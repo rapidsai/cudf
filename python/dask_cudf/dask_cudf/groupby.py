@@ -1,27 +1,27 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import math
-from operator import getitem
 from typing import Set
 
 import numpy as np
 import pandas as pd
 
-from dask.base import tokenize
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
-    _concat,
-    hash_shard,
-    new_dd_object,
+    aca,
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
-from dask.highlevelgraph import HighLevelGraph
+from dask.utils import funcname
 
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-SUPPORTED_AGGS = (
+CUMULATIVE_AGGS = (
+    "cumsum",
+    "cumcount",
+)
+
+AGGS = (
     "count",
     "mean",
     "std",
@@ -33,6 +33,8 @@ SUPPORTED_AGGS = (
     "first",
     "last",
 )
+
+SUPPORTED_AGGS = (*AGGS, *CUMULATIVE_AGGS)
 
 
 def _check_groupby_supported(func):
@@ -56,10 +58,10 @@ def _check_groupby_supported(func):
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_dask_cudf_nvtx_annotate
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, sort=sort, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def __getitem__(self, key):
@@ -242,7 +244,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1):
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if arg == "size":
             return self.size()
 
@@ -263,20 +265,26 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
+                shuffle=shuffle,
                 **self.dropna,
             )
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            # TODO: Change following line to `shuffle=shuffle,`
+            # when dask_cudf is pinned to dask>2022.8.0
+            **({} if shuffle is None else {"shuffle": shuffle}),
         )
 
 
 class CudfSeriesGroupBy(SeriesGroupBy):
     @_dask_cudf_nvtx_annotate
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sort=None, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, sort=sort, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     @_check_groupby_supported
@@ -429,7 +437,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1):
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if arg == "size":
             return self.size()
 
@@ -448,12 +456,83 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
+                shuffle=shuffle,
                 **self.dropna,
             )[self._slice]
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            # TODO: Change following line to `shuffle=shuffle,`
+            # when dask_cudf is pinned to dask>2022.8.0
+            **({} if shuffle is None else {"shuffle": shuffle}),
         )
+
+
+def _shuffle_aggregate(
+    ddf,
+    gb_cols,
+    chunk,
+    chunk_kwargs,
+    aggregate,
+    aggregate_kwargs,
+    split_every,
+    split_out,
+    token=None,
+    sort=None,
+    shuffle=None,
+):
+    # Shuffle-based groupby aggregation
+    # NOTE: This function is the dask_cudf version of
+    # dask.dataframe.groupby._shuffle_aggregate
+
+    # Step 1 - Chunkwise groupby operation
+    chunk_name = f"{token or funcname(chunk)}-chunk"
+    chunked = ddf.map_partitions(
+        chunk,
+        meta=chunk(ddf._meta, **chunk_kwargs),
+        token=chunk_name,
+        **chunk_kwargs,
+    )
+
+    # Step 2 - Perform global sort or shuffle
+    shuffle_npartitions = max(
+        chunked.npartitions // split_every,
+        split_out,
+    )
+    if sort and split_out > 1:
+        # Sort-based code path
+        result = (
+            chunked.repartition(npartitions=shuffle_npartitions)
+            .sort_values(
+                gb_cols,
+                ignore_index=True,
+                shuffle=shuffle,
+            )
+            .map_partitions(
+                aggregate,
+                meta=aggregate(chunked._meta, **aggregate_kwargs),
+                **aggregate_kwargs,
+            )
+        )
+    else:
+        # Hash-based code path
+        result = chunked.shuffle(
+            gb_cols,
+            npartitions=shuffle_npartitions,
+            ignore_index=True,
+            shuffle=shuffle,
+        ).map_partitions(
+            aggregate,
+            meta=aggregate(chunked._meta, **aggregate_kwargs),
+            **aggregate_kwargs,
+        )
+
+    # Step 3 - Repartition and return
+    if split_out < result.npartitions:
+        return result.repartition(npartitions=split_out)
+    return result
 
 
 @_dask_cudf_nvtx_annotate
@@ -467,6 +546,7 @@ def groupby_agg(
     sep="___",
     sort=False,
     as_index=True,
+    shuffle=None,
 ):
     """Optimized groupby aggregation for Dask-CuDF.
 
@@ -495,9 +575,11 @@ def groupby_agg(
             f"Aggregations must be specified with dict or list syntax."
         )
 
-    # Deal with default split_out and split_every params
+    # If split_every is False, we use an all-to-one reduction
     if split_every is False:
-        split_every = ddf.npartitions
+        split_every = max(ddf.npartitions, 2)
+
+    # Deal with default split_out and split_every params
     split_every = split_every or 8
     split_out = split_out or 1
 
@@ -528,64 +610,7 @@ def groupby_agg(
         if col in gb_cols:
             columns.append(col)
 
-    # Begin graph construction
-    dsk = {}
-    token = tokenize(ddf, gb_cols, aggs)
-    partition_agg_name = "groupby_partition_agg-" + token
-    tree_reduce_name = "groupby_tree_reduce-" + token
-    gb_agg_name = "groupby_agg-" + token
-    for p in range(ddf.npartitions):
-        # Perform groupby aggregation on each partition.
-        # Split each result into `split_out` chunks (by hashing `gb_cols`)
-        dsk[(partition_agg_name, p)] = (
-            _groupby_partition_agg,
-            (ddf._name, p),
-            gb_cols,
-            aggs,
-            columns,
-            split_out,
-            dropna,
-            sort,
-            sep,
-        )
-        # Pick out each chunk using `getitem`
-        for s in range(split_out):
-            dsk[(tree_reduce_name, p, s, 0)] = (
-                getitem,
-                (partition_agg_name, p),
-                s,
-            )
-
-    # Build reduction tree
-    parts = ddf.npartitions
-    widths = [parts]
-    while parts > 1:
-        parts = math.ceil(parts / split_every)
-        widths.append(parts)
-    height = len(widths)
-    for s in range(split_out):
-        for depth in range(1, height):
-            for group in range(widths[depth]):
-
-                p_max = widths[depth - 1]
-                lstart = split_every * group
-                lstop = min(lstart + split_every, p_max)
-                node_list = [
-                    (tree_reduce_name, p, s, depth - 1)
-                    for p in range(lstart, lstop)
-                ]
-
-                dsk[(tree_reduce_name, group, s, depth)] = (
-                    _tree_node_agg,
-                    node_list,
-                    gb_cols,
-                    split_out,
-                    dropna,
-                    sort,
-                    sep,
-                )
-
-    # Final output partitions.
+    # Construct meta
     _aggs = aggs.copy()
     if str_cols_out:
         # Metadata should use `str` for dict values if that is
@@ -601,26 +626,85 @@ def groupby_agg(
             col_array.append(col)
             agg_array.append(aggs_renames.get((col, agg), agg))
         _meta.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
-    for s in range(split_out):
-        dsk[(gb_agg_name, s)] = (
-            _finalize_gb_agg,
-            (tree_reduce_name, 0, s, height - 1),
+
+    chunk = _groupby_partition_agg
+    chunk_kwargs = {
+        "gb_cols": gb_cols,
+        "aggs": aggs,
+        "columns": columns,
+        "dropna": dropna,
+        "sort": sort,
+        "sep": sep,
+    }
+
+    combine = _tree_node_agg
+    combine_kwargs = {
+        "gb_cols": gb_cols,
+        "dropna": dropna,
+        "sort": sort,
+        "sep": sep,
+    }
+
+    aggregate = _finalize_gb_agg
+    aggregate_kwargs = {
+        "gb_cols": gb_cols,
+        "aggs": aggs,
+        "columns": columns,
+        "final_columns": _meta.columns,
+        "as_index": as_index,
+        "dropna": dropna,
+        "sort": sort,
+        "sep": sep,
+        "str_cols_out": str_cols_out,
+        "aggs_renames": aggs_renames,
+    }
+
+    # Use shuffle=True for split_out>1
+    if sort and split_out > 1 and shuffle is None:
+        shuffle = "tasks"
+
+    # Check if we are using the shuffle-based algorithm
+    if shuffle:
+        # Shuffle-based aggregation
+        return _shuffle_aggregate(
+            ddf,
             gb_cols,
-            aggs,
-            columns,
-            _meta.columns,
-            as_index,
-            sort,
-            sep,
-            str_cols_out,
-            aggs_renames,
+            chunk,
+            chunk_kwargs,
+            aggregate,
+            aggregate_kwargs,
+            split_every,
+            split_out,
+            token="cudf-aggregate",
+            sort=sort,
+            shuffle=shuffle if isinstance(shuffle, str) else None,
         )
 
-    divisions = [None] * (split_out + 1)
-    graph = HighLevelGraph.from_collections(
-        gb_agg_name, dsk, dependencies=[ddf]
+    # Deal with sort/shuffle defaults
+    if split_out > 1 and sort:
+        raise ValueError(
+            "dask-cudf's groupby algorithm does not yet support "
+            "`sort=True` when `split_out>1`, unless a shuffle-based "
+            "algorithm is used. Please use `split_out=1`, group "
+            "with `sort=False`, or set `shuffle=True`."
+        )
+
+    return aca(
+        [ddf],
+        chunk=chunk,
+        chunk_kwargs=chunk_kwargs,
+        combine=combine,
+        combine_kwargs=combine_kwargs,
+        aggregate=aggregate,
+        aggregate_kwargs=aggregate_kwargs,
+        token="cudf-aggregate",
+        split_every=split_every,
+        split_out=split_out,
+        split_out_setup=split_out_on_cols,
+        split_out_setup_kwargs={"cols": gb_cols},
+        sort=sort,
+        ignore_index=True,
     )
-    return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
 @_dask_cudf_nvtx_annotate
@@ -691,9 +775,7 @@ def _make_name(col_name, sep="_"):
 
 
 @_dask_cudf_nvtx_annotate
-def _groupby_partition_agg(
-    df, gb_cols, aggs, columns, split_out, dropna, sort, sep
-):
+def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     """Initial partition-level aggregation task.
 
     This is the first operation to be executed on each input
@@ -724,44 +806,23 @@ def _groupby_partition_agg(
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
         _agg_dict
     )
-    gb.columns = [_make_name(name, sep=sep) for name in gb.columns]
-
-    if split_out == 1:
-        output = {0: gb.copy(deep=False)}
-    elif hasattr(gb, "partition_by_hash"):
-        # For cudf, we can use `partition_by_hash` method
-        output = {}
-        for j, split in enumerate(
-            gb.partition_by_hash(gb_cols, split_out, keep_index=False)
-        ):
-            output[j] = split
-        del gb
-    else:
-        # Dask-Dataframe (Pandas) support
-        output = hash_shard(
-            gb,
-            split_out,
-            split_out_setup=split_out_on_cols,
-            split_out_setup_kwargs={"cols": gb_cols},
-        )
-        del gb
-    return output
+    output_columns = [_make_name(name, sep=sep) for name in gb.columns]
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
-def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
+def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     """Node in groupby-aggregation reduction tree.
 
-    Following the initial `_groupby_partition_agg` tasks,
-    the `groupby_agg` algorithm will perform a tree reduction
-    to combine the data from the input partitions into
-    `split_out` different output partitions.  For each node in
-    the reduction tree, the input DataFrame objects are
-    concatenated, and "sum", "min" and/or "max" groupby
-    aggregations are used to combine the necessary statistics.
+    The input DataFrame (`df`) corresponds to the
+    concatenated output of one or more `_groupby_partition_agg`
+    tasks. In this function, "sum", "min" and/or "max" groupby
+    aggregations will be used to combine the statistics for
+    duplicate keys.
     """
 
-    df = _concat(dfs, ignore_index=True)
     agg_dict = {}
     for col in df.columns:
         if col in gb_cols:
@@ -779,11 +840,13 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     )
 
     # Don't include the last aggregation in the column names
-    gb.columns = [
+    output_columns = [
         _make_name(name[:-1] if isinstance(name, tuple) else name, sep=sep)
         for name in gb.columns
     ]
-    return gb
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
@@ -810,12 +873,13 @@ def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
 
 @_dask_cudf_nvtx_annotate
 def _finalize_gb_agg(
-    gb,
+    gb_in,
     gb_cols,
     aggs,
     columns,
     final_columns,
     as_index,
+    dropna,
     sort,
     sep,
     str_cols_out,
@@ -829,6 +893,8 @@ def _finalize_gb_agg(
     "std" and "var".  We also need to deal with the column
     index, the row index, and final sorting behavior.
     """
+
+    gb = _tree_node_agg(gb_in, gb_cols, dropna, sort, sep)
 
     # Deal with higher-order aggregations
     for col in columns:

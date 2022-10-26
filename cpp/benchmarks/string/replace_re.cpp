@@ -35,15 +35,14 @@ static void BM_replace(benchmark::State& state, replace_type rt)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
-  cudf::strings_column_view input(table->view().column(0));
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+  cudf::strings_column_view input(column->view());
   cudf::test::strings_column_wrapper repls({"#", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case replace_type::replace_re:  // contains_re and matches_re use the same main logic
         cudf::strings::replace_re(input, "\\d+");

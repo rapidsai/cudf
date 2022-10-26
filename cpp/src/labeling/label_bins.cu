@@ -238,12 +238,13 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    inclusive right_inclusive,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::label_bins(input,
                             left_edges,
                             left_inclusive,
                             right_edges,
                             right_inclusive,
-                            cudf::default_stream_value,
+                            cudf::get_default_stream(),
                             mr);
 }
 }  // namespace cudf

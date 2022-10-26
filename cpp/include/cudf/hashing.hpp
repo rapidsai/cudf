@@ -34,11 +34,10 @@ using hash_value_type = uint32_t;  ///< Type of hash value
  *  @brief Identifies the hash function to be used
  */
 enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3,   ///< Spark Murmur3 hash function
-  HASH_MD5              ///< MD5 hash function
+  HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,        ///< Murmur3 hash function
+  HASH_SPARK_MURMUR3,  ///< Spark Murmur3 hash function
+  HASH_MD5             ///< MD5 hash function
 };
 
 /**

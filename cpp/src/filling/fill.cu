@@ -159,7 +159,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     auto result = std::make_unique<cudf::column>(input, stream, mr);
     auto mview  = result->mutable_view();
     cudf::detail::set_null_mask(mview.null_mask(), begin, end, false, stream);
-    mview.set_null_count(input.null_count() + (end - begin));
+    result->set_null_count(input.null_count() + (end - begin));
     return result;
   }
 
@@ -248,7 +248,7 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, cudf::default_stream_value);
+  return detail::fill_in_place(destination, begin, end, value, cudf::get_default_stream());
 }
 
 std::unique_ptr<column> fill(column_view const& input,
@@ -258,7 +258,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, cudf::default_stream_value, mr);
+  return detail::fill(input, begin, end, value, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

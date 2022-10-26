@@ -38,13 +38,14 @@ namespace detail {
  * @brief Base class for a table of `ColumnView`s
  *
  * This class should not be used directly. Instead:
- * -`table_view` should be used for a table of `column_view`s
- * -`mutable_table_view` should be used for a table of `mutable_column_view`s
+ * - `table_view` should be used for a table of columns of type `column_view`
+ * - `mutable_table_view` should be used for a table of columns of type `mutable_column_view`
  *
  * All public constructors and member functions of `table_view_base` are
  * available in both `table_view` and `mutable_table_view`.
  *
- * @tparam ColumnView The type of column view the table contains
+ * @tparam ColumnView The type of column view the table contains:
+ *                    expects column_view or mutable_column_view
  */
 template <typename ColumnView>
 class table_view_base {
@@ -165,6 +166,14 @@ class table_view_base {
    */
   table_view_base& operator=(table_view_base&&) = default;
 };
+
+/**
+ * @brief Determine if any nested columns exist in a given table.
+ *
+ * @param table The input table
+ * @return Whether nested columns exist in the input table
+ */
+bool has_nested_columns(table_view const& table);
 }  // namespace detail
 
 /**

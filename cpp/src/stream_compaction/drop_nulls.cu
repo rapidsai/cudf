@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 
 namespace {
@@ -91,7 +92,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keep_threshold, cudf::default_stream_value, mr);
+  return detail::drop_nulls(input, keys, keep_threshold, cudf::get_default_stream(), mr);
 }
 /*
  * Filters a table to remove null elements.
@@ -101,7 +102,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keys.size(), cudf::default_stream_value, mr);
+  return detail::drop_nulls(input, keys, keys.size(), cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

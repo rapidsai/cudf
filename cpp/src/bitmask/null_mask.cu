@@ -107,7 +107,7 @@ __global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
 {
   auto x                  = destination + word_index(begin_bit);
   const auto last_word    = word_index(end_bit) - word_index(begin_bit);
-  bitmask_type fill_value = (valid == true) ? 0xffffffff : 0x00;
+  bitmask_type fill_value = (valid == true) ? 0xffff'ffff : 0;
 
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
@@ -158,14 +158,14 @@ rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::create_null_mask(size, state, cudf::default_stream_value, mr);
+  return detail::create_null_mask(size, state, cudf::get_default_stream(), mr);
 }
 
 // Set pre-allocated null mask of given bit range [begin_bit, end_bit) to valid, if valid==true,
 // or null, otherwise;
 void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid)
 {
-  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid);
+  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, cudf::get_default_stream());
 }
 
 namespace detail {
@@ -510,25 +510,25 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type end_bit,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(mask, begin_bit, end_bit, cudf::default_stream_value, mr);
+  return detail::copy_bitmask(mask, begin_bit, end_bit, cudf::get_default_stream(), mr);
 }
 
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const& view, rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(view, cudf::default_stream_value, mr);
+  return detail::copy_bitmask(view, cudf::get_default_stream(), mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_and(view, cudf::default_stream_value, mr);
+  return detail::bitmask_and(view, cudf::get_default_stream(), mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_or(view, cudf::default_stream_value, mr);
+  return detail::bitmask_or(view, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

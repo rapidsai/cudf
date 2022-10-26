@@ -406,14 +406,14 @@ def test_index_copy_deep(idx, deep):
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.isna().to_numpy(), pidx.isna())
+    assert_eq(gidx.isna(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.notna().to_numpy(), pidx.notna())
+    assert_eq(gidx.notna(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():
@@ -2537,31 +2537,261 @@ def rangeindex(request):
     return RangeIndex(request.param)
 
 
-def test_rangeindex_nunique(rangeindex):
+@pytest.mark.parametrize(
+    "func",
+    ["nunique", "min", "max", "any", "values"],
+)
+def test_rangeindex_methods(rangeindex, func):
     gidx = rangeindex
     pidx = gidx.to_pandas()
 
-    actual = gidx.nunique()
-    expected = pidx.nunique()
+    if func == "values":
+        expected = pidx.values
+        actual = gidx.values
+    else:
+        expected = getattr(pidx, func)()
+        actual = getattr(gidx, func)()
 
     assert_eq(expected, actual)
 
 
-def test_rangeindex_min(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
+def test_index_constructor_integer(default_integer_bitwidth):
+    got = cudf.Index([1, 2, 3])
+    expect = cudf.Index([1, 2, 3], dtype=f"int{default_integer_bitwidth}")
 
-    actual = gidx.min()
-    expected = pidx.min()
+    assert_eq(expect, got)
+
+
+def test_index_constructor_float(default_float_bitwidth):
+    got = cudf.Index([1.0, 2.0, 3.0])
+    expect = cudf.Index(
+        [1.0, 2.0, 3.0], dtype=f"float{default_float_bitwidth}"
+    )
+
+    assert_eq(expect, got)
+
+
+def test_rangeindex_union_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for union operation.
+    idx1 = cudf.RangeIndex(0, 2)
+    idx2 = cudf.RangeIndex(5, 6)
+
+    expected = cudf.Index([0, 1, 5], dtype=f"int{default_integer_bitwidth}")
+    actual = idx1.union(idx2)
 
     assert_eq(expected, actual)
 
 
-def test_rangeindex_max(rangeindex):
-    gidx = rangeindex
-    pidx = gidx.to_pandas()
+def test_rangeindex_intersection_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for intersection operation.
+    idx1 = cudf.RangeIndex(0, 100)
+    # Intersecting two RangeIndex will _always_ result in a RangeIndex, use
+    # regular index here to force materializing.
+    idx2 = cudf.Index([50, 102])
 
-    actual = gidx.max()
-    expected = pidx.max()
+    expected = cudf.Index([50], dtype=f"int{default_integer_bitwidth}")
+    actual = idx1.intersection(idx2)
 
     assert_eq(expected, actual)
+
+
+def test_rangeindex_take_default_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for take operation.
+    idx = cudf.RangeIndex(0, 100)
+    actual = idx.take([0, 3, 7, 62])
+    expected = cudf.Index(
+        [0, 3, 7, 62], dtype=f"int{default_integer_bitwidth}"
+    )
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_apply_boolean_mask_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for apply boolean mask operation.
+    idx = cudf.RangeIndex(0, 8)
+    mask = [True, True, True, False, False, False, True, False]
+    actual = idx[mask]
+    expected = cudf.Index([0, 1, 2, 6], dtype=f"int{default_integer_bitwidth}")
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_repeat_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for repeat operation.
+    idx = cudf.RangeIndex(0, 3)
+    actual = idx.repeat(3)
+    expected = cudf.Index(
+        [0, 0, 0, 1, 1, 1, 2, 2, 2], dtype=f"int{default_integer_bitwidth}"
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "op, expected, expected_kind",
+    [
+        (lambda idx: 2**idx, [2, 4, 8, 16], "int"),
+        (lambda idx: idx**2, [1, 4, 9, 16], "int"),
+        (lambda idx: idx / 2, [0.5, 1, 1.5, 2], "float"),
+        (lambda idx: 2 / idx, [2, 1, 2 / 3, 0.5], "float"),
+        (lambda idx: idx % 3, [1, 2, 0, 1], "int"),
+        (lambda idx: 3 % idx, [0, 1, 0, 3], "int"),
+    ],
+)
+def test_rangeindex_binops_user_option(
+    op, expected, expected_kind, default_integer_bitwidth
+):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for binary operation.
+    idx = cudf.RangeIndex(1, 5)
+    actual = op(idx)
+    expected = cudf.Index(
+        expected, dtype=f"{expected_kind}{default_integer_bitwidth}"
+    )
+    assert_eq(
+        expected,
+        actual,
+    )
+
+
+def test_rangeindex_join_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for join.
+    idx1 = cudf.RangeIndex(0, 10)
+    idx2 = cudf.RangeIndex(5, 15)
+
+    actual = idx1.join(idx2, how="inner", sort=True)
+    expected = cudf.Index(
+        [5, 6, 7, 8, 9], dtype=f"int{default_integer_bitwidth}", name=0
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_rangeindex_where_user_option(default_integer_bitwidth):
+    # Test that RangeIndex is materialized into 32 bit index under user
+    # configuration for where operation.
+    idx = cudf.RangeIndex(0, 10)
+    mask = [True, False, True, False, True, False, True, False, True, False]
+    actual = idx.where(mask, -1)
+    expected = cudf.Index(
+        [0, -1, 2, -1, 4, -1, 6, -1, 8, -1],
+        dtype=f"int{default_integer_bitwidth}",
+    )
+    assert_eq(expected, actual)
+
+
+index_data = [
+    range(np.random.randint(0, 100)),
+    range(0, 10, -2),
+    range(0, -10, 2),
+    range(0, -10, -2),
+    range(0, 1),
+    [1, 2, 3, 1, None, None],
+    [None, None, 3.2, 1, None, None],
+    [None, "a", "3.2", "z", None, None],
+    pd.Series(["a", "b", None], dtype="category"),
+    np.array([1, 2, 3, None], dtype="datetime64[s]"),
+]
+
+
+@pytest.fixture(params=index_data)
+def index(request):
+    """Create a cudf Index of different dtypes"""
+    return cudf.Index(request.param)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "to_series",
+        "isna",
+        "notna",
+        "append",
+    ],
+)
+def test_index_methods(index, func):
+    gidx = index
+    pidx = gidx.to_pandas()
+
+    if func == "append":
+        expected = pidx.append(other=pidx)
+        actual = gidx.append(other=gidx)
+    else:
+        expected = getattr(pidx, func)()
+        actual = getattr(gidx, func)()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx, values",
+    [
+        (range(100, 1000, 10), [200, 600, 800]),
+        ([None, "a", "3.2", "z", None, None], ["a", "z"]),
+        (pd.Series(["a", "b", None], dtype="category"), [10, None]),
+    ],
+)
+def test_index_isin_values(idx, values):
+    gidx = cudf.Index(idx)
+    pidx = gidx.to_pandas()
+
+    actual = gidx.isin(values)
+    expected = pidx.isin(values)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx, scalar",
+    [
+        (range(0, -10, -2), -4),
+        ([None, "a", "3.2", "z", None, None], "x"),
+        (pd.Series(["a", "b", None], dtype="category"), 10),
+    ],
+)
+def test_index_isin_scalar_values(idx, scalar):
+    gidx = cudf.Index(idx)
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"only list-like objects are allowed to be passed "
+            f"to isin(), you passed a {type(scalar).__name__}"
+        ),
+    ):
+        gidx.isin(scalar)
+
+
+def test_index_any():
+    gidx = cudf.Index([1, 2, 3])
+    pidx = gidx.to_pandas()
+
+    assert_eq(pidx.any(), gidx.any())
+
+
+def test_index_values():
+    gidx = cudf.Index([1, 2, 3])
+    pidx = gidx.to_pandas()
+
+    assert_eq(pidx.values, gidx.values)
+
+
+def test_index_null_values():
+    gidx = cudf.Index([1.0, None, 3, 0, None])
+    with pytest.raises(ValueError):
+        gidx.values
+
+
+def test_index_error_list_index():
+    s = cudf.Series([[1, 2], [2], [4]])
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "Unsupported column type passed to create an "
+            "Index: <class 'cudf.core.column.lists.ListColumn'>"
+        ),
+    ):
+        cudf.Index(s)

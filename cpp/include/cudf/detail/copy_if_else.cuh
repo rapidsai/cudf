@@ -74,7 +74,7 @@ __launch_bounds__(block_size) __global__
     // update validity
     if (has_nulls) {
       // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, opt_value.has_value());
+      int warp_mask = __ballot_sync(0xFFFF'FFFFu, opt_value.has_value());
       // only one guy in the warp needs to update the mask and count
       if (lane_id == 0) {
         out.set_mask_word(warp_cur, warp_mask);
@@ -166,7 +166,7 @@ std::unique_ptr<column> copy_if_else(
   std::unique_ptr<column> out = make_fixed_width_column(
     output_type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
 
-  auto out_v = mutable_column_device_view::create(*out);
+  auto out_v = mutable_column_device_view::create(*out, stream);
 
   // if we have validity in the output
   if (nullable) {

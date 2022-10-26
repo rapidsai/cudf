@@ -325,6 +325,7 @@ case binary_operator::FLOOR_DIV:            apply_binary_op<ops::FloorDiv>(out, 
 case binary_operator::MOD:                  apply_binary_op<ops::Mod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::PYMOD:                apply_binary_op<ops::PyMod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::POW:                  apply_binary_op<ops::Pow>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::INT_POW:               apply_binary_op<ops::IntPow>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::EQUAL:
 case binary_operator::NOT_EQUAL:
 if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
@@ -404,6 +405,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
   // Struct child column type and structure mismatches are caught within the two_table_comparator
   switch (op) {
     case binary_operator::EQUAL: [[fallthrough]];
+    case binary_operator::NULL_EQUALS: [[fallthrough]];
     case binary_operator::NOT_EQUAL:
       detail::apply_struct_equality_op(
         out,

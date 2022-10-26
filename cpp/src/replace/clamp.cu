@@ -41,6 +41,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
@@ -390,7 +391,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::default_stream_value, mr);
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::get_default_stream(), mr);
 }
 
 // clamp input at lo and hi
@@ -400,6 +401,6 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo, hi, hi, cudf::default_stream_value, mr);
+  return detail::clamp(input, lo, lo, hi, hi, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

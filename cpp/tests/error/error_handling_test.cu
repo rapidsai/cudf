@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/filling.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream.hpp>
@@ -83,16 +84,13 @@ TEST(StreamCheck, CatchFailedKernel)
                             "invalid configuration argument");
 }
 
-__global__ void kernel(int* p) { *p = 42; }
+__global__ void kernel() { asm("trap;"); }
 
 TEST(DeathTest, CudaFatalError)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
   auto call_kernel                      = []() {
-    int* p;
-    cudaMalloc(&p, 2 * sizeof(int));
-    int* misaligned = (int*)(reinterpret_cast<char*>(p) + 1);
-    kernel<<<1, 1>>>(misaligned);
+    kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>();
     try {
       CUDF_CUDA_TRY(cudaDeviceSynchronize());
     } catch (const cudf::fatal_cuda_error& fe) {
@@ -142,5 +140,12 @@ TEST(DebugAssert, cudf_assert_true)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
+  auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
+  auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
+  if (stream_mode == "custom") {
+    auto resource = rmm::mr::get_current_device_resource();
+    auto adapter  = make_stream_checking_resource_adaptor(resource);
+    rmm::mr::set_current_device_resource(&adapter);
+  }
   return RUN_ALL_TESTS();
 }

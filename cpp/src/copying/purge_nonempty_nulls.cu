@@ -17,6 +17,7 @@
 #include <cudf/detail/copy.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
@@ -41,7 +42,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   auto const type         = input.type().id();
   auto const offsets      = (type == type_id::STRING) ? (strings_column_view{input}).offsets()
                                                       : (lists_column_view{input}).offsets();
-  auto const d_input      = cudf::column_device_view::create(input);
+  auto const d_input      = cudf::column_device_view::create(input, stream);
   auto const is_dirty_row = [d_input = *d_input, offsets = offsets.begin<size_type>()] __device__(
                               size_type const& row_idx) {
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);
@@ -103,7 +104,10 @@ bool may_have_nonempty_nulls(column_view const& input)
 /**
  * @copydoc cudf::has_nonempty_nulls
  */
-bool has_nonempty_nulls(column_view const& input) { return detail::has_nonempty_nulls(input); }
+bool has_nonempty_nulls(column_view const& input)
+{
+  return detail::has_nonempty_nulls(input, cudf::get_default_stream());
+}
 
 /**
  * @copydoc cudf::purge_nonempty_nulls(lists_column_view const&, rmm::mr::device_memory_resource*)
@@ -111,7 +115,7 @@ bool has_nonempty_nulls(column_view const& input) { return detail::has_nonempty_
 std::unique_ptr<cudf::column> purge_nonempty_nulls(lists_column_view const& input,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::purge_nonempty_nulls(input, cudf::default_stream_value, mr);
+  return detail::purge_nonempty_nulls(input, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -120,7 +124,7 @@ std::unique_ptr<cudf::column> purge_nonempty_nulls(lists_column_view const& inpu
 std::unique_ptr<cudf::column> purge_nonempty_nulls(structs_column_view const& input,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::purge_nonempty_nulls(input, cudf::default_stream_value, mr);
+  return detail::purge_nonempty_nulls(input, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -129,7 +133,7 @@ std::unique_ptr<cudf::column> purge_nonempty_nulls(structs_column_view const& in
 std::unique_ptr<cudf::column> purge_nonempty_nulls(strings_column_view const& input,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::purge_nonempty_nulls(input, cudf::default_stream_value, mr);
+  return detail::purge_nonempty_nulls(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -36,7 +36,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>
@@ -423,6 +423,7 @@ TEST_F(ColumnFactoryTest, FromStringScalar)
   EXPECT_EQ(0, column->null_count());
   EXPECT_FALSE(column->nullable());
   EXPECT_FALSE(column->has_nulls());
+  EXPECT_TRUE(column->num_children() > 0);
 }
 
 TEST_F(ColumnFactoryTest, FromNullStringScalar)
@@ -434,6 +435,7 @@ TEST_F(ColumnFactoryTest, FromNullStringScalar)
   EXPECT_EQ(2, column->null_count());
   EXPECT_TRUE(column->nullable());
   EXPECT_TRUE(column->has_nulls());
+  EXPECT_TRUE(column->num_children() > 0);
 }
 
 TEST_F(ColumnFactoryTest, FromStringScalarWithZeroSize)

@@ -736,6 +736,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [2, 100, 6000000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -1554,7 +1555,6 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 def test_writer_lists_structs(list_struct_buff):
     df_in = cudf.read_orc(list_struct_buff)
 
@@ -1566,7 +1566,6 @@ def test_writer_lists_structs(list_struct_buff):
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "data",
     [
@@ -1667,7 +1666,6 @@ def test_empty_statistics():
         assert stats[0]["i"].get("sum") == 1
 
 
-@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "equivalent_columns",
     [
@@ -1745,16 +1743,150 @@ def test_writer_protobuf_large_rowindexentry():
     assert_frame_equal(df, got)
 
 
-def test_orc_writer_zlib_compression(list_struct_buff):
-    expected = cudf.read_orc(list_struct_buff)
+@pytest.mark.parametrize("compression", ["ZLIB", "ZSTD"])
+def test_orc_writer_nvcomp(compression):
+    expected = cudf.datasets.randomdata(
+        nrows=12345, dtypes={"a": int, "b": str, "c": float}, seed=1
+    )
+
+    buff = BytesIO()
     try:
-        # save with ZLIB compression
-        buff = BytesIO()
-        expected.to_orc(buff, compression="ZLIB")
-        got = cudf.read_orc(buff)
+        expected.to_orc(buff, compression=compression)
+    except RuntimeError:
+        pytest.mark.xfail(reason="Newer nvCOMP version is required")
+    else:
+        got = pd.read_orc(buff)
         assert_eq(expected, got)
-    except RuntimeError as e:
-        if "Unsupported compression type" in str(e):
-            pytest.mark.xfail(reason="nvcomp build doesn't have deflate")
-        else:
-            raise e
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_orc_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_orc(buffer, index=index)
+
+    expected = pd.read_orc(buffer, columns=columns)
+    got = cudf.read_orc(buffer, columns=columns)
+
+    if columns:
+        # TODO: Remove workaround after this issue is fixed:
+        # https://github.com/pandas-dev/pandas/issues/47944
+        assert_eq(
+            expected.sort_index(axis=1),
+            got.sort_index(axis=1),
+            check_index_type=True,
+        )
+    else:
+        assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "df_data,cols_as_map_type,expected_data",
+    [
+        (
+            {"a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]]},
+            ["a"],
+            {"a": [[(10, 20)], [(1, 21)]]},
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+            },
+            ["b"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+            },
+        ),
+        (
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "c": [
+                    [{"a": {"a": 10}, "b": 20}],
+                    [{"a": {"a": 12}, "b": 21}],
+                ],
+            },
+            ["b", "c"],
+            {
+                "a": [[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]],
+                "b": [[(10, 20)], [(1, 21)]],
+                "c": [[({"a": 10}, 20)], [({"a": 12}, 21)]],
+            },
+        ),
+    ],
+)
+def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
+    df = cudf.DataFrame(df_data)
+    buffer = BytesIO()
+    df.to_orc(buffer, cols_as_map_type=cols_as_map_type)
+
+    got = pd.read_orc(buffer)
+    expected = pd.DataFrame(expected_data)
+
+    assert_eq(got, expected)
+
+
+def test_orc_writer_cols_as_map_type_error():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
+    )
+    buffer = BytesIO()
+    with pytest.raises(
+        TypeError, match="cols_as_map_type must be a list of column names."
+    ):
+        df.to_orc(buffer, cols_as_map_type=1)
+
+
+@pytest.fixture
+def negative_timestamp_df():
+    return cudf.DataFrame(
+        {
+            "a": [
+                pd.Timestamp("1969-12-31 23:59:59.000123"),
+                pd.Timestamp("1969-12-31 23:59:58.000999"),
+                pd.Timestamp("1969-12-31 23:59:58.001001"),
+                pd.Timestamp("1839-12-24 03:58:56.000826"),
+            ]
+        }
+    )
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
+    buffer = BytesIO()
+    pyorc_table = pa.Table.from_pandas(
+        negative_timestamp_df.to_pandas(), preserve_index=False
+    )
+    pyarrow.orc.write_table(pyorc_table, buffer)
+
+    assert_eq(negative_timestamp_df, cudf.read_orc(buffer, engine=engine))
+
+
+def test_orc_writer_negative_timestamp(negative_timestamp_df):
+    buffer = BytesIO()
+    negative_timestamp_df.to_orc(buffer)
+
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
+    assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
+
+
+def test_orc_reader_apache_negative_timestamp(datadir):
+    path = datadir / "TestOrcFile.apache_timestamp.orc"
+
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
+
+    assert_eq(pdf, gdf)
+
+
+def test_statistics_string_sum():
+    strings = ["a string", "another string!"]
+    buff = BytesIO()
+    df = cudf.DataFrame({"str": strings})
+    df.to_orc(buff)
+
+    file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
+    assert_eq(file_stats[0]["str"].get("sum"), sum(len(s) for s in strings))

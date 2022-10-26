@@ -27,7 +27,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace lists {
@@ -241,7 +245,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
            row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
             auto const row_index = i % num_rows;
             return row_null_counts[row_index] != num_columns;
-          });
+          },
+          stream);
       }
       // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
       return cudf::detail::valid_if(
@@ -251,7 +256,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
          row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
           auto const row_index = i % num_rows;
           return row_null_counts[row_index] == 0;
-        });
+        },
+        stream);
     }();
     concat->set_null_mask(std::move(null_mask), null_count);
   }
@@ -303,7 +309,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(input, null_policy, cudf::default_stream_value, mr);
+  return detail::concatenate_rows(input, null_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace lists

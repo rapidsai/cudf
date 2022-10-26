@@ -24,6 +24,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -51,8 +52,8 @@ class orc_reader_options_builder;
 class orc_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
-  std::vector<std::string> _columns;
+  // Names of column to read; `nullopt` is all
+  std::optional<std::vector<std::string>> _columns;
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
@@ -105,18 +106,18 @@ class orc_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns names of the columns to read.
+   * @brief Returns names of the columns to read, if set.
    *
-   * @return Names of the columns to read
+   * @return Names of the columns to read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] auto const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
    *
    * @return Vector of vectors, stripes to read for each input source
    */
-  std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
+  [[nodiscard]] auto const& get_stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start.
@@ -376,9 +377,6 @@ class orc_reader_options_builder {
  *  auto options = cudf::io::orc_reader_options::builder(source);
  *  auto result  = cudf::io::read_orc(options);
  * @endcode
- *
- * Note: Support for reading files with struct columns is currently experimental, the output may not
- * be as reliable as reading for other datatypes.
  *
  * @param options Settings for controlling reading behavior
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -781,9 +779,6 @@ class orc_writer_options_builder {
  *  auto options     = cudf::io::orc_writer_options::builder(destination, table->view());
  *  cudf::io::write_orc(options);
  * @endcode
- *
- * Note: Support for writing tables with struct columns is currently experimental, the output may
- * not be as reliable as writing for other datatypes.
  *
  * @param options Settings for controlling reading behavior
  * @param mr Device memory resource to use for device memory allocation

@@ -44,14 +44,12 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view source_table,
         column_view scatter_map,
         table_view target_table,
-        bool bounds_check
     ) except +
 
     cdef unique_ptr[table] scatter (
         vector[reference_wrapper[constscalar]] source_scalars,
         column_view indices,
         table_view target,
-        bool bounds_check
     ) except +
 
     ctypedef enum mask_allocation_policy:

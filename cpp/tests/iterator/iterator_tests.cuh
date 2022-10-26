@@ -50,15 +50,21 @@ struct IteratorTest : public cudf::test::BaseFixture {
   void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
   {
     T_output init = cudf::test::make_type_param_scalar<T_output>(0);
-    rmm::device_uvector<T_output> dev_result(1, cudf::default_stream_value);
+    rmm::device_uvector<T_output> dev_result(1, cudf::get_default_stream());
 
     // Get temporary storage size
     size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(
-      nullptr, temp_storage_bytes, d_in, dev_result.begin(), num_items, thrust::minimum{}, init);
+    cub::DeviceReduce::Reduce(nullptr,
+                              temp_storage_bytes,
+                              d_in,
+                              dev_result.begin(),
+                              num_items,
+                              thrust::minimum{},
+                              init,
+                              cudf::get_default_stream().value());
 
     // Allocate temporary storage
-    rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::default_stream_value);
+    rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::get_default_stream());
 
     // Run reduction
     cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -67,7 +73,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               dev_result.begin(),
                               num_items,
                               thrust::minimum{},
-                              init);
+                              init,
+                              cudf::get_default_stream().value());
 
     evaluate(expected, dev_result, "cub test");
   }
@@ -80,19 +87,22 @@ struct IteratorTest : public cudf::test::BaseFixture {
   {
     InputIterator d_in_last = d_in + num_items;
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
-    auto dev_expected = cudf::detail::make_device_uvector_sync(expected);
+    auto dev_expected =
+      cudf::detail::make_device_uvector_sync(expected, cudf::get_default_stream());
 
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster
-    auto dev_results = rmm::device_uvector<bool>(num_items, cudf::default_stream_value);
-    thrust::transform(thrust::device,
+    auto dev_results = rmm::device_uvector<bool>(num_items, cudf::get_default_stream());
+    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                       d_in,
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
                       thrust::equal_to{});
-    auto result = thrust::all_of(
-      thrust::device, dev_results.begin(), dev_results.end(), thrust::identity<bool>{});
+    auto result = thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
+                                 dev_results.begin(),
+                                 dev_results.end(),
+                                 thrust::identity<bool>{});
     EXPECT_TRUE(result) << "thrust test";
   }
 
@@ -101,7 +111,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                 rmm::device_uvector<T_output> const& dev_result,
                 const char* msg = nullptr)
   {
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
 
     EXPECT_EQ(expected, host_result[0]) << msg;
   }

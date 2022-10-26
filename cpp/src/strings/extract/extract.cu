@@ -92,7 +92,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
                                rmm::mr::device_memory_resource* mr)
 {
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
 
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
@@ -136,7 +136,7 @@ std::unique_ptr<table> extract(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::extract(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

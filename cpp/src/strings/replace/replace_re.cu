@@ -106,7 +106,7 @@ std::unique_ptr<column> replace_re(
   string_scalar const& replacement,
   std::optional<size_type> max_replace_count,
   regex_flags const flags,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
@@ -115,7 +115,7 @@ std::unique_ptr<column> replace_re(
   string_view d_repl(replacement.data(), replacement.size());
 
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
   auto const maxrepl = max_replace_count.value_or(-1);
 
@@ -144,7 +144,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace_re(
-    strings, pattern, replacement, max_replace_count, flags, cudf::default_stream_value, mr);
+    strings, pattern, replacement, max_replace_count, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
