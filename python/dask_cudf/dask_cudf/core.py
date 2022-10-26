@@ -14,7 +14,6 @@ from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
-    finalize,
     handle_out,
     make_meta as dask_make_meta,
     map_partitions,
