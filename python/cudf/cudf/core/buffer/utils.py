@@ -130,7 +130,7 @@ def mark_columns_as_read_only_inplace(obj: Any) -> None:
     This is an in-place operation, which does nothing if
     spilling is disabled.
 
-    Making columns as ready-only, makes it possible to unspill the
+    Making columns as read-only makes it possible to unspill the
     underlying buffers partially.
     """
 
@@ -198,7 +198,7 @@ def with_spill_lock(*, read_only_columns=False):
     read_only_columns : bool
         Mark all columns found in the arguments to the decorated function
         as read-only. This is an in-place operation, which does nothing if
-        spilling is disabled. Making columns as ready-only, makes it
+        spilling is disabled. Making columns as read-only makes it
         possible to unspill the underlying buffers partially.
     """
 
