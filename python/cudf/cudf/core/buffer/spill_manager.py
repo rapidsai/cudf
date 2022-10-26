@@ -11,7 +11,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, MutableMapping, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
@@ -136,7 +136,7 @@ class SpillManager:
         of `CUDF_SPILL_DEVICE_LIMIT` or None.
     """
 
-    _base_buffers: MutableMapping[int, SpillableBuffer]
+    _base_buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
     statistics: Statistics
 
     def __init__(
