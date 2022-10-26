@@ -66,13 +66,13 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::size_t max_page_size_bytes = cudf::io::default_max_page_size_bytes,
                 std::size_t max_page_size_rows  = cudf::io::default_max_page_size_rows)
 {
-  // Generate deterministic bitmask instead of random bitmask for easy verification.
-  auto const valid_iter = cudf::detail::make_counting_transform_iterator(
-    0, [&](int32_t i) -> bool { return static_cast<bool>(i % 2); });
-
   // Just shift nulls of the next column by one position to avoid having all nulls in the same
   // table rows.
   if (nullable) {
+    // Generate deterministic bitmask instead of random bitmask for easy verification.
+    auto const valid_iter = cudf::detail::make_counting_transform_iterator(
+      0, [&](int32_t i) -> bool { return static_cast<bool>(i % 2); });
+
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
       col->set_null_mask(
@@ -150,15 +150,15 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(240'000, false);
+    auto const [expected, result, num_chunks] = do_test(240'000, false);
     EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(240'000, true);
+    auto const [expected, result, num_chunks] = do_test(240'000, true);
     EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
@@ -177,48 +177,48 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
-  
+
   // test with a limit slightly less than one page of data
   {
-    auto [expected, result, num_chunks] = do_test(79'000);
+    auto const [expected, result, num_chunks] = do_test(79'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // test with a limit exactly the size one page of data
   {
-    auto [expected, result, num_chunks] = do_test(80'000);
+    auto const [expected, result, num_chunks] = do_test(80'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // test with a limit slightly more the size one page of data
   {
-    auto [expected, result, num_chunks] = do_test(81'000);
+    auto const [expected, result, num_chunks] = do_test(81'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-   // test with a limit slightly less than two pages of data
+  // test with a limit slightly less than two pages of data
   {
-    auto [expected, result, num_chunks] = do_test(159'000);
+    auto const [expected, result, num_chunks] = do_test(159'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // test with a limit exactly the size of two pages of data
   {
-    auto [expected, result, num_chunks] = do_test(160'000);
+    auto const [expected, result, num_chunks] = do_test(160'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // test with a limit slightly more the size two pages of data
   {
-    auto [expected, result, num_chunks] = do_test(161'000);
+    auto const [expected, result, num_chunks] = do_test(161'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
-  }  
+  }
 }
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
@@ -266,25 +266,25 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(500'000, false);
+    auto const [expected, result, num_chunks] = do_test(500'000, false);
     EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   {
-    auto const [input, result, num_chunks] = do_test(500'000, true);
+    auto const [expected, result, num_chunks] = do_test(500'000, true);
     EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(1'000'000, false);
+    auto const [expected, result, num_chunks] = do_test(1'000'000, false);
     EXPECT_EQ(num_chunks, 1);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   {
-    auto const [input, result, num_chunks] = do_test(1'000'000, true);
+    auto const [expected, result, num_chunks] = do_test(1'000'000, true);
     EXPECT_EQ(num_chunks, 1);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
@@ -318,15 +318,15 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(500'000, false);
+    auto const [expected, result, num_chunks] = do_test(500'000, false);
     EXPECT_EQ(num_chunks, 5);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(500'000, true);
+    auto const [expected, result, num_chunks] = do_test(500'000, true);
     EXPECT_EQ(num_chunks, 5);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
@@ -358,15 +358,15 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(400'000, false);
+    auto const [expected, result, num_chunks] = do_test(400'000, false);
     EXPECT_EQ(num_chunks, 3);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(400'000, true);
+    auto const [expected, result, num_chunks] = do_test(400'000, true);
     EXPECT_EQ(num_chunks, 3);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
@@ -411,15 +411,15 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(500'000, false);
+    auto const [expected, result, num_chunks] = do_test(500'000, false);
     EXPECT_EQ(num_chunks, 10);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(500'000, true);
+    auto const [expected, result, num_chunks] = do_test(500'000, true);
     EXPECT_EQ(num_chunks, 5);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
@@ -471,14 +471,14 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   };
 
   {
-    auto const [input, result, num_chunks] = do_test(1'000'000, false);
+    auto const [expected, result, num_chunks] = do_test(1'000'000, false);
     EXPECT_EQ(num_chunks, 7);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [input, result, num_chunks] = do_test(1'000'000, true);
+    auto const [expected, result, num_chunks] = do_test(1'000'000, true);
     EXPECT_EQ(num_chunks, 5);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
