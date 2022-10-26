@@ -200,6 +200,50 @@ class direct_read_source : public file_source {
 };
 
 /**
+ * @brief Implementation class for reading from a device buffer source
+ */
+class device_buffer_source : public datasource {
+ public:
+  explicit device_buffer_source(device_buffer const& d_buffer) : _d_buffer{d_buffer} {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    CUDF_FAIL("TODO: should this be invoked?");
+    // TODO: to be finished with deep copy
+    dst = const_cast<uint8_t*>(_d_buffer._data) + offset;
+    return std::min(size, this->size() - offset);
+  }
+
+  std::unique_ptr<buffer> device_read(size_t offset,
+                                      size_t size,
+                                      rmm::cuda_stream_view stream) override
+  {
+    return std::make_unique<non_owning_buffer>(const_cast<uint8_t*>(_d_buffer._data + offset),
+                                               size);
+  }
+
+  [[nodiscard]] size_t size() const override { return _d_buffer._size; }
+
+ private:
+  device_buffer const _d_buffer;  ///< A non-owning buffer to the existing device data
+};
+
+/**
  * @brief Wrapper class for user implemented data sources
  *
  * Holds the user-implemented object with a non-owning pointer; The user object is not deleted
@@ -271,8 +315,7 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 
 std::unique_ptr<datasource> datasource::create(device_buffer const& buffer)
 {
-  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer._data), buffer._size));
+  return std::make_unique<device_buffer_source>(buffer);
 }
 
 std::unique_ptr<datasource> datasource::create(datasource* source)

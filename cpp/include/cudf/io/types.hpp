@@ -178,16 +178,16 @@ struct host_buffer {
  */
 // TODO: to be replaced by `device_span`?
 struct device_buffer {
-  const char* _data = nullptr;  //!< Pointer to the buffer
-  size_t _size      = 0;        //!< Size of the buffer
-  device_buffer()   = default;
+  uint8_t const* _data = nullptr;  //!< Pointer to the buffer
+  std::size_t _size    = 0;        //!< Size of the buffer
+  device_buffer()      = default;
   /**
    * @brief Construct a new device buffer object
    *
    * @param data Pointer to the buffer
    * @param size Size of the buffer
    */
-  device_buffer(const char* data, size_t size) : _data(data), _size(size) {}
+  device_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
 };
 
 /**
