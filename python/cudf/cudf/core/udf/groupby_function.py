@@ -196,14 +196,14 @@ files = glob.glob(
 )
 if len(files) == 0:
     raise RuntimeError(
-        "This strings_udf installation is missing the necessary PTX "
+        "This groupby apply installation is missing the necessary PTX "
         "files. Please file an issue reporting this error and how you "
         "installed cudf and strings_udf."
     )
 dev = cuda.get_current_device()
 cc = "".join(str(x) for x in dev.compute_capability)
 sms = [os.path.basename(f).rstrip(".ptx").lstrip("function_") for f in files]
-selected_sm = max(sm for sm in sms if sm < cc)
+selected_sm = max(sm for sm in sms if sm <= cc)
 dev_func_ptx = os.path.join(
     os.path.dirname(__file__), f"function_{selected_sm}.ptx"
 )
