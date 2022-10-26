@@ -168,6 +168,46 @@ struct row_total_size {
   }
 };
 
+std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes, size_type num_rows, size_t chunked_read_size)
+{
+  // now we have an array of {row_count, real output bytes}. just walk through it and generate
+  // splits.
+  // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
+  // sizes are reasonably large, this shouldn't iterate too many times
+  std::vector<gpu::chunk_read_info> splits;
+  {
+    size_t cur_pos         = 0;
+    size_t cumulative_size = 0;
+    size_t cur_row_count   = 0;
+    while (cur_row_count < static_cast<size_t>(num_rows)) {
+      auto iter = thrust::make_transform_iterator(
+        sizes.begin() + cur_pos,
+        [cumulative_size](cumulative_row_info const& i) { return i.size_bytes - cumulative_size; });
+      int64_t p =
+        (thrust::lower_bound(
+           thrust::seq, iter, iter + sizes.size(), static_cast<size_t>(chunked_read_size)) -
+         iter) +
+        cur_pos;
+      if (static_cast<size_t>(p) >= sizes.size() || (sizes[p].size_bytes - cumulative_size > static_cast<size_t>(chunked_read_size))){
+        p--;
+      }
+
+      // best-try. if we can't find something that'll fit, we have to go bigger
+      while((sizes[p].row_count == cur_row_count || p < 0) && p < (static_cast<int64_t>(sizes.size()) - 1)){
+        p++;
+      }      
+
+      auto const start_row = cur_row_count;
+      cur_row_count        = sizes[p].row_count;
+      splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
+      // printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
+      cur_pos         = p;
+      cumulative_size = sizes[p].size_bytes;
+    }
+  }
+  return splits;
+}
+
 std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
                                                  gpu::chunk_intermediate_data const& id,
                                                  size_type num_rows,
@@ -290,42 +330,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   */
   // clang-format on
 
-  // now we have an array of {row_count, real output bytes}. just walk through it and generate
-  // splits.
-  // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
-  // sizes are reasonably large, this shouldn't iterate too many times
-  std::vector<gpu::chunk_read_info> splits;
-  {
-    size_t cur_pos         = 0;
-    size_t cumulative_size = 0;
-    size_t cur_row_count   = 0;
-    while (cur_row_count < static_cast<size_t>(num_rows)) {
-      auto iter = thrust::make_transform_iterator(
-        h_adjusted.begin() + cur_pos,
-        [cumulative_size](cumulative_row_info const& i) { return i.size_bytes - cumulative_size; });
-      size_type p =
-        (thrust::lower_bound(
-           thrust::seq, iter, iter + h_adjusted.size(), static_cast<size_t>(chunked_read_size)) -
-         iter) +
-        cur_pos;
-      if (h_adjusted[p].size_bytes - cumulative_size > static_cast<size_t>(chunked_read_size) ||
-          static_cast<size_t>(p) == h_adjusted.size()) {
-        p--;
-      }
-      if (h_adjusted[p].row_count == cur_row_count || p < 0) {
-        CUDF_FAIL("Cannot find read split boundary small enough");
-      }
-
-      auto const start_row = cur_row_count;
-      cur_row_count        = h_adjusted[p].row_count;
-      splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
-      // printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
-      cur_pos         = p;
-      cumulative_size = h_adjusted[p].size_bytes;
-    }
-  }
-
-  return splits;
+  return find_splits(h_adjusted, num_rows, chunked_read_size);
 }
 
 struct get_page_chunk_idx {
