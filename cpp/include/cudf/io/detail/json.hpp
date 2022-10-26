@@ -39,7 +39,7 @@ namespace json {
 table_with_metadata read_json(
   std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
   json_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace json

@@ -142,7 +142,7 @@ std::unique_ptr<scalar> reduce(
   reduce_aggregation const& agg,
   data_type output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
@@ -157,7 +157,7 @@ std::unique_ptr<scalar> reduce(
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
-      return detail::tdigest::make_empty_tdigest_scalar();
+      return detail::tdigest::make_empty_tdigest_scalar(stream);
     }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
       // Under some circumstance, the output type will become the List of input type,
