@@ -737,7 +737,7 @@ TEST_F(JsonTest, TreeRepresentation3)
 
 TEST_F(JsonTest, TreeError)
 {
-  auto const stream       = cudf::default_stream_value;
+  auto const stream       = cudf::get_default_stream();
   std::string const input = R"([ {}, }{])";
   // Prepare input & output buffers
   cudf::string_scalar d_scalar(input, true, stream);
