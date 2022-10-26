@@ -90,7 +90,7 @@ public:
 
   void reset_scoped_max_total_allocated(std::size_t initial_value) override {
     std::scoped_lock lock(max_total_allocated_mutex);
-    scoped_allocated = 0;
+    scoped_allocated = initial_value;
     scoped_max_total_allocated = initial_value;
   }
 
@@ -517,7 +517,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getMaximumTotalBytesAllocated(JN
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetScopedMaximumBytesAllocatedInternal(
-    JNIEnv *env, jclass, long initialValue) {
+    JNIEnv *env, jclass, jlong initialValue) {
   reset_scoped_max_total_allocated(initialValue);
 }
 

@@ -115,7 +115,7 @@ public class RmmTest {
     try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
       Rmm.resetScopedMaximumBytesAllocated(1024);
       try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
-        assertEquals(20480, Rmm.getScopedMaximumBytesAllocated());
+        assertEquals(21504, Rmm.getScopedMaximumBytesAllocated());
         assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
       }
     }
