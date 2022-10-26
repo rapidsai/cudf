@@ -42,7 +42,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   cudf::table_view input{*input_table};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
 
     auto result = (stable) ? cudf::stable_sorted_order(input) : cudf::sorted_order(input);
   }

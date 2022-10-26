@@ -32,7 +32,7 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=0
+export INSTALL_DASK_MAIN=1
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
 export DASK_STABLE_VERSION="2022.9.2"
@@ -202,11 +202,26 @@ else
     conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"
+
+    # Set up library for finding incorrect default stream usage.
+    cd "$WORKSPACE/cpp/tests/utilities/identify_stream_usage/"
+    mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
+    STREAM_IDENTIFY_LIB="$WORKSPACE/cpp/tests/utilities/identify_stream_usage/build/libidentify_stream_usage.so"
+
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         test_name=$(basename ${gt})
+
         echo "Running GoogleTest $test_name"
-        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        if [[ ${test_name} == "SPAN_TEST" ]]; then
+            # This one test is specifically designed to test using a thrust device
+            # vector, so we expect and allow it to include default stream usage.
+            gtest_filter="SpanTest.CanConstructFromDeviceContainers"
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="-${gtest_filter}"
+            ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="${gtest_filter}"
+        else
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        fi
     done
 
     # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
@@ -294,7 +309,7 @@ elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
 else
     cd "$WORKSPACE/python/cudf/cudf"
     gpuci_logger "Python py.test retest cuDF UDFs"
-    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+    py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
 fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.

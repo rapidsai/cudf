@@ -207,7 +207,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
     } else {
       // Don't need a random seconds generator for sub-second intervals
       seconds_gen = [range_s](thrust::minstd_rand&, size_t size) {
-        rmm::device_uvector<int64_t> result(size, cudf::default_stream_value);
+        rmm::device_uvector<int64_t> result(size, cudf::get_default_stream());
         thrust::fill(thrust::device, result.begin(), result.end(), range_s.second.count());
         return result;
       };
@@ -225,7 +225,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   {
     auto const sec = seconds_gen(engine, size);
     auto const ns  = nanoseconds_gen(engine, size);
-    rmm::device_uvector<T> result(size, cudf::default_stream_value);
+    rmm::device_uvector<T> result(size, cudf::get_default_stream());
     thrust::transform(
       thrust::device,
       sec.begin(),
@@ -247,40 +247,33 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
  */
 template <typename T>
 struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
-  using rep = typename T::rep;
-  rep const lower_bound;
-  rep const upper_bound;
-  distribution_fn<rep> dist;
+  using DeviceType = cudf::device_storage_type_t<T>;
+  DeviceType const lower_bound;
+  DeviceType const upper_bound;
+  distribution_fn<DeviceType> dist;
   std::optional<numeric::scale_type> scale;
 
-  random_value_fn(distribution_params<rep> const& desc)
+  random_value_fn(distribution_params<DeviceType> const& desc)
     : lower_bound{desc.lower_bound},
       upper_bound{desc.upper_bound},
-      dist{make_distribution<rep>(desc.id, desc.lower_bound, desc.upper_bound)}
+      dist{make_distribution<DeviceType>(desc.id, desc.lower_bound, desc.upper_bound)}
   {
   }
 
-  rmm::device_uvector<T> operator()(thrust::minstd_rand& engine, unsigned size)
+  [[nodiscard]] numeric::scale_type get_scale(thrust::minstd_rand& engine)
   {
     if (not scale.has_value()) {
-      int const max_scale = std::numeric_limits<rep>::digits10;
+      constexpr int max_scale = std::numeric_limits<DeviceType>::digits10;
       std::uniform_int_distribution<int> scale_dist{-max_scale, max_scale};
       std::mt19937 engine_scale(engine());
       scale = numeric::scale_type{scale_dist(engine_scale)};
     }
-    auto const ints = dist(engine, size);
-    rmm::device_uvector<T> result(size, cudf::default_stream_value);
-    // Clamp the generated random value to the specified range
-    thrust::transform(thrust::device,
-                      ints.begin(),
-                      ints.end(),
-                      result.begin(),
-                      [scale       = *(this->scale),
-                       upper_bound = this->upper_bound,
-                       lower_bound = this->lower_bound] __device__(auto int_value) {
-                        return T{std::clamp(int_value, lower_bound, upper_bound), scale};
-                      });
-    return result;
+    return scale.value_or(numeric::scale_type{0});
+  }
+
+  rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, unsigned size)
+  {
+    return dist(engine, size);
   }
 };
 
@@ -314,7 +307,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   random_value_fn(distribution_params<bool> const& desc)
     : dist{[valid_prob = desc.probability_true](thrust::minstd_rand& engine,
                                                 size_t size) -> rmm::device_uvector<bool> {
-        rmm::device_uvector<bool> result(size, cudf::default_stream_value);
+        rmm::device_uvector<bool> result(size, cudf::get_default_stream());
         thrust::tabulate(
           thrust::device, result.begin(), result.end(), bool_generator(engine, valid_prob));
         return result;
@@ -366,7 +359,7 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
         return samples_indices[sample_idx];
       });
     rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
-                                                                 cudf::default_stream_value);
+                                                                 cudf::get_default_stream());
     thrust::copy(thrust::device,
                  avg_repeated_sample_indices_iterator,
                  avg_repeated_sample_indices_iterator + num_rows,
@@ -398,10 +391,18 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
 
+  using DeviceType            = cudf::device_storage_type_t<T>;
+  cudf::data_type const dtype = [&]() {
+    if constexpr (cudf::is_fixed_point<T>())
+      return cudf::data_type{cudf::type_to_id<T>(), value_dist.get_scale(engine)};
+    else
+      return cudf::data_type{cudf::type_to_id<T>()};
+  }();
+
   // Distribution for picking elements from the array of samples
   auto const avg_run_len = profile.get_avg_run_length();
-  rmm::device_uvector<T> data(0, cudf::default_stream_value);
-  rmm::device_uvector<bool> null_mask(0, cudf::default_stream_value);
+  rmm::device_uvector<DeviceType> data(0, cudf::get_default_stream());
+  rmm::device_uvector<bool> null_mask(0, cudf::get_default_stream());
 
   if (profile.get_cardinality() == 0 and avg_run_len == 1) {
     data      = value_dist(engine, num_rows);
@@ -412,12 +413,13 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                                           : profile_cardinality;
     }();
     rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
-    rmm::device_uvector<T> samples              = value_dist(engine, cardinality);
+    rmm::device_uvector<DeviceType> samples     = value_dist(engine, cardinality);
+
     // generate n samples and gather.
     auto const sample_indices =
       sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
-    data      = rmm::device_uvector<T>(num_rows, cudf::default_stream_value);
-    null_mask = rmm::device_uvector<bool>(num_rows, cudf::default_stream_value);
+    data      = rmm::device_uvector<DeviceType>(num_rows, cudf::get_default_stream());
+    null_mask = rmm::device_uvector<bool>(num_rows, cudf::get_default_stream());
     thrust::gather(
       thrust::device, sample_indices.begin(), sample_indices.end(), samples.begin(), data.begin());
     thrust::gather(thrust::device,
@@ -431,7 +433,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
 
   return std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_to_id<T>()},
+    dtype,
     num_rows,
     data.release(),
     profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
@@ -496,12 +498,12 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
-  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::default_stream_value);
+  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
   thrust::exclusive_scan(
     thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
   // offfsets are ready.
   auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
-  rmm::device_uvector<char> chars(chars_length, cudf::default_stream_value);
+  rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
                      thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
                      num_rows,

@@ -30,7 +30,7 @@ import cudf
 from cudf.api.types import is_struct_dtype
 
 
-# Converts the Python source input to libcudf++ IO source_info
+# Converts the Python source input to libcudf IO source_info
 # with the appropriate type and source values
 cdef source_info make_source_info(list src) except*:
     if not src:
@@ -80,7 +80,7 @@ cdef source_info make_source_info(list src) except*:
 
     return source_info(c_host_buffers)
 
-# Converts the Python sink input to libcudf++ IO sink_info.
+# Converts the Python sink input to libcudf IO sink_info.
 cdef sink_info make_sinks_info(
     list src, vector[unique_ptr[data_sink]] & sink
 ) except*:
@@ -129,7 +129,7 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
     return info
 
 
-# Adapts a python io.IOBase object as a libcudf++ IO data_sink. This lets you
+# Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
 # write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
 cdef cppclass iobase_data_sink(data_sink):
     object buf
