@@ -1215,6 +1215,8 @@ filepath_or_buffer : str, path object, or file-like object
 delimiter : string, default None
     The delimiter that should be used for splitting text chunks into
     separate cudf column rows. The delimiter may be one or more characters.
+strip_delimiters : boolean, default False
+    If True, removes delimiters that are normally kept at the end of strings.
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
     offset in bytes, the second number is the range size in bytes.
