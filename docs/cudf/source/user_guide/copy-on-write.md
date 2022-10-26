@@ -84,7 +84,7 @@ different device objects:
 
 ````{Warning}
 When ``copy_on_write`` is enabled, all of the deep copies are constructed with 
-weak-references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface`
+weak-references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
 or `series.data.__cuda_array_interface__` which will then take care of detaching any existing weak-references that a column contains.
 ````
 

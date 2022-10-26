@@ -359,7 +359,7 @@ cdef class Column:
 
     def _detach_refs(self, zero_copied=False):
         """
-        Detaches a column from it's current Buffers by making
+        Detaches a column from its current Buffers by making
         a true deep-copy.
         """
         if not self._is_cai_zero_copied() and self.has_a_weakref():
