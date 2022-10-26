@@ -31,60 +31,53 @@
 #include NVCOMP_ZSTD_HEADER
 #endif
 
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 3)
-#define NVCOMP_HAS_ZSTD_DECOMP 1
-#else
-#define NVCOMP_HAS_ZSTD_DECOMP 0
-#endif
+constexpr bool NVCOMP_HAS_ZSTD_DECOMP = NVCOMP_MAJOR_VERSION > 2 or
+                                        (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 3);
 
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 4)
-#define NVCOMP_HAS_ZSTD_COMP 1
-#else
-#define NVCOMP_HAS_ZSTD_COMP 0
-#endif
+constexpr bool NVCOMP_HAS_ZSTD_COMP = NVCOMP_MAJOR_VERSION > 2 or
+                                      (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 4);
 
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 3)
-#define NVCOMP_HAS_DEFLATE 1
-#else
-#define NVCOMP_HAS_DEFLATE 0
-#endif
+constexpr bool NVCOMP_HAS_DEFLATE = NVCOMP_MAJOR_VERSION > 2 or
+                                    (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 3);
 
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
-  (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 1)
-#define NVCOMP_HAS_TEMPSIZE_EX 1
-#else
-#define NVCOMP_HAS_TEMPSIZE_EX 0
-#endif
+constexpr bool NVCOMP_HAS_TEMPSIZE_EX = NVCOMP_MAJOR_VERSION > 2 or
+                                        (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or
+                                        (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and
+                                         NVCOMP_PATCH_VERSION >= 1);
 
 // ZSTD is stable for nvcomp 2.3.2 or newer
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
-  (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 2)
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 0
-#else
-#define NVCOMP_ZSTD_IS_EXPERIMENTAL 1
-#endif
+constexpr bool NVCOMP_ZSTD_IS_STABLE = NVCOMP_MAJOR_VERSION > 2 or
+                                       (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or
+                                       (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and
+                                        NVCOMP_PATCH_VERSION >= 2);
+
+// Issue https://github.com/NVIDIA/spark-rapids/issues/6614 impacts nvCOMP 2.4.0 ZSTD decompression
+// on compute 6.x
+constexpr bool NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL =
+  NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 4 and NVCOMP_PATCH_VERSION == 0;
 
 namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
 template <typename... Args>
-nvcompStatus_t batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
+std::optional<nvcompStatus_t> batched_decompress_get_temp_size_ex(compression_type compression,
+                                                                  Args&&... args)
 {
-#if NVCOMP_HAS_TEMPSIZE_EX
-  switch (compression) {
-    case compression_type::SNAPPY:
-      return nvcompBatchedSnappyDecompressGetTempSizeEx(std::forward<Args>(args)...);
-    case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_DECOMP
-      return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
-    case compression_type::DEFLATE: [[fallthrough]];
-    default: CUDF_FAIL("Unsupported compression type");
+  if constexpr (NVCOMP_HAS_TEMPSIZE_EX) {
+    switch (compression) {
+      case compression_type::SNAPPY:
+        return nvcompBatchedSnappyDecompressGetTempSizeEx(std::forward<Args>(args)...);
+      case compression_type::ZSTD:
+        if constexpr (NVCOMP_HAS_ZSTD_DECOMP) {
+          return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
+        } else {
+          return std::nullopt;
+        }
+      case compression_type::DEFLATE: [[fallthrough]];
+      default: return std::nullopt;
+    }
   }
-#endif
-  CUDF_FAIL("GetTempSizeEx is not supported in the current nvCOMP version");
+  return std::nullopt;
 }
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSize
@@ -95,17 +88,17 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSize(std::forward<Args>(args)...);
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_DECOMP
-      return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_DECOMP) {
+        return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     case compression_type::DEFLATE:
-#if NVCOMP_HAS_DEFLATE
-      return nvcompBatchedDeflateDecompressGetTempSize(std::forward<Args>(args)...);
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_DEFLATE) {
+        return nvcompBatchedDeflateDecompressGetTempSize(std::forward<Args>(args)...);
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -118,17 +111,18 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressAsync(std::forward<Args>(args)...);
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_DECOMP
-      return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_DECOMP) {
+        return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
+
     case compression_type::DEFLATE:
-#if NVCOMP_HAS_DEFLATE
-      return nvcompBatchedDeflateDecompressAsync(std::forward<Args>(args)...);
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_DEFLATE) {
+        return nvcompBatchedDeflateDecompressAsync(std::forward<Args>(args)...);
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -138,21 +132,36 @@ size_t batched_decompress_temp_size(compression_type compression,
                                     size_t max_uncomp_chunk_size,
                                     size_t max_total_uncomp_size)
 {
-  size_t temp_size         = 0;
-  auto const nvcomp_status = [&]() {
-    try {
-      return batched_decompress_get_temp_size_ex(
-        compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
-    } catch (cudf::logic_error const& err) {
-      return batched_decompress_get_temp_size(
-        compression, num_chunks, max_uncomp_chunk_size, &temp_size);
-    }
-  }();
+  size_t temp_size   = 0;
+  auto nvcomp_status = batched_decompress_get_temp_size_ex(
+    compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
+
+  if (nvcomp_status.value_or(nvcompStatus_t::nvcompErrorInternal) !=
+      nvcompStatus_t::nvcompSuccess) {
+    nvcomp_status =
+      batched_decompress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size, &temp_size);
+  }
 
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for decompression");
 
   return temp_size;
+}
+
+void check_is_zstd_enabled()
+{
+  CUDF_EXPECTS(NVCOMP_HAS_ZSTD_DECOMP, "nvCOMP 2.3 or newer is required for Zstandard compression");
+  CUDF_EXPECTS(NVCOMP_ZSTD_IS_STABLE or cudf::io::detail::nvcomp_integration::is_all_enabled(),
+               "Zstandard compression is experimental, you can enable it through "
+               "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+
+  if constexpr (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL) {
+    int device;
+    int cc_major;
+    CUDF_CUDA_TRY(cudaGetDevice(&device));
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+    CUDF_EXPECTS(cc_major != 6, "Zstandard decompression is disabled on Pascal GPUs");
+  }
 }
 
 void batched_decompress(compression_type compression,
@@ -163,18 +172,7 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
-  // TODO Consolidate config use to a common location
-  if (compression == compression_type::ZSTD) {
-#if NVCOMP_HAS_ZSTD_DECOMP
-#if NVCOMP_ZSTD_IS_EXPERIMENTAL
-    CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
-                 "Zstandard compression is experimental, you can enable it through "
-                 "`LIBCUDF_NVCOMP_POLICY` environment variable.");
-#endif
-#else
-    CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
-#endif
-  }
+  if (compression == compression_type::ZSTD) { check_is_zstd_enabled(); }
 
   auto const num_chunks = inputs.size();
 
@@ -215,21 +213,22 @@ auto batched_compress_temp_size(compression_type compression,
         batch_size, max_uncompressed_chunk_bytes, nvcompBatchedSnappyDefaultOpts, &temp_size);
       break;
     case compression_type::DEFLATE:
-#if NVCOMP_HAS_DEFLATE
-      nvcomp_status = nvcompBatchedDeflateCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedDeflateDefaultOpts, &temp_size);
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_DEFLATE) {
+        nvcomp_status = nvcompBatchedDeflateCompressGetTempSize(
+          batch_size, max_uncompressed_chunk_bytes, nvcompBatchedDeflateDefaultOpts, &temp_size);
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_COMP) {
+        nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
+          batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
+
     default: CUDF_FAIL("Unsupported compression type");
   }
 
@@ -253,21 +252,21 @@ size_t compress_max_output_chunk_size(compression_type compression,
         capped_uncomp_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
       break;
     case compression_type::DEFLATE:
-#if NVCOMP_HAS_DEFLATE
-      status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
-        capped_uncomp_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_DEFLATE) {
+        status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
+          capped_uncomp_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      status = nvcompBatchedZstdCompressGetMaxOutputChunkSize(
-        capped_uncomp_bytes, nvcompBatchedZstdDefaultOpts, &max_comp_chunk_size);
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_COMP) {
+        status = nvcompBatchedZstdCompressGetMaxOutputChunkSize(
+          capped_uncomp_bytes, nvcompBatchedZstdDefaultOpts, &max_comp_chunk_size);
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     default: CUDF_FAIL("Unsupported compression type");
   }
 
@@ -303,37 +302,39 @@ static void batched_compress_async(compression_type compression,
                                                        stream.value());
       break;
     case compression_type::DEFLATE:
-#if NVCOMP_HAS_DEFLATE
-      nvcomp_status = nvcompBatchedDeflateCompressAsync(device_uncompressed_ptrs,
-                                                        device_uncompressed_bytes,
-                                                        max_uncompressed_chunk_bytes,
-                                                        batch_size,
-                                                        device_temp_ptr,
-                                                        temp_bytes,
-                                                        device_compressed_ptrs,
-                                                        device_compressed_bytes,
-                                                        nvcompBatchedDeflateDefaultOpts,
-                                                        stream.value());
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_DEFLATE) {
+        nvcomp_status = nvcompBatchedDeflateCompressAsync(device_uncompressed_ptrs,
+                                                          device_uncompressed_bytes,
+                                                          max_uncompressed_chunk_bytes,
+                                                          batch_size,
+                                                          device_temp_ptr,
+                                                          temp_bytes,
+                                                          device_compressed_ptrs,
+                                                          device_compressed_bytes,
+                                                          nvcompBatchedDeflateDefaultOpts,
+                                                          stream.value());
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
+
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      nvcomp_status = nvcompBatchedZstdCompressAsync(device_uncompressed_ptrs,
-                                                     device_uncompressed_bytes,
-                                                     max_uncompressed_chunk_bytes,
-                                                     batch_size,
-                                                     device_temp_ptr,
-                                                     temp_bytes,
-                                                     device_compressed_ptrs,
-                                                     device_compressed_bytes,
-                                                     nvcompBatchedZstdDefaultOpts,
-                                                     stream.value());
-      break;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_COMP) {
+        nvcomp_status = nvcompBatchedZstdCompressAsync(device_uncompressed_ptrs,
+                                                       device_uncompressed_bytes,
+                                                       max_uncompressed_chunk_bytes,
+                                                       batch_size,
+                                                       device_temp_ptr,
+                                                       temp_bytes,
+                                                       device_compressed_ptrs,
+                                                       device_compressed_bytes,
+                                                       nvcompBatchedZstdDefaultOpts,
+                                                       stream.value());
+        break;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
+
     default: CUDF_FAIL("Unsupported compression type");
   }
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
@@ -381,7 +382,8 @@ bool is_compression_enabled(compression_type compression)
 {
   switch (compression) {
     case compression_type::DEFLATE:
-      return NVCOMP_HAS_DEFLATE and detail::nvcomp_integration::is_all_enabled();
+      // See https://github.com/rapidsai/cudf/issues/11812
+      return false;
     case compression_type::SNAPPY: return detail::nvcomp_integration::is_stable_enabled();
     case compression_type::ZSTD:
       return NVCOMP_HAS_ZSTD_COMP and detail::nvcomp_integration::is_all_enabled();
@@ -416,11 +418,11 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     case compression_type::DEFLATE: return 64 * 1024;
     case compression_type::SNAPPY: return std::nullopt;
     case compression_type::ZSTD:
-#if NVCOMP_HAS_ZSTD_COMP
-      return nvcompZstdCompressionMaxAllowedChunkSize;
-#else
-      CUDF_FAIL("Unsupported compression type");
-#endif
+      if constexpr (NVCOMP_HAS_ZSTD_COMP) {
+        return nvcompZstdCompressionMaxAllowedChunkSize;
+      } else {
+        CUDF_FAIL("Unsupported compression type");
+      }
     default: return std::nullopt;
   }
 }

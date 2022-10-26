@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,12 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-namespace cudf {
-namespace test {
-
-struct IsElementValidTest : public BaseFixture {
+struct IsElementValidTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(IsElementValidTest, IsElementValidBasic)
 {
-  fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
   EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 0));
   EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 1));
   EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 2));
@@ -41,12 +38,12 @@ TEST_F(IsElementValidTest, IsElementValidBasic)
 
 TEST_F(IsElementValidTest, IsElementValidLarge)
 {
-  auto filter        = [](auto i) { return static_cast<bool>(i % 3); };
-  auto val           = thrust::make_counting_iterator(0);
-  auto valid         = cudf::detail::make_counting_transform_iterator(0, filter);
-  size_type num_rows = 1000;
+  auto filter              = [](auto i) { return static_cast<bool>(i % 3); };
+  auto val                 = thrust::make_counting_iterator(0);
+  auto valid               = cudf::detail::make_counting_transform_iterator(0, filter);
+  cudf::size_type num_rows = 1000;
 
-  fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
 
   for (int i = 0; i < num_rows; i++) {
     EXPECT_EQ(cudf::detail::is_element_valid_sync(col, i), filter(i));
@@ -55,16 +52,16 @@ TEST_F(IsElementValidTest, IsElementValidLarge)
 
 TEST_F(IsElementValidTest, IsElementValidOffset)
 {
-  fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
   {
-    auto offset_col = slice(col, {1, 5}).front();
+    auto offset_col = cudf::slice(col, {1, 5}).front();
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 2));
     EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 3));
   }
   {
-    auto offset_col = slice(col, {2, 5}).front();
+    auto offset_col = cudf::slice(col, {2, 5}).front();
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
     EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 2));
@@ -73,20 +70,16 @@ TEST_F(IsElementValidTest, IsElementValidOffset)
 
 TEST_F(IsElementValidTest, IsElementValidOffsetLarge)
 {
-  auto filter        = [](auto i) { return static_cast<bool>(i % 3); };
-  size_type offset   = 37;
-  auto val           = thrust::make_counting_iterator(0);
-  auto valid         = cudf::detail::make_counting_transform_iterator(0, filter);
-  size_type num_rows = 1000;
+  auto filter              = [](auto i) { return static_cast<bool>(i % 3); };
+  cudf::size_type offset   = 37;
+  auto val                 = thrust::make_counting_iterator(0);
+  auto valid               = cudf::detail::make_counting_transform_iterator(0, filter);
+  cudf::size_type num_rows = 1000;
 
-  fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
-  auto offset_col = slice(col, {offset, num_rows}).front();
+  cudf::test::fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
+  auto offset_col = cudf::slice(col, {offset, num_rows}).front();
 
   for (int i = 0; i < offset_col.size(); i++) {
     EXPECT_EQ(cudf::detail::is_element_valid_sync(offset_col, i), filter(i + offset));
   }
 }
-
-}  // namespace test
-
-}  // namespace cudf

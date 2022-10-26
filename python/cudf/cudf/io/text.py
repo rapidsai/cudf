@@ -14,11 +14,16 @@ def read_text(
     filepath_or_buffer,
     delimiter=None,
     byte_range=None,
+    compression=None,
+    compression_offsets=None,
     **kwargs,
 ):
     """{docstring}"""
 
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
+    if delimiter is None:
+        raise ValueError("delimiter needs to be provided")
+
+    filepath_or_buffer, _ = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=None,
         iotypes=(BytesIO, StringIO),
@@ -27,6 +32,10 @@ def read_text(
 
     return cudf.Series._from_data(
         libtext.read_text(
-            filepath_or_buffer, delimiter=delimiter, byte_range=byte_range
+            filepath_or_buffer,
+            delimiter=delimiter,
+            byte_range=byte_range,
+            compression=compression,
+            compression_offsets=compression_offsets,
         )
     )

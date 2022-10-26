@@ -139,7 +139,7 @@ std::unique_ptr<column> make_tdigest_column(
   std::unique_ptr<column>&& tdigest_offsets,
   std::unique_ptr<column>&& min_values,
   std::unique_ptr<column>&& max_values,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -153,7 +153,7 @@ std::unique_ptr<column> make_tdigest_column(
  * @returns An empty tdigest column.
  */
 std::unique_ptr<column> make_empty_tdigest_column(
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -167,7 +167,7 @@ std::unique_ptr<column> make_empty_tdigest_column(
  * @returns An empty tdigest scalar.
  */
 std::unique_ptr<scalar> make_empty_tdigest_scalar(
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

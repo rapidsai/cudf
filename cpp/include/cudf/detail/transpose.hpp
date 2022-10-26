@@ -30,7 +30,7 @@ namespace detail {
  */
 std::pair<std::unique_ptr<column>, table_view> transpose(
   table_view const& input,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

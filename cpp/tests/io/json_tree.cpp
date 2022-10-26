@@ -132,7 +132,7 @@ void print_tree(tree_meta_t2 const& cpu_tree)
 }
 void print_tree(tree_meta_t const& d_gpu_tree)
 {
-  auto const cpu_tree = to_cpu_tree(d_gpu_tree, rmm::cuda_stream_default);
+  auto const cpu_tree = to_cpu_tree(d_gpu_tree, cudf::get_default_stream());
   print_tree(cpu_tree);
 }
 
@@ -161,7 +161,7 @@ bool compare_vector(std::vector<T> const& cpu_vec,
                     rmm::device_uvector<T> const& d_vec,
                     std::string const& name)
 {
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::default_stream_value);
+  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::get_default_stream());
   return compare_vector(cpu_vec, gpu_vec, name);
 }
 
@@ -173,7 +173,7 @@ void compare_trees(tree_meta_t2 const& cpu_tree, tree_meta_t const& d_gpu_tree, 
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_levels.size());
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_begin.size());
   EXPECT_EQ(cpu_num_nodes, d_gpu_tree.node_range_end.size());
-  auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::default_stream_value);
+  auto gpu_tree = to_cpu_tree(d_gpu_tree, cudf::get_default_stream());
   bool mismatch = false;
 
 #define COMPARE_MEMBER(member)                                                       \
@@ -289,7 +289,7 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
       case token_t::StructBegin: return NC_STRUCT;
       case token_t::ListBegin: return NC_LIST;
       case token_t::StringBegin: return NC_STR;
-      case token_t::ValueBegin: return NC_VAL;
+      case token_t::ValueBegin: return NC_STR;  // NC_VAL;
       case token_t::FieldNameBegin: return NC_FN;
       default: return NC_ERR;
     };
@@ -535,7 +535,7 @@ struct JsonTest : public cudf::test::BaseFixture {
 
 TEST_F(JsonTest, TreeRepresentation)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Test input
   std::string const input = R"(  [{)"
@@ -576,14 +576,14 @@ TEST_F(JsonTest, TreeRepresentation)
   // Golden sample of node categories
   std::vector<cuio_json::node_t> golden_node_categories = {
     cuio_json::NC_LIST, cuio_json::NC_STRUCT, cuio_json::NC_FN,     cuio_json::NC_STR,
-    cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_VAL,    cuio_json::NC_VAL,
-    cuio_json::NC_VAL,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_FN,
-    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_VAL,    cuio_json::NC_STRUCT,
+    cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_STR,    cuio_json::NC_STR,
+    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_FN,
+    cuio_json::NC_STR,  cuio_json::NC_FN,     cuio_json::NC_STR,    cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_STR,    cuio_json::NC_FN,     cuio_json::NC_LIST,
-    cuio_json::NC_VAL,  cuio_json::NC_STRUCT, cuio_json::NC_VAL,    cuio_json::NC_STRUCT,
+    cuio_json::NC_STR,  cuio_json::NC_STRUCT, cuio_json::NC_STR,    cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_LIST,   cuio_json::NC_STRUCT, cuio_json::NC_STRUCT,
     cuio_json::NC_FN,   cuio_json::NC_STR,    cuio_json::NC_FN,     cuio_json::NC_STR,
-    cuio_json::NC_FN,   cuio_json::NC_VAL};
+    cuio_json::NC_FN,   cuio_json::NC_STR};
 
   // Golden sample of node ids
   // clang-format off
@@ -632,7 +632,7 @@ TEST_F(JsonTest, TreeRepresentation)
 
 TEST_F(JsonTest, TreeRepresentation2)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   // Test input: value end with comma, space, close-brace ", }"
   std::string const input =
     // 0         1         2         3         4         5         6         7         8         9
@@ -664,9 +664,9 @@ TEST_F(JsonTest, TreeRepresentation2)
   // clang-format off
   std::vector<cuio_json::node_t> golden_node_categories = {
     cuio_json::NC_LIST, cuio_json::NC_STRUCT,
-    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_LIST,
-    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL,
-                          cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_VAL, cuio_json::NC_FN,  cuio_json::NC_VAL};
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_LIST,
+    cuio_json::NC_STRUCT, cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_STR,
+                          cuio_json::NC_FN, cuio_json::NC_STRUCT,  cuio_json::NC_FN,  cuio_json::NC_STR, cuio_json::NC_FN,  cuio_json::NC_STR};
 
   // Golden sample of node ids
   std::vector<cuio_json::NodeIndexT> golden_parent_node_ids = {
@@ -707,7 +707,7 @@ TEST_F(JsonTest, TreeRepresentation2)
 
 TEST_F(JsonTest, TreeRepresentation3)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   // Test input: Json lines with same TreeRepresentation2 input
   std::string const input =
     R"(  {}
@@ -744,6 +744,7 @@ struct JsonTreeTraversalTest : public cudf::test::BaseFixture,
 
 //
 std::vector<std::string> json_list = {
+  "[]",
   "value",
   "\"string\"",
   "[1, 2, 3]",
@@ -767,11 +768,16 @@ std::vector<std::string> json_list = {
 
 std::vector<std::string> json_lines_list = {
   // Test input a: {x:i, y:i, z:[]}, b: {x:i, z:i} with JSON-lines
+  "",
   R"(  {}
  { "a": { "y" : 6, "z": [] }}
  { "a": { "y" : 6, "z": [2, 3, 4, 5] }}
  { "a": { "z": [4], "y" : 6 }}
- { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )"};
+ { "a" : { "x" : 8, "y": 9 }, "b" : {"x": 10 , "z": 11 }} )",
+  // empty list, row.
+  R"( {"a" : [], "b" : {}}
+ {"a" : []}
+ {"b" : {}})"};
 INSTANTIATE_TEST_SUITE_P(Mixed_And_Records,
                          JsonTreeTraversalTest,
                          ::testing::Combine(::testing::Values(false),
@@ -784,7 +790,7 @@ INSTANTIATE_TEST_SUITE_P(JsonLines,
 TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 {
   auto [json_lines, input] = GetParam();
-  auto stream              = cudf::default_stream_value;
+  auto stream              = cudf::get_default_stream();
   cudf::io::json_reader_options options{};
   options.enable_lines(json_lines);
 

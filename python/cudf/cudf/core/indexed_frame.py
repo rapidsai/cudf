@@ -1636,6 +1636,9 @@ class IndexedFrame(Frame):
         )
 
     def _split(self, splits, keep_index=True):
+        if self._num_rows == 0:
+            return []
+
         columns_split = libcudf.copying.columns_split(
             [
                 *(self._index._data.columns if keep_index else []),
@@ -4731,10 +4734,12 @@ def _drop_rows_by_labels(
     level: Union[int, str],
     errors: str,
 ) -> DataFrameOrSeries:
-    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
-    if some items in `labels` do not exist in `obj._index`.
+    """Remove rows specified by `labels`.
 
-    Will raise if level(int) is greater or equal to index nlevels
+    If `errors="raise"`, an error is raised if some items in `labels` do not
+    exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels.
     """
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")

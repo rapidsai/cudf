@@ -34,8 +34,11 @@ unset GIT_DESCRIBE_TAG
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2022.9.2"
+
 # ucx-py version
-export UCX_PY_VERSION='0.28.*'
+export UCX_PY_VERSION='0.29.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -75,6 +78,12 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+# Remove `dask/label/dev` channel if INSTALL_DASK_MAIN=0
+if [ "$SOURCE_BRANCH" != "main" ] && [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
+  conda config --system --remove channels dask/label/dev
+  gpuci_mamba_retry install conda-forge::dask==$DASK_STABLE_VERSION conda-forge::distributed==$DASK_STABLE_VERSION conda-forge::dask-core==$DASK_STABLE_VERSION --force-reinstall
+fi
+
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
@@ -91,8 +100,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.7.1 conda-forge::distributed>=2022.7.1 conda-forge::dask-core>=2022.7.1 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -188,13 +197,31 @@ else
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
+    
+    gpuci_logger "Check current conda environment"
+    conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"
+
+    # Set up library for finding incorrect default stream usage.
+    cd "$WORKSPACE/cpp/tests/utilities/identify_stream_usage/"
+    mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
+    STREAM_IDENTIFY_LIB="$WORKSPACE/cpp/tests/utilities/identify_stream_usage/build/libidentify_stream_usage.so"
+
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         test_name=$(basename ${gt})
+
         echo "Running GoogleTest $test_name"
-        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        if [[ ${test_name} == "SPAN_TEST" ]]; then
+            # This one test is specifically designed to test using a thrust device
+            # vector, so we expect and allow it to include default stream usage.
+            gtest_filter="SpanTest.CanConstructFromDeviceContainers"
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="-${gtest_filter}"
+            ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="${gtest_filter}"
+        else
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        fi
     done
 
     # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
@@ -263,17 +290,14 @@ cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
+
+# only install strings_udf after cuDF is finished testing without its presence
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
+# only install strings_udf after cuDF is finished testing without its presence
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
-
-# We do not want to exit with a nonzero exit code in the case where no
-# strings_udf tests are run because that will always happen when the local CUDA
-# version is not 11.5. We need to suppress the exit code because this script is
-# run with set -e and we're already setting a trap that we don't want to
-# override here.
 
 STRINGS_UDF_PYTEST_RETCODE=0
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
@@ -285,7 +309,7 @@ elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
 else
     cd "$WORKSPACE/python/cudf/cudf"
     gpuci_logger "Python py.test retest cuDF UDFs"
-    py.test tests/test_udf_masked_ops.py -n 8 --cache-clear
+    py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
 fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.

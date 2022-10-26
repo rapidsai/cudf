@@ -12,16 +12,14 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1)
+cmake_minimum_required(VERSION 3.23.1)
 
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
 include(rapids-find)
 
-rapids_cpm_init()
-
-rapids_cuda_init_architectures(STRINGS_UDF)
+rapids_cuda_init_architectures(strings-udf-cpp)
 
 # Create a project so that we can enable CUDA architectures in this file.
 project(
@@ -29,6 +27,8 @@ project(
   VERSION ${strings_udf_version}
   LANGUAGES CUDA
 )
+
+rapids_cpm_init()
 
 rapids_find_package(
   CUDAToolkit REQUIRED
@@ -67,7 +67,7 @@ install(TARGETS cudf_strings_udf DESTINATION ./strings_udf/_lib/)
 
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.
-function(copy_ptx_to_location target destination)
+function(copy_ptx_to_location target destination new_name)
   set(cmake_generated_file
       "${CMAKE_CURRENT_BINARY_DIR}/cmake/cp_${target}_$<LOWER_CASE:$<CONFIG>>_ptx.cmake"
   )
@@ -76,8 +76,9 @@ function(copy_ptx_to_location target destination)
     OUTPUT "${cmake_generated_file}"
     CONTENT
       "
-set(ptx_paths \"$<TARGET_OBJECTS:${target}>\")
-file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
+set(ptx_path \"$<TARGET_OBJECTS:${target}>\")
+file(MAKE_DIRECTORY \"${destination}\")
+file(COPY_FILE \${ptx_path} \"${destination}/${new_name}\")"
   )
 
   add_custom_target(
@@ -91,6 +92,11 @@ endfunction()
 # Create the shim library for each architecture.
 set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
+list(SORT CMAKE_CUDA_ARCHITECTURES)
+list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
+
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 
@@ -102,7 +108,7 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
-  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf")
+  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf" ${tgt}.ptx)
   install(
     FILES $<TARGET_OBJECTS:${tgt}>
     DESTINATION ./strings_udf

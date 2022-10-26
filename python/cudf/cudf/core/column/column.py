@@ -518,7 +518,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if step == 1:
+        if step == 1 and not isinstance(
+            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+        ):
+            # NOTE: List & Struct dtypes aren't supported by both
+            # inplace & out-of-place fill. Hence we need to use scatter for
+            # these two types.
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
@@ -566,21 +571,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        try:
-            if is_bool_dtype(key.dtype):
-                return libcudf.copying.boolean_mask_scatter(
-                    [value], [self], key
-                )[0]._with_type_metadata(self.dtype)
-            else:
-                return libcudf.copying.scatter([value], key, [self])[
-                    0
-                ]._with_type_metadata(self.dtype)
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+        if is_bool_dtype(key.dtype):
+            return libcudf.copying.boolean_mask_scatter([value], [self], key)[
+                0
+            ]._with_type_metadata(self.dtype)
+        else:
+            return libcudf.copying.scatter([value], key, [self])[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
         self, num_keys: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
