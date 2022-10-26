@@ -1338,7 +1338,7 @@ class csv_writer_options {
   std::string _true_value = std::string{"true"};
   // string to use for values == 0 in INT8 types (default 'false')
   std::string _false_value = std::string{"false"};
-  // Optional associated metadata
+  // Names of all columns; if empty, writer will generate column names
   std::vector<std::string> _names;
 
   /**
