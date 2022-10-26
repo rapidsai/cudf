@@ -34,8 +34,7 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
-inline void decompress_check(device_span<compression_result const> results,
-                             rmm::cuda_stream_view stream)
+void decompress_check(device_span<compression_result const> results, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               results.begin(),
@@ -44,6 +43,24 @@ inline void decompress_check(device_span<compression_result const> results,
                                 return res.status == compression_status::SUCCESS;
                               }),
                "Error during decompression");
+}
+
+/**
+ * @brief Recursively copy the output buffer from one to another.
+ *
+ * This only copies `name` and `user_data` fields, which are generated during reader construction.
+ *
+ * @param buff The old output buffer
+ * @param new_buff The new output buffer
+ */
+void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
+{
+  new_buff.name      = buff.name;
+  new_buff.user_data = buff.user_data;
+  for (auto const& child : buff.children) {
+    auto& new_child = new_buff.children.emplace_back(column_buffer(child.type, child.is_nullable));
+    copy_output_buffer(child, new_child);
+  }
 }
 
 }  // namespace
@@ -756,6 +773,13 @@ reader::impl::impl(std::size_t chunk_read_limit,
          mr)
 {
   _chunk_read_limit = chunk_read_limit;
+
+  // Save the states of the output buffers for reuse in `chunk_read()`.
+  for (auto const& buff : _output_columns) {
+    auto& new_buff =
+      _output_columns_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
+    copy_output_buffer(buff, new_buff);
+  }
 }
 
 void reader::impl::preprocess_file_and_columns(
@@ -886,14 +910,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
 table_with_metadata reader::impl::read_chunk()
 {
-  {
-    // TODO: this be called once, then _output_columns is saved as a template and copied to the
-    // output each time.
-    std::tie(_input_columns, _output_columns, _output_column_schemas) =
-      _metadata->select_columns(_options.get_columns(),
-                                _options.is_enabled_use_pandas_metadata(),
-                                _strings_to_categorical,
-                                _timestamp_type.id());
+  // Reset the output buffers to their original states (right after reader construction).
+  _output_columns.resize(0);
+  for (auto const& buff : _output_columns_template) {
+    auto& new_buff = _output_columns.emplace_back(column_buffer(buff.type, buff.is_nullable));
+    copy_output_buffer(buff, new_buff);
   }
 
   preprocess_file_and_columns(0, -1, true, {});

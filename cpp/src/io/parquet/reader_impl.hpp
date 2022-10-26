@@ -282,6 +282,9 @@ class reader::impl {
   // output columns to be generated
   std::vector<column_buffer> _output_columns;
 
+  // data of output columns saved after construction for reuse
+  std::vector<column_buffer> _output_columns_template;
+
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
 
