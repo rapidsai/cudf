@@ -396,7 +396,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                         node_t::NC_FN);
 
   constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_fields, 40),
+  hash_map_type key_map{compute_hash_table_size(num_fields, 40),  // 40% occupancy in hash map
                         cuco::sentinel::empty_key{empty_node_index_sentinel},
                         cuco::sentinel::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
@@ -457,20 +457,18 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   return node_type;
 }
 
-/**
- * @note Two level hashing algorithm
- * 1. Convert node_category+fieldname to node_type. (passed as argument)
- *   a. Create a hashmap to hash field name and assign unique node id as values.
- *   b. Convert the node categories to node types.
- *      Node type is defined as node category enum value if it is not a field node,
- *      otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
- * 2. Set operation on entire path of each node
- *   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
- *      until root.
- *   b. While creating hashmap, transform node id to unique node ids that are inserted into the
- *      hash map. This mimicks set operation with hash map. This unique node ids are set ids.
- *   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
- **/
+// Two level hashing algorithm
+// 1. Convert node_category+fieldname to node_type. (passed as argument)
+//   a. Create a hashmap to hash field name and assign unique node id as values.
+//   b. Convert the node categories to node types.
+//      Node type is defined as node category enum value if it is not a field node,
+//      otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
+// 2. Set operation on entire path of each node
+//   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
+//      until root.
+//   b. While creating hashmap, transform node id to unique node ids that are inserted into the
+//      hash map. This mimicks set operation with hash map. This unique node ids are set ids.
+//   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_node_path(
   device_span<TreeDepthT const> node_levels,
   device_span<size_type const> node_type,
@@ -709,22 +707,19 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   return row_offsets;
 }
 
-/**
-@note
-This algorithm assigns a unique column id to each node in the tree.
-The row offset is the row index of the node in that column id.
-Algorithm:
-1. Generate col_id:
-  a. Set operation on entire path of each node, translate each node id to set id.
-  b. gather unique set ids.
-  c. sort and use binary search to generate column ids.
-  d. Translate parent node ids to parent column ids.
-2. Generate row_offset.
-  a. filter only list childs
-  a. stable_sort by parent_col_id.
-  b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
-  c. propagate to non-list leaves from parent list node by recursion
-**/
+// This algorithm assigns a unique column id to each node in the tree.
+// The row offset is the row index of the node in that column id.
+// Algorithm:
+// 1. Generate col_id:
+//   a. Set operation on entire path of each node, translate each node id to set id.
+//   b. gather unique set ids.
+//   c. sort and use binary search to generate column ids.
+//   d. Translate parent node ids to parent column ids.
+// 2. Generate row_offset.
+//   a. filter only list childs
+//   a. stable_sort by parent_col_id.
+//   b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
+//   c. propagate to non-list leaves from parent list node by recursion
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
