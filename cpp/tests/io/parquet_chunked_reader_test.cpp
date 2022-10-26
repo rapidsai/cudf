@@ -24,6 +24,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -137,7 +138,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 {
   auto constexpr num_rows = 40'000;
 
-  auto const do_test = [](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
@@ -161,11 +162,70 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
   }
 }
 
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
+{
+  // tests some specific boundary conditions in the split calculations.
+
+  auto constexpr num_rows = 40'000;
+
+  auto const do_test = [](std::size_t chunk_read_limit) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const value_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
+
+    auto [input_table, filepath] = write_file(input_columns, "chunked_read_simple_boundary", false);
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+  
+  // test with a limit slightly less than one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(79'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit exactly the size one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(80'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit slightly more the size one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(81'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+   // test with a limit slightly less than two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(159'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit exactly the size of two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(160'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit slightly more the size two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(161'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }  
+}
+
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 {
   auto constexpr num_rows = 60'000;
 
-  auto const do_test = [](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
 
@@ -232,16 +292,18 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const do_test = [](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const int_iter = thrust::make_counting_iterator(0);
-    auto const str_iter = cudf::detail::make_counting_transform_iterator(
-      0, [&](int32_t i) { return std::to_string(i); });
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       auto child1 = int32s_col(int_iter, int_iter + num_rows);
       auto child2 = int32s_col(int_iter + num_rows, int_iter + num_rows * 2);
+
+      auto const str_iter = cudf::detail::make_counting_transform_iterator(
+        0, [&](int32_t i) { return std::to_string(i); });
       auto child3 = strings_col{str_iter, str_iter + num_rows};
+
       return structs_col{{child1, child2, child3}}.release();
     }());
 
@@ -272,7 +334,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const do_test = [](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const int_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
@@ -304,6 +366,119 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
   {
     auto const [input, result, num_chunks] = do_test(400'000, true);
     EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
+{
+  auto constexpr num_rows = 100'000;
+
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const int_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
+    input_columns.emplace_back([=] {
+      std::vector<std::unique_ptr<cudf::column>> child_columns;
+      child_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
+      child_columns.emplace_back(
+        int32s_col(int_iter + num_rows, int_iter + num_rows * 2).release());
+
+      auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
+        return std::to_string(i) + "++++++++++++++++++++" + std::to_string(i);
+      });
+      child_columns.emplace_back(strings_col{str_iter, str_iter + num_rows}.release());
+
+      auto const template_lists = int32s_lists_col{
+        int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{0, 1}, int32s_lists_col{0, 1, 2}};
+      auto const gather_iter =
+        cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+      auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
+      child_columns.emplace_back(
+        std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
+
+      return structs_col(std::move(child_columns)).release();
+    }());
+
+    auto [input_table, filepath] = write_file(input_columns,
+                                              "chunked_read_with_structs_of_lists",
+                                              nullable,
+                                              512 * 1024,  // 512KB per page
+                                              20000        // 20k rows per page
+    );
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+
+  {
+    auto const [input, result, num_chunks] = do_test(500'000, false);
+    EXPECT_EQ(num_chunks, 10);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  {
+    auto const [input, result, num_chunks] = do_test(500'000, true);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
+{
+  auto constexpr num_rows = 100'000;
+
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const int_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
+
+    auto offsets = std::vector<cudf::size_type>{};
+    offsets.reserve(num_rows * 2);
+    cudf::size_type num_structs = 0;
+    for (int i = 0; i < num_rows; ++i) {
+      offsets.push_back(num_structs);
+      auto const new_list_size = i % 4;
+      num_structs += new_list_size;
+    }
+    offsets.push_back(num_structs);
+
+    auto const make_structs_col = [=] {
+      auto child1 = int32s_col(int_iter, int_iter + num_structs);
+      auto child2 = int32s_col(int_iter + num_structs, int_iter + num_structs * 2);
+
+      auto const str_iter = cudf::detail::make_counting_transform_iterator(
+        0, [&](int32_t i) { return std::to_string(i) + std::to_string(i) + std::to_string(i); });
+      auto child3 = strings_col{str_iter, str_iter + num_structs};
+
+      return structs_col{{child1, child2, child3}}.release();
+    };
+
+    input_columns.emplace_back(
+      cudf::make_lists_column(static_cast<cudf::size_type>(offsets.size() - 1),
+                              int32s_col(offsets.begin(), offsets.end()).release(),
+                              make_structs_col(),
+                              0,
+                              rmm::device_buffer{}));
+
+    auto [input_table, filepath] = write_file(input_columns,
+                                              "chunked_read_with_lists_of_structs",
+                                              nullable,
+                                              512 * 1024,  // 512KB per page
+                                              20000        // 20k rows per page
+    );
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+
+  {
+    auto const [input, result, num_chunks] = do_test(1'000'000, false);
+    EXPECT_EQ(num_chunks, 7);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  {
+    auto const [input, result, num_chunks] = do_test(1'000'000, true);
+    EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }
 }
