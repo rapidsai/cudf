@@ -33,7 +33,7 @@ namespace detail {
 std::unique_ptr<table> tile(
   table_view const& input,
   size_type count,
-  rmm::cuda_stream_view               = cudf::get_default_stream(),
+  rmm::cuda_stream_view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -43,7 +43,7 @@ std::unique_ptr<table> tile(
  */
 std::unique_ptr<column> interleave_columns(
   table_view const& input,
-  rmm::cuda_stream_view               = cudf::get_default_stream(),
+  rmm::cuda_stream_view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
