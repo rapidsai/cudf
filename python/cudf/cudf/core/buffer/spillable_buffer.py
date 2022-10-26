@@ -116,9 +116,9 @@ class SpillableBuffer(Buffer):
             self._owner = data
         elif hasattr(data, "__cuda_array_interface__"):
             self._ptr_desc = {"type": "gpu"}
-            ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-            self._ptr = ptr
-            self._size = size
+            self._ptr, self._size = get_ptr_and_size(
+                data.__cuda_array_interface__
+            )
             self._owner = data
         else:
             if self._exposed:
