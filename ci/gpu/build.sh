@@ -202,11 +202,26 @@ else
     conda list --show-channel-urls
 
     gpuci_logger "GoogleTests"
+
+    # Set up library for finding incorrect default stream usage.
+    cd "$WORKSPACE/cpp/tests/utilities/identify_stream_usage/"
+    mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
+    STREAM_IDENTIFY_LIB="$WORKSPACE/cpp/tests/utilities/identify_stream_usage/build/libidentify_stream_usage.so"
+
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         test_name=$(basename ${gt})
+
         echo "Running GoogleTest $test_name"
-        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        if [[ ${test_name} == "SPAN_TEST" ]]; then
+            # This one test is specifically designed to test using a thrust device
+            # vector, so we expect and allow it to include default stream usage.
+            gtest_filter="SpanTest.CanConstructFromDeviceContainers"
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="-${gtest_filter}"
+            ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="${gtest_filter}"
+        else
+            GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        fi
     done
 
     # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`

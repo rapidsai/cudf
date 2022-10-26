@@ -15,7 +15,7 @@ cmake -S . -B build/
 # Build
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
-build/libcudf_example
+build/basic_example
 ```
 
 If your machine does not come with a pre-built libcudf binary, expect the

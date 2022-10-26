@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cython.operator import dereference
+
 import cudf
 from cudf.api.types import is_decimal_dtype
 
@@ -35,7 +37,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
-    Top level Cython reduce function wrapping libcudf++ reductions.
+    Top level Cython reduce function wrapping libcudf reductions.
 
     Parameters
     ----------
@@ -74,7 +76,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     with nogil:
         c_result = move(cpp_reduce(
             c_incol_view,
-            cython_agg.c_obj,
+            dereference(cython_agg.c_obj),
             c_out_dtype
         ))
 
@@ -91,7 +93,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
-    Top level Cython scan function wrapping libcudf++ scans.
+    Top level Cython scan function wrapping libcudf scans.
 
     Parameters
     ----------
@@ -112,7 +114,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     with nogil:
         c_result = move(cpp_scan(
             c_incol_view,
-            cython_agg.c_obj,
+            dereference(cython_agg.c_obj),
             c_inclusive
         ))
 
@@ -122,7 +124,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
 
 def minmax(Column incol):
     """
-    Top level Cython minmax function wrapping libcudf++ minmax.
+    Top level Cython minmax function wrapping libcudf minmax.
 
     Parameters
     ----------

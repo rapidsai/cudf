@@ -113,6 +113,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/transpose.hpp
         - test -f $PREFIX/include/cudf/detail/unary.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
+        - test -f $PREFIX/include/cudf/detail/utilities/default_stream.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
         - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
         - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
@@ -275,6 +276,7 @@ outputs:
         - test -f $PREFIX/include/cudf_test/file_utilities.hpp
         - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
         - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
+        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adapter.hpp
         - test -f $PREFIX/include/cudf_test/table_utilities.hpp
         - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
         - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp

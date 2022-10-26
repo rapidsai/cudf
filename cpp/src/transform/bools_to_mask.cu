@@ -61,7 +61,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::bools_to_mask(input, cudf::default_stream_value, mr);
+  return detail::bools_to_mask(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -298,7 +298,7 @@ conditional_inner_join(table_view const& left,
                                   binary_predicate,
                                   detail::join_kind::INNER_JOIN,
                                   output_size,
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 
@@ -316,7 +316,7 @@ conditional_left_join(table_view const& left,
                                   binary_predicate,
                                   detail::join_kind::LEFT_JOIN,
                                   output_size,
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 
@@ -333,7 +333,7 @@ conditional_full_join(table_view const& left,
                                   binary_predicate,
                                   detail::join_kind::FULL_JOIN,
                                   {},
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 
@@ -350,7 +350,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
                                             binary_predicate,
                                             detail::join_kind::LEFT_SEMI_JOIN,
                                             output_size,
-                                            cudf::default_stream_value,
+                                            cudf::get_default_stream(),
                                             mr)
                      .first);
 }
@@ -368,7 +368,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                                             binary_predicate,
                                             detail::join_kind::LEFT_ANTI_JOIN,
                                             output_size,
-                                            cudf::default_stream_value,
+                                            cudf::get_default_stream(),
                                             mr)
                      .first);
 }
@@ -380,7 +380,7 @@ std::size_t conditional_inner_join_size(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(
-    left, right, binary_predicate, detail::join_kind::INNER_JOIN, cudf::default_stream_value, mr);
+    left, right, binary_predicate, detail::join_kind::INNER_JOIN, cudf::get_default_stream(), mr);
 }
 
 std::size_t conditional_left_join_size(table_view const& left,
@@ -390,7 +390,7 @@ std::size_t conditional_left_join_size(table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(
-    left, right, binary_predicate, detail::join_kind::LEFT_JOIN, cudf::default_stream_value, mr);
+    left, right, binary_predicate, detail::join_kind::LEFT_JOIN, cudf::get_default_stream(), mr);
 }
 
 std::size_t conditional_left_semi_join_size(table_view const& left,
@@ -403,7 +403,7 @@ std::size_t conditional_left_semi_join_size(table_view const& left,
                                                                 right,
                                                                 binary_predicate,
                                                                 detail::join_kind::LEFT_SEMI_JOIN,
-                                                                cudf::default_stream_value,
+                                                                cudf::get_default_stream(),
                                                                 mr));
 }
 
@@ -417,7 +417,7 @@ std::size_t conditional_left_anti_join_size(table_view const& left,
                                                                 right,
                                                                 binary_predicate,
                                                                 detail::join_kind::LEFT_ANTI_JOIN,
-                                                                cudf::default_stream_value,
+                                                                cudf::get_default_stream(),
                                                                 mr));
 }
 
