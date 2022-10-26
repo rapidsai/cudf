@@ -764,7 +764,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   bool const insert_begin = first_row_offset.value_or(0) == 0;
   // insert an offset at the end if we have not terminated the last row
   bool const insert_end =
-    not(last_row_offset.has_value() or global_offsets.back_element(stream) == chunk_offset);
+    not(last_row_offset.has_value() or
+        (global_offsets.size() > 0 and global_offsets.back_element(stream) == chunk_offset));
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }

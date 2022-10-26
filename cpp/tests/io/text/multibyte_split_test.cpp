@@ -62,6 +62,19 @@ TEST_F(MultibyteSplitTest, NondeterministicMatching)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
+TEST_F(MultibyteSplitTest, NoDelimiter)
+{
+  auto delimiter  = std::string(":");
+  auto host_input = std::string("abcdefg");
+
+  auto expected = strings_column_wrapper{"abcdefg"};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
 TEST_F(MultibyteSplitTest, DelimiterAtEnd)
 {
   auto delimiter  = std::string(":");
