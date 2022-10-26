@@ -8,7 +8,7 @@ import sys
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from numba import cuda
 from numba.cuda.cudadrv.driver import Linker
-from ptxcompiler.patch import CMD
+from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
 from . import _version
 
@@ -84,11 +84,8 @@ def get_ptx_file():
         return regular_result[1]
 
 
-# adapted from PTXCompiler
-cp = subprocess.run([sys.executable, "-c", CMD], capture_output=True)
-# must have a driver to proceed
-if cp.returncode == 0:
-    versions = [int(s) for s in cp.stdout.strip().split()]
-    driver_version = tuple(versions[:2])
+versions = safe_get_versions()
+if not versions == NO_DRIVER:
+    driver_version, runtime_version = versions
     maybe_patch_numba_linker(driver_version)
     ptxpath = get_ptx_file()
