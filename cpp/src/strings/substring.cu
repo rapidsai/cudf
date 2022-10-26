@@ -105,13 +105,12 @@ struct substring_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> slice_strings(
-  strings_column_view const& strings,
-  numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
-  numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
-  numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+                                      numeric_scalar<size_type> const& start,
+                                      numeric_scalar<size_type> const& stop,
+                                      numeric_scalar<size_type> const& step,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -291,12 +290,11 @@ void compute_substring_indices(column_device_view const& d_column,
 }  // namespace
 
 //
-std::unique_ptr<column> slice_strings(
-  strings_column_view const& strings,
-  column_view const& starts_column,
-  column_view const& stops_column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> slice_strings(strings_column_view const& strings,
+                                      column_view const& starts_column,
+                                      column_view const& stops_column,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);

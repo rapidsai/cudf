@@ -205,7 +205,8 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto offsets      = count_matches(*d_strings, *d_prog, strings_count + 1, stream);
+  auto offsets = count_matches(
+    *d_strings, *d_prog, strings_count + 1, stream, rmm::mr::get_current_device_resource());
   auto offsets_view = offsets->mutable_view();
   auto d_offsets    = offsets_view.data<offset_type>();
 

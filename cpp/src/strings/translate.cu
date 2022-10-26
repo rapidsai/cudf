@@ -86,11 +86,10 @@ struct translate_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> translate(
-  strings_column_view const& strings,
-  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> translate(strings_column_view const& strings,
+                                  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 

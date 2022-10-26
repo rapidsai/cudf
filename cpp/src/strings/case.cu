@@ -147,30 +147,27 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> to_lower(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> to_lower(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   character_flags_table_type case_flag = IS_UPPER(0xFF);  // convert only upper case characters
   return convert_case(strings, case_flag, stream, mr);
 }
 
 //
-std::unique_ptr<column> to_upper(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> to_upper(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   character_flags_table_type case_flag = IS_LOWER(0xFF);  // convert only lower case characters
   return convert_case(strings, case_flag, stream, mr);
 }
 
 //
-std::unique_ptr<column> swapcase(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> swapcase(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // convert only upper or lower case characters
   character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);

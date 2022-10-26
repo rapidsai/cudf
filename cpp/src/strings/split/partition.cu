@@ -181,11 +181,10 @@ struct rpartition_fn : public partition_fn {
 
 }  // namespace
 
-std::unique_ptr<table> partition(
-  strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> partition(strings_column_view const& strings,
+                                 string_scalar const& delimiter,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
@@ -209,11 +208,10 @@ std::unique_ptr<table> partition(
   return std::make_unique<table>(std::move(results));
 }
 
-std::unique_ptr<table> rpartition(
-  strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> rpartition(strings_column_view const& strings,
+                                  string_scalar const& delimiter,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();

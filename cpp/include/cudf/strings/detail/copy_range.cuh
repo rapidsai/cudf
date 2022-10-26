@@ -99,14 +99,13 @@ namespace detail {
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
-std::unique_ptr<column> copy_range(
-  SourceValueIterator source_value_begin,
-  SourceValidityIterator source_validity_begin,
-  strings_column_view const& target,
-  size_type target_begin,
-  size_type target_end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
+                                   SourceValidityIterator source_validity_begin,
+                                   strings_column_view const& target,
+                                   size_type target_begin,
+                                   size_type target_end,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
     (target_begin >= 0) && (target_begin < target.size()) && (target_end <= target.size()),

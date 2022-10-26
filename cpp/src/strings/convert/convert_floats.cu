@@ -454,10 +454,9 @@ std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_m
 }
 
 namespace detail {
-std::unique_ptr<column> is_float(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> is_float(strings_column_view const& strings,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
