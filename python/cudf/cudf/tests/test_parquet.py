@@ -2681,10 +2681,16 @@ def test_parquet_writer_time_delta_physical_type():
     df.to_parquet(buffer)
 
     got = pd.read_parquet(buffer)
-    assert_eq(got["s"].astype('str'), pd.Series(['00:00:01'], name='s', dtype='str'))
-    assert_eq(got["ms"].astype('str'), pd.Series(['00:00:00.002000'], name='ms', dtype='str'))
-    assert_eq(got["us"].astype('str'), pd.Series(['00:00:00.000003'], name='us', dtype='str'))
-    assert_eq(got["ns"].astype('str'), pd.Series(['00:00:00.000004'], name='ns', dtype='str'))
+    expected = pd.DataFrame(
+        {
+            "s": ["00:00:01"],
+            "ms": ["00:00:00.002000"],
+            "us": ["00:00:00.000003"],
+            "ns": ["00:00:00.000004"],
+        },
+        dtype="str",
+    )
+    assert_eq(got.astype("str"), expected)
 
 
 def test_parquet_roundtrip_time_delta():
