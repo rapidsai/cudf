@@ -57,7 +57,7 @@ set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}"
+  LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was

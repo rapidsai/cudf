@@ -59,7 +59,6 @@ if(NOT cudf_FOUND)
   # library in the _lib directory as a single source of truth and modify the other rpaths
   # appropriately.
   set(cython_lib_dir cudf)
-  rapids_cython_set_lib_dirs(${cython_lib_dir})
   install(TARGETS cudf DESTINATION ${cython_lib_dir})
 endif()
 
@@ -68,5 +67,8 @@ rapids_cython_init()
 add_subdirectory(cudf/_lib)
 
 include(cmake/Modules/ProtobufHelpers.cmake)
-
 codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)
+
+if(DEFINED cython_lib_dir)
+  rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
+endif()

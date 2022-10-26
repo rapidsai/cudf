@@ -17,7 +17,7 @@ set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
 
 set(targets_using_numpy io_datasource io_utils)
