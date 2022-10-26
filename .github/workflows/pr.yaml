@@ -1,0 +1,42 @@
+name: pr
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # pr-builder:
+  #   secrets: inherit
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@main
+  # checks:
+  #   secrets: inherit
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@main
+  conda-cpp-build:
+    # needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@main
+    with:
+      build_type: pull-request
+  # conda-cpp-tests:
+  #   needs: conda-cpp-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
+  #   with:
+  #     build_type: pull-request
+  conda-python-build:
+    needs: conda-cpp-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@main
+    with:
+      build_type: pull-request
+  # conda-python-tests:
+  #   needs: conda-python-build
+  #   secrets: inherit
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+  #   with:
+  #     build_type: pull-request

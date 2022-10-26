@@ -1,0 +1,34 @@
+name: test
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      date:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+
+jobs:
+  cpp-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+  python-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
