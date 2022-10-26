@@ -52,11 +52,13 @@ namespace {
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
-using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
-using strings_col = cudf::test::strings_column_wrapper;
-using structs_col = cudf::test::structs_column_wrapper;
+using int32s_col       = cudf::test::fixed_width_column_wrapper<int32_t>;
+using int64s_col       = cudf::test::fixed_width_column_wrapper<int64_t>;
+using strings_col      = cudf::test::strings_column_wrapper;
+using structs_col      = cudf::test::structs_column_wrapper;
+using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 
+// TODO: Remove the last 2 params
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
                 bool nullable,
@@ -85,6 +87,8 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                                                           cudf::get_default_stream(),
                                                           rmm::mr::get_current_device_resource());
         }
+      } else if (col->type().id() == cudf::type_id::LIST) {
+        col = cudf::purge_nonempty_nulls(cudf::lists_column_view{col->view()});
       }
     }
   }
@@ -224,7 +228,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   }
 }
 
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleStructs)
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
 {
   auto constexpr num_rows = 100'000;
 
@@ -242,7 +246,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleStructs)
     }());
 
     auto [input_table, filepath] = write_file(input_columns,
-                                              "chunked_read_simple_structs",
+                                              "chunked_read_with_structs",
                                               nullable,
                                               512 * 1024,  // 512KB per page
                                               20000        // 20k rows per page
@@ -260,6 +264,46 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleStructs)
   {
     auto const [input, result, num_chunks] = do_test(500'000, true);
     EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
+{
+  auto constexpr num_rows = 100'000;
+
+  auto const do_test = [](std::size_t chunk_read_limit, bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const int_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
+
+    auto const template_lists = int32s_lists_col{
+      int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{0, 1}, int32s_lists_col{0, 1, 2}};
+    auto const gather_iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+    auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
+    input_columns.emplace_back(
+      std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
+
+    auto [input_table, filepath] = write_file(input_columns,
+                                              "chunked_read_with_lists",
+                                              nullable,
+                                              512 * 1024,  // 512KB per page
+                                              20000        // 20k rows per page
+    );
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+
+  {
+    auto const [input, result, num_chunks] = do_test(400'000, false);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  {
+    auto const [input, result, num_chunks] = do_test(400'000, true);
+    EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }
 }

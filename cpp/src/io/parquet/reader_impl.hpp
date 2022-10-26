@@ -278,10 +278,18 @@ class reader::impl {
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
+
   // output columns to be generated
   std::vector<column_buffer> _output_columns;
+
+  // data of output columns saved after construction for reuse
+  std::vector<column_buffer> _output_columns_template;
+
   // _output_columns associated schema indices
   std::vector<int> _output_column_schemas;
+
+  // _output_columns associated metadata
+  std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
@@ -294,9 +302,6 @@ class reader::impl {
   std::size_t _chunk_read_limit{0};
   std::size_t _current_read_chunk{0};
   bool _file_preprocessed{false};
-
-  // TODO: Remove below
-  parquet_reader_options const _options;
 };
 
 }  // namespace cudf::io::detail::parquet
