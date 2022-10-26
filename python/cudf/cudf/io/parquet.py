@@ -59,6 +59,7 @@ def _write_parquet(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     partitions_info=None,
+    storage_options=None,
     **kwargs,
 ):
     if is_list_like(paths) and len(paths) > 1:
@@ -73,7 +74,9 @@ def _write_parquet(
             ValueError("paths must be list-like when partitions_info provided")
 
     paths_or_bufs = [
-        ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
+        ioutils.get_writer_filepath_or_buffer(
+            path, mode="wb", storage_options=storage_options
+        )
         for path in paths
     ]
     common_args = {
@@ -116,6 +119,7 @@ def write_to_dataset(
     fs=None,
     preserve_index=False,
     return_metadata=False,
+    storage_options=None,
     **kwargs,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
@@ -154,7 +158,7 @@ def write_to_dataset(
         kwargs for to_parquet function.
     """
 
-    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
     fs.mkdirs(root_path, exist_ok=True)
 
     if partition_cols is not None and len(partition_cols) > 0:
@@ -172,25 +176,34 @@ def write_to_dataset(
             filename,
             fs,
             preserve_index,
-            **kwargs,
+            storage_options,
+            # **kwargs,
         )
 
-        if return_metadata:
-            kwargs["metadata_file_path"] = metadata_file_paths
+        # if return_metadata:
+        #     kwargs["metadata_file_path"] = metadata_file_paths
         metadata = to_parquet(
             grouped_df,
             full_paths,
             index=preserve_index,
             partition_offsets=part_offsets,
-            **kwargs,
+            storage_options=storage_options,
+            metadata_file_path=metadata_file_paths if return_metadata else None
+            # **kwargs,
         )
 
     else:
         filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
-        if return_metadata:
-            kwargs["metadata_file_path"] = filename
-        metadata = df.to_parquet(full_path, index=preserve_index, **kwargs)
+        # if return_metadata:
+        #     kwargs["metadata_file_path"] = filename
+        metadata = df.to_parquet(
+            full_path,
+            index=preserve_index,
+            storage_options=storage_options,
+            metadata_file_path=filename if return_metadata else None
+            # **kwargs
+        )
 
     return metadata
 
@@ -361,6 +374,7 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    storage_options=None,
     filters=None,
     row_groups=None,
     strings_to_categorical=False,
@@ -368,6 +382,7 @@ def read_parquet(
     use_python_file_object=True,
     categorical_partitions=True,
     open_file_options=None,
+    bytes_per_thread=None,
     *args,
     **kwargs,
 ):
@@ -403,7 +418,9 @@ def read_parquet(
 
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
-    fs, paths = ioutils._get_filesystem_and_paths(filepath_or_buffer, **kwargs)
+    fs, paths = ioutils._get_filesystem_and_paths(
+        filepath_or_buffer, storage_options
+    )
 
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
@@ -443,7 +460,11 @@ def read_parquet(
             fs=fs,
             use_python_file_object=use_python_file_object,
             open_file_options=open_file_options,
-            **kwargs,
+            storage_options=storage_options,
+            bytes_per_thread=256_000_000
+            if bytes_per_thread is None
+            else bytes_per_thread,
+            # **kwargs,
         )
 
         if compression is not None:
@@ -604,6 +625,7 @@ def to_parquet(
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    storage_options=None,
     *args,
     **kwargs,
 ):
@@ -626,33 +648,36 @@ def to_parquet(
                     "partition_cols are provided. To request returning the "
                     "metadata binary blob, pass `return_metadata=True`"
                 )
-            kwargs.update(
-                {
-                    "compression": compression,
-                    "statistics": statistics,
-                    "int96_timestamps": int96_timestamps,
-                    "row_group_size_bytes": row_group_size_bytes,
-                    "row_group_size_rows": row_group_size_rows,
-                    "max_page_size_bytes": max_page_size_bytes,
-                    "max_page_size_rows": max_page_size_rows,
-                }
-            )
+            # kwargs.update(
+            #     {
+            #         "compression": compression,
+            #         "statistics": statistics,
+            #         "int96_timestamps": int96_timestamps,
+            #         "row_group_size_bytes": row_group_size_bytes,
+            #         "row_group_size_rows": row_group_size_rows,
+            #         "max_page_size_bytes": max_page_size_bytes,
+            #         "max_page_size_rows": max_page_size_rows,
+            #     }
+            # )
             return write_to_dataset(
                 df,
                 filename=partition_file_name,
                 partition_cols=partition_cols,
                 root_path=path,
                 preserve_index=index,
-                **kwargs,
+                compression=compression,
+                statistics=statistics,
+                int96_timestamps=int96_timestamps,
+                row_group_size_bytes=row_group_size_bytes,
+                row_group_size_rows=row_group_size_rows,
+                max_page_size_bytes=max_page_size_bytes,
+                max_page_size_rows=max_page_size_rows,
+                storage_options=storage_options,
+                # **kwargs,
             )
 
-        if partition_offsets:
-            kwargs["partitions_info"] = list(
-                zip(
-                    partition_offsets,
-                    np.roll(partition_offsets, -1) - partition_offsets,
-                )
-            )[:-1]
+        # if partition_offsets:
+        #     kwargs["partitions_info"] =
 
         return _write_parquet(
             df,
@@ -666,7 +691,16 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
-            **kwargs,
+            partitions_info=list(
+                zip(
+                    partition_offsets,
+                    np.roll(partition_offsets, -1) - partition_offsets,
+                )
+            )[:-1]
+            if partition_offsets is not None
+            else partition_offsets,
+            storage_options=storage_options,
+            # **kwargs,
         )
 
     else:
@@ -730,9 +764,11 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
-    **kwargs,
+    storage_options=None,
 ):
-    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs = ioutils._ensure_filesystem(
+        fs, root_path, storage_options=storage_options
+    )
     fs.mkdirs(root_path, exist_ok=True)
 
     part_names, grouped_df, part_offsets = _get_groups_and_offsets(
@@ -915,7 +951,8 @@ class ParquetDatasetWriter:
         statistics="ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,
-        **kwargs,
+        storage_options=None,
+        # **kwargs,
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
@@ -938,7 +975,7 @@ class ParquetDatasetWriter:
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
-        self.kwargs = kwargs
+        self.storage_options = storage_options
         self.filename = file_name_prefix
         self.max_file_size = max_file_size
         if max_file_size is not None:
@@ -961,7 +998,7 @@ class ParquetDatasetWriter:
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
         )
-        fs = ioutils._ensure_filesystem(None, self.path)
+        fs = ioutils._ensure_filesystem(None, self.path, None)
         fs.mkdirs(self.path, exist_ok=True)
 
         full_paths = []
@@ -1097,7 +1134,7 @@ class ParquetDatasetWriter:
             local_path = self.path
             s3_path = self.fs_meta["actual_path"]
             s3_file, _ = ioutils._get_filesystem_and_paths(
-                s3_path, **self.kwargs
+                s3_path, storage_options=self.storage_options
             )
             s3_file.put(local_path, s3_path, recursive=True)
             shutil.rmtree(self.path)

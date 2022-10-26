@@ -17,11 +17,13 @@ from cudf.utils.dtypes import _maybe_convert_to_default_type
 def read_json(
     path_or_buf,
     engine="auto",
+    orient=None,
     dtype=True,
     lines=False,
     compression="infer",
     byte_range=None,
     keep_quotes=False,
+    storage_options=None,
     *args,
     **kwargs,
 ):
@@ -52,9 +54,11 @@ def read_json(
 
         filepaths_or_buffers = []
         for source in path_or_buf:
-            if ioutils.is_directory(source, **kwargs):
+            if ioutils.is_directory(source, storage_options=storage_options):
                 fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None, path=source, **kwargs
+                    passed_filesystem=None,
+                    path=source,
+                    storage_options=storage_options,
                 )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
@@ -64,7 +68,8 @@ def read_json(
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
-                **kwargs,
+                storage_options=storage_options,
+                # **kwargs,
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -88,7 +93,8 @@ def read_json(
 
         if not ioutils.ensure_single_filepath_or_buffer(
             path_or_data=path_or_buf,
-            **kwargs,
+            storage_options=storage_options,
+            # **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
@@ -100,14 +106,20 @@ def read_json(
             compression=compression,
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
-            **kwargs,
+            storage_options=storage_options,
+            # bytes_per_thread=256_000_000
+            # if bytes_per_thread is None
+            # else bytes_per_thread,
+            # **kwargs,
         )
 
-        if kwargs.get("orient") == "table":
+        if orient == "table":
             pd_value = pd.read_json(
                 path_or_buf,
                 lines=lines,
                 compression=compression,
+                storage_options=storage_options,
+                orient=orient,
                 *args,
                 **kwargs,
             )
@@ -117,6 +129,8 @@ def read_json(
                 lines=lines,
                 dtype=dtype,
                 compression=compression,
+                storage_options=storage_options,
+                orient=orient,
                 *args,
                 **kwargs,
             )

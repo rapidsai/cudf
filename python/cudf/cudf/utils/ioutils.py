@@ -1313,11 +1313,10 @@ def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
     return True
 
 
-def is_directory(path_or_data, **kwargs):
+def is_directory(path_or_data, storage_options=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
             fs = get_fs_token_paths(
@@ -1473,6 +1472,7 @@ def get_reader_filepath_or_buffer(
     open_file_options=None,
     allow_raw_text_input=False,
     storage_options=None,
+    bytes_per_thread=256_000_000,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1561,6 +1561,7 @@ def get_reader_filepath_or_buffer(
                             fpath,
                             fs=fs,
                             mode=mode,
+                            bytes_per_thread=bytes_per_thread,
                         )
                     )
                     for fpath in paths
@@ -1575,7 +1576,9 @@ def get_reader_filepath_or_buffer(
             path_or_data = ArrowPythonFile(path_or_data)
         else:
             path_or_data = BytesIO(
-                _fsspec_data_transfer(path_or_data, mode=mode)
+                _fsspec_data_transfer(
+                    path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
+                )
             )
 
     return path_or_data, compression
@@ -1793,11 +1796,11 @@ def _prepare_filters(filters):
     return filters
 
 
-def _ensure_filesystem(passed_filesystem, path, **kwargs):
+def _ensure_filesystem(passed_filesystem, path, storage_options):
     if passed_filesystem is None:
         return get_fs_token_paths(
             path[0] if isinstance(path, list) else path,
-            storage_options=kwargs.get("storage_options", {}),
+            storage_options={} if storage_options is None else storage_options,
         )[0]
     return passed_filesystem
 

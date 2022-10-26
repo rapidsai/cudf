@@ -289,6 +289,8 @@ def read_orc(
     use_index=True,
     timestamp_type=None,
     use_python_file_object=True,
+    storage_options=None,
+    bytes_per_thread=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -326,11 +328,12 @@ def read_orc(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
-        if ioutils.is_directory(source, **kwargs):
+        if ioutils.is_directory(source, storage_options=storage_options):
             fs = ioutils._ensure_filesystem(
                 passed_filesystem=None,
                 path=source,
-                **kwargs,
+                storage_options=storage_options,
+                # **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -339,7 +342,11 @@ def read_orc(
             path_or_data=source,
             compression=None,
             use_python_file_object=use_python_file_object,
-            **kwargs,
+            storage_options=storage_options,
+            bytes_per_thread=256_000_000
+            if bytes_per_thread is None
+            else bytes_per_thread,
+            # **kwargs,
         )
         if compression is not None:
             raise ValueError(
