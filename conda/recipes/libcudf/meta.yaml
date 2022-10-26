@@ -25,6 +25,8 @@ build:
     - SCCACHE_BUCKET=rapids-sccache
     - SCCACHE_REGION=us-west-2
     - SCCACHE_IDLE_TIMEOUT=32768
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
 requirements:
   build:
@@ -36,6 +38,9 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - cuda-nvrtc-dev {{ cuda_version }}.*
+    - cuda-nvtx {{ cuda_version }}.*
+    - libcurand-dev
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
