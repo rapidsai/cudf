@@ -511,7 +511,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         if (col->type().id() != type_id::LIST) { return false; }
         auto const child_col_type =
           col->children[lists_column_view::child_column_index]->type().id();
-        return child_col_type == type_id::INT8 or child_col_type == type_id::UINT8;
+        return child_col_type == type_id::UINT8;
       };
 
       // There is a special case for a list<int8> column with one byte column child. This column can

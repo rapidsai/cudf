@@ -137,6 +137,49 @@ public class Rmm {
   public static native long getTotalBytesAllocated();
 
   /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding during the
+   * lifetime of the process.
+   */
+  public static native long getMaximumTotalBytesAllocated();
+
+  /**
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
+   * code sections while debugging.
+   *
+   * @param initialValue an initial value (in Bytes) to use for this scoped counter
+   */
+  public static void resetScopedMaximumBytesAllocated(long initialValue) {
+    resetScopedMaximumBytesAllocatedInternal(initialValue);
+  }
+
+  /**
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
+   * code sections while debugging.
+   *
+   * This resets the counter to 0 Bytes.
+   */
+  public static void resetScopedMaximumBytesAllocated() {
+    resetScopedMaximumBytesAllocatedInternal(0L);
+  }
+
+  private static native void resetScopedMaximumBytesAllocatedInternal(long initialValue);
+
+  /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
+   * `resetScopedMaximumOutstanding` call was issued (it is "scoped" because it's the
+   * maximum amount seen since the last reset).
+   *
+   * If the memory used is net negative (for example if only frees happened since
+   * reset, and we reset to 0), then result will be 0.
+   *
+   * If `resetScopedMaximumBytesAllocated` is never called, the scope is the whole
+   * program and is equivalent to `getMaximumTotalBytesAllocated`.
+   *
+   * @return the scoped maximum bytes allocated
+   */
+  public static native long getScopedMaximumBytesAllocated();
+
+  /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
    * @param handler event handler to invoke on RMM events or null to clear an existing handler
    * @throws RmmException if an active handler is already set

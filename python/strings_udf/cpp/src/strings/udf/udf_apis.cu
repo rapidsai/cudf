@@ -40,7 +40,7 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
-  return detail::to_string_view_array(input, rmm::cuda_stream_default);
+  return detail::to_string_view_array(input, cudf::get_default_stream());
 }
 
 }  // namespace udf

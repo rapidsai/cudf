@@ -323,7 +323,7 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(
   table_view const& input,
   Filter filter,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();

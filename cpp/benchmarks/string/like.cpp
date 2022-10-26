@@ -81,7 +81,7 @@ static void bench_like(nvbench::state& state)
   // This pattern forces reading the entire target string (when matched expected)
   auto pattern = std::string("% 5W4_");  // regex equivalent: ".* 5W4."
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
   auto chars_size = input.chars_size();
   state.add_element_count(chars_size, "chars_size");           // number of bytes;

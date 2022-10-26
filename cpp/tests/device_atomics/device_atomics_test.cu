@@ -147,16 +147,16 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     if (block_size == 0) { block_size = vec_size; }
 
     if (is_cas_test) {
-      gpu_atomicCAS_test<<<grid_size, block_size, 0, cudf::default_stream_value.value()>>>(
+      gpu_atomicCAS_test<<<grid_size, block_size, 0, cudf::get_default_stream().value()>>>(
         dev_result.data(), dev_data.data(), vec_size);
     } else {
-      gpu_atomic_test<<<grid_size, block_size, 0, cudf::default_stream_value.value()>>>(
+      gpu_atomic_test<<<grid_size, block_size, 0, cudf::get_default_stream().value()>>>(
         dev_result.data(), dev_data.data(), vec_size);
     }
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CUDF_CHECK_CUDA(cudf::default_stream_value.value());
+    CUDF_CHECK_CUDA(cudf::get_default_stream().value());
 
     if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
       EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -298,12 +298,12 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 
     if (block_size == 0) { block_size = vec_size; }
 
-    gpu_atomic_bitwiseOp_test<T><<<grid_size, block_size, 0, cudf::default_stream_value.value()>>>(
+    gpu_atomic_bitwiseOp_test<T><<<grid_size, block_size, 0, cudf::get_default_stream().value()>>>(
       reinterpret_cast<T*>(dev_result.data()), reinterpret_cast<T*>(dev_data.data()), vec_size);
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CUDF_CHECK_CUDA(cudf::default_stream_value.value());
+    CUDF_CHECK_CUDA(cudf::get_default_stream().value());
 
     // print_exact(exact, "exact");
     // print_exact(host_result.data(), "result");

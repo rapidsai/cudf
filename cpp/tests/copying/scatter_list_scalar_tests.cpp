@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ std::unique_ptr<column> single_scalar_scatter(column_view const& target,
 {
   std::vector<std::reference_wrapper<const scalar>> slrs{slr};
   table_view targets{{target}};
-  auto result = scatter(slrs, scatter_map, targets, true);
+  auto result = scatter(slrs, scatter_map, targets);
   return std::move(result->release()[0]);
 }
 
