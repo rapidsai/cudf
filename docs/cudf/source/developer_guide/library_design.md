@@ -27,24 +27,24 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class RangeIndex
 % class DataFrame
 % class Series
-% 
+%
 % Frame <|-- IndexedFrame
-% 
+%
 % Frame <|-- SingleColumnFrame
-% 
+%
 % SingleColumnFrame <|-- Series
 % IndexedFrame <|-- Series
-% 
+%
 % IndexedFrame <|-- DataFrame
-% 
+%
 % BaseIndex <|-- RangeIndex
-% 
+%
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
-% 
+%
 % BaseIndex <|-- GenericIndex
 % SingleColumnFrame <|-- GenericIndex
-% 
+%
 % @enduml
 
 
@@ -211,6 +211,12 @@ Conversely, when constructed from a host object,
 `Buffer` uses [`rmm.DeviceBuffer`](https://github.com/rapidsai/rmm#devicebuffers) to allocate new memory.
 The data is then copied from the host object into the newly allocated device memory.
 You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
+
+### Spilling to host memory
+
+Setting the environment variable `CUDF_SPILL=on` enables automatic spilling (and "unspilling") of buffers from
+device to host to enable out-of-memory computation, i.e., computing on objects that occupy more memory than is
+available on the GPU.
 
 ## The Cython layer
 
