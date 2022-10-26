@@ -14,4 +14,5 @@ cupy-interop
 dask-cudf
 options
 PandasCompat
+copy-on-write
 ```
