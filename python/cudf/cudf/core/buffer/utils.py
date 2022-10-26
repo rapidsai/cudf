@@ -21,7 +21,7 @@ from cudf.core.buffer.buffer import (
     DeviceBufferLike,
     ensure_buffer_like,
 )
-from cudf.core.buffer.spill_manager import global_manager_get
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def as_device_buffer_like(
         return data
 
     data = ensure_buffer_like(data=data, size=size, owner=owner)
-    manager = global_manager_get()
+    manager = get_global_manager()
     if manager is None:
         return Buffer(data)
     return SpillableBuffer(data=data, exposed=exposed, manager=manager)
@@ -134,7 +134,7 @@ def mark_columns_as_read_only_inplace(obj: Any) -> None:
     underlying buffers partially.
     """
 
-    if global_manager_get() is None:
+    if get_global_manager() is None:
         return
 
     for col in get_columns(obj):
@@ -205,7 +205,7 @@ def with_spill_lock(*, read_only_columns=False):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            if global_manager_get() is None:
+            if get_global_manager() is None:
                 # Quick return, if spilling is disabled.
                 return func(*args, **kwargs)
             if read_only_columns:

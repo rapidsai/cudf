@@ -28,9 +28,9 @@ from cudf.core.buffer import (
 )
 from cudf.core.buffer.spill_manager import (
     SpillManager,
+    get_global_manager,
     get_rmm_memory_resource_stack,
-    global_manager_get,
-    global_manager_reset,
+    set_global_manager,
 )
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.buffer.utils import (
@@ -68,13 +68,13 @@ def manager(request):
     kwargs = dict(getattr(request, "param", {}))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        global_manager_reset(manager=SpillManager(**kwargs))
-        yield global_manager_get()
+        set_global_manager(manager=SpillManager(**kwargs))
+        yield get_global_manager()
         if request.node.report["call"].failed:
             # Ignore `overwriting non-empty manager` errors when
             # test is failing.
             warnings.simplefilter("ignore")
-        global_manager_reset(manager=None)
+        set_global_manager(manager=None)
 
 
 def test_spillable_buffer(manager: SpillManager):
@@ -169,30 +169,30 @@ def test_environment_variables(monkeypatch):
     def clear():
         # In order to enabling monkey patching of the environment variables
         # mark the global manager as uninitialized.
-        global_manager_reset(None)
+        set_global_manager(None)
         cudf.core.buffer.spill_manager._global_manager_uninitialized = True
 
     clear()
     monkeypatch.setenv("CUDF_SPILL_ON_DEMAND", "off")
     monkeypatch.setenv("CUDF_SPILL", "off")
-    assert global_manager_get() is None
+    assert get_global_manager() is None
 
     clear()
     monkeypatch.setenv("CUDF_SPILL", "on")
-    manager = global_manager_get()
+    manager = get_global_manager()
     assert isinstance(manager, SpillManager)
     assert manager._spill_on_demand is False
     assert manager._device_memory_limit is None
 
     clear()
     monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
-    manager = global_manager_get()
+    manager = get_global_manager()
     assert isinstance(manager, SpillManager)
     assert manager._device_memory_limit == 1000
 
     clear()
     monkeypatch.setenv("CUDF_SPILL_STATS_LEVEL", "2")
-    manager = global_manager_get()
+    manager = get_global_manager()
     assert isinstance(manager, SpillManager)
     assert manager.statistics.level == 2
 

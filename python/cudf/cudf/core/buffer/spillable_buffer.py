@@ -347,7 +347,7 @@ class SpillableBuffer(Buffer):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> SpillableBuffer:
-        from cudf.core.buffer.spill_manager import global_manager_get
+        from cudf.core.buffer.spill_manager import get_global_manager
 
         if header["frame_count"] != 1:
             raise ValueError(
@@ -356,7 +356,7 @@ class SpillableBuffer(Buffer):
         (frame,) = frames
         if isinstance(frame, SpillableBuffer):
             return frame
-        manager = global_manager_get()
+        manager = get_global_manager()
         assert manager is not None
         return cls(frame, exposed=False, manager=manager)
 

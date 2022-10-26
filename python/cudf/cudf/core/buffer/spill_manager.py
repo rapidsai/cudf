@@ -357,7 +357,7 @@ _global_manager_uninitialized: bool = True
 _global_manager: Optional[SpillManager] = None
 
 
-def global_manager_reset(manager: Optional[SpillManager]) -> None:
+def set_global_manager(manager: Optional[SpillManager]) -> None:
     """Set the global manager, which if None disables spilling"""
 
     global _global_manager, _global_manager_uninitialized
@@ -371,9 +371,9 @@ def global_manager_reset(manager: Optional[SpillManager]) -> None:
     _global_manager_uninitialized = False
 
 
-def global_manager_get() -> Optional[SpillManager]:
+def get_global_manager() -> Optional[SpillManager]:
     """Get the global manager or None if spilling is disabled"""
     global _global_manager_uninitialized
     if _global_manager_uninitialized:
-        global_manager_reset(_get_manager_from_env())
+        set_global_manager(_get_manager_from_env())
     return _global_manager
