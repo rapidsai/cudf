@@ -85,7 +85,7 @@ struct node_ranges {
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
     // Whether a token expects to be followed by its respective end-of-* token partner
-    auto is_begin_of_section = [] __device__(PdaTokenT const token) {
+    auto const is_begin_of_section = [] __device__(PdaTokenT const token) {
       switch (token) {
         case token_t::StringBegin:
         case token_t::ValueBegin:
@@ -94,7 +94,7 @@ struct node_ranges {
       };
     };
     // The end-of-* partner token for a given beginning-of-* token
-    auto end_of_partner = [] __device__(PdaTokenT const token) {
+    auto const end_of_partner = [] __device__(PdaTokenT const token) {
       switch (token) {
         case token_t::StringBegin: return token_t::StringEnd;
         case token_t::ValueBegin: return token_t::ValueEnd;
@@ -104,8 +104,8 @@ struct node_ranges {
     };
     // Includes quote char for end-of-string token or Skips the quote char for
     // beginning-of-field-name token
-    auto get_token_index = [include_quote_char = include_quote_char] __device__(
-                             PdaTokenT const token, SymbolOffsetT const token_index) {
+    auto const get_token_index = [include_quote_char = include_quote_char] __device__(
+                                   PdaTokenT const token, SymbolOffsetT const token_index) {
       constexpr SymbolOffsetT quote_char_size = 1;
       switch (token) {
         // Strip off quote char included for StringBegin
@@ -208,7 +208,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 {
   CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
-  auto is_node = [] __device__(PdaTokenT const token) -> bool {
+  auto const is_node = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructBegin:
       case token_t::ListBegin:
@@ -221,7 +221,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pops from the parent node stack
-  auto does_pop = [] __device__(PdaTokenT const token) -> bool {
+  auto const does_pop = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructMemberEnd:
       case token_t::StructEnd:
@@ -231,7 +231,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pushes onto the parent node stack
-  auto does_push = [] __device__(PdaTokenT const token) -> bool {
+  auto const does_push = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::FieldNameBegin:
       case token_t::StructBegin:
@@ -251,27 +251,27 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                 token_indices.data())[error_location - tokens.begin()]));
   }
 
-  auto num_tokens = tokens.size();
-  auto num_nodes  = thrust::count_if(
-    rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
+  auto const num_tokens = tokens.size();
+  auto const num_nodes =
+    thrust::count_if(rmm::exec_policy(stream), tokens.begin(), tokens.end(), is_node);
 
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
   {
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
-    auto push_pop_it = thrust::make_transform_iterator(
+    auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
         return does_push(token) - does_pop(token);
       });
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
-                                           token_levels.begin(),
-                                           token_levels.begin() + num_tokens,
-                                           tokens.begin(),
-                                           node_levels.begin(),
-                                           is_node);
+    auto const node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
+                                                 token_levels.begin(),
+                                                 token_levels.end(),
+                                                 tokens.begin(),
+                                                 node_levels.begin(),
+                                                 is_node);
     CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -295,8 +295,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // if previous node is SMB and its previous node is a push, then i-2
     // eg. `{ SMB FB FE VB VE SME` -> `{` index as FB's parent.
     // else -1
-    auto first_childs_parent_token_id = [tokens_gpu =
-                                           tokens.begin()] __device__(auto i) -> NodeIndexT {
+    auto const first_childs_parent_token_id = [tokens_gpu =
+                                                 tokens.begin()] __device__(auto i) -> NodeIndexT {
       if (i <= 0) { return -1; }
       if (tokens_gpu[i - 1] == token_t::StructBegin or tokens_gpu[i - 1] == token_t::ListBegin) {
         return i - 1;
@@ -318,7 +318,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       parent_node_ids.begin(),
       [node_ids_gpu = node_token_ids.begin(), num_nodes, first_childs_parent_token_id] __device__(
         NodeIndexT const tid) -> NodeIndexT {
-        auto pid = first_childs_parent_token_id(tid);
+        auto const pid = first_childs_parent_token_id(tid);
         return pid < 0
                  ? parent_node_sentinel
                  : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
@@ -334,28 +334,25 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   // Node categories: copy_if with transform.
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
-  auto node_categories_it =
+  auto const node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
-  auto node_categories_end = thrust::copy_if(rmm::exec_policy(stream),
-                                             tokens.begin(),
-                                             tokens.begin() + num_tokens,
-                                             node_categories_it,
-                                             is_node);
+  auto const node_categories_end = thrust::copy_if(
+    rmm::exec_policy(stream), tokens.begin(), tokens.end(), node_categories_it, is_node);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
 
   // Node ranges: copy_if with transform.
   rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
   rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
-  auto node_range_tuple_it =
+  auto const node_range_tuple_it =
     thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
   // Whether the tokenizer stage should keep quote characters for string values
   // If the tokenizer keeps the quote characters, they may be stripped during type casting
   constexpr bool include_quote_char = true;
-  auto node_range_out_it            = thrust::make_transform_output_iterator(
+  auto const node_range_out_it      = thrust::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
-  auto node_range_out_end =
+  auto const node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
@@ -392,11 +389,11 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   using hash_map_type =
     cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-  auto num_nodes  = d_tree.node_categories.size();
-  auto num_fields = thrust::count(rmm::exec_policy(stream),
-                                  d_tree.node_categories.begin(),
-                                  d_tree.node_categories.end(),
-                                  node_t::NC_FN);
+  auto const num_nodes  = d_tree.node_categories.size();
+  auto const num_fields = thrust::count(rmm::exec_policy(stream),
+                                        d_tree.node_categories.begin(),
+                                        d_tree.node_categories.end(),
+                                        node_t::NC_FN);
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_fields, 40),
@@ -404,17 +401,17 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                         cuco::sentinel::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
-  auto d_hasher = [d_input          = d_input.data(),
-                   node_range_begin = d_tree.node_range_begin.data(),
-                   node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+  auto const d_hasher = [d_input          = d_input.data(),
+                         node_range_begin = d_tree.node_range_begin.data(),
+                         node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
     auto const field_name = cudf::string_view(d_input + node_range_begin[node_id],
                                               node_range_end[node_id] - node_range_begin[node_id]);
     return cudf::detail::default_hash<cudf::string_view>{}(field_name);
   };
-  auto d_equal = [d_input          = d_input.data(),
-                  node_range_begin = d_tree.node_range_begin.data(),
-                  node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
-                                                                            auto node_id2) {
+  auto const d_equal = [d_input          = d_input.data(),
+                        node_range_begin = d_tree.node_range_begin.data(),
+                        node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
+                                                                                  auto node_id2) {
     auto const field_name1 = cudf::string_view(
       d_input + node_range_begin[node_id1], node_range_end[node_id1] - node_range_begin[node_id1]);
     auto const field_name2 = cudf::string_view(
@@ -423,11 +420,13 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
-  auto iter = cudf::detail::make_counting_transform_iterator(
+  auto const iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
-  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
+  auto const is_field_name_node = [node_categories =
+                                     d_tree.node_categories.data()] __device__(auto node_id) {
+    return node_categories[node_id] == node_t::NC_FN;
+  };
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil
@@ -436,9 +435,9 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                     d_equal,
                     stream.value());
 
-  auto get_hash_value =
+  auto const get_hash_value =
     [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
-    auto it = key_map.find(node_id, d_hasher, d_equal);
+    auto const it = key_map.find(node_id, d_hasher, d_equal);
     return (it == key_map.end()) ? size_type{0} : it->second.load(cuda::std::memory_order_relaxed);
   };
 
@@ -480,7 +479,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto num_nodes = parent_node_ids.size();
+  auto const num_nodes = parent_node_ids.size();
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
@@ -495,9 +494,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
   // path compression is not used since extra writes make all map operations slow.
-  auto d_hasher = [node_level      = node_levels.begin(),
-                   node_type       = node_type.begin(),
-                   parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
+  auto const d_hasher = [node_level      = node_levels.begin(),
+                         node_type       = node_type.begin(),
+                         parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
     auto hash =
       cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
                                  cudf::detail::default_hash<size_type>{}(node_type[node_id]));
@@ -514,17 +513,17 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 
   rmm::device_uvector<hash_value_type> node_hash(num_nodes, stream);
   thrust::tabulate(rmm::exec_policy(stream), node_hash.begin(), node_hash.end(), d_hasher);
-  auto d_hashed_cache = [node_hash = node_hash.begin()] __device__(auto node_id) {
+  auto const d_hashed_cache = [node_hash = node_hash.begin()] __device__(auto node_id) {
     return node_hash[node_id];
   };
 
-  auto d_equal = [node_level      = node_levels.begin(),
-                  node_type       = node_type.begin(),
-                  parent_node_ids = parent_node_ids.begin(),
-                  d_hashed_cache] __device__(auto node_id1, auto node_id2) {
+  auto const d_equal = [node_level      = node_levels.begin(),
+                        node_type       = node_type.begin(),
+                        parent_node_ids = parent_node_ids.begin(),
+                        d_hashed_cache] __device__(auto node_id1, auto node_id2) {
     if (node_id1 == node_id2) return true;
     if (d_hashed_cache(node_id1) != d_hashed_cache(node_id2)) return false;
-    auto is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
+    auto const is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
       if (node_id1 == node_id2) return true;
       return node_level[node_id1] == node_level[node_id2] and
              node_type[node_id1] == node_type[node_id2];
@@ -540,7 +539,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   };
 
   // insert and convert node ids to unique set ids
-  auto num_inserted = thrust::count_if(
+  auto const num_inserted = thrust::count_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_nodes),
@@ -554,7 +553,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       return it.second;
     });
 
-  auto num_columns = num_inserted;  // key_map.get_size() is not updated.
+  auto const num_columns = num_inserted;  // key_map.get_size() is not updated.
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
   key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
 
@@ -585,7 +584,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto num_nodes = d_tree.node_categories.size();
+  auto const num_nodes = d_tree.node_categories.size();
 
   // Two level hashing:
   //   one for field names -> node_type and,
@@ -623,7 +622,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
 /**
  * @brief Computes row indices of each node in the hierarchy.
  * 2. Generate row_offset.
- *   a. filter only list childs
+ *   a. Extract only list children
  *   b. stable_sort by parent_col_id.
  *   c. scan_by_key {parent_col_id} (done only on nodes who's parent is list)
  *   d. propagate to non-list leaves from parent list node by recursion
@@ -649,8 +648,8 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
 
-  // filter only list childs. (nodes who's parent is a list/root)
-  auto list_parent_end =
+  // Extract only list children. (nodes who's parent is a list/root)
+  auto const list_parent_end =
     thrust::remove_if(rmm::exec_policy(stream),
                       thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()),
                       thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
@@ -658,7 +657,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
                       [node_categories = d_tree.node_categories.begin()] __device__(auto pnid) {
                         return !(pnid == parent_node_sentinel || node_categories[pnid] == NC_LIST);
                       });
-  auto num_list_parent = thrust::distance(
+  auto const num_list_parent = thrust::distance(
     thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
 
   thrust::stable_sort_by_key(rmm::exec_policy(stream),
@@ -703,7 +702,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
     },
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      auto parent_node_id = parent_node_ids[node_id];
+      auto const parent_node_id = parent_node_ids[node_id];
       return parent_node_id != parent_node_sentinel and
              !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
