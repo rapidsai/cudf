@@ -253,6 +253,22 @@ class SpillManager:
         return 0
 
     def spill_to_device_limit(self, device_limit: int = None) -> int:
+        """Spill until device limit
+
+        Notice, by default this is a no-op.
+
+        Parameters
+        ----------
+        device_limit : int, optional
+            Limit in bytes. If None, the value of the environment variable
+            `CUDF_SPILL_DEVICE_LIMIT` is used. If this is not set, the method
+            does nothing and returns 0.
+
+        Return
+        ------
+        int
+            The number of bytes spilled.
+        """
         limit = (
             self._device_memory_limit if device_limit is None else device_limit
         )
