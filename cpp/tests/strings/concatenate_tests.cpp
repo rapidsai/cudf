@@ -20,7 +20,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
-//#include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <vector>
