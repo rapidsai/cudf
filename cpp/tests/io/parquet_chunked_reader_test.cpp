@@ -162,6 +162,65 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
   }
 }
 
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
+{
+  // tests some specific boundary conditions in the split calculations.
+
+  auto constexpr num_rows = 40'000;
+
+  auto const do_test = [](std::size_t chunk_read_limit) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const value_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
+
+    auto [input_table, filepath] = write_file(input_columns, "chunked_read_simple_boundary", false);
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+  
+  // test with a limit slightly less than one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(79'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit exactly the size one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(80'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit slightly more the size one page of data
+  {
+    auto [expected, result, num_chunks] = do_test(81'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+   // test with a limit slightly less than two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(159'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit exactly the size of two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(160'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // test with a limit slightly more the size two pages of data
+  {
+    auto [expected, result, num_chunks] = do_test(161'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }  
+}
+
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 {
   auto constexpr num_rows = 60'000;

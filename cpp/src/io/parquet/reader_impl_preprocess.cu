@@ -176,33 +176,35 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
   // sizes are reasonably large, this shouldn't iterate too many times
   std::vector<gpu::chunk_read_info> splits;
   {
-    size_t cur_pos         = 0;
-    size_t cumulative_size = 0;
-    size_t cur_row_count   = 0;
-    while (cur_row_count < static_cast<size_t>(num_rows)) {
-      auto iter = thrust::make_transform_iterator(
-        sizes.begin() + cur_pos,
-        [cumulative_size](cumulative_row_info const& i) { return i.size_bytes - cumulative_size; });
-      int64_t p =
-        (thrust::lower_bound(
-           thrust::seq, iter, iter + sizes.size(), static_cast<size_t>(chunked_read_size)) -
-         iter) +
-        cur_pos;
-      if (static_cast<size_t>(p) >= sizes.size() || (sizes[p].size_bytes - cumulative_size > static_cast<size_t>(chunked_read_size))){
+    size_t cur_pos              = 0;
+    size_t cur_cumulative_size  = 0;
+    size_t cur_row_count        = 0;        
+    auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_row_info const& i) { return i.size_bytes - cur_cumulative_size; });
+    auto end = start + sizes.size();
+    while (cur_row_count < static_cast<size_t>(num_rows)) { 
+      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, static_cast<size_t>(chunked_read_size)) - start;
+
+      // if we're past the end, or if the returned bucket is > than the chunked_read_size, move back one.
+      if (static_cast<size_t>(p) >= sizes.size() ||      
+         (sizes[p].size_bytes - cur_cumulative_size > static_cast<size_t>(chunked_read_size)) ){
         p--;
       }
-
-      // best-try. if we can't find something that'll fit, we have to go bigger
-      while((sizes[p].row_count == cur_row_count || p < 0) && p < (static_cast<int64_t>(sizes.size()) - 1)){
+      
+      // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in a loop
+      // because all of the cumulative sizes for all the pages are sorted into one big list.  so if we had
+      // two columns, both of which had an entry {1000, 10000}, that entry would be in the list twice. so we have 
+      // to iterate until we skip past all of them.  The idea is that we either do this, or we have to call
+      // unique() on the input first.
+      while(p < (static_cast<int64_t>(sizes.size()) - 1) && (sizes[p].row_count == cur_row_count || p < 0)){
         p++;
-      }      
+      }
 
       auto const start_row = cur_row_count;
       cur_row_count        = sizes[p].row_count;
       splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
-      // printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
+      //printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
       cur_pos         = p;
-      cumulative_size = sizes[p].size_bytes;
+      cur_cumulative_size = sizes[p].size_bytes;
     }
   }
   return splits;
