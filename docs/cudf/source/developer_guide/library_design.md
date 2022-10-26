@@ -274,8 +274,8 @@ of it(call it `copied_buf`), then we generate weak-references of both the buffer
 This is how we achieve this in code:
 
 ```
-copied_buf._weak_ref = current_buf.get_weakref()
-current_buf._weak_ref = copied_buf.get_weakref()
+copied_buf._weak_ref = current_buf._get_weakref()
+current_buf._weak_ref = copied_buf._get_weakref()
 ```
 
 2. If the current `Buffer`(call it `current_buf`) already holds a weak-reference, this means there exists at-least one 
@@ -285,7 +285,7 @@ weak-reference of `copied_buf` and store it in `current_buf`. This will ensure w
 Buffer's alive(as long as `Buffer` is alive only). This is how we achieve it in code:
 ```
 copied_buf._weak_ref = current_buf._weak_ref
-current_buf._weak_ref = copied_buf.get_weakref()
+current_buf._weak_ref = copied_buf._get_weakref()
 ```
 
 There is a case when `copy-on-write` mechanism will stay in-active and return true copies though `copy_on_write` cudf setting set to `True`:

@@ -352,7 +352,7 @@ class Buffer(Serializable):
         else:
             return weakref_count > 0
 
-    def get_weakref(self):
+    def _get_weakref(self):
         """
         Returns a weak-reference for the Buffer.
         """
@@ -396,9 +396,9 @@ class Buffer(Serializable):
                     # If `self` has no weak-references,
                     # we will have to generate a new weak-reference
                     # and assign it to `copied_buf`
-                    copied_buf._weak_ref = self.get_weakref()
+                    copied_buf._weak_ref = self._get_weakref()
 
-                self._weak_ref = copied_buf.get_weakref()
+                self._weak_ref = copied_buf._get_weakref()
 
                 return copied_buf
             else:
