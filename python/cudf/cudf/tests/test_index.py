@@ -248,7 +248,9 @@ def test_index_rename():
     assert_eq(pds, gds)
 
 
-def test_index_rename_inplace():
+@pytest.mark.parametrize("copy_on_write", [True, False])
+def test_index_rename_inplace(copy_on_write):
+    cudf.set_option("copy_on_write", copy_on_write)
     pds = pd.Index([1, 2, 3], name="asdf")
     gds = as_index(pds)
 

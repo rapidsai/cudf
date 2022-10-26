@@ -760,12 +760,14 @@ def test_multiindex_copy_sem(data, levels, codes, names):
         ),
     ],
 )
+@pytest.mark.parametrize("copy_on_write", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-def test_multiindex_copy_deep(data, deep):
+def test_multiindex_copy_deep(data, copy_on_write, deep):
     """Test memory identity for deep copy
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
+    cudf.set_option("copy_on_write", copy_on_write)
     same_ref = (not deep) or cudf.get_option("copy_on_write")
 
     if isinstance(data, dict):
