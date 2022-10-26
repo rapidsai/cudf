@@ -39,7 +39,7 @@ struct parse_options {
    */
   byte_range_info byte_range = create_byte_range_info_max();
   /**
-   * @brief Should delimiters at the end of rows be stripped from the output column?
+   * @brief Whether delimiters at the end of rows should be stripped from the output column
    */
   bool strip_delimiters = false;
 };
