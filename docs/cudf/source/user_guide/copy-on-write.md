@@ -12,7 +12,8 @@ i. Either by using `set_option` in `cudf`:
 >>> cudf.set_option("copy_on_write", True)
 ```
 
-ii. Or, by setting an environment variable ``CUDF_COPY_ON_WRITE`` to ``1``:
+ii. Or, by setting an environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
+launch of the python interpreter:
 
 ```bash
 export CUDF_COPY_ON_WRITE="1"
@@ -87,3 +88,12 @@ weak-references, and it is recommended to not hand-construct the contents of `__
 or `series.data.__cuda_array_interface__` which will then take care of detaching any existing weak-references that a column contains.
 ````
 
+
+## How to disable it
+
+
+Copy on write can be disable by setting ``copy_on_write`` cudf option to ``False``:
+
+```python
+>>> cudf.set_option("copy_on_write", False)
+```
