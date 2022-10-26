@@ -110,8 +110,9 @@ TEST_F(DataChunkSourceTest, DataSourceFile)
 {
   std::string content = "file datasource";
   // make it big enought to have is_device_read_preferred return true
+  content.reserve(content.size() << 20);
   for (int i = 0; i < 20; i++) {
-    content = content + content;
+    content += content;
   }
   auto const filename = temp_env->get_temp_filepath("file_source");
   {
