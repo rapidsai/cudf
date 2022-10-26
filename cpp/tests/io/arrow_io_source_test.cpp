@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
+#include <arrow/filesystem/filesystem.h>
 #include <arrow/io/api.h>
 
 #include <fstream>
@@ -61,36 +62,32 @@ TEST_F(ArrowIOTest, URIFileSystem)
   ASSERT_EQ(2, tbl.tbl->num_rows());
 }
 
-#ifdef S3_ENABLED
-
 TEST_F(ArrowIOTest, S3FileSystem)
 {
   std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // Populate the Parquet Reader Options
-  cudf::io::source_info src(datasource.get());
-  std::vector<std::string> single_column;
-  single_column.insert(single_column.begin(), "total_bill");
-  cudf::io::parquet_reader_options_builder builder(src);
-  cudf::io::parquet_reader_options options = builder.columns(single_column).build();
+  // Check to see if Arrow was built with support for S3. If not, ensure this
+  // test throws. If so, validate the S3 file contents.
+  auto const s3_unsupported = arrow::fs::FileSystemFromUri(s3_uri).status().IsNotImplemented();
+  if (s3_unsupported) {
+    EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
+  } else {
+    std::unique_ptr<cudf::io::arrow_io_source> datasource =
+      std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // Read the Parquet file from S3
-  cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
+    // Populate the Parquet Reader Options
+    cudf::io::source_info src(datasource.get());
+    std::vector<std::string> single_column;
+    single_column.insert(single_column.begin(), "total_bill");
+    cudf::io::parquet_reader_options_builder builder(src);
+    cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 
-  ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
-  ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
+    // Read the Parquet file from S3
+    cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
+
+    ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
+    ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
+  }
 }
-
-#else
-
-TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
-{
-  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
-}
-
-#endif
 
 CUDF_TEST_PROGRAM_MAIN()
