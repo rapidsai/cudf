@@ -13,73 +13,34 @@
 # =============================================================================
 
 # This function finds thrust and sets any additional necessary environment variables.
-function(find_and_configure_thrust VERSION)
-  # We only want to set `UPDATE_DISCONNECTED` while the GIT tag hasn't moved from the last time we
-  # cloned
-  set(cpm_thrust_disconnect_update "UPDATE_DISCONNECTED TRUE")
-  set(CPM_THRUST_CURRENT_VERSION
-      ${VERSION}
-      CACHE STRING "version of thrust we checked out"
-  )
-  if(NOT VERSION VERSION_EQUAL CPM_THRUST_CURRENT_VERSION)
-    set(CPM_THRUST_CURRENT_VERSION
-        ${VERSION}
-        CACHE STRING "version of thrust we checked out" FORCE
-    )
-    set(cpm_thrust_disconnect_update "")
-  endif()
+function(find_and_configure_thrust)
 
-  # We currently require cuDF to always build with a custom version of thrust. This is needed so
-  # that build times of of cudf are kept reasonable, without this CI builds of cudf will be killed
-  # as some source file can take over 45 minutes to build
-  #
-  set(CPM_DOWNLOAD_ALL TRUE)
-  rapids_cpm_find(
-    Thrust ${VERSION}
+  include(${rapids-cmake-dir}/cpm/thrust.cmake)
+  include(${rapids-cmake-dir}/cpm/package_override.cmake)
+
+  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+  rapids_cpm_package_override("${cudf_patch_dir}/thrust_override.json")
+
+  # Make sure we install thrust into the `include/libcudf` subdirectory instead of the default
+  include(GNUInstallDirs)
+  set(CMAKE_INSTALL_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}/libcudf")
+  set(CMAKE_INSTALL_LIBDIR "${CMAKE_INSTALL_INCLUDEDIR}/lib")
+
+  # Find or install Thrust with our custom set of patches
+  rapids_cpm_thrust(
+    NAMESPACE cudf
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
-    CPM_ARGS
-    GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
-    GIT_TAG ${VERSION}
-    GIT_SHALLOW TRUE ${cpm_thrust_disconnect_update}
-    PATCH_COMMAND patch --reject-file=- -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
-    OPTIONS "THRUST_INSTALL TRUE"
   )
 
-  if(NOT TARGET cudf::Thrust)
-    thrust_create_target(cudf::Thrust FROM_OPTIONS)
-  endif()
-
-  if(Thrust_SOURCE_DIR) # only install thrust when we have an in-source version
-    include(GNUInstallDirs)
-    install(
-      DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
-      FILES_MATCHING
-      REGEX "\\.(h|inl)$"
-    )
-    install(
-      DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
-      FILES_MATCHING
-      PATTERN "*.cuh"
-    )
-
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/"
-    )
-    install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/"
-    )
-
+  if(Thrust_SOURCE_DIR)
     # Store where CMake can find our custom Thrust install
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(
-      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust/]=] cudf-exports
+      INSTALL Thrust [=[${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/lib/cmake/thrust]=]
+      cudf-exports
     )
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_Thrust 1.17.2)
-
-find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})
+find_and_configure_thrust()

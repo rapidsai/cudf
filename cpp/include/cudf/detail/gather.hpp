@@ -66,7 +66,7 @@ std::unique_ptr<table> gather(
   column_view const& gather_map,
   out_of_bounds_policy bounds_policy,
   negative_index_policy neg_indices,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -81,7 +81,7 @@ std::unique_ptr<table> gather(
   device_span<size_type const> const gather_map,
   out_of_bounds_policy bounds_policy,
   negative_index_policy neg_indices,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

@@ -55,7 +55,7 @@ void write_csv(data_sink* sink,
                table_view const& table,
                std::vector<std::string> const& column_names,
                csv_writer_options const& options,
-               rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace csv
