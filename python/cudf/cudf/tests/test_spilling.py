@@ -380,7 +380,7 @@ def test_ptr_restricted(manager: SpillManager):
     assert buf.spillable
 
 
-def test_get_spill_lock():
+def test_get_spill_lock(manager: SpillManager):
     @with_spill_lock()
     def f(sleep=False, nest=0):
         if sleep:
@@ -409,6 +409,17 @@ def test_get_spill_lock():
             )
         all(isinstance(f.result(), SpillLock) for f in futures_with_spill_lock)
         all(f is None for f in futures_without_spill_lock)
+
+
+def test_get_spill_lock_no_manager():
+    """When spilling is disabled, get_spill_lock() should return None always"""
+
+    @with_spill_lock()
+    def f():
+        return get_spill_lock()
+
+    assert get_spill_lock() is None
+    assert f() is None
 
 
 @pytest.mark.parametrize(
