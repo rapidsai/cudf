@@ -168,7 +168,9 @@ struct row_total_size {
   }
 };
 
-std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes, size_type num_rows, size_t chunked_read_size)
+std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes,
+                                              size_type num_rows,
+                                              size_t chunked_read_size)
 {
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
@@ -176,34 +178,40 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
   // sizes are reasonably large, this shouldn't iterate too many times
   std::vector<gpu::chunk_read_info> splits;
   {
-    size_t cur_pos              = 0;
-    size_t cur_cumulative_size  = 0;
-    size_t cur_row_count        = 0;        
-    auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_row_info const& i) { return i.size_bytes - cur_cumulative_size; });
-    auto end = start + sizes.size();
-    while (cur_row_count < static_cast<size_t>(num_rows)) { 
-      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, static_cast<size_t>(chunked_read_size)) - start;
+    size_t cur_pos             = 0;
+    size_t cur_cumulative_size = 0;
+    size_t cur_row_count       = 0;
+    auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_row_info const& i) {
+      return i.size_bytes - cur_cumulative_size;
+    });
+    auto end   = start + sizes.size();
+    while (cur_row_count < static_cast<size_t>(num_rows)) {
+      int64_t p = thrust::lower_bound(
+                    thrust::seq, start + cur_pos, end, static_cast<size_t>(chunked_read_size)) -
+                  start;
 
-      // if we're past the end, or if the returned bucket is > than the chunked_read_size, move back one.
-      if (static_cast<size_t>(p) >= sizes.size() ||      
-         (sizes[p].size_bytes - cur_cumulative_size > static_cast<size_t>(chunked_read_size)) ){
+      // if we're past the end, or if the returned bucket is > than the chunked_read_size, move back
+      // one.
+      if (static_cast<size_t>(p) >= sizes.size() ||
+          (sizes[p].size_bytes - cur_cumulative_size > static_cast<size_t>(chunked_read_size))) {
         p--;
       }
-      
-      // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in a loop
-      // because all of the cumulative sizes for all the pages are sorted into one big list.  so if we had
-      // two columns, both of which had an entry {1000, 10000}, that entry would be in the list twice. so we have 
-      // to iterate until we skip past all of them.  The idea is that we either do this, or we have to call
-      // unique() on the input first.
-      while(p < (static_cast<int64_t>(sizes.size()) - 1) && (sizes[p].row_count == cur_row_count || p < 0)){
+
+      // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
+      // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
+      // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
+      // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
+      // either do this, or we have to call unique() on the input first.
+      while (p < (static_cast<int64_t>(sizes.size()) - 1) &&
+             (sizes[p].row_count == cur_row_count || p < 0)) {
         p++;
       }
 
       auto const start_row = cur_row_count;
       cur_row_count        = sizes[p].row_count;
       splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
-      //printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
-      cur_pos         = p;
+      // printf("Split: {%lu, %lu}\n", splits.back().skip_rows, splits.back().num_rows);
+      cur_pos             = p;
       cur_cumulative_size = sizes[p].size_bytes;
     }
   }
@@ -230,7 +238,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
-                                cumulative_row_sum{});  
+                                cumulative_row_sum{});
   // clang-format off
   /*
   stream.synchronize();
