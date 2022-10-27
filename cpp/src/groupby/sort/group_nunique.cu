@@ -35,26 +35,25 @@ namespace {
 
 template <typename Nullate>
 struct is_unique_iterator_fn {
+  using comparator_type =
+    typename cudf::experimental::row::equality::device_row_comparator<Nullate>;
+
   Nullate nulls;
   column_device_view const v;
-  cudf::experimental::row::equality::self_comparator comparator;
-  cudf::experimental::row::equality::device_row_comparator<Nullate> equal;
+  comparator_type equal;
   null_policy null_handling;
   size_type const* group_offsets;
   size_type const* group_labels;
 
-  is_unique_iterator_fn(column_view const& values,
+  is_unique_iterator_fn(Nullate nulls,
+                        column_device_view const& v,
+                        comparator_type const& equal,
                         null_policy null_handling,
                         size_type const* group_offsets,
-                        size_type const* group_labels,
-                        rmm::cuda_stream_view stream)
-    : nulls{nullate::DYNAMIC{values.has_nulls()}},
-      v{*column_device_view::create(values, stream)},
-      comparator{cudf::experimental::row::equality::preprocessed_table::create(table_view{{values}},
-                                                                               stream)},
-      equal{
-        comparator.equal_to(cudf::nullate::DYNAMIC{cudf::has_nested_nulls(table_view{{values}})},
-                            null_equality::EQUAL)},
+                        size_type const* group_labels)
+    : nulls{nulls},
+      v{v},
+      equal{equal},
       null_handling{null_handling},
       group_offsets{group_offsets},
       group_labels{group_labels}
@@ -90,10 +89,19 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   if (num_groups == 0) { return result; }
 
+  auto const values_view = table_view{{values}};
+  auto const comparator  = cudf::experimental::row::equality::self_comparator{values_view, stream};
+  auto const d_equal     = comparator.equal_to(
+    cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
+
   auto is_unique_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
-    is_unique_iterator_fn<nullate::DYNAMIC>{
-      values, null_handling, group_offsets.data(), group_labels.data(), stream});
+    is_unique_iterator_fn<nullate::DYNAMIC>{nullate::DYNAMIC{values.has_nulls()},
+                                            *column_device_view::create(values, stream),
+                                            d_equal,
+                                            null_handling,
+                                            group_offsets.data(),
+                                            group_labels.data()});
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
