@@ -550,11 +550,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
 
-      // this isn't the ideal place to be setting this value (it's not obvious this function would
-      // do it) but we don't have any other places that go host->device with the pages and I'd like
-      // to avoid another copy
-      pages[target_page_index + p_idx].type = type_id;
-
       src_info_index += per_page_nesting_info_size;
     }
     target_page_index += chunks[idx].num_data_pages;
@@ -616,6 +611,9 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
           pni[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
           pni[cur_depth].size          = 0;
+          pni[cur_depth].type =
+            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
+          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
         }
 
         // move up the hierarchy
@@ -823,7 +821,7 @@ struct cumulative_row_sum {
 struct row_size_functor {
   __device__ size_t validity_size(size_t num_rows, bool nullable)
   {
-    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
+    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) * 4) : 0;
   }
 
   template <typename T>
@@ -865,14 +863,22 @@ struct get_cumulative_row_info {
     if (page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
       return cumulative_row_info{0, 0, page.src_col_schema};
     }
-    size_t const row_count = page.nesting[0].size;
-    return cumulative_row_info{
-      row_count,
-      // note: the size of the actual char bytes for strings is tracked in the `str_bytes` field, so
-      // the row_size_functor{} itself is only returning the size of offsets+validity
-      cudf::type_dispatcher(data_type{page.type}, row_size_functor{}, row_count, false) +
-        page.str_bytes,
-      page.src_col_schema};
+
+    // total nested size, not counting string data
+    auto iter =
+      cudf::detail::make_counting_transform_iterator(0, [page, index] __device__(size_type i) {
+        auto const& pni = page.nesting[i];
+        if (index == 1) {
+          auto const size =
+            cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+        }
+        return cudf::type_dispatcher(
+          data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+      });
+
+    size_t const row_count = static_cast<size_t>(page.nesting[0].size);
+    return {row_count,
+            thrust::reduce(thrust::seq, iter, iter + page.num_nesting_levels) + page.str_bytes};
   }
 };
 
