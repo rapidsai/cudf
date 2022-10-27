@@ -450,8 +450,9 @@ fname : str
     File path or object where the ORC dataset will be stored.
 compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
-enable_statistics: boolean, default True
-    Enable writing column statistics.
+statistics: str {{ "ROWGROUP", "STRIPE", None }}, default "ROWGROUP"
+    The granularity with which column statistics must
+    be written to the file.
 stripe_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
     If None, 67108864 (64MB) will be used.
@@ -465,6 +466,13 @@ cols_as_map_type : list of column names or None, default None
     A list of column names which should be written as map type in the ORC file.
     Note that this option only affects columns of ListDtype. Names of other
     column types will be ignored.
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
 
 See Also
 --------

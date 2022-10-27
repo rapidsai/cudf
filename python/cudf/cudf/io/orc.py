@@ -420,7 +420,7 @@ def to_orc(
     row_index_stride=None,
     cols_as_map_type=None,
     storage_options=None,
-    **kwargs,
+    index=None,
 ):
     """{docstring}"""
 
@@ -455,6 +455,7 @@ def to_orc(
                 stripe_size_rows,
                 row_index_stride,
                 cols_as_map_type,
+                index,
             )
     else:
         liborc.write_orc(
@@ -466,6 +467,7 @@ def to_orc(
             stripe_size_rows,
             row_index_stride,
             cols_as_map_type,
+            index,
         )
 
 

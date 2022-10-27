@@ -292,14 +292,21 @@ class CudfEngine(ArrowDatasetEngine):
             preserve_index = True
         if partition_on:
             md = write_to_dataset(
-                df,
-                path,
+                df=df,
+                root_path=path,
+                compression=compression,
                 filename=filename,
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
                 return_metadata=return_metadata,
-                **kwargs,
+                statistics=kwargs.get("statistics", "ROWGROUP"),
+                int96_timestamps=kwargs.get("int96_timestamps", False),
+                row_group_size_bytes=kwargs.get("row_group_size_bytes", None),
+                row_group_size_rows=kwargs.get("row_group_size_rows", None),
+                max_page_size_bytes=kwargs.get("max_page_size_bytes", None),
+                max_page_size_rows=kwargs.get("max_page_size_rows", None),
+                storage_options=kwargs.get("storage_options", None),
             )
         else:
             with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:

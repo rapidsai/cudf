@@ -113,13 +113,19 @@ def _write_parquet(
 def write_to_dataset(
     df,
     root_path,
+    compression="snappy",
     filename=None,
     partition_cols=None,
     fs=None,
     preserve_index=False,
     return_metadata=False,
+    statistics="ROWGROUP",
+    int96_timestamps=False,
+    row_group_size_bytes=None,
+    row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
     storage_options=None,
-    **kwargs,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -142,19 +148,24 @@ def write_to_dataset(
     filename : string, default None
         The file name to use (within each partition directory). If None,
         a random uuid4 hex string will be used for each file name.
+    partition_cols : list,
+        Column names by which to partition the dataset
+        Columns are partitioned in the order they are given
     fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem
     preserve_index : bool, default False
         Preserve index values in each parquet file.
-    partition_cols : list,
-        Column names by which to partition the dataset
-        Columns are partitioned in the order they are given
     return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
         include the file-path metadata (relative to `root_path`).
-    **kwargs : dict,
-        kwargs for to_parquet function.
+    storage_options : dict, optional, default None
+        Extra options that make sense for a particular storage connection,
+        e.g. host, port, username, password, etc. For HTTP(S) URLs the
+        key-value pairs are forwarded to ``urllib.request.Request`` as
+        header options. For other URLs (e.g. starting with “s3://”, and
+        “gcs://”) the key-value pairs are forwarded to ``fsspec.open``.
+        Please see ``fsspec`` and ``urllib`` for more details.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -169,39 +180,49 @@ def write_to_dataset(
             part_offsets,
             _,
         ) = _get_partitioned(
-            df,
-            root_path,
-            partition_cols,
-            filename,
-            fs,
-            preserve_index,
-            storage_options,
-            # **kwargs,
+            df=df,
+            root_path=root_path,
+            partition_cols=partition_cols,
+            filename=filename,
+            fs=fs,
+            preserve_index=preserve_index,
+            storage_options=storage_options,
         )
 
-        # if return_metadata:
-        #     kwargs["metadata_file_path"] = metadata_file_paths
         metadata = to_parquet(
-            grouped_df,
-            full_paths,
+            df=grouped_df,
+            path=full_paths,
+            compression=compression,
             index=preserve_index,
             partition_offsets=part_offsets,
             storage_options=storage_options,
-            metadata_file_path=metadata_file_paths if return_metadata else None
-            # **kwargs,
+            metadata_file_path=metadata_file_paths
+            if return_metadata
+            else None,
+            statistics=statistics,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
         )
 
     else:
         filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
-        # if return_metadata:
-        #     kwargs["metadata_file_path"] = filename
+
         metadata = df.to_parquet(
-            full_path,
+            path=full_path,
+            compression=compression,
             index=preserve_index,
             storage_options=storage_options,
-            metadata_file_path=filename if return_metadata else None
-            # **kwargs
+            metadata_file_path=filename if return_metadata else None,
+            statistics=statistics,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
         )
 
     return metadata
@@ -452,7 +473,7 @@ def read_parquet(
             row_groups,
             fs=fs,
         )
-    for i, source in enumerate(filepath_or_buffer):
+    for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
@@ -463,7 +484,6 @@ def read_parquet(
             bytes_per_thread=256_000_000
             if bytes_per_thread is None
             else bytes_per_thread,
-            # **kwargs,
         )
 
         if compression is not None:

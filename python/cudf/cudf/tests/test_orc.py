@@ -1759,11 +1759,15 @@ def test_orc_writer_nvcomp(compression):
         assert_eq(expected, got)
 
 
+@pytest.mark.xfail
+@pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
 @pytest.mark.parametrize("index", [True, False, None])
 @pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
-def test_orc_columns_and_index_param(index, columns):
+def test_orc_columns_and_index_param(index_obj, index, columns):
     buffer = BytesIO()
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=index_obj
+    )
     df.to_orc(buffer, index=index)
 
     expected = pd.read_orc(buffer, columns=columns)
