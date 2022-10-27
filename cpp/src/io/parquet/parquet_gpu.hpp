@@ -107,6 +107,8 @@ struct PageNestingInfo {
   // set at initialization
   int32_t max_def_level;
   int32_t max_rep_level;
+  cudf::type_id type;  // type of the corresponding cudf output column
+  bool nullable;
 
   // set during preprocessing
   int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
@@ -152,7 +154,6 @@ struct PageInfo {
   Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  cudf::type_id type;                  // type of this page.
 
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the

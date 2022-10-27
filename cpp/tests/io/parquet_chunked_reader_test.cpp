@@ -336,11 +336,14 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
 
   auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
-    input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
-
+    // 20000 rows in 1 page consist of:
+    //
+    // 20001 offsets :   80004  bytes
+    // 30000 ints    :   120000 bytes
+    // total         :   200004 bytes
     auto const template_lists = int32s_lists_col{
       int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{0, 1}, int32s_lists_col{0, 1, 2}};
+
     auto const gather_iter =
       cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
     auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
@@ -357,14 +360,86 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithLists)
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
 
+  // chunk size slightly less than 1 page (forcing it to be at least 1 page per read)
   {
-    auto const [input, result, num_chunks] = do_test(400'000, false);
-    EXPECT_EQ(num_chunks, 3);
+    auto const [input, result, num_chunks] = do_test(200'000, false);
+    EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }
 
+  // chunk size exactly 1 page
   {
-    auto const [input, result, num_chunks] = do_test(400'000, true);
+    auto const [input, result, num_chunks] = do_test(200'004, true);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  // chunk size 2 pages. 3 chunks (2 pages + 2 pages + 1 page)
+  {
+    auto const [input, result, num_chunks] = do_test(400'008, true);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+}
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNulls)
+{
+  auto constexpr num_rows = 100'000;
+  // auto constexpr num_rows = 100;
+
+  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    // 20000 rows in 1 page consist of:
+    //
+    // 625 validity words :   2500 bytes
+    // 20001 offsets      :   80004  bytes
+    // 15000 ints         :   60000 bytes
+    // total              :   142504 bytes
+    auto const template_lists = int32s_lists_col{// these will all be null
+                                                 int32s_lists_col{},
+                                                 int32s_lists_col{0},
+                                                 int32s_lists_col{1, 2},
+                                                 int32s_lists_col{3, 4, 5}};
+    auto const gather_iter =
+      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+    auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
+    auto intermediate =
+      std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front());
+    auto const valids = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type i) { return i % 4 == 3 ? 0 : 1; });
+    intermediate->set_null_mask(cudf::test::detail::make_null_mask(valids, valids + num_rows),
+                                num_rows / 4);
+
+    input_columns.emplace_back(
+      cudf::purge_nonempty_nulls(cudf::lists_column_view{intermediate->view()}));
+
+    auto [input_table, filepath] = write_file(input_columns,
+                                              "chunked_read_with_lists_nulls",
+                                              nullable,
+                                              512 * 1024,  // 512KB per page
+                                              20000        // 20k rows per page
+    );
+    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+
+  // chunk size slightly less than 1 page (forcing it to be at least 1 page per read)
+  {
+    auto const [input, result, num_chunks] = do_test(142'500, false);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  // chunk size exactly 1 page
+  {
+    auto const [input, result, num_chunks] = do_test(142'504, false);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
+  }
+
+  // chunk size 2 pages. 3 chunks (2 pages + 2 pages + 1 page)
+  {
+    auto const [input, result, num_chunks] = do_test(285'008, false);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }

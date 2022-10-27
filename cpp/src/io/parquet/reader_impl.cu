@@ -484,11 +484,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
 
-      // this isn't the ideal place to be setting this value (it's not obvious this function would
-      // do it) but we don't have any other places that go host->device with the pages and I'd like
-      // to avoid another copy
-      pages[target_page_index + p_idx].type = type_id;
-
       src_info_index += per_page_nesting_info_size;
     }
     target_page_index += chunks[idx].num_data_pages;
@@ -550,6 +545,9 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
           pni[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
           pni[cur_depth].size          = 0;
+          pni[cur_depth].type =
+            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
+          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
         }
 
         // move up the hierarchy

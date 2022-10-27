@@ -91,7 +91,7 @@ struct cumulative_row_sum {
 struct row_size_functor {
   __device__ size_t validity_size(size_t num_rows, bool nullable)
   {
-    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) / 8) : 0;
+    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) * 4) : 0;
   }
 
   template <typename T>
@@ -133,14 +133,22 @@ struct get_cumulative_row_info {
     if (page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
       return cumulative_row_info{0, 0, page.src_col_schema};
     }
-    size_t const row_count = page.nesting[0].size;
-    return cumulative_row_info{
-      row_count,
-      // note: the size of the actual char bytes for strings is tracked in the `str_bytes` field, so
-      // the row_size_functor{} itself is only returning the size of offsets+validity
-      cudf::type_dispatcher(data_type{page.type}, row_size_functor{}, row_count, false) +
-        page.str_bytes,
-      page.src_col_schema};
+
+    // total nested size, not counting string data
+    auto iter =
+      cudf::detail::make_counting_transform_iterator(0, [page, index] __device__(size_type i) {
+        auto const& pni = page.nesting[i];
+        if (index == 1) {
+          auto const size =
+            cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+        }
+        return cudf::type_dispatcher(
+          data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+      });
+
+    size_t const row_count = static_cast<size_t>(page.nesting[0].size);
+    return {row_count,
+            thrust::reduce(thrust::seq, iter, iter + page.num_nesting_levels) + page.str_bytes};
   }
 };
 
