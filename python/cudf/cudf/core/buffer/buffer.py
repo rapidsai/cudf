@@ -144,19 +144,12 @@ class Buffer(Serializable):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
-        assert (
-            header["frame_count"] == 1
-        ), "Only expecting to deserialize Buffer with a single frame."
-        buf = cls(frames[0], **header["constructor-kwargs"])
-
-        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
-            raise ValueError(
-                f"Received a `Buffer` with the wrong size."
-                f" Expected {header['desc']['shape']}, "
-                f"but got {buf.__cuda_array_interface__['shape']}"
-            )
-
-        return buf
+        if header["frame_count"] != 1:
+            raise ValueError("Deserializing a Buffer expect a single frame")
+        frame = frames[0]
+        if isinstance(frame, cls):
+            return frame  # The frame is already deserialized
+        return cls(frame)
 
     def __repr__(self) -> str:
         return (
