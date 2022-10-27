@@ -55,7 +55,7 @@ outputs:
         - cmake {{ cmake_version }}
       run:
         - cudatoolkit {{ cuda_spec }}
-        - librmm {{ minor_version }}.*
+        - rapidsai-nightly::librmm {{ minor_version }}.*
         - arrow-cpp {{ arrow_cpp_version }}
         - dlpack {{ dlpack_version }}
     test:
