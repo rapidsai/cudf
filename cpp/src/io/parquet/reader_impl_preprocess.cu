@@ -1109,12 +1109,12 @@ struct chunk_row_output_iter {
 
 }  // anonymous namespace
 
-void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                      hostdevice_vector<gpu::PageInfo>& pages,
-                                      size_t min_row,
-                                      size_t num_rows,
-                                      bool uses_custom_row_bounds,
-                                      size_type chunked_read_size)
+void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                           hostdevice_vector<gpu::PageInfo>& pages,
+                                           size_t skip_rows,
+                                           size_t num_rows,
+                                           bool uses_custom_row_bounds,
+                                           size_type chunked_read_size)
 {
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
@@ -1258,7 +1258,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   _chunk_read_info =
     chunked_read_size > 0
       ? compute_splits(pages, _chunk_itm_data, num_rows, chunked_read_size, _stream)
-      : std::vector<gpu::chunk_read_info>{{min_row, num_rows}};
+      : std::vector<gpu::chunk_read_info>{{skip_rows, num_rows}};
 }
 
 }  // namespace cudf::io::detail::parquet

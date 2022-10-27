@@ -164,7 +164,7 @@ class aggregate_reader_metadata {
    * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
    * values based on the input row group list.
    *
-   * @param row_groups Lists of row groups to read, one per source
+   * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
@@ -172,7 +172,7 @@ class aggregate_reader_metadata {
    *         starting row
    */
   [[nodiscard]] std::tuple<size_type, size_type, std::vector<row_group_info>> select_row_groups(
-    std::vector<std::vector<size_type>> const& row_groups_list,
+    std::vector<std::vector<size_type>> const& row_group_indices,
     size_type row_start,
     size_type row_count) const;
 

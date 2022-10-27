@@ -114,7 +114,7 @@ void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     gpu::chunk_intermediate_data const& id,
-                                    size_t min_row,
+                                    size_t skip_rows,
                                     size_t num_rows,
                                     bool uses_custom_row_bounds)
 {
@@ -127,7 +127,7 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   if (uses_custom_row_bounds) {
     gpu::ComputePageSizes(pages,
                           chunks,
-                          min_row,
+                          skip_rows,
                           num_rows,
                           false,  // num_rows is already computed
                           false,  // no need to compute string sizes
@@ -220,8 +220,8 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                                    size_t min_row,
-                                    size_t total_rows)
+                                    size_t skip_rows,
+                                    size_t num_rows)
 {
   // TODO (dm): hd_vec should have begin and end iterator members
   size_t sum_max_depths =
@@ -316,7 +316,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   chunk_nested_valids.host_to_device(_stream);
   chunk_nested_data.host_to_device(_stream);
 
-  gpu::DecodePageData(pages, chunks, total_rows, min_row, _stream);
+  gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
 
   _stream.synchronize();
 
@@ -434,22 +434,22 @@ reader::impl::impl(std::size_t chunk_read_limit,
 void reader::impl::prepare_data(size_type skip_rows,
                                 size_type num_rows,
                                 bool uses_custom_row_bounds,
-                                std::vector<std::vector<size_type>> const& row_group_list)
+                                std::vector<std::vector<size_type>> const& row_group_indices)
 {
   if (_file_preprocessed) { return; }
 
   const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
-    _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
+    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
 
-    preprocess_columns(_file_itm_data.chunks,
-                       _file_itm_data.pages_info,
-                       skip_rows_corrected,
-                       num_rows_corrected,
-                       uses_custom_row_bounds,
-                       _chunk_read_limit);
+    compute_chunk_read_info(_file_itm_data.chunks,
+                            _file_itm_data.pages_info,
+                            skip_rows_corrected,
+                            num_rows_corrected,
+                            uses_custom_row_bounds,
+                            _chunk_read_limit);
 
     if (_chunk_read_limit == 0) {  // read the whole file at once
       CUDF_EXPECTS(_chunk_read_info.size() == 1,
@@ -545,7 +545,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
-                                       std::vector<std::vector<size_type>> const& row_group_list)
+                                       std::vector<std::vector<size_type>> const& row_group_indices)
 {
 #if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
   prepare_data(
@@ -553,7 +553,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
 #else
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
-  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_list);
+  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
   return read_chunk_internal(uses_custom_row_bounds);
 #endif
 }
