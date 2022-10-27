@@ -16,13 +16,11 @@
 
 #pragma once
 
+#include <cstddef>
 #include <limits>
-#include <stdexcept>
-#include <string>
-#include <thrust/detail/config.h>
-#include <thrust/system/cuda/detail/guarded_cuda_runtime_api.h>
-#include <thrust/system/cuda/error.h>
-#include <thrust/system/system_error.h>
+#include <new> // for bad_alloc
+
+#include <cudf/utilities/error.hpp>
 
 namespace cudf::detail {
 
@@ -154,15 +152,9 @@ class pinned_allocator {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
 
     pointer result(0);
-    cudaError_t error = cudaMallocHost(reinterpret_cast<void**>(&result), cnt * sizeof(value_type));
-
-    if (error) {
-      cudaGetLastError();  // Clear global CUDA error state.
-      throw std::bad_alloc();
-    }  // end if
-
+    CUDF_CUDA_TRY(cudaMallocHost(reinterpret_cast<void**>(&result), cnt * sizeof(value_type)));
     return result;
-  }  // end allocate()
+  }
 
   /**
    * @brief This method deallocates pinned host memory previously allocated
@@ -175,17 +167,7 @@ class pinned_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  __host__ inline void deallocate(pointer p, size_type /*cnt*/)
-  {
-    cudaError_t error = cudaFreeHost(p);
-
-    cudaGetLastError();  // Clear global CUDA error state.
-
-    if (error) {
-      cudaGetLastError();  // Clear global CUDA error state.
-      throw thrust::system_error(error, thrust::cuda_category());
-    }  // end if
-  }    // end deallocate()
+  __host__ inline void deallocate(pointer p, size_type /*cnt*/) { CUDF_CUDA_TRY(cudaFreeHost(p)); }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter
@@ -194,10 +176,7 @@ class pinned_allocator {
    *  @return The maximum number of objects that may be allocated
    *          by a single call to \p allocate().
    */
-  inline size_type max_size() const
-  {
-    return (std::numeric_limits<size_type>::max)() / sizeof(T);
-  }  // end max_size()
+  inline size_type max_size() const { return (std::numeric_limits<size_type>::max)() / sizeof(T); }
 
   /**
    * @brief This method tests this \p pinned_allocator for equality to
