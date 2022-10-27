@@ -34,7 +34,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
-#include <thrust/device_ptr.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -737,8 +736,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
-  thrust::host_vector<char> h_input(thrust::device_pointer_cast(d_input.begin()),
-                                    thrust::device_pointer_cast(d_input.end()));
+  auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
 #endif
 

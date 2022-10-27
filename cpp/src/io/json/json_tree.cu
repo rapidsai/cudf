@@ -252,9 +252,16 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       error_count > 0) {
     auto const error_location =
       thrust::find(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
+    SymbolOffsetT error_index;
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(&error_index,
+                      token_indices.data() + thrust::distance(tokens.begin(), error_location),
+                      sizeof(SymbolOffsetT),
+                      cudaMemcpyDeviceToHost,
+                      stream.value()));
+    stream.synchronize();
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +
-              std::to_string(thrust::device_pointer_cast(
-                token_indices.data())[error_location - tokens.begin()]));
+              std::to_string(error_index));
   }
 
   auto const num_tokens = tokens.size();
