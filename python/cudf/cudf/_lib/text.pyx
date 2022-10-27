@@ -19,12 +19,14 @@ from cudf._lib.cpp.io.text cimport (
     make_source_from_bgzip_file,
     make_source_from_file,
     multibyte_split,
+    parse_options,
 )
 
 
 def read_text(object filepaths_or_buffers,
               object delimiter=None,
               object byte_range=None,
+              object strip_delimiters=False,
               object compression=None,
               object compression_offsets=None):
     """
@@ -44,6 +46,7 @@ def read_text(object filepaths_or_buffers,
     cdef byte_range_info c_byte_range
     cdef uint64_t c_compression_begin_offset
     cdef uint64_t c_compression_end_offset
+    cdef parse_options c_options
 
     if compression is None:
         if isinstance(filepaths_or_buffers, TextIOBase):
@@ -71,19 +74,18 @@ def read_text(object filepaths_or_buffers,
     else:
         raise ValueError("Only bgzip compression is supported at the moment")
 
-    if (byte_range is None):
-        with nogil:
-            c_col = move(multibyte_split(dereference(datasource), delim))
-    else:
+    c_options = parse_options()
+    if byte_range is not None:
         c_byte_range_offset = byte_range[0]
         c_byte_range_size = byte_range[1]
-        c_byte_range = byte_range_info(
+        c_options.byte_range = byte_range_info(
             c_byte_range_offset,
             c_byte_range_size)
-        with nogil:
-            c_col = move(multibyte_split(
-                dereference(datasource),
-                delim,
-                c_byte_range))
+    c_options.strip_delimiters = strip_delimiters
+    with nogil:
+        c_col = move(multibyte_split(
+            dereference(datasource),
+            delim,
+            c_options))
 
     return {None: Column.from_unique_ptr(move(c_col))}

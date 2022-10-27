@@ -21,13 +21,16 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
+#include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -551,6 +554,7 @@ class output_builder {
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               byte_range_info byte_range,
+                                              bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr,
                                               rmm::cuda_stream_pool& stream_pool)
@@ -756,8 +760,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto chars          = char_storage.gather(stream, mr);
   auto global_offsets = row_offset_storage.gather(stream, mr);
 
-  bool const insert_begin = *first_row_offset == 0;
-  bool const insert_end   = not last_row_offset.has_value() or last_row_offset == chunk_offset;
+  // insert an offset at the beginning if we started at the beginning of the input
+  bool const insert_begin = first_row_offset.value_or(0) == 0;
+  // insert an offset at the end if we have not terminated the last row
+  bool const insert_end =
+    not(last_row_offset.has_value() or
+        (global_offsets.size() > 0 and global_offsets.back_element(stream) == chunk_offset));
   rmm::device_uvector<int32_t> offsets{
     global_offsets.size() + insert_begin + insert_end, stream, mr};
   if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
@@ -771,10 +779,27 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                     [baseline = *first_row_offset] __device__(byte_offset global_offset) {
                       return static_cast<int32_t>(global_offset - baseline);
                     });
-
   auto string_count = offsets.size() - 1;
-
-  return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars));
+  if (strip_delimiters) {
+    auto it = cudf::detail::make_counting_transform_iterator(
+      0,
+      [ofs        = offsets.data(),
+       chars      = chars.data(),
+       delim_size = static_cast<size_type>(delimiter.size()),
+       last_row   = static_cast<size_type>(string_count) - 1,
+       insert_end] __device__(size_type row) {
+        auto const begin = ofs[row];
+        auto const len   = ofs[row + 1] - begin;
+        if (row == last_row && insert_end) {
+          return thrust::make_pair(chars + begin, len);
+        } else {
+          return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+        };
+      });
+    return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
+  } else {
+    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars));
+  }
 }
 
 }  // namespace detail
@@ -784,11 +809,20 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::optional<byte_range_info> byte_range,
                                               rmm::mr::device_memory_resource* mr)
 {
+  return multibyte_split(
+    source, delimiter, parse_options{byte_range.value_or(create_byte_range_info_max())}, mr);
+}
+
+std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
+                                              std::string const& delimiter,
+                                              parse_options options,
+                                              rmm::mr::device_memory_resource* mr)
+{
   auto stream      = cudf::get_default_stream();
   auto stream_pool = rmm::cuda_stream_pool(2);
 
   auto result = detail::multibyte_split(
-    source, delimiter, byte_range.value_or(create_byte_range_info_max()), stream, mr, stream_pool);
+    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr, stream_pool);
 
   return result;
 }
@@ -797,7 +831,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::string const& delimiter,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return multibyte_split(source, delimiter, std::nullopt, mr);
+  return multibyte_split(source, delimiter, parse_options{}, mr);
 }
 
 }  // namespace text

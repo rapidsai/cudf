@@ -14,6 +14,7 @@ def read_text(
     filepath_or_buffer,
     delimiter=None,
     byte_range=None,
+    strip_delimiters=False,
     compression=None,
     compression_offsets=None,
     storage_options=None,
@@ -37,6 +38,7 @@ def read_text(
             filepath_or_buffer,
             delimiter=delimiter,
             byte_range=byte_range,
+            strip_delimiters=strip_delimiters,
             compression=compression,
             compression_offsets=compression_offsets,
         )
