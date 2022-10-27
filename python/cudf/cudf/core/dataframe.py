@@ -6431,6 +6431,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot_table)
     def pivot_table(
+        self,
         values=None,
         index=None,
         columns=None,
@@ -6443,9 +6444,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=True,
     ):
         return cudf.core.reshape.pivot_table(
-            self, values=values, index=index, columns=columns, aggfunc=aggfunc,
-            fill_value=fill_value, margins=margins, dropna=dropna, margins_name=margins_name,
-            observed=observed, sort=sort,
+            self,
+            values=values,
+            index=index,
+            columns=columns,
+            aggfunc=aggfunc,
+            fill_value=fill_value,
+            margins=margins,
+            dropna=dropna,
+            margins_name=margins_name,
+            observed=observed,
+            sort=sort,
         )
 
     @_cudf_nvtx_annotate
