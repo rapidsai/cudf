@@ -45,7 +45,7 @@
 
 temp_directory const temp_dir("cudf_nvbench");
 
-enum class data_chunk_source_type { device, file, host, host_pinned, file_bgzip };
+enum class data_chunk_source_type { device, file, file_datasource, host, host_pinned, file_bgzip };
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   data_chunk_source_type,
@@ -53,6 +53,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case data_chunk_source_type::device: return "device";
       case data_chunk_source_type::file: return "file";
+      case data_chunk_source_type::file_datasource: return "file_datasource";
       case data_chunk_source_type::host: return "host";
       case data_chunk_source_type::host_pinned: return "host_pinned";
       case data_chunk_source_type::file_bgzip: return "file_bgzip";
@@ -134,13 +135,14 @@ static void bench_multibyte_split(nvbench::state& state,
   std::iota(delim.begin(), delim.end(), '1');
 
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
-  auto device_input       = create_random_input(file_size_approx, delim_factor, 0.05, delim);
-  auto host_input         = std::vector<char>{};
+  std::unique_ptr<cudf::io::datasource> datasource;
+  auto device_input = create_random_input(file_size_approx, delim_factor, 0.05, delim);
+  auto host_input   = std::vector<char>{};
   auto host_pinned_input =
     thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>>{};
 
-  if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file ||
-      source_type == data_chunk_source_type::file_bgzip) {
+  if (source_type != data_chunk_source_type::device &&
+      source_type != data_chunk_source_type::host_pinned) {
     host_input = cudf::detail::make_std_vector_sync<char>(
       {device_input.data(), static_cast<std::size_t>(device_input.size())},
       cudf::get_default_stream());
@@ -155,11 +157,17 @@ static void bench_multibyte_split(nvbench::state& state,
 
   auto source = [&] {
     switch (source_type) {
-      case data_chunk_source_type::file: {
+      case data_chunk_source_type::file:
+      case data_chunk_source_type::file_datasource: {
         auto const temp_file_name = random_file_in_dir(temp_dir.path());
         std::ofstream(temp_file_name, std::ofstream::out)
           .write(host_input.data(), host_input.size());
-        return cudf::io::text::make_source_from_file(temp_file_name);
+        if (source_type == data_chunk_source_type::file) {
+          return cudf::io::text::make_source_from_file(temp_file_name);
+        } else {
+          datasource = cudf::io::datasource::create(temp_file_name);
+          return cudf::io::text::make_source(*datasource);
+        }
       }
       case data_chunk_source_type::host:  //
         return cudf::io::text::make_source(host_input);
@@ -199,6 +207,7 @@ static void bench_multibyte_split(nvbench::state& state,
 
 using source_type_list = nvbench::enum_type_list<data_chunk_source_type::device,
                                                  data_chunk_source_type::file,
+                                                 data_chunk_source_type::file_datasource,
                                                  data_chunk_source_type::host,
                                                  data_chunk_source_type::host_pinned,
                                                  data_chunk_source_type::file_bgzip>;
