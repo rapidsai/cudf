@@ -40,38 +40,38 @@ class pinned_allocator;
 template <>
 class pinned_allocator<void> {
  public:
-  typedef void value_type;                 ///< The type of the elements in the allocator
-  typedef void* pointer;                   ///< The type returned by address() / allocate()
-  typedef const void* const_pointer;       ///< The type returned by address()
-  typedef std::size_t size_type;           ///< The type used for the size of the allocation
-  typedef std::ptrdiff_t difference_type;  ///< The type of the distance between two pointers
+  using value_type      = void;            ///< The type of the elements in the allocator
+  using pointer         = void*;           ///< The type returned by address() / allocate()
+  using const_pointer   = const void*;     ///< The type returned by address()
+  using size_type       = std::size_t;     ///< The type used for the size of the allocation
+  using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
   /**
    * @brief converts a pinned_allocator<void> to pinned_allocator<U>
    */
   template <typename U>
   struct rebind {
-    typedef pinned_allocator<U> other;
+    using other = pinned_allocator<U>;
   };
 };
 
 template <typename T>
 class pinned_allocator {
  public:
-  typedef T value_type;                    ///< The type of the elements in the allocator
-  typedef T* pointer;                      ///< The type returned by address() / allocate()
-  typedef const T* const_pointer;          ///< The type returned by address()
-  typedef T& reference;                    ///< The parameter type for address()
-  typedef const T& const_reference;        ///< The parameter type for address()
-  typedef std::size_t size_type;           ///< The type used for the size of the allocation
-  typedef std::ptrdiff_t difference_type;  ///< The type of the distance between two pointers
+  using value_type      = T;               ///< The type of the elements in the allocator
+  using pointer         = T*;              ///< The type returned by address() / allocate()
+  using const_pointer   = const T*;        ///< The type returned by address()
+  using reference       = T&;              ///< The parameter type for address()
+  using const_reference = const T&;        ///< The parameter type for address()
+  using size_type       = std::size_t;     ///< The type used for the size of the allocation
+  using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
   /**
    * @brief converts a pinned_allocator<T> to pinned_allocator<U>
    */
   template <typename U>
   struct rebind {
-    typedef pinned_allocator<U> other;
+    using other = pinned_allocator<U>;
   };  // end rebind
 
   /**
