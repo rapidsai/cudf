@@ -66,7 +66,9 @@ def read_json(
 
         filepaths_or_buffers = []
         for source in path_or_buf:
-            if ioutils.is_directory(source, storage_options=storage_options):
+            if ioutils.is_directory(
+                path_or_data=source, storage_options=storage_options
+            ):
                 fs = ioutils._ensure_filesystem(
                     passed_filesystem=None,
                     path=source,
