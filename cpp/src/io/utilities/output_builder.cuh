@@ -234,7 +234,7 @@ class output_builder {
     auto head_span = get_free_span(*head_it);
     if (head_span.size() >= _max_write_size) { return split_device_span<T>{head_span}; }
     if (head_it == _chunks.end() - 1) {
-      // insert a new vector of double size
+      // insert a new device_uvector of double size
       auto const next_chunk_size =
         std::min(_max_growth * _max_write_size, 2 * _chunks.back().capacity());
       _chunks.emplace_back(0, stream, _chunks.back().memory_resource());
