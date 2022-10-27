@@ -2092,7 +2092,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for _ in range(map_size - len(result))
             ]
 
-        return result
+        return [df.copy() for df in result]
 
     @_cudf_nvtx_annotate
     def update(
