@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import warnings
 from collections import abc
 from io import BytesIO, StringIO
@@ -47,6 +48,17 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine == "cudf" or engine == "cudf_experimental":
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following parameters: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following non key-word arguments: {list(args)}"
+            )
+
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
         if not is_list_like(path_or_buf):
@@ -69,7 +81,6 @@ def read_json(
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
-                # **kwargs,
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -94,7 +105,6 @@ def read_json(
         if not ioutils.ensure_single_filepath_or_buffer(
             path_or_data=path_or_buf,
             storage_options=storage_options,
-            # **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
@@ -107,10 +117,6 @@ def read_json(
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
             storage_options=storage_options,
-            # bytes_per_thread=256_000_000
-            # if bytes_per_thread is None
-            # else bytes_per_thread,
-            # **kwargs,
         )
 
         if orient == "table":
