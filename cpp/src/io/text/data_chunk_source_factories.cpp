@@ -37,7 +37,7 @@ namespace {
 class istream_data_chunk_reader : public data_chunk_reader {
   struct host_ticket {
     cudaEvent_t event;
-    thrust::host_vector<char, cudf::pinned_allocator<char>> buffer;
+    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
   };
 
  public:

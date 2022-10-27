@@ -135,7 +135,7 @@ static void bench_multibyte_split(nvbench::state& state,
   auto const delim_factor = static_cast<double>(delim_percent) / 100;
   auto device_input       = create_random_input(file_size_approx, delim_factor, 0.05, delim);
   auto host_input         = std::vector<char>{};
-  auto host_pinned_input  = thrust::host_vector<char, cudf::pinned_allocator<char>>{};
+  auto host_pinned_input  = thrust::host_vector<char, cudf::detail::pinned_allocator<char>>{};
 
   if (source_type == data_chunk_source_type::host || source_type == data_chunk_source_type::file ||
       source_type == data_chunk_source_type::file_bgzip) {

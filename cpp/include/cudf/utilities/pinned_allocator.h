@@ -24,7 +24,7 @@
 #include <thrust/system/cuda/error.h>
 #include <thrust/system/system_error.h>
 
-namespace cudf {
+namespace cudf::detail {
 
 /*! \p pinned_allocator is a CUDA-specific host memory allocator
  *  that employs \c cudaMallocHost for allocation.
@@ -51,7 +51,7 @@ class pinned_allocator<void> {
    */
   template <typename U>
   struct rebind {
-    using other = pinned_allocator<U>; ///< The rebound type
+    using other = pinned_allocator<U>;  ///< The rebound type
   };
 };
 
@@ -71,7 +71,7 @@ class pinned_allocator {
    */
   template <typename U>
   struct rebind {
-    using other = pinned_allocator<U>; ///< The rebound type
+    using other = pinned_allocator<U>;  ///< The rebound type
   };
 
   /**
@@ -202,4 +202,4 @@ class pinned_allocator {
     return !operator==(x);
   }
 };
-}  // namespace cudf
+}  // namespace cudf::detail

@@ -126,7 +126,7 @@ class hostdevice_vector {
   }
 
  private:
-  thrust::host_vector<T, cudf::pinned_allocator<T>> h_data;
+  thrust::host_vector<T, cudf::detail::pinned_allocator<T>> h_data;
   rmm::device_uvector<T> d_data;
 };
 
