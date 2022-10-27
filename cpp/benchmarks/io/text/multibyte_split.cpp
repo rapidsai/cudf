@@ -23,6 +23,7 @@
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/pinned_allocator.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -31,7 +32,6 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/pinned_allocator.h>
 
 #include <thrust/host_vector.h>
 #include <thrust/transform.h>

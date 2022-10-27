@@ -17,8 +17,8 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/pinned_allocator.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
-#include <cudf/utilities/pinned_allocator.h>
 
 #include <rmm/device_buffer.hpp>
 
