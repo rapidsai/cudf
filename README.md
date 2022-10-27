@@ -71,7 +71,7 @@ conda install -c rapidsai -c conda-forge -c nvidia \
     cudf cudatoolkit=11.5
 # for CUDA 11.2
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf cudatoolkit=11.2
+    cudf=22.10 python=3.9 cudatoolkit=11.2
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
