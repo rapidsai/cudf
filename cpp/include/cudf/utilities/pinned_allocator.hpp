@@ -125,8 +125,10 @@ class pinned_allocator {
    *  memory.
    *
    *  @param cnt The number of objects to allocate.
-   *  @param hint pointer to a nearby memory location ( not used by this allocator )
    *  @return a \c pointer to the newly allocated objects.
+   *  @note The second parameter to this function is meant as a
+   *        hint pointer to a nearby memory location, but is
+   *        not used by this allocator.
    *  @note This method does not invoke \p value_type's constructor.
    *        It is the responsibility of the caller to initialize the
    *        objects at the returned \c pointer.
@@ -151,8 +153,8 @@ class pinned_allocator {
    *  with this \c pinned_allocator.
    *
    *  @param p A \c pointer to the previously allocated memory.
-   *  @param cnt The number of objects previously allocated at
-   *         \p p. ( not used by this allocator )
+   *  @note The second parameter is the number of objects previously allocated
+   *        but is ignored by this allocator.
    *  @note This method does not invoke \p value_type's destructor.
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
