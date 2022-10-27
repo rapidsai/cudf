@@ -380,6 +380,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
+
+  // chunk size 2 pages minus one byte: each chunk will be just one page
+  {
+    auto const [expected, result, num_chunks] = do_test(400'007, false);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
 }
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
@@ -440,6 +447,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
   {
     auto const [expected, result, num_chunks] = do_test(285'008, false);
     EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // chunk size 2 pages minus 1 byte: each chunk will be just one page
+  {
+    auto const [expected, result, num_chunks] = do_test(285'007, false);
+    EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }

@@ -910,6 +910,10 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
                                               size_type num_rows,
                                               size_t chunked_read_size)
 {
+  //  for (auto x : sizes) {
+  //    printf("size: %d | %d \n", (int)x.row_count, (int)x.size_bytes);
+  //  }
+
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
   // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
