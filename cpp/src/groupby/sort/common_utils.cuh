@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ namespace detail {
  * the sorted order of the table.
  *
  */
-template <typename ComparatorT, typename Iterator>
+template <typename ComparatorT>
 struct permuted_row_equality_comparator {
   /**
    * @brief Constructs a permuted comparator object which compares two rows of the table in given
@@ -37,7 +37,8 @@ struct permuted_row_equality_comparator {
    * @param permutation The permutation map that specifies the effective ordering of
    * `t`. Must be the same size as `t.num_rows()`
    */
-  permuted_row_equality_comparator(ComparatorT const& comparator, Iterator const permutation)
+  permuted_row_equality_comparator(ComparatorT const& comparator,
+                                   cudf::size_type const* permutation)
     : _comparator{comparator}, _permutation{permutation}
   {
   }
@@ -60,7 +61,7 @@ struct permuted_row_equality_comparator {
 
  private:
   ComparatorT const _comparator;
-  Iterator const _permutation;
+  cudf::size_type const* _permutation;
 };
 }  // namespace detail
 }  // namespace groupby
