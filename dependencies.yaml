@@ -19,12 +19,16 @@ files:
 channels:
   - rapidsai
   - conda-forge
+# Not sure whether we need these:
+# - nvidia
+# - rapidsai-nightly
+# - dask/label/dev
 dependencies:
   conda_and_requirements:
     common:
       build:
         - arrow-cpp=9
-        - cmake>=3.20.1,!=3.23.0
+        - cmake>=3.23.1
         - cmake_setuptools>=0.1.3
         - cython>=0.29,<0.30
         - dlpack>=0.5,<0.6.0a0
@@ -32,29 +36,30 @@ dependencies:
         - protobuf>=3.20.1,<3.21.0a0
         - pyarrow=9
         - python>=3.8,<3.10
-        - rmm=22.10.*
+        - rmm=22.12.*
         - scikit-build>=0.13.1
         # Not sure if these are used anywhere?
         # - double-conversion
         # - rapidjson
       run:
         - cachetools
+        - cubinlinker  # TODO: Is this conda or requirements or both?
         - cupy>=9.5.0,<12.0.0a0  # TODO: cupy for conda, cupy-cuda115 for requirements?
-        - dask>=2022.7.1
-        - distributed>=2022.7.1
+        - dask>=2022.9.2
+        - distributed>=2022.9.2
         - fsspec>=0.6.0
-        - numba>=0.54
-        - numpy>=1.19
+        - numba>=0.56.2
+        - numpy  # Does this need a lower bound?
         - nvtx>=0.2.1
         - packaging
-        - pandas>=1.0,<1.5.0dev0
+        - pandas>=1.0,<1.6.0dev0
         - python-confluent-kafka=1.7.0
         - streamz
         - typing_extensions
       develop:
         - black=22.3.0
         - cmakelang=0.6.13
-        - doxygen=1.8.20
+        - doxygen=1.8.20  # We rely on this being installed for pre-commit but pre-commit handles all the rest of this section for us (except pre-commit itself). We can probably remove black, etc.
         - flake8=3.8.3
         - gcovr>=5.0
         - isort=5.10.1
@@ -64,10 +69,10 @@ dependencies:
         - aiobotocore>=2.2.0
         - boto3>=1.21.21
         - botocore>=1.24.21
-        - dask-cuda=22.10.*  # TODO: This only looks like a testing dependency?
+        - dask-cuda=22.12.*  # TODO: This only looks like a testing dependency?
         - fastavro>=0.22.9
         - hypothesis
-        - mimesis<4.1
+        - mimesis>=4.1.0
         - moto>=3.1.6
         - pytest
         - pytest-benchmark
@@ -75,16 +80,16 @@ dependencies:
         - pytest-cov
         - pytest-xdist
         - python-snappy>=0.6.0
-        - pytorch<1.12.0
+        - pytorch<1.12.0  # We should check and fix all "<=" pinnings
         - s3fs>=2022.3.0
-        - scipy
-        - transformers<=4.10.3
+        - scipy  # Does this need a lower bound?
+        - transformers<=4.10.3  # We should check and fix all "<=" pinnings
         - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
       doc:
         - myst-nb
         - nbsphinx
         - numpydoc
-        - pandoc<=2.0.0
+        - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
         - pydata-sphinx-theme
         - sphinx
         - sphinx-autobuild
@@ -98,20 +103,21 @@ dependencies:
       - matrix:
           cuda: "11.5"
         build:
-          - cuda-python>=11.5,<11.7.1
+          - cuda-python>=11.5,<11.7.1  # TODO: Check this, it should be updated very soon for the hotfix
   conda:
     common:
       build:
         - c-compiler
         - cxx-compiler
       develop:
+        # Are these needed? For what?
         - clang=11.1.0
         - clang-tools=11.1.0
       run:
         - pip
         - pip:
             - git+https://github.com/python-streamz/streamz.git@master
-            - pyorc
+            - pyorc  # I think there is an issue filed about removing this. Maybe need to check that.
         - ptxcompiler  # Not available on PyPI, may be needed?
     specific:
       - matrix:
