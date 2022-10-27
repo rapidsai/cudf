@@ -33,4 +33,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
 
-}
+std::vector<table_with_metadata> skeleton_for_parellel_chunk_reader(
+  host_span<std::unique_ptr<datasource>> sources,
+  json_reader_options const& reader_opts,
+  int chunk_size,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr);
+}  // namespace cudf::io::detail::json::experimental
