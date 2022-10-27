@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common_utils.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -43,47 +45,6 @@
 #include <algorithm>
 #include <numeric>
 #include <tuple>
-
-namespace {
-/**
- * @brief Compares two `table` rows for equality as if the table were
- * ordered according to a specified permutation map.
- */
-template <typename ComparatorT>
-struct permuted_row_equality_comparator {
-  ComparatorT const _comparator;
-  cudf::size_type const* _map;
-
-  /**
-   * @brief Construct a permuted_row_equality_comparator.
-   *
-   * @param t The `table` whose rows will be compared
-   * @param map The permutation map that specifies the effective ordering of
-   * `t`. Must be the same size as `t.num_rows()`
-   */
-  permuted_row_equality_comparator(ComparatorT const& comparator, cudf::size_type const* map)
-    : _comparator{comparator}, _map{map}
-  {
-  }
-
-  /**
-   * @brief Returns true if the two rows at the specified indices in the permuted
-   * order are equivalent.
-   *
-   * For example, comparing rows `i` and `j` is
-   * equivalent to comparing rows `map[i]` and `map[j]` in the original table.
-   *
-   * @param lhs The index of the first row
-   * @param rhs The index of the second row
-   * @returns true if the two specified rows in the permuted order are equivalent
-   */
-  __device__ inline bool operator()(cudf::size_type lhs, cudf::size_type rhs)
-  {
-    return _comparator(_map[lhs], _map[rhs]);
-  }
-};
-
-}  // namespace
 
 namespace cudf {
 namespace groupby {
