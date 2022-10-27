@@ -621,6 +621,13 @@ keep_quotes : bool, default False
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
 
 Returns
 -------
