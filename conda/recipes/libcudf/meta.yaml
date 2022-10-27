@@ -34,6 +34,7 @@ requirements:
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - rapidsai-nightly::librmm {{ minor_version }}.*
+    - cuda-python>=11.7.1,<12.0
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
