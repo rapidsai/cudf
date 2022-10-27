@@ -18,7 +18,7 @@
 
 #include <cstddef>
 #include <limits>
-#include <new> // for bad_alloc
+#include <new>  // for bad_alloc
 
 #include <cudf/utilities/error.hpp>
 
