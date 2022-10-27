@@ -6,7 +6,7 @@ import math
 import pickle
 from typing import Any, Dict, Mapping, Sequence, Tuple, Union
 
-import numpy as np
+import numpy
 
 import rmm
 
@@ -54,32 +54,45 @@ class Buffer(Serializable):
             self._ptr = data
             self._size = size
             self._owner = owner
-        else:
-            if size is not None or owner is not None:
-                raise ValueError(
-                    "`size` and `owner` must be None when "
-                    "`data` is a buffer-like object"
-                )
-
-            # `data` is a buffer-like object
-            buf: Any = data
-            if isinstance(buf, rmm.DeviceBuffer):
-                self._ptr = buf.ptr
-                self._size = buf.size
-                self._owner = buf
-                return
-            iface = getattr(buf, "__cuda_array_interface__", None)
-            if iface:
-                ptr, size = get_ptr_and_size(iface)
-                self._ptr = ptr
-                self._size = size
-                self._owner = buf
-                return
-            ptr, size = get_ptr_and_size(np.asarray(buf).__array_interface__)
-            buf = rmm.DeviceBuffer(ptr=ptr, size=size)
+            return
+        if size is not None or owner is not None:
+            raise ValueError(
+                "`size` and `owner` must be None when "
+                "`data` is a buffer-like object"
+            )
+        # `data` is a buffer-like or array-like object
+        buf: Any = data
+        if isinstance(buf, rmm.DeviceBuffer):
             self._ptr = buf.ptr
             self._size = buf.size
             self._owner = buf
+            return
+        iface = getattr(buf, "__cuda_array_interface__", None)
+        if iface:
+            self._ptr, self._size = get_ptr_and_size(iface)
+            self._owner = buf
+            return
+        # At this point, `buf` must represents host memory, let's deligate
+        # to `._init_from_host_memory()`
+        buf = memoryview(buf)
+        if not buf.c_contiguous:
+            raise ValueError("`data` must be C-contiguous")
+        self._init_from_host_memory(buf)
+
+    def _init_from_host_memory(self, data: memoryview) -> None:
+        """Initialize in the case where `data` represents host memory.
+
+        Sub-classes can overwrite this and still use `super().__init__()`
+        to handle the (trivial) case where `data` represents device memory.
+
+        This default implemention copies `data` to a newly allocated RMM
+        device buffer.
+        """
+        ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
+        buf = rmm.DeviceBuffer(ptr=ptr, size=size)
+        self._ptr = buf.ptr
+        self._size = buf.size
+        self._owner = buf
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
