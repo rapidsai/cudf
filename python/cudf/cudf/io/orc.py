@@ -291,7 +291,6 @@ def read_orc(
     use_python_file_object=True,
     storage_options=None,
     bytes_per_thread=None,
-    **kwargs,
 ):
     """{docstring}"""
     from cudf import DataFrame
@@ -333,7 +332,6 @@ def read_orc(
                 passed_filesystem=None,
                 path=source,
                 storage_options=storage_options,
-                # **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -346,7 +344,6 @@ def read_orc(
             bytes_per_thread=256_000_000
             if bytes_per_thread is None
             else bytes_per_thread,
-            # **kwargs,
         )
         if compression is not None:
             raise ValueError(

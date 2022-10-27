@@ -400,7 +400,20 @@ use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
     performance when making small reads from larger ORC files.
-kwargs are passed to the engine
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
+bytes_per_thread : int, default None
+    Determines the number of bytes to be allocated per thread to read the
+    files in parallel. When there is a file of large size, we get slightly
+    better throughput by decomposing it and transferring multiple "blocks"
+    in parallel (using a python thread pool). Default allocation is
+    256_000_000 bytes.
+    This parameter is functional only when `use_python_file_object=False`.
 
 Returns
 -------
