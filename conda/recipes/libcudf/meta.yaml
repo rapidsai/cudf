@@ -334,6 +334,7 @@ outputs:
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        - cuda-nvtx {{ cuda_version }}.*
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
