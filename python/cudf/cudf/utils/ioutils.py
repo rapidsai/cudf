@@ -948,7 +948,8 @@ header : int, default 'infer'
     the column names: if no names are passed, header=0;
     if column names are passed explicitly, header=None.
 names : list of str, default None
-    List of column names to be used.
+    List of column names to be used. Needs to include names of all column in
+    the file, or names of all columns selected using `usecols` (indices only).
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
