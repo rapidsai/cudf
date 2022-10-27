@@ -735,14 +735,14 @@ TEST_F(JsonTest, TreeRepresentation3)
   if (std::getenv("NJP_DEBUG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 }
 
-TEST_F(JsonTest, TreeError)
+TEST_F(JsonTest, TreeRepresentationError)
 {
   auto const stream       = cudf::get_default_stream();
   std::string const input = R"([ {}, }{])";
   // Prepare input & output buffers
-  cudf::string_scalar d_scalar(input, true, stream);
-  auto d_input = cudf::device_span<cuio_json::SymbolT const>{d_scalar.data(),
-                                                             static_cast<size_t>(d_scalar.size())};
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+    d_scalar.data(), static_cast<size_t>(d_scalar.size())};
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
