@@ -184,7 +184,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(_keys, stream);
+  auto preprocessed_keys =
+    cudf::experimental::row::equality::preprocessed_table::create(_keys, stream);
   auto const comparator =
     cudf::experimental::row::equality::self_comparator{std::move(preprocessed_keys)};
   auto const d_key_equal = comparator.equal_to(
