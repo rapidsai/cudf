@@ -49,7 +49,7 @@ static void BM_concatenate(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     auto result = cudf::concatenate(column_views);
   }
 
@@ -91,7 +91,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     auto result = cudf::concatenate(table_views);
   }
 
@@ -150,7 +150,7 @@ static void BM_concatenate_strings(benchmark::State& state)
   CUDF_CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     auto result = cudf::concatenate(column_views);
   }
 

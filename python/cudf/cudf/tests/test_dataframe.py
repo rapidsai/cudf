@@ -3106,7 +3106,7 @@ def test_to_frame(pdf, gdf):
     gdf_new_name = gdf.x.to_frame(name=name)
     pdf_new_name = pdf.x.to_frame(name=name)
     assert_eq(gdf_new_name, pdf_new_name)
-    assert gdf_new_name.columns[0] is name
+    assert gdf_new_name.columns[0] == np.bool(name)
 
 
 def test_dataframe_empty_sort_index():
@@ -4286,26 +4286,26 @@ def test_series_values_property(data):
         pytest.param(
             {"A": [1, None, 3], "B": [1, 2, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
     ],
@@ -4424,8 +4424,8 @@ def test_isin_dataframe(data, values):
         except ValueError as e:
             if str(e) == "Lengths must match.":
                 pytest.xfail(
-                    not PANDAS_GE_110,
-                    "https://github.com/pandas-dev/pandas/issues/34256",
+                    condition=not PANDAS_GE_110,
+                    reason="https://github.com/pandas-dev/pandas/issues/34256",
                 )
         except TypeError as e:
             # Can't do isin with different categories
@@ -9547,5 +9547,25 @@ def test_non_string_column_name_to_arrow(data):
 
     expected = df.to_arrow()
     actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)
+
+
+def test_complex_types_from_arrow():
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
 
     assert expected.equals(actual)

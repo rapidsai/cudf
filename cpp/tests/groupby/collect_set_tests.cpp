@@ -248,7 +248,10 @@ TEST_F(CollectSetTest, FloatsWithNaN)
     vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
                       validity_col{true, true, true, true, true, true, true, false}}};
     auto const [out_keys, out_lists] =
-      groupby_collect_set(keys, vals, CollectSetTest::collect_set());
+      groupby_collect_set(keys,
+                          vals,
+                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+                            null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
@@ -258,7 +261,10 @@ TEST_F(CollectSetTest, FloatsWithNaN)
     vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
                       validity_col{true, true, true, true, true, true, true, false, false}}};
     auto const [out_keys, out_lists] =
-      groupby_collect_set(keys, vals, CollectSetTest::collect_set_null_unequal());
+      groupby_collect_set(keys,
+                          vals,
+                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+                            null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
@@ -267,7 +273,10 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   {
     vals_expected = {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN}};
     auto const [out_keys, out_lists] =
-      groupby_collect_set(keys, vals, CollectSetTest::collect_set_null_exclude());
+      groupby_collect_set(keys,
+                          vals,
+                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+                            null_policy::EXCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }

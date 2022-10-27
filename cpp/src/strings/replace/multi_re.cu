@@ -145,7 +145,7 @@ std::unique_ptr<column> replace_re(
     patterns.size());
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
-      return reprog_device::create(ptn, flags, stream);
+      return reprog_device::create(ptn, flags, capture_groups::NON_CAPTURE, stream);
     });
 
   // get the longest regex for the dispatcher
@@ -198,7 +198,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, cudf::default_stream_value, mr);
+  return detail::replace_re(strings, patterns, replacements, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

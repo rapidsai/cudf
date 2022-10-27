@@ -26,6 +26,18 @@
 
 #include <nvbench/nvbench.cuh>
 
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  cudf::io::statistics_freq,
+  [](auto value) {
+    switch (value) {
+      case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
+      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "ORC_STATISTICS_STRIPE";
+      case cudf::io::statistics_freq::STATISTICS_PAGE: return "ORC_STATISTICS_ROW_GROUP";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
@@ -38,7 +50,7 @@ void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   auto const compression            = cudf::io::compression_type::SNAPPY;
-  auto const sink_type              = io_type::HOST_BUFFER;
+  auto const sink_type              = io_type::VOID;
 
   auto const tbl =
     create_random_table(cycle_dtypes(d_type, num_cols),
@@ -49,7 +61,7 @@ void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum
   std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(sink_type);
@@ -100,7 +112,7 @@ void BM_orc_write_io_compression(
   std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(sink_type);
@@ -145,7 +157,7 @@ void BM_orc_write_statistics(
   std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(io_type::FILEPATH);

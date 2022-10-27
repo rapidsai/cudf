@@ -1906,7 +1906,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  *
  * @param[in] inputs Source buffer per block
  * @param[out] outputs Destination buffer per block
- * @param[out] statuses Decompressor status per block
+ * @param[out] results Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
  * blocks)
@@ -1914,7 +1914,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
 __global__ void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<decompress_status> statuses,
+                      device_span<compression_result> results,
                       uint8_t* scratch,
                       uint32_t scratch_size)
 {
@@ -2016,10 +2016,11 @@ __global__ void __launch_bounds__(block_size, 2)
   __syncthreads();
   // Output decompression status
   if (!t) {
-    statuses[block_id].bytes_written = s->out - s->outbase;
-    statuses[block_id].status        = s->error;
+    results[block_id].bytes_written = s->out - s->outbase;
+    results[block_id].status =
+      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     // Return ext heap used by last block (statistics)
-    statuses[block_id].reserved = s->fb_size;
+    results[block_id].reserved = s->fb_size;
   }
 }
 
@@ -2079,7 +2080,7 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<decompress_status> statuses,
+                  device_span<compression_result> results,
                   void* scratch,
                   size_t scratch_size,
                   rmm::cuda_stream_view stream)
@@ -2104,7 +2105,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                                 cudaMemcpyHostToDevice,
                                 stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
-    inputs, outputs, statuses, scratch_u8, fb_heap_size);
+    inputs, outputs, results, scratch_u8, fb_heap_size);
 #if DUMP_FB_HEAP
   uint32_t dump[2];
   uint32_t cur = 0;

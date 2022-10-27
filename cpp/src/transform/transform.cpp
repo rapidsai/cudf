@@ -99,7 +99,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(input, unary_udf, output_type, is_ptx, cudf::default_stream_value, mr);
+  return detail::transform(input, unary_udf, output_type, is_ptx, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

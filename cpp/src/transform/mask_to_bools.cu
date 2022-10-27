@@ -64,6 +64,6 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, cudf::default_stream_value, mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

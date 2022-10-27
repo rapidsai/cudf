@@ -91,7 +91,7 @@ void BM_url_decode(benchmark::State& state, int esc_seq_pct)
   auto strings_view = cudf::strings_column_view(column->view());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     auto result = cudf::strings::url_decode(strings_view);
   }
 

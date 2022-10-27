@@ -18,45 +18,52 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
-    lineterminator="\n",
-    quotechar='"',
-    quoting=0,
-    doublequote=True,
-    header="infer",
-    mangle_dupe_cols=True,
-    usecols=None,
     sep=",",
     delimiter=None,
-    delim_whitespace=False,
-    skipinitialspace=False,
+    header="infer",
     names=None,
+    index_col=None,
+    usecols=None,
+    prefix=None,
+    mangle_dupe_cols=True,
     dtype=None,
-    skipfooter=0,
+    true_values=None,
+    false_values=None,
+    skipinitialspace=False,
     skiprows=0,
+    skipfooter=0,
+    nrows=None,
+    na_values=None,
+    keep_default_na=True,
+    na_filter=True,
+    skip_blank_lines=True,
+    parse_dates=None,
     dayfirst=False,
     compression="infer",
     thousands=None,
     decimal=".",
-    true_values=None,
-    false_values=None,
-    nrows=None,
-    byte_range=None,
-    skip_blank_lines=True,
-    parse_dates=None,
+    lineterminator="\n",
+    quotechar='"',
+    quoting=0,
+    doublequote=True,
     comment=None,
-    na_values=None,
-    keep_default_na=True,
-    na_filter=True,
-    prefix=None,
-    index_col=None,
+    delim_whitespace=False,
+    byte_range=None,
     use_python_file_object=True,
-    **kwargs,
+    storage_options=None,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
 
+    if use_python_file_object and bytes_per_thread is not None:
+        raise ValueError(
+            "bytes_per_thread is only supported when "
+            "`use_python_file_object=False`"
+        )
+
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        **kwargs,
+        storage_options=storage_options,
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
@@ -68,7 +75,10 @@ def read_csv(
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
-        **kwargs,
+        storage_options=storage_options,
+        bytes_per_thread=256_000_000
+        if bytes_per_thread is None
+        else bytes_per_thread,
     )
 
     if na_values is not None and is_scalar(na_values):
@@ -142,11 +152,11 @@ def to_csv(
     columns=None,
     header=True,
     index=True,
-    line_terminator="\n",
-    chunksize=None,
     encoding=None,
     compression=None,
-    **kwargs,
+    line_terminator="\n",
+    chunksize=None,
+    storage_options=None,
 ):
     """{docstring}"""
 
@@ -172,7 +182,7 @@ def to_csv(
         return_as_string = True
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=path_or_buf, mode="w", **kwargs
+        path_or_data=path_or_buf, mode="w", storage_options=storage_options
     )
 
     if columns is not None:

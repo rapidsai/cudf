@@ -260,7 +260,7 @@ static __device__ uint32_t Match60(const uint8_t* src1,
 __global__ void __launch_bounds__(128)
   snap_kernel(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<decompress_status> statuses)
+              device_span<compression_result> results)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -337,21 +337,22 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (!t) {
-    statuses[blockIdx.x].bytes_written = s->dst - s->dst_base;
-    statuses[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
-    statuses[blockIdx.x].reserved      = 0;
+    results[blockIdx.x].bytes_written = s->dst - s->dst_base;
+    results[blockIdx.x].status =
+      (s->dst > s->end) ? compression_status::FAILURE : compression_status::SUCCESS;
+    results[blockIdx.x].reserved = 0;
   }
 }
 
 void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<decompress_status> statuses,
+              device_span<compression_result> results,
               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);
   if (inputs.size() > 0) {
-    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, statuses);
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
   }
 }
 

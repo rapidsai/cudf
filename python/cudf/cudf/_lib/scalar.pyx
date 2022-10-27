@@ -396,7 +396,7 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s, dtype):
         children=tuple(columns),
         size=1,
     )
-    table = to_arrow([struct_col], {"None": dtype})
+    table = to_arrow([struct_col], [("None", dtype)])
     python_dict = table.to_pydict()["None"][0]
     return {k: _nested_na_replace([python_dict[k]])[0] for k in python_dict}
 
@@ -428,14 +428,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s, dtype):
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column element_col = Column.from_column_view(list_col_view, None)
 
-    arrow_obj = to_arrow(
-        [element_col],
-        {
-            "None": dtype.element_type
-            if isinstance(element_col, cudf.core.column.StructColumn)
-            else dtype
-        }
-    )["None"]
+    arrow_obj = to_arrow([element_col], [("None", dtype.element_type)])["None"]
 
     result = arrow_obj.to_pylist()
     return _nested_na_replace(result)

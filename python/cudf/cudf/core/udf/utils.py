@@ -1,16 +1,18 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from typing import Callable
+from typing import Any, Callable, Dict, List
 
 import cachetools
+import cupy as cp
 import numpy as np
 from numba import cuda, typeof
 from numba.core.errors import TypingError
 from numba.np import numpy_support
-from numba.types import Poison, Tuple, boolean, int64, void
+from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
+from cudf.core.column.column import as_column
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -23,11 +25,12 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
 )
-
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+arg_handlers: List[Any] = []
+ptx_files: List[Any] = []
 
 
 @_cudf_nvtx_annotate
@@ -109,6 +112,9 @@ def _supported_cols_from_frame(frame):
     }
 
 
+masked_array_types: Dict[Any, Any] = {}
+
+
 def _masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
@@ -116,11 +122,18 @@ def _masked_array_type_from_col(col):
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    nb_scalar_ty = numpy_support.from_dtype(col.dtype)
-    if col.mask is None:
-        return nb_scalar_ty[::1]
+
+    col_type = masked_array_types.get(col.dtype)
+    if col_type:
+        col_type = CPointer(col_type)
     else:
-        return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
+        nb_scalar_ty = numpy_support.from_dtype(col.dtype)
+        col_type = nb_scalar_ty[::1]
+
+    if col.mask is None:
+        return col_type
+    else:
+        return Tuple((col_type, libcudf_bitmask_type[::1]))
 
 
 def _construct_signature(frame, return_type, args):
@@ -200,7 +213,6 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-
     np_return_type = numpy_support.as_dtype(scalar_return_type)
     precompiled[cache_key] = (kernel, np_return_type)
 
@@ -213,6 +225,37 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig)(_kernel)
+    kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
 
     return kernel
+
+
+launch_arg_getters: Dict[Any, Any] = {}
+
+
+def _get_input_args_from_frame(fr):
+    args = []
+    offsets = []
+    for col in _supported_cols_from_frame(fr).values():
+        getter = launch_arg_getters.get(col.dtype)
+        if getter:
+            data = getter(col)
+        else:
+            data = col.data
+        if col.mask is not None:
+            # argument is a tuple of data, mask
+            args.append((data, col.mask))
+        else:
+            # argument is just the data pointer
+            args.append(data)
+        offsets.append(col.offset)
+
+    return args + offsets
+
+
+def _return_arr_from_dtype(dt, size):
+    return cp.empty(size, dtype=dt)
+
+
+def _post_process_output_col(col, retty):
+    return as_column(col, retty)

@@ -194,8 +194,7 @@ def gather(
 
 cdef scatter_scalar(list source_device_slrs,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef vector[reference_wrapper[constscalar]] c_source
     cdef DeviceScalar d_slr
     cdef unique_ptr[table] c_result
@@ -212,7 +211,6 @@ cdef scatter_scalar(list source_device_slrs,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
 
@@ -221,8 +219,7 @@ cdef scatter_scalar(list source_device_slrs,
 
 cdef scatter_column(list source_columns,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef table_view c_source = table_view_from_columns(source_columns)
     cdef unique_ptr[table] c_result
 
@@ -232,7 +229,6 @@ cdef scatter_column(list source_columns,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
     return columns_from_unique_ptr(move(c_result))
@@ -257,14 +253,24 @@ def scatter(list sources, Column scatter_map, list target_columns,
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = table_view_from_columns(target_columns)
 
+    if bounds_check:
+        n_rows = len(target_columns[0])
+        if not (
+            (scatter_map >= -n_rows).all()
+            and (scatter_map < n_rows).all()
+        ):
+            raise IndexError(
+                f"index out of bounds for column of size {n_rows}"
+            )
+
     if isinstance(sources[0], Column):
         return scatter_column(
-            sources, scatter_map_view, target_table_view, bounds_check
+            sources, scatter_map_view, target_table_view
         )
     else:
         source_scalars = [as_device_scalar(slr) for slr in sources]
         return scatter_scalar(
-            source_scalars, scatter_map_view, target_table_view, bounds_check
+            source_scalars, scatter_map_view, target_table_view
         )
 
 

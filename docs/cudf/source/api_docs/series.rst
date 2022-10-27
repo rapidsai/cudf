@@ -260,25 +260,27 @@ Datetime properties
 .. autosummary::
    :toctree: api/
 
+   year
+   month
    day
-   dayofweek
-   dayofyear
-   days_in_month
-   day_of_year
    hour
    minute
-   month
    second
+   microsecond
+   nanosecond
+   dayofweek
    weekday
-   year
-   is_leap_year
+   dayofyear
+   day_of_year
+   quarter
    is_month_start
    is_month_end
    is_quarter_start
    is_quarter_end
    is_year_start
    is_year_end
-   quarter
+   is_leap_year
+   days_in_month   
 
 Datetime methods
 ^^^^^^^^^^^^^^^^
@@ -286,11 +288,11 @@ Datetime methods
 .. autosummary::
    :toctree: api/
 
-   strftime
    isocalendar
-   ceil
-   floor
+   strftime
    round
+   floor
+   ceil
 
 
 Timedelta properties
@@ -300,30 +302,15 @@ Timedelta properties
 .. autosummary::
    :toctree: api/
 
-   components
    days
+   seconds   
    microseconds
    nanoseconds
-   seconds
+   components
 
 .. _api.series.str:
 .. include:: string_handling.rst
 
-
-..
-    The following is needed to ensure the generated pages are created with the
-    correct template (otherwise they would be created in the Series/Index class page)
-
-..
-    .. currentmodule:: cudf
-    .. autosummary::
-       :toctree: api/
-       :template: autosummary/accessor.rst
-
-       Series.str
-       Series.cat
-       Series.dt
-       Index.str
 
 .. _api.series.cat:
 
@@ -349,42 +336,27 @@ the ``Series.cat`` accessor.
 
 
 .. _api.series.list:
-
-List handling
-~~~~~~~~~~~~~
-
-``Series.list`` can be used to access the values of the series as
-lists and apply list methods to it. These can be accessed like
-``Series.list.<function/property>``.
-
-.. currentmodule:: cudf.core.column.lists.ListMethods
-.. autosummary::
-   :toctree: api/
-
-   concat
-   contains
-   get
-   len
-   sort_values
-   take
-   unique
+.. include:: list_handling.rst
 
 
 .. _api.series.struct:
+.. include:: struct_handling.rst
 
-Struct handling
-~~~~~~~~~~~~~~~
 
-``Series.struct`` can be used to access the values of the series as
-Structs and apply struct methods to it. These can be accessed like
-``Series.struct.<function/property>``.
+..
+    The following is needed to ensure the generated pages are created with the
+    correct template (otherwise they would be created in the Series/Index class page)
 
-.. currentmodule:: cudf.core.column.struct.StructMethods
-.. autosummary::
-   :toctree: api/
+..
+    .. currentmodule:: cudf
+    .. autosummary::
+       :toctree: api/
+       :template: autosummary/accessor.rst
 
-   field
-   explode
+       Series.str
+       Series.cat
+       Series.dt
+       Index.str
 
 
 Serialization / IO / conversion
