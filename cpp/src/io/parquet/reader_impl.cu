@@ -684,8 +684,8 @@ class aggregate_reader_metadata {
         // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
         // data stored) so add me to the list.
         if (schema_elem.num_children == 0) {
-          input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+          input_column_info& input_col = input_columns.emplace_back(
+            input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
           // set up child output column for one-level encoding list
           if (schema_elem.is_one_level_list()) {
@@ -1151,6 +1151,12 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
+  // vectors to save v2 def and rep level data, if any
+  std::vector<device_span<uint8_t const>> copy_in;
+  copy_in.reserve(num_comp_pages);
+  std::vector<device_span<uint8_t>> copy_out;
+  copy_out.reserve(num_comp_pages);
+
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
                comp_res.begin(),
@@ -1162,15 +1168,24 @@ rmm::device_buffer reader::impl::decompress_page_data(
   for (const auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
-    for_each_codec_page(codec.compression_type, [&](size_t page) {
-      auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
-      comp_in.emplace_back(pages[page].page_data,
-                           static_cast<size_t>(pages[page].compressed_page_size));
-      comp_out.emplace_back(dst_base + decomp_offset,
-                            static_cast<size_t>(pages[page].uncompressed_page_size));
-
-      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
-      decomp_offset += comp_out.back().size();
+    for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
+      auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page          = pages[page_idx];
+      // offset will only be non-zero for V2 pages
+      auto const offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      // for V2 need to copy def and rep level info into place, and then offset the
+      // input and output buffers. otherwise we'd have to keep both the compressed
+      // and decompressed data.
+      if (offset != 0) {
+        copy_in.emplace_back(page.page_data, offset);
+        copy_out.emplace_back(dst_base, offset);
+      }
+      comp_in.emplace_back(page.page_data + offset,
+                           static_cast<size_t>(page.compressed_page_size - offset));
+      comp_out.emplace_back(dst_base + offset,
+                            static_cast<size_t>(page.uncompressed_page_size - offset));
+      page.page_data = dst_base;
+      decomp_offset += page.uncompressed_page_size;
     });
 
     host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
@@ -1221,6 +1236,15 @@ rmm::device_buffer reader::impl::decompress_page_data(
   }
 
   decompress_check(comp_res, _stream);
+
+  // now copy the uncompressed V2 def and rep level data
+  if (not copy_in.empty()) {
+    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, _stream);
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, _stream);
+
+    gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, _stream);
+    _stream.synchronize();
+  }
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
@@ -1353,26 +1377,39 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
-                                      bool uses_custom_row_bounds,
-                                      bool has_lists)
+                                      bool uses_custom_row_bounds)
 {
-  // TODO : we should be selectively preprocessing only columns that have
-  // lists in them instead of doing them all if even one contains lists.
+  // iterate over all input columns and allocate any associated output
+  // buffers if they are not part of a list hierarchy. mark down
+  // if we have any list columns that need further processing.
+  bool has_lists = false;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const& input_col  = _input_columns[idx];
+    size_t const max_depth = input_col.nesting_depth();
 
-  // if there are no lists, simply allocate every allocate every output
-  // column to be of size num_rows
-  if (!has_lists) {
-    std::function<void(std::vector<column_buffer>&)> create_columns =
-      [&](std::vector<column_buffer>& cols) {
-        for (size_t idx = 0; idx < cols.size(); idx++) {
-          auto& col = cols[idx];
-          col.create(total_rows, _stream, _mr);
-          create_columns(col.children);
-        }
-      };
-    create_columns(_output_columns);
-  } else {
-    // preprocess per-nesting level sizes by page
+    auto* cols = &_output_columns;
+    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
+
+      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
+      // to know how big this buffer actually is.
+      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+        has_lists = true;
+      }
+      // if we haven't already processed this column because it is part of a struct hierarchy
+      else if (out_buf.size == 0) {
+        // add 1 for the offset if this is a list column
+        out_buf.create(
+          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
+          _stream,
+          _mr);
+      }
+    }
+  }
+
+  // if we have columns containing lists, further preprocessing is necessary.
+  if (has_lists) {
     gpu::PreprocessColumnData(pages,
                               chunks,
                               _input_columns,
@@ -1636,9 +1673,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Keep track of column chunk file offsets
     std::vector<size_t> column_chunk_offsets(num_chunks);
 
-    // if there are lists present, we need to preprocess
-    bool has_lists = false;
-
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
@@ -1656,9 +1690,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         // look up metadata
         auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
         auto& schema   = _metadata->get_schema(col.schema_idx);
-
-        // this column contains repetition levels and will require a preprocess
-        if (schema.max_repetition_level > 0) { has_lists = true; }
 
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
@@ -1755,7 +1786,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds);
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);

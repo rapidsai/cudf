@@ -192,8 +192,7 @@ dremel_data get_dremel_data(column_view h_col,
     }
     if (curr_col.type().id() == type_id::LIST) {
       auto child = curr_col.child(lists_column_view::child_column_index);
-      if ((child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8) &&
-          output_as_byte_array) {
+      if (output_as_byte_array && child.type().id() == type_id::UINT8) {
         // consider this the bottom
         break;
       }
@@ -225,6 +224,7 @@ dremel_data get_dremel_data(column_view h_col,
   cudf::detail::device_single_thread(
     [offset_at_level  = d_column_offsets.data(),
      end_idx_at_level = d_column_ends.data(),
+     level_max        = d_column_offsets.size(),
      col              = *d_col] __device__() {
       auto curr_col           = col;
       size_type off           = curr_col.offset();
@@ -239,9 +239,11 @@ dremel_data get_dremel_data(column_view h_col,
         if (curr_col.type().id() == type_id::LIST) {
           off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
           end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-          offset_at_level[level]  = off;
-          end_idx_at_level[level] = end;
-          ++level;
+          if (level < level_max) {
+            offset_at_level[level]  = off;
+            end_idx_at_level[level] = end;
+            ++level;
+          }
           curr_col = curr_col.child(lists_column_view::child_column_index);
         } else {
           curr_col = curr_col.child(0);

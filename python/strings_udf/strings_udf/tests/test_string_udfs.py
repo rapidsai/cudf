@@ -89,6 +89,11 @@ def data():
         "cudf",
         "cuda",
         "gpu",
+        "This Is A Title",
+        "This is Not a Title",
+        "Neither is This a Title",
+        "NoT a TiTlE",
+        "123 Title Works",
     ]
 
 
@@ -224,6 +229,13 @@ def test_string_udf_isspace(data):
 def test_string_udf_isupper(data):
     def func(st):
         return st.isupper()
+
+    run_udf_test(data, func, "bool")
+
+
+def test_string_udf_istitle(data):
+    def func(st):
+        return st.istitle()
 
     run_udf_test(data, func, "bool")
 

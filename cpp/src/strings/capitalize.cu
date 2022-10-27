@@ -289,7 +289,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(input, delimiter, cudf::default_stream_value, mr);
+  return detail::capitalize(input, delimiter, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
@@ -297,14 +297,14 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(input, sequence_type, cudf::default_stream_value, mr);
+  return detail::title(input, sequence_type, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_title(input, cudf::default_stream_value, mr);
+  return detail::is_title(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

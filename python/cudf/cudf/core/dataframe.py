@@ -1057,7 +1057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return pd.Series(self._dtypes)
+        return pd.Series(self._dtypes, dtype="object")
 
     @property
     def ndim(self):
@@ -3333,7 +3333,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def nlargest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n largest value of *columns*
+        """Return the first *n* rows ordered by *columns* in descending order.
+
+        Return the first *n* rows with the largest values in *columns*, in
+        descending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -3396,7 +3400,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n smallest value of *columns*
+        """Return the first *n* rows ordered by *columns* in ascending order.
+
+        Return the first *n* rows with the smallest values in *columns*, in
+        ascending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -3955,6 +3963,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
+
         Parameters
         ----------
         func : function
@@ -4078,6 +4092,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1     4.8
         2     5.0
         dtype: float64
+
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
+
+        >>> def f(row):
+        ...     st = row['str_col']
+        ...     scale = row['scale']
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1 - scale
+        ...     elif 'example' in st:
+        ...             return 1 + scale
+        ...     else:
+        ...             return 42
+        ...
+        >>> df = cudf.DataFrame({
+        ...     'str_col': ['', 'abc', 'some_example'],
+        ...     'scale': [1, 2, 3]
+        ... })
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+        0   -1
+        1   -1
+        2    4
+        dtype: int64
+
+        However, the following UDF is not allowed since it includes an
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(row):
+        ...     st = row['str_col'].upper()
+        ...     return 'ABC' in st
+        >>> df.apply(f, axis=1)  # doctest: +SKIP
+
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
         """
         if axis != 1:
             raise ValueError(
@@ -5833,7 +5887,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def select_dtypes(self, include=None, exclude=None):
-        """Return a subset of the DataFrame’s columns based on the column dtypes.
+        """Return a subset of the DataFrame's columns based on the column dtypes.
 
         Parameters
         ----------
@@ -5892,7 +5946,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """
+        """  # noqa: E501
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
@@ -5987,11 +6041,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns=None,
         header=True,
         index=True,
-        line_terminator="\n",
-        chunksize=None,
         encoding=None,
         compression=None,
-        **kwargs,
+        line_terminator="\n",
+        chunksize=None,
+        storage_options=None,
     ):
         """{docstring}"""
         from cudf.io import csv
@@ -6008,7 +6062,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             chunksize=chunksize,
             encoding=encoding,
             compression=compression,
-            **kwargs,
+            storage_options=storage_options,
         )
 
     @ioutils.doc_to_orc()
@@ -6977,7 +7031,7 @@ def from_pandas(obj, nan_as_null=None):
 
     Converting a Pandas Series to cuDF Series:
 
-    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple')
+    >>> psr = pd.Series(['a', 'b', 'c', 'd'], name='apple', dtype='str')
     >>> psr
     0    a
     1    b

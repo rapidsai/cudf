@@ -160,7 +160,7 @@ std::unique_ptr<column> filter_characters(
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters(
-    strings, characters_to_filter, keep_characters, replacement, cudf::default_stream_value, mr);
+    strings, characters_to_filter, keep_characters, replacement, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -38,14 +38,14 @@ struct managed_allocator {
   {
   }
 
-  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::default_stream_value) const
+  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::get_default_stream()) const
   {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
   void deallocate(T* p,
                   std::size_t n,
-                  rmm::cuda_stream_view stream = cudf::default_stream_value) const
+                  rmm::cuda_stream_view stream = cudf::get_default_stream()) const
   {
     mr->deallocate(p, n * sizeof(T), stream);
   }
@@ -74,14 +74,14 @@ struct default_allocator {
   {
   }
 
-  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::default_stream_value) const
+  T* allocate(std::size_t n, rmm::cuda_stream_view stream = cudf::get_default_stream()) const
   {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
   void deallocate(T* p,
                   std::size_t n,
-                  rmm::cuda_stream_view stream = cudf::default_stream_value) const
+                  rmm::cuda_stream_view stream = cudf::get_default_stream()) const
   {
     mr->deallocate(p, n * sizeof(T), stream);
   }

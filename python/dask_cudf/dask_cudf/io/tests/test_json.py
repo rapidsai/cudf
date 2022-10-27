@@ -12,6 +12,23 @@ from dask.utils import tmpfile
 import dask_cudf
 
 
+@pytest.mark.skipif(
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
+)
+def test_read_json_backend_dispatch(tmp_path):
+    # Test ddf.read_json cudf-backend dispatch
+    df1 = dask.datasets.timeseries(
+        dtypes={"x": int, "y": int}, freq="120s"
+    ).reset_index(drop=True)
+    json_path = str(tmp_path / "data-*.json")
+    df1.to_json(json_path)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        df2 = dd.read_json(json_path)
+    assert isinstance(df2, dask_cudf.DataFrame)
+    dd.assert_eq(df1, df2)
+
+
 def test_read_json(tmp_path):
     df1 = dask.datasets.timeseries(
         dtypes={"x": int, "y": int}, freq="120s"

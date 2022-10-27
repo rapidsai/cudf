@@ -1162,9 +1162,6 @@ void make_json_column(json_column& root_column,
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
 
-  // Default name for a list's child column
-  std::string const list_child_name = "element";
-
   // Parse the JSON and get the token stream
   const auto [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
 
@@ -1286,7 +1283,7 @@ void make_json_column(json_column& root_column,
    * (b) a list, the selected child column corresponds to single child column of
    * the list column. In this case, the child column may not exist yet.
    */
-  auto get_selected_column = [&list_child_name](std::stack<tree_node>& current_data_path) {
+  auto get_selected_column = [](std::stack<tree_node>& current_data_path) {
     json_column* selected_col = current_data_path.top().current_selected_col;
 
     // If the node does not have a selected column yet
@@ -1543,7 +1540,7 @@ auto parsing_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = cudf::default_stream_value;
+  auto const stream     = cudf::get_default_stream();
   parse_opts.dayfirst   = options.is_enabled_dayfirst();
   parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
@@ -1680,7 +1677,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       size_type num_rows = json_col.child_offsets.size();
       std::vector<column_name_info> column_names{};
       column_names.emplace_back("offsets");
-      column_names.emplace_back(json_col.child_columns.begin()->first);
+      column_names.emplace_back(
+        json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
       rmm::device_uvector<json_column::row_offset_t> d_offsets =
         cudf::detail::make_device_uvector_async(json_col.child_offsets, stream, mr);
@@ -1688,12 +1686,15 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
         std::make_unique<column>(data_type{type_id::INT32}, num_rows, d_offsets.release());
       // Create children column
       auto [child_column, names] =
-        json_column_to_cudf_column(json_col.child_columns.begin()->second,
-                                   d_input,
-                                   options,
-                                   get_child_schema(json_col.child_columns.begin()->first),
-                                   stream,
-                                   mr);
+        json_col.child_columns.empty()
+          ? std::pair<std::unique_ptr<column>,
+                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+          : json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                       d_input,
+                                       options,
+                                       get_child_schema(json_col.child_columns.begin()->first),
+                                       stream,
+                                       mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       return {make_lists_column(num_rows - 1,
@@ -1712,10 +1713,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata parse_nested_json(host_span<SymbolT const> input,
-                                      cudf::io::json_reader_options const& options,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
@@ -1757,6 +1758,12 @@ table_with_metadata parse_nested_json(host_span<SymbolT const> input,
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =
     new_line_delimited_json ? root_column : root_column.child_columns.begin()->second;
+
+  // Zero row entries
+  if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
+                               {{}, std::vector<column_name_info>{}}};
+  }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;

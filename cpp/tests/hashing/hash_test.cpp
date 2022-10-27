@@ -24,37 +24,35 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-using cudf::test::fixed_width_column_wrapper;
-using cudf::test::strings_column_wrapper;
-using namespace cudf::test;
-using namespace cudf::test::iterators;
-
-constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 class HashTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col({"",
-                                            "The quick brown fox",
-                                            "jumps over the lazy dog.",
-                                            "All work and no play makes Jack a dull boy",
-                                            R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+  cudf::test::strings_column_wrapper const strings_col(
+    {"",
+     "The quick brown fox",
+     "jumps over the lazy dog.",
+     "All work and no play makes Jack a dull boy",
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
+    {0, 100, -100, limits::min(), limits::max()});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
   using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts, ts::duration> const secs_col({ts::duration::zero(),
-                                                               static_cast<ts::duration>(100),
-                                                               static_cast<ts::duration>(-100),
-                                                               ts::duration::min(),
-                                                               ts::duration::max()});
+  cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col(
+    {ts::duration::zero(),
+     static_cast<ts::duration>(100),
+     static_cast<ts::duration>(-100),
+     ts::duration::min(),
+     ts::duration::max()});
 
   auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
   auto const input2 = cudf::table_view({strings_col, ints_col, bools_col2, secs_col});
@@ -69,45 +67,49 @@ TEST_F(HashTest, MultiValue)
 TEST_F(HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1({"",
-                                             "The quick brown fox",
-                                             "jumps over the lazy dog.",
-                                             "All work and no play makes Jack a dull boy",
-                                             R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
-                                            {0, 1, 1, 0, 1});
-  strings_column_wrapper const strings_col2({"different but null",
-                                             "The quick brown fox",
-                                             "jumps over the lazy dog.",
-                                             "I am Jack's complete lack of null value",
-                                             R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
-                                            {0, 1, 1, 0, 1});
+  cudf::test::strings_column_wrapper const strings_col1(
+    {"",
+     "The quick brown fox",
+     "jumps over the lazy dog.",
+     "All work and no play makes Jack a dull boy",
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+    {0, 1, 1, 0, 1});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"different but null",
+     "The quick brown fox",
+     "jumps over the lazy dog.",
+     "I am Jack's complete lack of null value",
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+    {0, 1, 1, 0, 1});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
   // Nulls with different values should be equal
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
   // Nulls with different values should be equal
   using ts = cudf::timestamp_s;
-  fixed_width_column_wrapper<ts, ts::duration> const secs_col1({ts::duration::zero(),
-                                                                static_cast<ts::duration>(100),
-                                                                static_cast<ts::duration>(-100),
-                                                                ts::duration::min(),
-                                                                ts::duration::max()},
-                                                               {1, 0, 0, 1, 1});
-  fixed_width_column_wrapper<ts, ts::duration> const secs_col2({ts::duration::zero(),
-                                                                static_cast<ts::duration>(-200),
-                                                                static_cast<ts::duration>(200),
-                                                                ts::duration::min(),
-                                                                ts::duration::max()},
-                                                               {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col1(
+    {ts::duration::zero(),
+     static_cast<ts::duration>(100),
+     static_cast<ts::duration>(-100),
+     ts::duration::min(),
+     ts::duration::max()},
+    {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col2(
+    {ts::duration::zero(),
+     static_cast<ts::duration>(-200),
+     static_cast<ts::duration>(200),
+     ts::duration::min(),
+     ts::duration::max()},
+    {1, 0, 0, 1, 1});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1, secs_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2, secs_col2});
@@ -355,7 +357,7 @@ TYPED_TEST_SUITE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam, int32_t> const col{0, 127, 1, 2, 8};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> const col{0, 127, 1, 2, 8};
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -377,8 +379,8 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T, int32_t> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T, int32_t> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -410,10 +412,11 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col_neg_zero(
+  cudf::test::fixed_width_column_wrapper<T> const col(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col_neg_zero(
     {T(-0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col_neg_nan(
+  cudf::test::fixed_width_column_wrapper<T> const col_neg_nan(
     {T(0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const table_col          = cudf::table_view({col});
@@ -505,76 +508,77 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   println(s"combined => ${df.select(hash(col("*"))).collect.mkString(",")}")
   */
 
-  fixed_width_column_wrapper<int32_t> const hash_structs_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_structs_expected(
     {-105406170, 90479889, -678041645, 1667387937, 301478567});
-  fixed_width_column_wrapper<int32_t> const hash_strings_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_strings_expected(
     {142593372, 1217302703, -715697185, -2061143941, -111635966});
-  fixed_width_column_wrapper<int32_t> const hash_doubles_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_doubles_expected(
     {-1670924195, -853646085, -1281358385, 1897734433, -508695674});
-  fixed_width_column_wrapper<int32_t> const hash_timestamps_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_timestamps_expected(
     {-1670924195, 1114849490, 904948192, -1832979433, 1752430209});
-  fixed_width_column_wrapper<int32_t> const hash_decimal64_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal64_expected(
     {-1670924195, 1114849490, 904948192, 1962370902, -1795328666});
-  fixed_width_column_wrapper<int32_t> const hash_longs_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_longs_expected(
     {-1670924195, 1114849490, 904948192, -853646085, -1604625029});
-  fixed_width_column_wrapper<int32_t> const hash_floats_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_floats_expected(
     {933211791, 723455942, -349261430, -1225560532, -338752985});
-  fixed_width_column_wrapper<int32_t> const hash_dates_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_dates_expected(
     {933211791, 751823303, -1080202046, -1906567553, -1503850410});
-  fixed_width_column_wrapper<int32_t> const hash_decimal32_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal32_expected(
     {-1670924195, 1114849490, 904948192, -1454351396, -193774131});
-  fixed_width_column_wrapper<int32_t> const hash_ints_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_ints_expected(
     {933211791, 751823303, -1080202046, 723455942, 133916647});
-  fixed_width_column_wrapper<int32_t> const hash_shorts_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_shorts_expected(
     {933211791, 751823303, -1080202046, -1871935946, 1249274084});
-  fixed_width_column_wrapper<int32_t> const hash_bytes_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_bytes_expected(
     {933211791, 751823303, -1080202046, 1110053733, 1135925485});
-  fixed_width_column_wrapper<int32_t> const hash_bools_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_bools_expected(
     {933211791, -559580957, -559580957, -559580957, 933211791});
-  fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
     {-783713497, -295670906, 1398487324, -52622807, -1359749815});
-  fixed_width_column_wrapper<int32_t> const hash_combined_expected(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_combined_expected(
     {401603227, 588162166, 552160517, 1132537411, -326043017});
 
   using double_limits = std::numeric_limits<double>;
   using long_limits   = std::numeric_limits<int64_t>;
   using float_limits  = std::numeric_limits<float>;
   using int_limits    = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> a_col{0, 100, -100, 0x1234'5678, -0x7654'3210};
-  strings_column_wrapper b_col{"a", "bc", "def", "ghij", "klmno"};
-  fixed_width_column_wrapper<float> x_col{
+  cudf::test::fixed_width_column_wrapper<int32_t> a_col{0, 100, -100, 0x1234'5678, -0x7654'3210};
+  cudf::test::strings_column_wrapper b_col{"a", "bc", "def", "ghij", "klmno"};
+  cudf::test::fixed_width_column_wrapper<float> x_col{
     0.f, 100.f, -100.f, float_limits::infinity(), -float_limits::infinity()};
-  fixed_width_column_wrapper<int64_t> y_col{
+  cudf::test::fixed_width_column_wrapper<int64_t> y_col{
     0L, 100L, -100L, 0x0123'4567'89ab'cdefL, -0x0123'4567'89ab'cdefL};
-  structs_column_wrapper c_col{{x_col, y_col}};
-  structs_column_wrapper const structs_col{{a_col, b_col, c_col}};
+  cudf::test::structs_column_wrapper c_col{{x_col, y_col}};
+  cudf::test::structs_column_wrapper const structs_col{{a_col, b_col, c_col}};
 
-  strings_column_wrapper const strings_col({"",
-                                            "The quick brown fox",
-                                            "jumps over the lazy dog.",
-                                            "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
-  fixed_width_column_wrapper<double> const doubles_col(
+  cudf::test::strings_column_wrapper const strings_col(
+    {"",
+     "The quick brown fox",
+     "jumps over the lazy dog.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+  cudf::test::fixed_width_column_wrapper<double> const doubles_col(
     {0., -0., -double_limits::quiet_NaN(), double_limits::lowest(), double_limits::max()});
-  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const timestamps_col(
-    {0L, 100L, -100L, long_limits::min() / 1000000, long_limits::max() / 1000000});
-  fixed_point_column_wrapper<int64_t> const decimal64_col(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const
+    timestamps_col({0L, 100L, -100L, long_limits::min() / 1000000, long_limits::max() / 1000000});
+  cudf::test::fixed_point_column_wrapper<int64_t> const decimal64_col(
     {0L, 100L, -100L, -999999999999999999L, 999999999999999999L}, numeric::scale_type{-7});
-  fixed_width_column_wrapper<int64_t> const longs_col(
+  cudf::test::fixed_width_column_wrapper<int64_t> const longs_col(
     {0L, 100L, -100L, long_limits::min(), long_limits::max()});
-  fixed_width_column_wrapper<float> const floats_col(
+  cudf::test::fixed_width_column_wrapper<float> const floats_col(
     {0.f, -0.f, -float_limits::quiet_NaN(), float_limits::lowest(), float_limits::max()});
-  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> dates_col(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> dates_col(
     {0, 100, -100, int_limits::min() / 100, int_limits::max() / 100});
-  fixed_point_column_wrapper<int32_t> const decimal32_col({0, 100, -100, -999999999, 999999999},
-                                                          numeric::scale_type{-3});
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_point_column_wrapper<int32_t> const decimal32_col(
+    {0, 100, -100, -999999999, 999999999}, numeric::scale_type{-3});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, int_limits::min(), int_limits::max()});
-  fixed_width_column_wrapper<int16_t> const shorts_col({0, 100, -100, -32768, 32767});
-  fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
-  fixed_point_column_wrapper<__int128_t> const decimal128_col(
+  cudf::test::fixed_width_column_wrapper<int16_t> const shorts_col({0, 100, -100, -32768, 32767});
+  cudf::test::fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  cudf::test::fixed_point_column_wrapper<__int128_t> const decimal128_col(
     {static_cast<__int128>(0),
      static_cast<__int128>(100),
      static_cast<__int128>(-1),
@@ -644,14 +648,15 @@ TEST_F(SparkMurmurHash3Test, StringsWithSeed)
   //   .map(org.apache.spark.sql.catalyst.expressions.Murmur3HashFunction.hash(
   //     _, org.apache.spark.sql.types.StringType, 314)))
 
-  fixed_width_column_wrapper<int32_t> const hash_strings_expected_seed_314(
+  cudf::test::fixed_width_column_wrapper<int32_t> const hash_strings_expected_seed_314(
     {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
 
-  strings_column_wrapper const strings_col({"",
-                                            "The quick brown fox",
-                                            "jumps over the lazy dog.",
-                                            "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
+  cudf::test::strings_column_wrapper const strings_col(
+    {"",
+     "The quick brown fox",
+     "jumps over the lazy dog.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
 
   constexpr auto hasher   = cudf::hash_id::HASH_SPARK_MURMUR3;
   auto const hash_strings = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
@@ -691,27 +696,28 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   df2.show(false)
   */
 
-  auto const null  = -1;
-  auto nested_list = cudf::test::lists_column_wrapper<int>({{},
-                                                            {1},
-                                                            {1, 2},
-                                                            {1, 2, 3},
-                                                            {1, 2},
-                                                            {3},
-                                                            {1},
-                                                            {2, 3},
-                                                            {1},
-                                                            {{null, 2, 3}, nulls_at({0})},
-                                                            {1, 2},
-                                                            {3},
-                                                            {{null}, nulls_at({0})},
-                                                            {1, 2},
-                                                            {},
-                                                            {3}},
-                                                           nulls_at({0, 14}));
+  auto const null = -1;
+  auto nested_list =
+    cudf::test::lists_column_wrapper<int>({{},
+                                           {1},
+                                           {1, 2},
+                                           {1, 2, 3},
+                                           {1, 2},
+                                           {3},
+                                           {1},
+                                           {2, 3},
+                                           {1},
+                                           {{null, 2, 3}, cudf::test::iterators::nulls_at({0})},
+                                           {1, 2},
+                                           {3},
+                                           {{null}, cudf::test::iterators::nulls_at({0})},
+                                           {1, 2},
+                                           {},
+                                           {3}},
+                                          cudf::test::iterators::nulls_at({0, 14}));
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16};
-  auto list_validity        = nulls_at({0});
+  auto list_validity        = cudf::test::iterators::nulls_at({0});
   auto list_validity_buffer = cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
   auto list_column          = cudf::make_lists_column(11,
                                              offsets.release(),
@@ -766,11 +772,18 @@ TEST_F(SparkMurmurHash3Test, StructOfListValues)
   */
 
   auto const null = -1;
-  auto col1       = cudf::test::lists_column_wrapper<int>(
-    {{}, {0}, {{1, null}, nulls_at({1})}, {{1, null}, nulls_at({1})}, {}, {} /*NULL*/, {2, 3}},
-    nulls_at({5}));
+  auto col1 =
+    cudf::test::lists_column_wrapper<int>({{},
+                                           {0},
+                                           {{1, null}, cudf::test::iterators::nulls_at({1})},
+                                           {{1, null}, cudf::test::iterators::nulls_at({1})},
+                                           {},
+                                           {} /*NULL*/,
+                                           {2, 3}},
+                                          cudf::test::iterators::nulls_at({5}));
   auto col2 = cudf::test::lists_column_wrapper<int>(
-    {{}, {0}, {} /*NULL*/, {}, {{null, 1}, nulls_at({0})}, {1}, {4, 5}}, nulls_at({2}));
+    {{}, {0}, {} /*NULL*/, {}, {{null, 1}, cudf::test::iterators::nulls_at({0})}, {1}, {4, 5}},
+    cudf::test::iterators::nulls_at({2}));
   auto struct_column = cudf::test::structs_column_wrapper{{col1, col2}};
 
   auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{
@@ -813,12 +826,15 @@ TEST_F(SparkMurmurHash3Test, ListOfStructValues)
   */
 
   auto const null = -1;
-  auto col1 = fixed_width_column_wrapper<int32_t>({0, null, null, 1, null, null, 2, 2, null, 2, 4},
-                                                  nulls_at({1, 2, 4, 5, 8}));
-  auto col2 = fixed_width_column_wrapper<int32_t>({0, null, null, null, 1, 1, 3, 3, null, 3, 5},
-                                                  nulls_at({1, 2, 3, 8}));
-  auto struct_column = structs_column_wrapper{{col1, col2}, {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
-  auto offsets       = fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 5, 7, 9, 11};
+  auto col1       = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {0, null, null, 1, null, null, 2, 2, null, 2, 4},
+    cudf::test::iterators::nulls_at({1, 2, 4, 5, 8}));
+  auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {0, null, null, null, 1, 1, 3, 3, null, 3, 5}, cudf::test::iterators::nulls_at({1, 2, 3, 8}));
+  auto struct_column =
+    cudf::test::structs_column_wrapper{{col1, col2}, {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
+  auto offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 5, 7, 9, 11};
   auto list_nullmask = std::vector<bool>(1, 8);
   auto list_validity_buffer =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
@@ -847,7 +863,7 @@ class MD5HashTest : public cudf::test::BaseFixture {
 
 TEST_F(MD5HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "A 60 character string to test MD5's message padding algorithm",
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
@@ -855,24 +871,27 @@ TEST_F(MD5HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
 
-  strings_column_wrapper const md5_string_results1({"d41d8cd98f00b204e9800998ecf8427e",
-                                                    "682240021651ae166d08fe2a014d5c09",
-                                                    "3669d5225fddbb34676312ca3b78bbd9",
-                                                    "c61a4185135eda043f35e92c3505e180",
-                                                    "52da74c75cb6575d25be29e66bd0adde"});
+  cudf::test::strings_column_wrapper const md5_string_results1(
+    {"d41d8cd98f00b204e9800998ecf8427e",
+     "682240021651ae166d08fe2a014d5c09",
+     "3669d5225fddbb34676312ca3b78bbd9",
+     "c61a4185135eda043f35e92c3505e180",
+     "52da74c75cb6575d25be29e66bd0adde"});
 
-  strings_column_wrapper const md5_string_results2({"d41d8cd98f00b204e9800998ecf8427e",
-                                                    "e5a5682e82278e78dbaad9a689df7a73",
-                                                    "4121ab1bb6e84172fd94822645862ae9",
-                                                    "28970886501efe20164213855afe5850",
-                                                    "6bc1b872103cc6a02d882245b8516e2e"});
+  cudf::test::strings_column_wrapper const md5_string_results2(
+    {"d41d8cd98f00b204e9800998ecf8427e",
+     "e5a5682e82278e78dbaad9a689df7a73",
+     "4121ab1bb6e84172fd94822645862ae9",
+     "28970886501efe20164213855afe5850",
+     "6bc1b872103cc6a02d882245b8516e2e"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
+    {0, 100, -100, limits::min(), limits::max()});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
   auto const string_input1      = cudf::table_view({strings_col});
   auto const string_input2      = cudf::table_view({strings_col, strings_col});
@@ -894,7 +913,7 @@ TEST_F(MD5HashTest, MultiValue)
 TEST_F(MD5HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
@@ -902,7 +921,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2(
+  cudf::test::strings_column_wrapper const strings_col2(
     {"",
      "A 60 character string to test MD5's message padding algorithm",
      "Very different... but null",
@@ -912,15 +931,15 @@ TEST_F(MD5HashTest, MultiValueNulls)
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
   // Nulls with different values should be equal
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -936,7 +955,7 @@ TEST_F(MD5HashTest, StringListsNulls)
 {
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "A 60 character string to test MD5's message padding algorithm",
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
@@ -944,7 +963,7 @@ TEST_F(MD5HashTest, StringListsNulls)
      "All work and no play makes Jack a dull boy",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
 
-  lists_column_wrapper<cudf::string_view> strings_list_col(
+  cudf::test::lists_column_wrapper<cudf::string_view> strings_list_col(
     {{""},
      {{"NULL", "A 60 character string to test MD5's message padding algorithm"}, validity},
      {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in "
@@ -971,7 +990,7 @@ TYPED_TEST_SUITE(MD5HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(MD5HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -987,8 +1006,8 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -1002,15 +1021,15 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
 
 TEST_F(MD5HashTest, TestBoolListsWithNulls)
 {
-  fixed_width_column_wrapper<bool> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
-                                              {1, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<bool> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
-                                              {1, 0, 0, 1, 0, 1, 0, 1, 0});
-  fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
-                                              {1, 0, 0, 1, 1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
+                                                          {1, 0, 0, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
+                                                          {1, 0, 0, 1, 0, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
+                                                          {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  lists_column_wrapper<bool> const list_col(
+  cudf::test::lists_column_wrapper<bool> const list_col(
     {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
 
   auto const input1 = cudf::table_view({col1, col2, col3});
@@ -1027,22 +1046,23 @@ template <typename T>
 class MD5HashListTestTyped : public cudf::test::BaseFixture {
 };
 
-using NumericTypesNoBools = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+using NumericTypesNoBools =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_SUITE(MD5HashListTestTyped, NumericTypesNoBools);
 
 TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
-                                           {1, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<T> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
-                                           {1, 0, 0, 1, 0, 1, 0, 1, 0});
-  fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
-                                           {1, 0, 0, 1, 1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
+                                                       {1, 0, 0, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<T> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
+                                                       {1, 0, 0, 1, 0, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
+                                                       {1, 0, 0, 1, 1, 0, 0, 0, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  lists_column_wrapper<T> const list_col(
+  cudf::test::lists_column_wrapper<T> const list_col(
     {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
     validity);
 
@@ -1070,8 +1090,9 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
@@ -1091,9 +1112,9 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  lists_column_wrapper<T> const col1(
+  cudf::test::lists_column_wrapper<T> const col1(
     {{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
-  lists_column_wrapper<T> const col2(
+  cudf::test::lists_column_wrapper<T> const col2(
     {{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
 
   auto const input1 = cudf::table_view({col1});
