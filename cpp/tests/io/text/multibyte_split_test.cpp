@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <io/utilities/output_builder.cuh>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -26,6 +28,7 @@
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 using namespace cudf;
 using namespace test;
@@ -497,6 +500,67 @@ TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
   auto out = multibyte_split(*source, delimiter, byte_range_info{3, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, EmptySplitDeviceSpan)
+{
+  cudf::split_device_span<int> span;
+  ASSERT_EQ(span.size(), 0);
+  ASSERT_EQ(span.head().size(), 0);
+  ASSERT_EQ(span.head().data(), nullptr);
+  ASSERT_EQ(span.tail().size(), 0);
+  ASSERT_EQ(span.tail().data(), nullptr);
+}
+
+TEST_F(MultibyteSplitTest, SplitDeviceSpan)
+{
+  int i = 0;
+  int j = 1;
+  cudf::split_device_span<int> span{{&i, 1}, {&j, 1}};
+  ASSERT_EQ(span.size(), 2);
+  ASSERT_EQ(span.head().size(), 1);
+  ASSERT_EQ(span.head().data(), &i);
+  ASSERT_EQ(span.tail().size(), 1);
+  ASSERT_EQ(span.tail().data(), &j);
+  ASSERT_EQ(&span[0], &i);
+  ASSERT_EQ(&span[1], &j);
+  ASSERT_EQ(&*span.begin(), &i);
+  ASSERT_EQ(&*(span.begin() + 1), &j);
+  ASSERT_NE(span.begin() + 1, span.end());
+  ASSERT_EQ(span.begin() + 2, span.end());
+}
+
+TEST_F(MultibyteSplitTest, OutputBuilder)
+{
+  auto const stream = cudf::get_default_stream();
+  cudf::output_builder<char> builder{10, 4, stream};
+  auto const output = builder.next_output(stream);
+  ASSERT_GE(output.size(), 10);
+  ASSERT_EQ(output.tail().size(), 0);
+  ASSERT_EQ(output.tail().data(), nullptr);
+  ASSERT_EQ(builder.size(), 0);
+  builder.advance_output(1, stream);
+  ASSERT_EQ(builder.size(), 1);
+  auto const output2 = builder.next_output(stream);
+  ASSERT_EQ(output2.head().data(), output.head().data() + 1);
+  builder.advance_output(10, stream);
+  ASSERT_EQ(builder.size(), 11);
+  auto const output3 = builder.next_output(stream);
+  ASSERT_EQ(output3.head().size(), 9);
+  ASSERT_EQ(output3.head().data(), output.head().data() + 11);
+  ASSERT_EQ(output3.tail().size(), 40);
+  builder.advance_output(9, stream);
+  ASSERT_EQ(builder.size(), 20);
+  auto const output4 = builder.next_output(stream);
+  ASSERT_EQ(output4.head().size(), 0);
+  ASSERT_EQ(output4.tail().size(), output3.tail().size());
+  ASSERT_EQ(output4.tail().data(), output3.tail().data());
+  builder.advance_output(1, stream);
+  auto const output5 = builder.next_output(stream);
+  ASSERT_EQ(output5.head().size(), 39);
+  ASSERT_EQ(output5.head().data(), output4.tail().data() + 1);
+  ASSERT_EQ(output5.tail().size(), 0);
+  ASSERT_EQ(output5.tail().data(), nullptr);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
