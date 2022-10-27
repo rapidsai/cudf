@@ -922,7 +922,7 @@ TEST_F(CsvReaderTest, Strings)
   auto filepath = temp_env->get_temp_dir() + "Strings.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
     outfile << "30,stu \"\"vwx\"\" yz" << '\n';
@@ -952,7 +952,7 @@ TEST_F(CsvReaderTest, StringsQuotes)
   auto filepath = temp_env->get_temp_dir() + "StringsQuotes.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,`abc,\ndef, ghi`" << '\n';
     outfile << "20,`jkl, ``mno``, pqr`" << '\n';
     outfile << "30,stu `vwx` yz" << '\n';
@@ -981,7 +981,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
     outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
@@ -2258,6 +2258,25 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
+}
+
+TEST_F(CsvReaderTest, UseColsValidation)
+{
+  std::string buffer = "1,2,3";
+
+  cudf::io::csv_reader_options indexes_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1)
+      .names({"a", "b"})
+      .use_cols_indexes({0});
+  EXPECT_THROW(cudf::io::read_csv(indexes_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options names_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1)
+      .names({"a", "b", "c"})
+      .use_cols_names({"nonexistent_name"});
+  EXPECT_THROW(cudf::io::read_csv(names_options), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
