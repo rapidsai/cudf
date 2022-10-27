@@ -177,7 +177,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
-  
+
   // test with a limit slightly less than one page of data
   {
     auto [expected, result, num_chunks] = do_test(79'000);
@@ -199,7 +199,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-   // test with a limit slightly less than two pages of data
+  // test with a limit slightly less than two pages of data
   {
     auto [expected, result, num_chunks] = do_test(159'000);
     EXPECT_EQ(num_chunks, 2);
@@ -218,7 +218,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     auto [expected, result, num_chunks] = do_test(161'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
-  }  
+  }
 }
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)

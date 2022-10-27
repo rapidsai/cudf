@@ -119,7 +119,7 @@ template <>
 __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, bool nullable)
 {
   // only returns the size of offsets and validity. the size of the actual string chars
-  // is tracked seperately.
+  // is tracked separately.
   auto const offset_size = sizeof(offset_type);
   return (offset_size * (num_rows + 1)) + validity_size(num_rows, nullable);
 }
@@ -366,7 +366,7 @@ struct get_page_nesting_size {
     if (page.src_col_schema != src_col_schema || page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
       return 0;
     }
-    return page.nesting[depth].size;
+    return page.nesting[depth].batch_size;
   }
 };
 
@@ -596,11 +596,10 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
                                     bool uses_custom_row_bounds)
 {
   // computes:
-  // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input to respect the
-  // user bounds.
-  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
-  // specified artifical bounds).
+  // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
+  // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artifical bounds).
   if (uses_custom_row_bounds) {
     gpu::ComputePageSizes(pages,
                           chunks,

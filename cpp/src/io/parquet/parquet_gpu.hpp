@@ -109,7 +109,9 @@ struct PageNestingInfo {
   int32_t max_rep_level;
 
   // set during preprocessing
-  int32_t size;  // this page/nesting-level's row count contribution to the output column
+  int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
+                 // decoded
+  int32_t batch_size;        // the size of the page for this batch
   int32_t page_start_value;  // absolute output start index in output column data
 
   // set during data decoding
@@ -164,7 +166,9 @@ struct PageInfo {
   int skipped_values;
   // # of values skipped in the actual data stream.
   int skipped_leaf_values;
-  int32_t str_bytes;  // for string columns only, the size in for all the chars in the string
+  // for string columns only, the size of all the chars in the string for
+  // this page. only valid/computed during the base preprocess pass
+  int32_t str_bytes;
 
   // nesting information (input/output) for each page
   int num_nesting_levels;
