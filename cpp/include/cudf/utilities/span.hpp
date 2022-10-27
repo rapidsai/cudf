@@ -226,7 +226,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                      std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                              std::declval<C&>().data()))> (*)[],
                                            T (*)[]>>* = nullptr>
-  constexpr host_span(C& in) : base(in.data(), in.size())
+  constexpr host_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
@@ -239,7 +239,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                      std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                              std::declval<C&>().data()))> (*)[],
                                            T (*)[]>>* = nullptr>
-  constexpr host_span(C const& in) : base(in.data(), in.size())
+  constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
