@@ -35,7 +35,7 @@ namespace detail {
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -47,7 +47,7 @@ std::unique_ptr<column> add_keys(
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -58,7 +58,7 @@ std::unique_ptr<column> remove_keys(
  */
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -70,7 +70,7 @@ std::unique_ptr<column> remove_unused_keys(
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -81,7 +81,7 @@ std::unique_ptr<column> set_keys(
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -105,7 +105,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
  */
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
   std::vector<table_view> tables,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

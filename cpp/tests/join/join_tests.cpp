@@ -1880,7 +1880,8 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
     auto fact_ints    = ints{0, 1, 2, 3, 4};
     auto fact_structs = structs{{fact_ints}, no_nulls()}.release();
     // Now set struct validity to invalidate index#3.
-    cudf::detail::set_null_mask(fact_structs->mutable_view().null_mask(), 3, 4, false);
+    cudf::detail::set_null_mask(
+      fact_structs->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
     // Struct row#3 is null, but Struct.child has a non-null value.
     return make_table(std::move(fact_structs));
   }();
@@ -1896,7 +1897,8 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
 
   // Note: Join result might not have nulls pushed down, since it's an output of gather().
   // Must superimpose parent nulls before comparisons.
-  auto [superimposed_results, _] = cudf::structs::detail::superimpose_parent_nulls(*result);
+  auto [superimposed_results, _] =
+    cudf::structs::detail::superimpose_parent_nulls(*result, cudf::get_default_stream());
 
   auto const expected = [] {
     auto fact_ints    = ints{0};
