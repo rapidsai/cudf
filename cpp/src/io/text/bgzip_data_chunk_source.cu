@@ -65,8 +65,7 @@ struct bgzip_nvcomp_transform_functor {
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
-  using pinned_host_vector =
-    thrust::host_vector<T, cudf::detail::pinned_allocator<T>>;
+  using pinned_host_vector = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>;
 
   template <typename T>
   static void copy_to_device(const pinned_host_vector<T>& host,
