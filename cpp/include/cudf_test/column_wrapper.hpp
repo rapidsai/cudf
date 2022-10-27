@@ -732,9 +732,9 @@ class strings_column_wrapper : public detail::column_wrapper {
   {
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
-    wrapped               = cudf::make_strings_column(d_chars, d_offsets);
+    auto d_chars   = cudf::detail::make_device_uvector_sync(chars, cudf::get_default_stream());
+    auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, cudf::get_default_stream());
+    wrapped        = cudf::make_strings_column(d_chars, d_offsets);
   }
 
   /**
@@ -772,10 +772,10 @@ class strings_column_wrapper : public detail::column_wrapper {
     size_type num_strings = std::distance(begin, end);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, v);
     auto null_mask        = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
-    auto d_bitmask        = cudf::detail::make_device_uvector_sync(null_mask);
-    wrapped               = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
+    auto d_chars   = cudf::detail::make_device_uvector_sync(chars, cudf::get_default_stream());
+    auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, cudf::get_default_stream());
+    auto d_bitmask = cudf::detail::make_device_uvector_sync(null_mask, cudf::get_default_stream());
+    wrapped        = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
   }
 
   /**
