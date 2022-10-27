@@ -30,8 +30,7 @@ def as_buffer(obj: Any) -> Buffer:
     Return
     ------
     Buffer
-        A buffer instance that represents the device memory
-        of `obj`.
+        A buffer instance that represents the device memory of `obj`.
     """
 
     if isinstance(obj, Buffer):

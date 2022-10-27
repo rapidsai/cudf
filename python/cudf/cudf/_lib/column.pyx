@@ -478,8 +478,8 @@ cdef class Column:
         Given a ``cudf::column_view``, constructs a ``cudf.Column`` from it,
         along with referencing an ``owner`` Python object that owns the memory
         lifetime. If ``owner`` is a ``cudf.Column``, we reach inside of it and
-        make the owner of each newly created ``Buffer`` the
-        respective ``Buffer`` from the ``owner`` ``cudf.Column``.
+        make the owner of each newly created ``Buffer`` the respective
+        ``Buffer`` from the ``owner`` ``cudf.Column``.
         If ``owner`` is ``None``, we allocate new memory for the resulting
         ``cudf.Column``.
         """
