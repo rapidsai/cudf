@@ -43,12 +43,20 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     (such as builtin `open()` file handler function or `BytesIO`).
 engine : ['cudf'], default 'cudf'
     Parser engine to use.
+    This Parameter is deprecated.
 columns : list, default None
     If not None, only these columns will be read.
 skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
 
 Returns
 -------
