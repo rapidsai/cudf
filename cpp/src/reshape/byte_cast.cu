@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reshape.hpp>
@@ -80,18 +81,20 @@ struct byte_list_conversion {
 
     rmm::device_buffer null_mask = detail::copy_bitmask(input_column, stream, mr);
 
-    auto const result = make_lists_column(input_column.size(),
-                                          std::move(offsets_column),
-                                          std::move(byte_column),
-                                          input_column.null_count(),
-                                          std::move(null_mask),
-                                          stream,
-                                          mr);
+    auto result = make_lists_column(input_column.size(),
+                                    std::move(offsets_column),
+                                    std::move(byte_column),
+                                    input_column.null_count(),
+                                    std::move(null_mask),
+                                    stream,
+                                    mr);
 
     // If any nulls are present, the corresponding lists must be purged so that
     // the result is sanitized.
-    return result->null_count() > 0 ? cudf::detail::purge_nonempty_nulls(result, stream, mr)
-                                    : result;
+    if (result->null_count() > 0) {
+      return cudf::detail::purge_nonempty_nulls(lists_column_view{*result}, stream, mr);
+    }
+    return result;
   }
 };
 
