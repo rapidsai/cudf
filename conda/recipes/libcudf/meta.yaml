@@ -33,7 +33,7 @@ requirements:
     - {{ compiler('cuda') }} {{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm {{ minor_version }}.*
+    - rapidsai-nightly::librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
