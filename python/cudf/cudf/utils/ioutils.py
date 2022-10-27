@@ -1216,7 +1216,12 @@ delimiter : string, default None
     The delimiter that should be used for splitting text chunks into
     separate cudf column rows. The delimiter may be one or more characters.
 strip_delimiters : boolean, default False
-    If True, removes delimiters that are normally kept at the end of strings.
+    Unlike the `str.split()` function, `read_text` preserves the delimiter
+    at the end of a field in output by default, meaning `a;b;c` will turn into
+    `['a;','b;','c']` when using `;` as a delimiter.
+    Setting this option to `True` will strip these trailing delimiters,
+    leaving only the contents between delimiters in the resulting column:
+    `['a','b','c']`
 byte_range : list or tuple, default None
     Byte range within the input file to be read. The first number is the
     offset in bytes, the second number is the range size in bytes.
