@@ -36,7 +36,7 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -66,10 +66,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
     dtype : np.dtype
-        The dtype associated with the data DeviceBufferLike
-    mask : DeviceBufferLike, optional
+        The dtype associated with the data Buffer
+    mask : Buffer, optional
     """
 
     _nan_count: Optional[int]
@@ -77,9 +77,9 @@ class NumericalColumn(NumericalBaseColumn):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: DtypeObj,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
@@ -87,9 +87,7 @@ class NumericalColumn(NumericalBaseColumn):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         self._nan_count = None
@@ -306,7 +304,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=as_device_buffer_like(ary),
+                    data=as_buffer(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

@@ -33,7 +33,7 @@ from cudf.api.types import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
@@ -5173,7 +5173,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : DeviceBufferLike
+    mask : Buffer
         The validity mask
     offset : int
         Data offset
@@ -5207,7 +5207,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

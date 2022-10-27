@@ -4,7 +4,7 @@ from typing import Callable
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
 
 arr_len = 10
 
@@ -23,10 +23,10 @@ arr_len = 10
 def test_buffer_from_cuda_iface_contiguous(data):
     data, expect_success = data
     if expect_success:
-        as_device_buffer_like(data.view("|u1"))
+        as_buffer(data.view("|u1"))
     else:
         with pytest.raises(ValueError):
-            as_device_buffer_like(data.view("|u1"))
+            as_buffer(data.view("|u1"))
 
 
 @pytest.mark.parametrize(
@@ -41,17 +41,17 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    buf = as_device_buffer_like(data)
+    buf = as_buffer(data)
     got = cp.array(buf).reshape(-1).view("uint8")
     expect = data.reshape(-1).view("uint8")
     assert (expect == got).all()
 
 
-@pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
+@pytest.mark.parametrize("creator", [Buffer, as_buffer])
 def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
     ary = cp.arange(arr_len)
     b = creator(ary)
-    assert isinstance(b, DeviceBufferLike)
+    assert isinstance(b, Buffer)
     assert ary.__cuda_array_interface__["data"][0] == b.ptr
     assert ary.nbytes == b.size
 
@@ -66,7 +66,7 @@ def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
 )
 def test_buffer_repr(size, expect):
     ary = cp.arange(size, dtype="uint8")
-    buf = as_device_buffer_like(ary)
+    buf = as_buffer(ary)
     assert f"size={expect}" in repr(buf)
 
 
@@ -83,7 +83,7 @@ def test_buffer_repr(size, expect):
 )
 def test_buffer_slice(idx):
     ary = cp.arange(arr_len, dtype="uint8")
-    buf = as_device_buffer_like(ary)
+    buf = as_buffer(ary)
     expect = ary[idx]
     got = cp.array(buf[idx])
     assert (expect == got).all()
@@ -101,7 +101,7 @@ def test_buffer_slice(idx):
 )
 def test_buffer_slice_fail(idx, err_msg):
     ary = cp.arange(arr_len, dtype="uint8")
-    buf = as_device_buffer_like(ary)
+    buf = as_buffer(ary)
 
     with pytest.raises(ValueError, match=err_msg):
         buf[idx]

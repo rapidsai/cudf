@@ -19,7 +19,7 @@ from cudf._lib.utils cimport (
     table_view_from_table,
 )
 
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
@@ -31,7 +31,7 @@ cpdef concat_masks(object columns):
     with nogil:
         c_result = move(libcudf_concatenate_masks(c_views))
         c_unique_result = make_unique[device_buffer](move(c_result))
-    return as_device_buffer_like(
+    return as_buffer(
         DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
     )
 

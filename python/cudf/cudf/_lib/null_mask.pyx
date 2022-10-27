@@ -22,7 +22,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport mask_state, size_type
 from cudf._lib.utils cimport table_view_from_columns
 
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 
 
 class MaskState(Enum):
@@ -52,7 +52,7 @@ def copy_bitmask(Column col):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
@@ -98,7 +98,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
@@ -110,7 +110,7 @@ def bitmask_and(columns: list):
         c_result = move(cpp_bitmask_and(c_view))
         up_db = make_unique[device_buffer](move(c_result.first))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(dbuf)
+    buf = as_buffer(dbuf)
     return buf, c_result.second
 
 
@@ -122,5 +122,5 @@ def bitmask_or(columns: list):
         c_result = move(cpp_bitmask_or(c_view))
         up_db = make_unique[device_buffer](move(c_result.first))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(dbuf)
+    buf = as_buffer(dbuf)
     return buf, c_result.second

@@ -179,9 +179,7 @@ def test_cuda_array_interface_pytorch():
     got = cudf.Series(tensor)
 
     assert_eq(got, series)
-    buffer = cudf.core.buffer.as_device_buffer_like(
-        cupy.ones(10, dtype=np.bool_)
-    )
+    buffer = cudf.core.buffer.as_buffer(cupy.ones(10, dtype=np.bool_))
     tensor = torch.tensor(buffer)
     got = cudf.Series(tensor, dtype=np.bool_)
 

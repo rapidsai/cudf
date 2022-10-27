@@ -429,7 +429,7 @@ def test_assert_column_memory_slice(arrow_arrays):
 
 def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    buf = cudf.core.buffer.as_device_buffer_like(data.base_data)
+    buf = cudf.core.buffer.as_buffer(data.base_data)
 
     left = cudf.core.column.build_column(buf, dtype=np.int32)
     right = cudf.core.column.build_column(buf, dtype=np.int32)

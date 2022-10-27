@@ -4,17 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
-from typing import (
-    Any,
-    Dict,
-    List,
-    Mapping,
-    Protocol,
-    Sequence,
-    Tuple,
-    Union,
-    runtime_checkable,
-)
+from typing import Any, Dict, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -24,113 +14,13 @@ import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
-# Frame type for serialization and deserialization of `DeviceBufferLike`
-Frame = Union[memoryview, "DeviceBufferLike"]
-
-
-@runtime_checkable
-class DeviceBufferLike(Protocol):
-    def __getitem__(self, key: slice) -> DeviceBufferLike:
-        """Create a new view of the buffer."""
-
-    @property
-    def size(self) -> int:
-        """Size of the buffer in bytes."""
-
-    @property
-    def nbytes(self) -> int:
-        """Size of the buffer in bytes."""
-
-    @property
-    def ptr(self) -> int:
-        """Device pointer to the start of the buffer."""
-
-    @property
-    def owner(self) -> Any:
-        """Object owning the memory of the buffer."""
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping:
-        """Implementation of the CUDA Array Interface."""
-
-    def memoryview(self) -> memoryview:
-        """Read-only access to the buffer through host memory."""
-
-    def serialize(self) -> Tuple[dict, List[Frame]]:
-        """Serialize the buffer into header and frames.
-
-        The frames can be a mixture of memoryview and device-buffer-like
-        objects.
-
-        Returns
-        -------
-        Tuple[Dict, List]
-            The first element of the returned tuple is a dict containing any
-            serializable metadata required to reconstruct the object. The
-            second element is a list containing the device buffers and
-            memoryviews of the object.
-        """
-
-    @classmethod
-    def deserialize(
-        cls, header: dict, frames: List[Frame]
-    ) -> DeviceBufferLike:
-        """Generate an buffer from a serialized representation.
-
-        Parameters
-        ----------
-        header : dict
-            The metadata required to reconstruct the object.
-        frames : list
-            The device-buffer-like and memoryview buffers that the object
-            should contain.
-
-        Returns
-        -------
-        DeviceBufferLike
-            A new object that implements DeviceBufferLike.
-        """
-
-
-def as_device_buffer_like(obj: Any) -> DeviceBufferLike:
-    """
-    Factory function to wrap `obj` in a DeviceBufferLike object.
-
-    If `obj` isn't device-buffer-like already, a new buffer that implements
-    DeviceBufferLike and points to the memory of `obj` is created. If `obj`
-    represents host memory, it is copied to a new `rmm.DeviceBuffer` device
-    allocation. Otherwise, the data of `obj` is **not** copied, instead the
-    new buffer keeps a reference to `obj` in order to retain the lifetime
-    of `obj`.
-
-    Raises ValueError if the data of `obj` isn't C-contiguous.
-
-    Parameters
-    ----------
-    obj : buffer-like or array-like
-        An object that exposes either device or host memory through
-        `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. If `obj` represents host memory, data will
-        be copied.
-
-    Return
-    ------
-    DeviceBufferLike
-        A device-buffer-like instance that represents the device memory
-        of `obj`.
-    """
-
-    if isinstance(obj, DeviceBufferLike):
-        return obj
-    return Buffer(obj)
-
 
 class Buffer(Serializable):
     """
     A Buffer represents device memory.
 
-    Usually Buffers will be created using `as_device_buffer_like(obj)`,
-    which will make sure that `obj` is device-buffer-like and not a `Buffer`
+    Usually Buffers will be created using `as_buffer(obj)`,
+    which will make sure that `obj` is buffer and not a `Buffer`
     necessarily.
 
     Parameters
@@ -191,15 +81,25 @@ class Buffer(Serializable):
             self._size = buf.size
             self._owner = buf
 
+    def _getitem(self, offset: int, size: int) -> Buffer:
+        """
+        Sub-classes can overwrite this to implement __getitem__
+        without having to handle non-slice inputs.
+        """
+        return self.__class__(
+            data=self.ptr + offset, size=size, owner=self.owner
+        )
+
     def __getitem__(self, key: slice) -> Buffer:
         if not isinstance(key, slice):
-            raise ValueError("index must be an slice")
+            raise TypeError(
+                "Argument 'key' has incorrect type "
+                f"(expected slice, got {key.__class__.__name__})"
+            )
         start, stop, step = key.indices(self.size)
         if step != 1:
-            raise ValueError("slice must be contiguous")
-        return self.__class__(
-            data=self.ptr + start, size=stop - start, owner=self.owner
-        )
+            raise ValueError("slice must be C-contiguous")
+        return self._getitem(offset=start, size=stop - start)
 
     @property
     def size(self) -> int:
