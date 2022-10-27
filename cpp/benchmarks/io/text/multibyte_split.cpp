@@ -121,6 +121,7 @@ static void bench_multibyte_split(nvbench::state& state,
   auto const delim_percent      = state.get_int64("delim_percent");
   auto const file_size_approx   = state.get_int64("size_approx");
   auto const byte_range_percent = state.get_int64("byte_range_percent");
+  auto const strip_delimiters   = bool(state.get_int64("strip_delimiters"));
 
   auto const byte_range_factor = static_cast<double>(byte_range_percent) / 100;
   CUDF_EXPECTS(delim_percent >= 1, "delimiter percent must be at least 1");
@@ -182,12 +183,13 @@ static void bench_multibyte_split(nvbench::state& state,
   auto const range_size   = static_cast<int64_t>(device_input.size() * byte_range_factor);
   auto const range_offset = (device_input.size() - range_size) / 2;
   cudf::io::text::byte_range_info range{range_offset, range_size};
+  cudf::io::text::parse_options options{range, strip_delimiters};
   std::unique_ptr<cudf::column> output;
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     try_drop_l3_cache();
-    output = cudf::io::text::multibyte_split(*source, delim, range);
+    output = cudf::io::text::multibyte_split(*source, delim, options);
   });
 
   state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "pmu", "Peak Memory Usage");
@@ -203,6 +205,7 @@ using source_type_list = nvbench::enum_type_list<data_chunk_source_type::device,
 
 NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
   .set_name("multibyte_split")
+  .add_int64_axis("strip_delimiters", {0, 1})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
