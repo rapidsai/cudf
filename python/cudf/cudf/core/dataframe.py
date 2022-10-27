@@ -5335,7 +5335,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if q_is_number and numeric_only:
                 result = result.fillna(np.nan).iloc[0]
-                result.index = data_df._data.to_pandas_index()
+                result.index = data_df.keys()
                 result.name = q
                 return result
 
