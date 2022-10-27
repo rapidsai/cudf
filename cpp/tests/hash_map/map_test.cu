@@ -57,7 +57,7 @@ struct InsertTest : public cudf::test::BaseFixture {
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
     pairs.resize(input_size, cudf::get_default_stream());
-    map = std::move(map_type::create(compute_hash_table_size(size)));
+    map = std::move(map_type::create(compute_hash_table_size(size), cudf::get_default_stream()));
     cudf::get_default_stream().synchronize();
   }
 

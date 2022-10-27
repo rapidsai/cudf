@@ -52,7 +52,7 @@ std::unique_ptr<column> spark_murmur_hash3_32(
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /* Copyright 2005-2014 Daniel James.

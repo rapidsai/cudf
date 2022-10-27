@@ -141,8 +141,9 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
 
-    auto dev_data   = cudf::detail::make_device_uvector_sync(v);
-    auto dev_result = cudf::detail::make_device_uvector_sync(result_init);
+    auto dev_data = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
+    auto dev_result =
+      cudf::detail::make_device_uvector_sync(result_init, cudf::get_default_stream());
 
     if (block_size == 0) { block_size = vec_size; }
 
@@ -154,7 +155,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
         dev_result.data(), dev_data.data(), vec_size);
     }
 
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
 
     CUDF_CHECK_CUDA(cudf::get_default_stream().value());
 
@@ -293,15 +294,15 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     exact[2] = std::accumulate(
       v.begin(), v.end(), identity[2], [](T acc, uint64_t i) { return acc ^ T(i); });
 
-    auto dev_result = cudf::detail::make_device_uvector_sync(identity);
-    auto dev_data   = cudf::detail::make_device_uvector_sync(v);
+    auto dev_result = cudf::detail::make_device_uvector_sync(identity, cudf::get_default_stream());
+    auto dev_data   = cudf::detail::make_device_uvector_sync(v, cudf::get_default_stream());
 
     if (block_size == 0) { block_size = vec_size; }
 
     gpu_atomic_bitwiseOp_test<T><<<grid_size, block_size, 0, cudf::get_default_stream().value()>>>(
       reinterpret_cast<T*>(dev_result.data()), reinterpret_cast<T*>(dev_data.data()), vec_size);
 
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
 
     CUDF_CHECK_CUDA(cudf::get_default_stream().value());
 

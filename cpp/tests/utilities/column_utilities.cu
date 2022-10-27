@@ -495,7 +495,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
   // move the differences to the host.
-  auto h_differences = cudf::detail::make_host_vector_sync(differences);
+  auto h_differences = cudf::detail::make_host_vector_sync(differences, cudf::get_default_stream());
   if (verbosity == debug_output_level::ALL_ERRORS) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
@@ -976,7 +976,8 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
     shifted_offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
-  auto const h_shifted_offsets = cudf::detail::make_host_vector_sync(shifted_offsets);
+  auto const h_shifted_offsets =
+    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::get_default_stream());
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];
