@@ -73,7 +73,7 @@ auto print_vec = [](auto const& cpu, auto const name, auto converter) {
 
 void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
-                rmm::cuda_stream_view stream = cudf::get_default_stream())
+                rmm::cuda_stream_view stream)
 {
   print_vec(cudf::detail::make_std_vector_async(d_gpu_tree.node_categories, stream),
             "node_categories",

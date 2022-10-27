@@ -38,8 +38,9 @@ namespace detail {
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  // Move before delimiter?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view
@@ -54,7 +55,7 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> tokenize(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -71,8 +72,9 @@ std::unique_ptr<cudf::column> tokenize(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  // Move before delimiter?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view
@@ -87,7 +89,7 @@ std::unique_ptr<cudf::column> count_tokens(
 std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& strings,
   cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
