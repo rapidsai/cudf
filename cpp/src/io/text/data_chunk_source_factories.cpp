@@ -18,11 +18,11 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/utilities/pinned_allocator.h>
 
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/system/cuda/experimental/pinned_allocator.h>
 
 #include <fstream>
 
@@ -37,7 +37,7 @@ namespace {
 class istream_data_chunk_reader : public data_chunk_reader {
   struct host_ticket {
     cudaEvent_t event;
-    thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>> buffer;
+    thrust::host_vector<char, cudf::pinned_allocator<char>> buffer;
   };
 
  public:

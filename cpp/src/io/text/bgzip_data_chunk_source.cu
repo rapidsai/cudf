@@ -23,6 +23,7 @@
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/pinned_allocator.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -30,7 +31,6 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/system/cuda/experimental/pinned_allocator.h>
 #include <thrust/transform.h>
 
 #include <fstream>
@@ -66,7 +66,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
   using pinned_host_vector =
-    thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>>;
+    thrust::host_vector<T, cudf::pinned_allocator<T>>;
 
   template <typename T>
   static void copy_to_device(const pinned_host_vector<T>& host,
