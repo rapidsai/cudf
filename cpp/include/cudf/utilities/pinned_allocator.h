@@ -47,11 +47,11 @@ class pinned_allocator<void> {
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
   /**
-   * @brief converts a pinned_allocator<void> to pinned_allocator<U>
+   * @brief converts a `pinned_allocator<void>` to `pinned_allocator<U>`
    */
   template <typename U>
   struct rebind {
-    using other = pinned_allocator<U>;
+    using other = pinned_allocator<U>; ///< The rebound type
   };
 };
 
@@ -67,12 +67,12 @@ class pinned_allocator {
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
   /**
-   * @brief converts a pinned_allocator<T> to pinned_allocator<U>
+   * @brief converts a `pinned_allocator<T>` to `pinned_allocator<U>`
    */
   template <typename U>
   struct rebind {
-    using other = pinned_allocator<U>;
-  };  // end rebind
+    using other = pinned_allocator<U>; ///< The rebound type
+  };
 
   /**
    * @brief pinned_allocator's null constructor does nothing.
@@ -125,13 +125,13 @@ class pinned_allocator {
    *  memory.
    *
    *  @param cnt The number of objects to allocate.
-   *  @param const_pointer pointer to a nearby memory location ( not used by this allocator )
+   *  @param hint pointer to a nearby memory location ( not used by this allocator )
    *  @return a \c pointer to the newly allocated objects.
    *  @note This method does not invoke \p value_type's constructor.
    *        It is the responsibility of the caller to initialize the
    *        objects at the returned \c pointer.
    */
-  __host__ inline pointer allocate(size_type cnt, const_pointer = 0)
+  __host__ inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
 
@@ -152,7 +152,7 @@ class pinned_allocator {
    *
    *  @param p A \c pointer to the previously allocated memory.
    *  @param cnt The number of objects previously allocated at
-   *         \p p.
+   *         \p p. ( not used by this allocator )
    *  @note This method does not invoke \p value_type's destructor.
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
