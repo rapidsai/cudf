@@ -1612,7 +1612,7 @@ def get_reader_filepath_or_buffer(
     return path_or_data, compression
 
 
-def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
+def get_writer_filepath_or_buffer(path_or_data, mode, storage_options={}):
     """
     Return either a filepath string to data,
     or a open file object to the output filesystem
@@ -1630,7 +1630,6 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
         Filepath string or buffer of data
     """
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options", {})
         path_or_data = os.path.expanduser(path_or_data)
         fs = get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options

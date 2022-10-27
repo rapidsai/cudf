@@ -60,7 +60,6 @@ def _write_parquet(
     max_page_size_rows=None,
     partitions_info=None,
     storage_options=None,
-    **kwargs,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -75,7 +74,7 @@ def _write_parquet(
 
     paths_or_bufs = [
         ioutils.get_writer_filepath_or_buffer(
-            path, mode="wb", storage_options=storage_options
+            path_or_data=path, mode="wb", storage_options=storage_options
         )
         for path in paths
     ]

@@ -419,6 +419,7 @@ def to_orc(
     stripe_size_rows=None,
     row_index_stride=None,
     cols_as_map_type=None,
+    storage_options=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -440,7 +441,7 @@ def to_orc(
         raise TypeError("cols_as_map_type must be a list of column names.")
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=fname, mode="wb", **kwargs
+        path_or_data=fname, mode="wb", storage_options=storage_options
     )
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
