@@ -92,7 +92,7 @@ class chunked_reader : reader {
   /**
    * @brief Constructor from a read limit and an array of data sources with reader options.
    *
-   * @param chunk_read_limit The byte size limit to read each chunk
+   * @param chunk_read_limit The size limit (in bytes) to read each chunk
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.

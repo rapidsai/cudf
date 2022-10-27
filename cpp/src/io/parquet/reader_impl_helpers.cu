@@ -326,19 +326,21 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata::select_row_groups(
-  std::vector<std::vector<size_type>> const& row_groups,
-  size_type& row_start,
-  size_type& row_count) const
+std::tuple<size_type, size_type, std::vector<row_group_info>>
+aggregate_reader_metadata::select_row_groups(
+  std::vector<std::vector<size_type>> const& row_groups_list,
+  size_type row_start,
+  size_type row_count) const
 {
-  if (!row_groups.empty()) {
-    std::vector<row_group_info> selection;
-    CUDF_EXPECTS(row_groups.size() == per_file_metadata.size(),
+  std::vector<row_group_info> selection;
+
+  if (!row_groups_list.empty()) {
+    CUDF_EXPECTS(row_groups_list.size() == per_file_metadata.size(),
                  "Must specify row groups for each source");
 
     row_count = 0;
-    for (size_t src_idx = 0; src_idx < row_groups.size(); ++src_idx) {
-      for (auto const& rowgroup_idx : row_groups[src_idx]) {
+    for (size_t src_idx = 0; src_idx < row_groups_list.size(); ++src_idx) {
+      for (auto const& rowgroup_idx : row_groups_list[src_idx]) {
         CUDF_EXPECTS(
           rowgroup_idx >= 0 &&
             rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
@@ -347,19 +349,18 @@ std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata
         row_count += get_row_group(rowgroup_idx, src_idx).num_rows;
       }
     }
-    return selection;
+
+    return {row_start, row_count, std::move(selection)};
   }
 
   row_start = std::max(row_start, 0);
   if (row_count < 0) {
-    row_count = static_cast<size_type>(
-      std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+    row_count = std::min(get_num_rows(), std::numeric_limits<size_type>::max());
   }
-  row_count = min(row_count, get_num_rows() - row_start);
+  row_count = std::min(row_count, get_num_rows() - row_start);
   CUDF_EXPECTS(row_count >= 0, "Invalid row count");
   CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
 
-  std::vector<row_group_info> selection;
   size_type count = 0;
   for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
     for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
@@ -372,7 +373,7 @@ std::vector<aggregate_reader_metadata::row_group_info> aggregate_reader_metadata
     }
   }
 
-  return selection;
+  return {row_start, row_count, std::move(selection)};
 }
 
 std::tuple<std::vector<input_column_info>, std::vector<column_buffer>, std::vector<size_type>>

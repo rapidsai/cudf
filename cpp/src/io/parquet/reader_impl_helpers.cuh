@@ -51,6 +51,19 @@ inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
 }
 
 /**
+ * @brief The row_group_info class
+ */
+struct row_group_info {
+  size_type const index;
+  size_t const start_row;  // TODO source index
+  size_type const source_index;
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index(index), start_row(start_row), source_index(source_index)
+  {
+  }
+};
+
+/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
@@ -145,29 +158,23 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
-  struct row_group_info {
-    size_type const index;
-    size_t const start_row;  // TODO source index
-    size_type const source_index;
-    row_group_info(size_type index, size_t start_row, size_type source_index)
-      : index(index), start_row(start_row), source_index(source_index)
-    {
-    }
-  };
-
   /**
    * @brief Filters and reduces down to a selection of row groups
+   *
+   * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
+   * values based on the input row group list.
    *
    * @param row_groups Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
-   * @return List of row group indexes and its starting row
+   * @return A tuple of corrected row_start, row_count and list of row group indexes and its
+   *         starting row
    */
-  [[nodiscard]] std::vector<row_group_info> select_row_groups(
-    std::vector<std::vector<size_type>> const& row_groups,
-    size_type& row_start,
-    size_type& row_count) const;
+  [[nodiscard]] std::tuple<size_type, size_type, std::vector<row_group_info>> select_row_groups(
+    std::vector<std::vector<size_type>> const& row_groups_list,
+    size_type row_start,
+    size_type row_count) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns
