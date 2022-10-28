@@ -12,10 +12,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):

@@ -4,14 +4,6 @@ from cython.operator import dereference
 
 import cudf
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type
-from cudf._lib.scalar cimport DeviceScalar
-
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
@@ -21,10 +13,14 @@ from cudf._lib.aggregation cimport (
     make_reduce_aggregation,
     make_scan_aggregation,
 )
-from cudf._lib.types cimport (
-    dtype_to_data_type,
-    is_decimal_type_id,
-)
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.types cimport dtype_to_data_type, is_decimal_type_id
 
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):

@@ -8,10 +8,7 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.types import (
-    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
-    NullHandling,
-)
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES, NullHandling
 from cudf.utils import cudautils
 
 from cudf._lib.types cimport (

@@ -8,6 +8,7 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from collections import OrderedDict
 
 cimport cudf._lib.cpp.lists.lists_column_view as cpp_lists_column_view
@@ -52,11 +53,7 @@ from cudf._lib.io.utils cimport (
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
-
-from cudf._lib.utils cimport (
-    data_from_unique_ptr,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -9,13 +9,11 @@ from libcpp.utility cimport move
 
 import numpy as np
 
+cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-
 from cudf._lib.cpp.types cimport data_type
-
-cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
 from cudf._lib.types cimport dtype_to_data_type
 

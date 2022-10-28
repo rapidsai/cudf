@@ -19,10 +19,7 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 

@@ -18,10 +18,7 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport (
-    dtype_from_column_view,
-    dtype_to_data_type,
-)
+from cudf._lib.types cimport dtype_from_column_view, dtype_to_data_type
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 

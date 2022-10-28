@@ -45,10 +45,7 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.utils cimport (
-    data_from_unique_ptr,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
 

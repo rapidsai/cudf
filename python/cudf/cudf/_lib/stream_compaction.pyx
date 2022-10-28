@@ -25,10 +25,7 @@ from cudf._lib.cpp.types cimport (
     order,
     size_type,
 )
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def drop_nulls(list columns, how="any", keys=None, thresh=None):

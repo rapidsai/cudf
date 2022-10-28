@@ -2,11 +2,10 @@
 
 import cudf
 
-from cudf._lib.column cimport Column
-
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
@@ -14,12 +13,7 @@ from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
     is_fixed_point as cpp_is_fixed_point,
     to_fixed_point as cpp_to_fixed_point,
 )
-from cudf._lib.cpp.types cimport (
-    DECIMAL32,
-    DECIMAL64,
-    DECIMAL128,
-    data_type,
-)
+from cudf._lib.cpp.types cimport DECIMAL32, DECIMAL64, DECIMAL128, data_type
 
 
 def from_decimal(Column input_col):

@@ -23,12 +23,7 @@ from cudf._lib.cpp.quantiles cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
-    interpolation,
-    null_order,
-    order,
-    sorted,
-)
+from cudf._lib.cpp.types cimport interpolation, null_order, order, sorted
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 

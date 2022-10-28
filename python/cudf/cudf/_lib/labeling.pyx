@@ -1,11 +1,10 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.labeling cimport inclusive, label_bins as cpp_label_bins
