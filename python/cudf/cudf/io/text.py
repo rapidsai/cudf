@@ -18,7 +18,6 @@ def read_text(
     compression=None,
     compression_offsets=None,
     storage_options=None,
-    # **kwargs,
 ):
     """{docstring}"""
 
@@ -30,7 +29,6 @@ def read_text(
         compression=None,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
-        # **kwargs,
     )
 
     return cudf.Series._from_data(

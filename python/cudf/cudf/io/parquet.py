@@ -997,7 +997,6 @@ class ParquetDatasetWriter:
         max_file_size=None,
         file_name_prefix=None,
         storage_options=None,
-        # **kwargs,
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
