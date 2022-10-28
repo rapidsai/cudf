@@ -26,11 +26,14 @@ include_guard(GLOBAL)
 # within a pip install pyarrow.
 function(find_libarrow_in_python_wheel VERSION)
   function(find_arrow_lib _name _alias _lib)
-    # TODO: For now I'm hardcoding the path, that should be changed to use execute_process.
-    set(CUDF_PYARROW_WHEEL_DIR /home/vyasr/home/miniconda3/envs/cudf_dev/lib/python3.9/site-packages/pyarrow)
-    if(CUDF_PYARROW_WHEEL_DIR)
-      list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
-    endif()
+    find_package(Python REQUIRED)
+    execute_process(
+        COMMAND "${Python_EXECUTABLE}"
+        -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
+        OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR 
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
     rapids_find_generate_module(
       "${_name}"
       NO_CONFIG
@@ -50,9 +53,7 @@ function(find_libarrow_in_python_wheel VERSION)
     rapids_export_package(BUILD Arrow cudf-exports)
     rapids_export_package(INSTALL Arrow cudf-exports)
 
-    if(CUDF_PYARROW_WHEEL_DIR)
-      list(POP_BACK CMAKE_PREFIX_PATH)
-    endif()
+    list(POP_BACK CMAKE_PREFIX_PATH)
   endfunction()
 
   string(REPLACE "." "" PYARROW_SO_VER "${VERSION}")
