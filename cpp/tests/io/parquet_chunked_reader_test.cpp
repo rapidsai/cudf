@@ -132,6 +132,8 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         }
       } else if (col->type().id() == cudf::type_id::LIST) {
         col = cudf::purge_nonempty_nulls(cudf::lists_column_view{col->view()});
+      } else if (col->type().id() == cudf::type_id::STRING) {
+        col = cudf::purge_nonempty_nulls(cudf::strings_column_view{col->view()});
       }
     }
   }
