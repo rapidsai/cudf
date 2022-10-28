@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
-from typing import Any, Dict, Mapping, Sequence, Tuple
+from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
 
 import numpy
 
@@ -13,6 +13,8 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+T = TypeVar("T", bound="Buffer")
 
 
 class Buffer(Serializable):
@@ -43,7 +45,7 @@ class Buffer(Serializable):
         self._owner = owner
 
     @classmethod
-    def from_device_memory(cls, data: Any) -> Buffer:
+    def from_device_memory(cls: Type[T], data: Any) -> T:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -66,7 +68,7 @@ class Buffer(Serializable):
         return cls(ptr, size, owner=data)
 
     @classmethod
-    def from_host_memory(cls, data: Any) -> Buffer:
+    def from_host_memory(cls: Type[T], data: Any) -> T:
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -165,14 +167,12 @@ class Buffer(Serializable):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
-        header["desc"] = self.__cuda_array_interface__.copy()
-        header["desc"]["strides"] = (1,)
         header["frame_count"] = 1
         frames = [self]
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list) -> Buffer:
+    def deserialize(cls: Type[T], header: dict, frames: list) -> T:
         """Create an Buffer from a serialized representation.
 
         Parameters
@@ -187,19 +187,28 @@ class Buffer(Serializable):
         Buffer
             The deserialized Buffer.
         """
-        from cudf.core.buffer import as_buffer
-
         if header["frame_count"] != 1:
             raise ValueError("Deserializing a Buffer expect a single frame")
         frame = frames[0]
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
-        return as_buffer(frame)
+
+        # TODO: remove handling of "constructor-kwargs" used by cuML's
+        #       `CumlArray`, which will require `CumlArray` to implement
+        #       its own deserialize.
+        if header["constructor-kwargs"]:
+            return cls(frame, **header["constructor-kwargs"])
+
+        if hasattr(frame, "__cuda_array_interface__"):
+            return cls.from_device_memory(frame)
+        return cls.from_host_memory(frame)
 
     def __repr__(self) -> str:
+        klass = self.__class__
+        name = f"{klass.__module__}.{klass.__qualname__}"
         return (
-            f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
-            f"ptr={hex(self._ptr)} owner={repr(self._owner)} "
+            f"<{name} size={format_bytes(self._size)} "
+            f"ptr={hex(self._ptr)} owner={repr(self._owner)}>"
         )
 
 
