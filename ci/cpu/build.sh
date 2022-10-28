@@ -87,7 +87,7 @@ else
 fi
 
 # TODO: remove
-sed '/rapidsai$/d' /opt/conda/.condarc
+sed -i '/rapidsai$/d' /opt/conda/.condarc
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
