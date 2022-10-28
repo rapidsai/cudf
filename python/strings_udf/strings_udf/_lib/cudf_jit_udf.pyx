@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
