@@ -80,18 +80,50 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
       if (col->type().id() == cudf::type_id::STRUCT) {
         auto const null_mask  = col->view().null_mask();
         auto const null_count = col->null_count();
+        bool has_list         = false;
+
         for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
           cudf::structs::detail::superimpose_parent_nulls(null_mask,
                                                           null_count,
                                                           col->child(idx),
                                                           cudf::get_default_stream(),
                                                           rmm::mr::get_current_device_resource());
+
+          if (col->child(idx).type().id() == cudf::type_id::LIST) { has_list = true; }
+        }
+
+        // If there is lists column in this struct column, rebuild it.
+        if (has_list) {
+          auto const dtype      = col->type();
+          auto const size       = col->size();
+          auto const null_count = col->null_count();
+          auto col_content      = col->release();
+
+          std::vector<std::unique_ptr<cudf::column>> children;
+          for (std::size_t idx = 0; idx < col_content.children.size(); ++idx) {
+            auto& child = col_content.children[idx];
+
+            if (child->type().id() == cudf::type_id::LIST) {
+              children.emplace_back(
+                cudf::purge_nonempty_nulls(cudf::lists_column_view{child->view()}));
+            } else {
+              children.emplace_back(std::move(child));
+            }
+          }
+
+          col = std::make_unique<cudf::column>(dtype,
+                                               size,
+                                               std::move(*col_content.data),
+                                               std::move(*col_content.null_mask),
+                                               null_count,
+                                               std::move(children));
         }
       } else if (col->type().id() == cudf::type_id::LIST) {
         col = cudf::purge_nonempty_nulls(cudf::lists_column_view{col->view()});
       }
     }
   }
+
   auto input_table = std::make_unique<cudf::table>(std::move(input_columns));
   auto filepath =
     temp_env->get_temp_filepath(nullable ? filename + "_nullable.parquet" : filename + ".parquet");
