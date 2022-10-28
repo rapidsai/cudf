@@ -185,7 +185,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
 {
-  // tests some specific boundary conditions in the split calculations.
+  // Tests some specific boundary conditions in the split calculations.
 
   auto constexpr num_rows = 40'000;
 
@@ -194,54 +194,76 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
 
-    auto [input_table, filepath] = write_file(input_columns, "chunked_read_simple_boundary", false);
-    auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
+    auto [input_table, filepath] =
+      write_file(input_columns, "chunked_read_simple_boundary", false /*nullable*/);
+    auto [result, num_chunks] = chunked_read(filepath, chunk_read_limit);
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
 
-  // test with a limit slightly less than one page of data
+  // Test with zero limit: everything will be read in one chunk
+  {
+    auto const [expected, result, num_chunks] = do_test(0);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very small limit: 1 byte
+  {
+    auto const [expected, result, num_chunks] = do_test(1);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very large limit
+  {
+    auto const [expected, result, num_chunks] = do_test(2L << 40);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a limit slightly less than one page of data
   {
     auto const [expected, result, num_chunks] = do_test(79'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit exactly the size one page of data
+  // Test with a limit exactly the size one page of data
   {
     auto const [expected, result, num_chunks] = do_test(80'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit slightly more the size one page of data
+  // Test with a limit slightly more the size one page of data
   {
     auto const [expected, result, num_chunks] = do_test(81'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit slightly less than two pages of data
+  // Test with a limit slightly less than two pages of data
   {
     auto const [expected, result, num_chunks] = do_test(159'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit exactly the size of two pages of data minus one byte
+  // Test with a limit exactly the size of two pages of data minus one byte
   {
     auto const [expected, result, num_chunks] = do_test(159'999);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit exactly the size of two pages of data
+  // Test with a limit exactly the size of two pages of data
   {
     auto const [expected, result, num_chunks] = do_test(160'000);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
-  // test with a limit slightly more the size two pages of data
+  // Test with a limit slightly more the size two pages of data
   {
     auto const [expected, result, num_chunks] = do_test(161'000);
     EXPECT_EQ(num_chunks, 1);
@@ -345,6 +367,27 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
 
+  // Test with zero limit: everything will be read in one chunk
+  {
+    auto const [expected, result, num_chunks] = do_test(0, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very small limit: 1 byte
+  {
+    auto const [expected, result, num_chunks] = do_test(1, false);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very large limit
+  {
+    auto const [expected, result, num_chunks] = do_test(2L << 40, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
   {
     auto const [expected, result, num_chunks] = do_test(500'000, false);
     EXPECT_EQ(num_chunks, 5);
@@ -387,6 +430,27 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
+
+  // Test with zero limit: everything will be read in one chunk
+  {
+    auto const [expected, result, num_chunks] = do_test(0);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very small limit: 1 byte
+  {
+    auto const [expected, result, num_chunks] = do_test(1);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very large limit
+  {
+    auto const [expected, result, num_chunks] = do_test(2L << 40);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
 
   // chunk size slightly less than 1 page (forcing it to be at least 1 page per read)
   {
@@ -520,6 +584,27 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
 
+  // Test with zero limit: everything will be read in one chunk
+  {
+    auto const [expected, result, num_chunks] = do_test(0, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very small limit: 1 byte
+  {
+    auto const [expected, result, num_chunks] = do_test(1, false);
+    EXPECT_EQ(num_chunks, 10);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very large limit
+  {
+    auto const [expected, result, num_chunks] = do_test(2L << 40, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
   {
     auto const [expected, result, num_chunks] = do_test(500'000, false);
     EXPECT_EQ(num_chunks, 10);
@@ -579,6 +664,27 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
     auto [result, num_chunks]    = chunked_read(filepath, chunk_read_limit);
     return std::tuple{std::move(input_table), std::move(result), num_chunks};
   };
+
+  // Test with zero limit: everything will be read in one chunk
+  {
+    auto const [expected, result, num_chunks] = do_test(0, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very small limit: 1 byte
+  {
+    auto const [expected, result, num_chunks] = do_test(1, false);
+    EXPECT_EQ(num_chunks, 10);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  // Test with a very large limit
+  {
+    auto const [expected, result, num_chunks] = do_test(2L << 40, false);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
 
   {
     auto const [expected, result, num_chunks] = do_test(1'000'000, false);
