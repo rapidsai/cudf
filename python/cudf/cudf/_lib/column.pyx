@@ -509,7 +509,7 @@ cdef class Column:
                                      size=(size+offset) * dtype.itemsize)
                 )
             else:
-                data = Buffer(
+                data = as_buffer(
                     data=data_ptr,
                     size=(base_size) * dtype.itemsize,
                     owner=data_owner
@@ -552,7 +552,7 @@ cdef class Column:
                         )
                     )
             else:
-                mask = Buffer(
+                mask = as_buffer(
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner

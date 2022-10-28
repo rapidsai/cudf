@@ -1,5 +1,4 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
-from typing import Callable
 
 import cupy as cp
 import pytest
@@ -47,10 +46,9 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
     assert (expect == got).all()
 
 
-@pytest.mark.parametrize("creator", [Buffer, as_buffer])
-def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
+def test_buffer_creation_from_any():
     ary = cp.arange(arr_len)
-    b = creator(ary)
+    b = as_buffer(ary)
     assert isinstance(b, Buffer)
     assert ary.__cuda_array_interface__["data"][0] == b.ptr
     assert ary.nbytes == b.size
@@ -58,7 +56,7 @@ def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
     with pytest.raises(
         ValueError, match="size must be specified when `data` is an integer"
     ):
-        Buffer(42)
+        as_buffer(42)
 
 
 @pytest.mark.parametrize(

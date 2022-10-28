@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_buffer
 from cudf.core.column import build_column
 from cudf.core.df_protocol import (
     DataFrameObject,
@@ -25,7 +25,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
     col_from_buf = build_column(
-        Buffer(data=buf.ptr, size=buf.bufsize, owner=None),
+        as_buffer(data=buf.ptr, size=buf.bufsize),
         protocol_dtype_to_cupy_dtype(dtype),
     )
     # check that non null values are the equals as nulls are represented
