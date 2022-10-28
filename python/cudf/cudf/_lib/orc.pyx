@@ -19,7 +19,6 @@ except ImportError:
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
@@ -34,7 +33,6 @@ from cudf._lib.cpp.io.orc_metadata cimport (
 )
 from cudf._lib.cpp.io.types cimport (
     column_in_metadata,
-    column_name_info,
     compression_type,
     data_sink,
     sink_info,
@@ -49,18 +47,14 @@ from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_column_struct_field_names,
-    update_struct_field_names,
 )
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
 
-import numpy as np
-
 from cudf._lib.utils cimport (
     data_from_unique_ptr,
-    get_column_names,
     table_view_from_table,
 )
 

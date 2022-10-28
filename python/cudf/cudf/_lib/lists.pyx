@@ -26,17 +26,10 @@ from cudf._lib.cpp.types cimport (
     nan_equality,
     null_equality,
     null_order,
-    null_policy,
     order,
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.types cimport (
-    underlying_type_t_null_order,
-    underlying_type_t_order,
-)
-
-from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
 from cudf._lib.cpp.lists.extract cimport extract_list_element

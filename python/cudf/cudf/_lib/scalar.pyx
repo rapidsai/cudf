@@ -71,9 +71,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
 )
 from cudf._lib.utils cimport (
     columns_from_table_view,
-    data_from_table_view,
     table_view_from_columns,
-    table_view_from_table,
 )
 
 

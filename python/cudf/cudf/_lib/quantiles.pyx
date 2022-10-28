@@ -6,7 +6,6 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_order,
@@ -28,7 +27,6 @@ from cudf._lib.cpp.types cimport (
     interpolation,
     null_order,
     order,
-    order_info,
     sorted,
 )
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns

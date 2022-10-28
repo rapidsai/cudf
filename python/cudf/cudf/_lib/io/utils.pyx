@@ -2,9 +2,7 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
-from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -15,7 +13,6 @@ from cudf._lib.cpp.io.types cimport (
     data_sink,
     datasource,
     host_buffer,
-    io_type,
     sink_info,
     source_info,
 )
@@ -26,7 +23,6 @@ import errno
 import io
 import os
 
-import cudf
 from cudf.api.types import is_struct_dtype
 
 

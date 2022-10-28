@@ -12,7 +12,6 @@ from cudf._lib.cpp.strings.replace cimport (
     replace as cpp_replace,
     replace_slice as cpp_replace_slice,
 )
-from cudf._lib.cpp.strings.substring cimport slice_strings as cpp_slice_strings
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 

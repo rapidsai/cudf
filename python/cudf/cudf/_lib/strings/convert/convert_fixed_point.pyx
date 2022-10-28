@@ -1,15 +1,10 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-import numpy as np
-
 import cudf
 
 from cudf._lib.column cimport Column
 
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
@@ -24,9 +19,7 @@ from cudf._lib.cpp.types cimport (
     DECIMAL64,
     DECIMAL128,
     data_type,
-    type_id,
 )
-from cudf._lib.types cimport underlying_type_t_type_id
 
 
 def from_decimal(Column input_col):
