@@ -469,7 +469,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  if (!has_next()) { return finalize_output(out_metadata, out_columns); }
+  if (!has_next() || _chunk_read_info.size() == 0) {
+    return finalize_output(out_metadata, out_columns);
+  }
 
   auto const& read_info = _chunk_read_info[_current_read_chunk++];
 

@@ -59,7 +59,6 @@ using strings_col      = cudf::test::strings_column_wrapper;
 using structs_col      = cudf::test::structs_column_wrapper;
 using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 
-// TODO: Remove the last 2 params
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
                 bool nullable,
@@ -116,15 +115,18 @@ auto chunked_read(std::string const& filepath, std::size_t byte_limit)
   auto num_chunks = 0;
   auto result     = std::make_unique<cudf::table>();
 
-  while (reader.has_next()) {
+  do {
     auto chunk = reader.read_chunk();
     if (num_chunks == 0) {
       result = std::move(chunk.tbl);
     } else {
+      CUDF_EXPECTS(chunk.tbl->num_rows() != 0, "Number of rows in the new chunk is zero.");
       result = cudf::concatenate(std::vector<cudf::table_view>{result->view(), chunk.tbl->view()});
     }
     ++num_chunks;
-  }
+
+    if (result->num_rows() == 0) { break; }
+  } while (reader.has_next());
 
   return std::pair(std::move(result), num_chunks);
 }
@@ -133,6 +135,25 @@ auto chunked_read(std::string const& filepath, std::size_t byte_limit)
 
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {
 };
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
+{
+  auto const do_test = []() {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    input_columns.emplace_back(int32s_col{}.release());
+    input_columns.emplace_back(int64s_col{}.release());
+
+    auto [input_table, filepath] = write_file(input_columns, "chunked_read_empty", false);
+    auto [result, num_chunks]    = chunked_read(filepath, 1'000);
+    return std::tuple{std::move(input_table), std::move(result), num_chunks};
+  };
+
+  auto const [expected, result, num_chunks] = do_test();
+  EXPECT_EQ(num_chunks, 1);
+  EXPECT_EQ(result->num_rows(), 0);
+  EXPECT_EQ(result->num_columns(), 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+}
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 {
