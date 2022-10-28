@@ -524,6 +524,28 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 }
 
 /**
+ * @brief Adjusts the range to ignore starting/trailing whitespace characters.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                           char const* end)
+{
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
+
+  return {trim_begin, trim_end.base()};
+}
+
+/**
  * @brief Adjusts the range to ignore starting/trailing quotation characters.
  *
  * @param begin Pointer to the first character in the parsing range
