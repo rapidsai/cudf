@@ -629,7 +629,7 @@ struct ConvertFunctor {
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
       return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
-    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
+    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
     return value.has_value() and !std::isnan(*value);
   }
