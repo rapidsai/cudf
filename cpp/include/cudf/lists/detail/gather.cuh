@@ -320,8 +320,9 @@ std::unique_ptr<column> gather_list_leaf(
 std::unique_ptr<column> segmented_gather(
   lists_column_view const& source_column,
   lists_column_view const& gather_map_list,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
+  // Move before bounds_policy?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

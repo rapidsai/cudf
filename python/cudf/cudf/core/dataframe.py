@@ -298,24 +298,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     if len(df) == 0:
                         raise KeyError(arg)
 
-        # Step 3: Gather index
-        if df.shape[0] == 1:  # we have a single row
-            if isinstance(arg[0], slice):
-                start = arg[0].start
-                if start is None:
-                    start = self._frame.index[0]
-                df.index = as_index(start, name=self._frame.index.name)
-            else:
-                row_selection = as_column(arg[0])
-                if is_bool_dtype(row_selection.dtype):
-                    df.index = self._frame.index._apply_boolean_mask(
-                        row_selection
-                    )
-                else:
-                    df.index = as_index(
-                        row_selection, name=self._frame.index.name
-                    )
-        # Step 4: Downcast
+        # Step 3: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
         return df
@@ -3333,7 +3316,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def nlargest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n largest value of *columns*
+        """Return the first *n* rows ordered by *columns* in descending order.
+
+        Return the first *n* rows with the largest values in *columns*, in
+        descending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -3396,7 +3383,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
-        """Get the rows of the DataFrame sorted by the n smallest value of *columns*
+        """Return the first *n* rows ordered by *columns* in ascending order.
+
+        Return the first *n* rows with the smallest values in *columns*, in
+        ascending order. The columns that are not specified are returned as
+        well, but not used for ordering.
 
         Parameters
         ----------
@@ -5879,7 +5870,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def select_dtypes(self, include=None, exclude=None):
-        """Return a subset of the DataFrame’s columns based on the column dtypes.
+        """Return a subset of the DataFrame's columns based on the column dtypes.
 
         Parameters
         ----------
@@ -5938,7 +5929,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """
+        """  # noqa: E501
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
@@ -6416,9 +6407,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
     def pivot(self, index, columns, values=None):
-
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
+        )
+
+    @_cudf_nvtx_annotate
+    @copy_docstring(reshape.pivot_table)
+    def pivot_table(
+        self,
+        values=None,
+        index=None,
+        columns=None,
+        aggfunc="mean",
+        fill_value=None,
+        margins=False,
+        dropna=None,
+        margins_name="All",
+        observed=False,
+        sort=True,
+    ):
+        return cudf.core.reshape.pivot_table(
+            self,
+            values=values,
+            index=index,
+            columns=columns,
+            aggfunc=aggfunc,
+            fill_value=fill_value,
+            margins=margins,
+            dropna=dropna,
+            margins_name=margins_name,
+            observed=observed,
+            sort=sort,
         )
 
     @_cudf_nvtx_annotate

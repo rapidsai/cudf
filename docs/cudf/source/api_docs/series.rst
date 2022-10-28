@@ -260,25 +260,27 @@ Datetime properties
 .. autosummary::
    :toctree: api/
 
+   year
+   month
    day
-   dayofweek
-   dayofyear
-   days_in_month
-   day_of_year
    hour
    minute
-   month
    second
+   microsecond
+   nanosecond
+   dayofweek
    weekday
-   year
-   is_leap_year
+   dayofyear
+   day_of_year
+   quarter
    is_month_start
    is_month_end
    is_quarter_start
    is_quarter_end
    is_year_start
    is_year_end
-   quarter
+   is_leap_year
+   days_in_month   
 
 Datetime methods
 ^^^^^^^^^^^^^^^^
@@ -286,11 +288,11 @@ Datetime methods
 .. autosummary::
    :toctree: api/
 
-   strftime
    isocalendar
-   ceil
-   floor
+   strftime
    round
+   floor
+   ceil
 
 
 Timedelta properties
@@ -300,11 +302,11 @@ Timedelta properties
 .. autosummary::
    :toctree: api/
 
-   components
    days
+   seconds   
    microseconds
    nanoseconds
-   seconds
+   components
 
 .. _api.series.str:
 .. include:: string_handling.rst

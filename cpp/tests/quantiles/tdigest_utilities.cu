@@ -65,15 +65,15 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   }
 
   auto d_expected_src =
-    cudf::detail::make_device_uvector_async(h_expected_src, cudf::default_stream_value);
+    cudf::detail::make_device_uvector_async(h_expected_src, cudf::get_default_stream());
   auto d_expected_mean =
-    cudf::detail::make_device_uvector_async(h_expected_mean, cudf::default_stream_value);
+    cudf::detail::make_device_uvector_async(h_expected_mean, cudf::get_default_stream());
   auto d_expected_weight =
-    cudf::detail::make_device_uvector_async(h_expected_weight, cudf::default_stream_value);
+    cudf::detail::make_device_uvector_async(h_expected_weight, cudf::get_default_stream());
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
-    rmm::exec_policy(cudf::default_stream_value),
+    rmm::exec_policy(cudf::get_default_stream()),
     iter,
     iter + h_expected.size(),
     [expected_src_in     = d_expected_src.data(),
@@ -122,13 +122,13 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
 
     auto min_col =
       cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  min_col->mutable_view().begin<double>(),
                  min_col->mutable_view().end<double>(),
                  tdigest.min);
     auto max_col =
       cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  max_col->mutable_view().begin<double>(),
                  max_col->mutable_view().end<double>(),
                  tdigest.max);

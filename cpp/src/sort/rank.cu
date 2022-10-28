@@ -352,7 +352,7 @@ std::unique_ptr<column> rank(column_view const& input,
                       null_handling,
                       null_precedence,
                       percentage,
-                      cudf::default_stream_value,
+                      cudf::get_default_stream(),
                       mr);
 }
 }  // namespace cudf

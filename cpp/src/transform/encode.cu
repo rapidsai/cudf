@@ -73,7 +73,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input, cudf::default_stream_value, mr);
+  return detail::encode(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

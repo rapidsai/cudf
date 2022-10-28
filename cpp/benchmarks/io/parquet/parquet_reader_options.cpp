@@ -86,7 +86,7 @@ void BM_parquet_read_options(nvbench::state& state,
   auto constexpr num_chunks     = 1;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();

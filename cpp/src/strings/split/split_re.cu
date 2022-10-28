@@ -334,7 +334,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  return detail::split_re(input, pattern, maxsplit, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
@@ -343,7 +343,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  return detail::split_record_re(input, pattern, maxsplit, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
@@ -352,7 +352,7 @@ std::unique_ptr<table> rsplit_re(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  return detail::rsplit_re(input, pattern, maxsplit, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
@@ -361,7 +361,7 @@ std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
+  return detail::rsplit_record_re(input, pattern, maxsplit, cudf::get_default_stream(), mr);
 }
 }  // namespace strings
 }  // namespace cudf

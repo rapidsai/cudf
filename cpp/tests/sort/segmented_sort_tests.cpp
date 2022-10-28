@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,9 +201,13 @@ TEST_F(SegmentedSortInt, NonZeroSegmentsStart)
   column_wrapper<int> segments1{{0,    2,       5,       8,     11}};
   column_wrapper<int> segments2{{      2,       5,       8,      11}};
   column_wrapper<int> segments3{{                  6,    8,      11}};
+  column_wrapper<int> segments4{{                  6,    8}};
+  column_wrapper<int> segments5{{0,       3,       6}};
   column_wrapper<int> expected1{{0, 1, 2, 4, 3, 7, 5, 6, 9, 10, 8}};
   column_wrapper<int> expected2{{0, 1, 2, 4, 3, 7, 5, 6, 9, 10, 8}};
-  column_wrapper<int> expected3{{2, 4, 5, 3, 0, 1, 7, 6, 9, 10, 8}};
+  column_wrapper<int> expected3{{0, 1, 2, 3, 4, 5, 7, 6, 9, 10, 8}};
+  column_wrapper<int> expected4{{0, 1, 2, 3, 4, 5, 7, 6, 8, 9, 10}};
+  column_wrapper<int> expected5{{2, 0, 1, 4, 5, 3, 6, 7, 8, 9, 10}};
   // clang-format on
   table_view input{{col1}};
   auto results = cudf::detail::segmented_sorted_order(input, segments1);
@@ -212,6 +216,10 @@ TEST_F(SegmentedSortInt, NonZeroSegmentsStart)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected2);
   results = cudf::detail::segmented_sorted_order(input, segments3);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected3);
+  results = cudf::detail::segmented_sorted_order(input, segments4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected4);
+  results = cudf::detail::segmented_sorted_order(input, segments5);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected5);
 }
 
 TEST_F(SegmentedSortInt, Sliced)
@@ -219,13 +227,13 @@ TEST_F(SegmentedSortInt, Sliced)
   using T = int;
   // clang-format off
   column_wrapper<T>        col1{{8, 9, 2, 3, 2, 2, 4, 1, 7, 5, 6}};
-  // sliced                      2, 2, 4, 1, 7, 5, 6
+  // sliced                                  2, 2, 4, 1, 7, 5, 6
   column_wrapper<int> segments1{{0,    2,       5}};
   column_wrapper<int> segments2{{-4,   0,      2,       5}};
   column_wrapper<int> segments3{{                 7}};
   column_wrapper<int> expected1{{0, 1, 3, 2, 4, 5, 6}};
   column_wrapper<int> expected2{{0, 1, 3, 2, 4, 5, 6}};
-  column_wrapper<int> expected3{{3, 0, 1, 2, 5, 6, 4}};
+  column_wrapper<int> expected3{{0, 1, 2, 3, 4, 5, 6}};
   // clang-format on
   auto slice = cudf::slice(col1, {4, 11})[0];  // 7 elements
   table_view input{{slice}};
