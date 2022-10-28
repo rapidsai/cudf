@@ -227,6 +227,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
+  // test with a limit exactly the size of two pages of data minus one byte
+  {
+    auto const [expected, result, num_chunks] = do_test(159'999);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
   // test with a limit exactly the size of two pages of data
   {
     auto const [expected, result, num_chunks] = do_test(160'000);
