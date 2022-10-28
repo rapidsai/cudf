@@ -44,6 +44,9 @@ function(find_libarrow_in_python_wheel VERSION)
     find_package(${_name} ${VERSION} MODULE REQUIRED GLOBAL)
     add_library(${_alias} ALIAS ${_name}::${_name})
 
+    rapids_export_package(BUILD Arrow cudf-exports)
+    rapids_export_package(INSTALL Arrow cudf-exports)
+
     if(CUDF_PYARROW_WHEEL_DIR)
       list(POP_BACK CMAKE_PREFIX_PATH)
     endif()
@@ -65,6 +68,21 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     find_libarrow_in_python_wheel(${VERSION})
     set(ARROW_FOUND TRUE PARENT_SCOPE)
     set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+
+    # When using the libarrow inside a wheel we must build libcudf with the old
+    # ABI because pyarrow's `libarrow.so` is compiled for manylinux2014
+    # (centos7 toolchain) which uses the old ABI.
+    # TODO: Tests will not build successfully now without also propagating
+    # these options to builds of GTest. Similarly, benchmarks will not work
+    # without updating GBench (and possibly NVBench) builds. Unclear if we are
+    # going to test that regularly anyway, though, so we may not need to update
+    # that.
+    # TODO: How to propagate these flags up to the Python build?
+    list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
+    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
+    set(CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}" PARENT_SCOPE)
+    set(CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}" PARENT_SCOPE)
+
     return()
   endif()
 

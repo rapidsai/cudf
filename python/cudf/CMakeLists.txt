@@ -34,6 +34,27 @@ option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulti
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
+  set(USE_ARROW_PIP TRUE)
+  if(USE_ARROW_PIP)
+    # TODO: These options should probably all become optional since in practice
+    # they aren't meaningful except in the case where we actually compile Arrow.
+    set(CUDF_USE_ARROW_STATIC OFF)
+    set(CUDF_ENABLE_ARROW_S3 OFF)
+    set(CUDF_ENABLE_ARROW_ORC OFF)
+    SET(CUDF_ENABLE_ARROW_PYTHON OFF)
+    set(CUDF_ENABLE_ARROW_PARQUET OFF)
+    include(rapids-find)
+    include(rapids-export)
+    include(../../cpp/cmake/thirdparty/get_arrow.cmake)
+
+    # TODO: We definitely shouldn't be setting these globally for all
+    # compilation, this is just a shortcut for now. Also when compiling against
+    # a static libcudf this shouldn't matter since we'll just get the right ABI
+    # symbols "for free".
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0")
+  endif()
+
   find_package(cudf ${cudf_version} REQUIRED)
 else()
   set(cudf_FOUND OFF)
