@@ -109,9 +109,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
   endif()
 
-  # TODO: AFAICT this variable is not used anywhere. Safe to remove?
-  set(CPMAddOrFindPackage CPMFindPackage)
-
   if(NOT ARROW_ARMV8_ARCH)
     set(ARROW_ARMV8_ARCH "armv8-a")
   endif()
