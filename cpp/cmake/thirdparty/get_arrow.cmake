@@ -44,6 +44,9 @@ function(find_libarrow_in_python_wheel VERSION)
     find_package(${_name} ${VERSION} MODULE REQUIRED GLOBAL)
     add_library(${_alias} ALIAS ${_name}::${_name})
 
+    # TODO: Should these both be here? I think so, the
+    # `rapids_find_generate_module` doesn't seems to create the necessary
+    # `find_dependency` calls in the config files.
     rapids_export_package(BUILD Arrow cudf-exports)
     rapids_export_package(INSTALL Arrow cudf-exports)
 
@@ -78,6 +81,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     # going to test that regularly anyway, though, so we may not need to update
     # that.
     # TODO: How to propagate these flags up to the Python build?
+    # Note: These flags will be redundant in some cases where we build wheels
+    # in manylinux containers that actually have the old libc++, but not in all
+    # cases e.g. aarch builds on newer manylinux or testing builds in newer
+    # containers.
     list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
     set(CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}" PARENT_SCOPE)
