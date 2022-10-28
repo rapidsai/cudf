@@ -676,6 +676,7 @@ def to_parquet(
     max_page_size_bytes=None,
     max_page_size_rows=None,
     storage_options=None,
+    return_metadata=False,
     *args,
     **kwargs,
 ):
@@ -722,6 +723,7 @@ def to_parquet(
                 row_group_size_rows=row_group_size_rows,
                 max_page_size_bytes=max_page_size_bytes,
                 max_page_size_rows=max_page_size_rows,
+                return_metadata=return_metadata,
                 storage_options=storage_options,
             )
 
@@ -953,6 +955,13 @@ class ParquetDatasetWriter:
     file_name_prefix : str
         This is a prefix to file names generated only when
         `max_file_size` is specified.
+    storage_options : dict, optional, default None
+        Extra options that make sense for a particular storage connection,
+        e.g. host, port, username, password, etc. For HTTP(S) URLs the
+        key-value pairs are forwarded to ``urllib.request.Request`` as
+        header options. For other URLs (e.g. starting with “s3://”, and
+        “gcs://”) the key-value pairs are forwarded to ``fsspec.open``.
+        Please see ``fsspec`` and ``urllib`` for more details.
 
 
     Examples

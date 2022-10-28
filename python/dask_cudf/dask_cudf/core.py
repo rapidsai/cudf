@@ -245,7 +245,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
         from dask_cudf.io import to_parquet
 
-        print(kwargs, args)
         return to_parquet(self, path, *args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
