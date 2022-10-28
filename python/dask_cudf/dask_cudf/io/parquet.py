@@ -313,10 +313,24 @@ class CudfEngine(ArrowDatasetEngine):
                 if not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
                 md = df.to_parquet(
-                    out_file,
-                    compression=compression,
+                    path=out_file,
+                    engine=kwargs.get("engine", "cudf"),
+                    index=kwargs.get("index", None),
+                    partition_cols=kwargs.get("partition_cols", None),
+                    partition_file_name=kwargs.get(
+                        "partition_file_name", None
+                    ),
+                    partition_offsets=kwargs.get("partition_offsets", None),
+                    statistics=kwargs.get("statistics", "ROWGROUP"),
+                    int96_timestamps=kwargs.get("int96_timestamps", False),
+                    row_group_size_bytes=kwargs.get(
+                        "row_group_size_bytes", None
+                    ),
+                    row_group_size_rows=kwargs.get(
+                        "row_group_size_rows", None
+                    ),
+                    storage_options=kwargs.get("storage_options", None),
                     metadata_file_path=filename if return_metadata else None,
-                    **kwargs,
                 )
         # Return the schema needed to write the metadata
         if return_metadata:
