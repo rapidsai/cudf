@@ -558,9 +558,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
      d_equal,
      view       = key_map.get_device_mutable_view(),
      uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
-      // typename hash_map_type::value_type const insert_pair{};
       auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hashed_cache, d_equal);
-      uq_node_id[node_id] = (it.first)->first;  // first.load(cuda::std::memory_order_relaxed);
+      uq_node_id[node_id] = (it.first)->first.load(cuda::std::memory_order_relaxed);
       return it.second;
     });
 
