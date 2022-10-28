@@ -469,7 +469,7 @@ cudf::size_type count_all_from_set(host_span<char const> data,
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
- * @param[in] ch The character to check
+ * @param ch The character to check
  *
  * @return True if the input is whitespace, False otherwise
  */
@@ -487,9 +487,9 @@ __inline__ __device__ It skip_character(It const& it, char ch)
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
@@ -510,9 +510,9 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 /**
  * @brief Adjusts the range to ignore starting/trailing quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
