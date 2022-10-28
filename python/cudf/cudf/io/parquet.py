@@ -145,6 +145,8 @@ def write_to_dataset(
     df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
+    compression : {'snappy', 'ZSTD', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
     filename : string, default None
         The file name to use (within each partition directory). If None,
         a random uuid4 hex string will be used for each file name.
@@ -159,6 +161,25 @@ def write_to_dataset(
     return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
         include the file-path metadata (relative to `root_path`).
+    int96_timestamps : bool, default False
+        If ``True``, write timestamps in int96 format. This will convert
+        timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
+        timestamp[us] to the int96 format, which is the number of Julian
+        days and the number of nanoseconds since midnight. If ``False``,
+        timestamps will not be altered.
+    row_group_size_bytes: integer or None, default None
+        Maximum size of each stripe of the output.
+        If None, 134217728 (128MB) will be used.
+    row_group_size_rows: integer or None, default None
+        Maximum number of rows of each stripe of the output.
+        If None, 1000000 will be used.
+    max_page_size_bytes: integer or None, default None
+        Maximum uncompressed size of each page of the output.
+        If None, 524288 (512KB) will be used.
+    max_page_size_rows: integer or None, default None
+        Maximum number of rows of each page of the output.
+        If None, 20000 will be used.
+
     storage_options : dict, optional, default None
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
@@ -651,6 +672,16 @@ def to_parquet(
     """{docstring}"""
 
     if engine == "cudf":
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following parameters: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following non key-word arguments: {list(args)}"
+            )
         # Ensure that no columns dtype is 'category'
         for col in df._column_names:
             if partition_cols is None or col not in partition_cols:
@@ -667,17 +698,7 @@ def to_parquet(
                     "partition_cols are provided. To request returning the "
                     "metadata binary blob, pass `return_metadata=True`"
                 )
-            # kwargs.update(
-            #     {
-            #         "compression": compression,
-            #         "statistics": statistics,
-            #         "int96_timestamps": int96_timestamps,
-            #         "row_group_size_bytes": row_group_size_bytes,
-            #         "row_group_size_rows": row_group_size_rows,
-            #         "max_page_size_bytes": max_page_size_bytes,
-            #         "max_page_size_rows": max_page_size_rows,
-            #     }
-            # )
+
             return write_to_dataset(
                 df,
                 filename=partition_file_name,
@@ -692,11 +713,7 @@ def to_parquet(
                 max_page_size_bytes=max_page_size_bytes,
                 max_page_size_rows=max_page_size_rows,
                 storage_options=storage_options,
-                # **kwargs,
             )
-
-        # if partition_offsets:
-        #     kwargs["partitions_info"] =
 
         return _write_parquet(
             df,
@@ -719,7 +736,6 @@ def to_parquet(
             if partition_offsets is not None
             else partition_offsets,
             storage_options=storage_options,
-            # **kwargs,
         )
 
     else:
