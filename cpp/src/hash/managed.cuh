@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef MANAGED_CUH
-#define MANAGED_CUH
+#pragma once
 
 #include <new>
 
@@ -43,5 +42,3 @@ inline bool isPtrManaged(cudaPointerAttributes attr)
   return attr.isManaged;
 #endif
 }
-
-#endif  // MANAGED_CUH
