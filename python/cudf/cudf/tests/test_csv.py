@@ -766,6 +766,43 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     assert_eq(df_out, out)
 
 
+def test_csv_reader_bools_custom():
+    names = ["text", "int"]
+    dtypes = ["str", "int"]
+    trues = ["foo"]
+    falses = ["bar"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "0,0",
+    ]
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert len(df.columns) == 2
+    assert df["text"].dtype == np.dtype("object")
+    assert df["int"].dtype == np.dtype("int64")
+    expected = pd.read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert_eq(df, expected)
+
+
 def test_csv_reader_bools_NA():
     names = ["text", "int"]
     dtypes = ["str", "int"]
