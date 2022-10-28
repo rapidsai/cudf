@@ -16,10 +16,9 @@ from cudf.utils.string import format_bytes
 
 
 class Buffer(Serializable):
-    """
-    A Buffer represents device memory.
+    """A Buffer represents device memory.
 
-    Usually Buffers will be created using `as_buffer(obj)`,
+    Usually buffers will be created using `as_buffer(obj)`,
     which will make sure that `obj` is buffer and not a `Buffer`
     necessarily.
 
@@ -93,6 +92,30 @@ class Buffer(Serializable):
         self._ptr = buf.ptr
         self._size = buf.size
         self._owner = buf
+
+    @classmethod
+    def from_device_memory(cls, data: Any) -> Buffer:
+        ret = cls.__new__(cls)
+        if isinstance(data, rmm.DeviceBuffer):
+            ret._ptr = data.ptr
+            ret._size = data.size
+            ret._owner = data
+        else:
+            ret._ptr, ret._size = get_ptr_and_size(
+                data.__cuda_array_interface__
+            )
+            ret._owner = data
+        return ret
+
+    @classmethod
+    def from_host_memory(cls, data: Any) -> Buffer:
+        ret = cls.__new__(cls)
+        ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
+        buf = rmm.DeviceBuffer(ptr=ptr, size=size)
+        ret._ptr = buf.ptr
+        ret._size = buf.size
+        ret._owner = buf
+        return ret
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """

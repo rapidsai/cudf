@@ -2,37 +2,72 @@
 
 from __future__ import annotations
 
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Union
 
 from cudf.core.buffer.buffer import Buffer
 
 
-def as_buffer(obj: Any) -> Buffer:
-    """
-    Factory function to wrap `obj` in a Buffer object.
+def as_buffer(
+    data: Union[int, Any],
+    *,
+    size: int = None,
+    owner: object = None,
+) -> Buffer:
+    """Factory function to wrap `data` in a Buffer object.
 
-    If `obj` isn't buffer already, a new buffer that points to the memory of
-    `obj` is created. If `obj` represents host memory, it is copied to a new
-    `rmm.DeviceBuffer` device allocation. Otherwise, the data of `obj` is
-    **not** copied, instead the new buffer keeps a reference to `obj` in order
-    to retain the lifetime of `obj`.
-
-    Raises ValueError if the data of `obj` isn't C-contiguous.
+    If `data` isn't a buffer already, a new buffer that points to the memory of
+    `data` is created. If `data` represents host memory, it is copied to a new
+    `rmm.DeviceBuffer` device allocation. Otherwise, the memory of `data` is
+    **not** copied, instead the new buffer keeps a reference to `data` in order
+    to retain its lifetime.
 
     Parameters
     ----------
-    obj : buffer-like or array-like
-        An object that exposes either device or host memory through
-        `__array_interface__`, `__cuda_array_interface__`, or the
-        buffer protocol. If `obj` represents host memory, data will
-        be copied.
+    data : int or buffer-like or array-like
+        An integer representing a pointer to device memory or a buffer-like
+        or array-like object. When not an integer, `size` and `owner` must
+        be None.
+    size : int, optional
+        Size of device memory in bytes. Must be specified if `data` is an
+        integer.
+    owner : object, optional
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned Buffer.
 
     Return
     ------
     Buffer
-        A buffer instance that represents the device memory of `obj`.
+        A buffer instance that represents the device memory of `data`.
     """
 
-    if isinstance(obj, Buffer):
-        return obj
-    return Buffer(obj)
+    if isinstance(data, Buffer):
+        return data
+
+    # We handle the integer argument in the factory function by wrapping
+    # the pointer in a `__cuda_array_interface__` exposing object so that
+    # the Buffer (and its sub-classes) do not have to.
+    if isinstance(data, int):
+        if size is None:
+            raise ValueError(
+                "size must be specified when `data` is an integer"
+            )
+        data = SimpleNamespace(
+            __cuda_array_interface__={
+                "data": (data, False),
+                "shape": (size,),
+                "strides": None,
+                "typestr": "|u1",
+                "version": 0,
+            },
+            owner=owner,
+        )
+    elif size is not None or owner is not None:
+        raise ValueError(
+            "`size` and `owner` must be None when "
+            "`data` is a buffer-like or array-like object"
+        )
+
+    if hasattr(data, "__cuda_array_interface__"):
+        return Buffer.from_device_memory(data)
+    return Buffer.from_host_memory(data)
