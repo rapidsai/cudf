@@ -117,9 +117,8 @@ struct parse_options {
 };
 
 /**
- * @brief Returns the numeric value of an ASCII/UTF-8 character.
- * Handles hexadecimal digits, both uppercase and lowercase
- * for integral types and only decimal digits for floating point types.
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
  * If the character is not a valid numeric digit then `0` is returned and
  * valid_flag is set to false.
  *
@@ -128,14 +127,31 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, bool as_hex = false>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
-  if constexpr (as_hex and std::is_integral_v<T>) {
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  }
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+
+  *valid_flag = false;
+  return 0;
+}
+
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for non-integral types. Handles only decimal digits. If the character is not
+ * a valid numeric digit then `0` is returned and valid_flag is set to false.
+ *
+ * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
+ *
+ * @return uint8_t Numeric value of the character, or `0`
+ */
+template <typename T, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
+constexpr uint8_t decode_digit(char c, bool* valid_flag)
+{
+  if (c >= '0' && c <= '9') return c - '0';
 
   *valid_flag = false;
   return 0;
@@ -178,13 +194,13 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__host__ __device__ std::optional<T> parse_numeric(char const* begin,
-                                                   char const* end,
-                                                   parse_options_view const& opts)
+constexpr T parse_numeric(char const* begin,
+                          char const* end,
+                          parse_options_view const& opts,
+                          T error_result = std::numeric_limits<T>::quiet_NaN())
 {
   T value{};
   bool all_digits_valid = true;
-  constexpr bool as_hex = (base == 16);
 
   // Handle negative values if necessary
   int32_t sign = (*begin == '-') ? -1 : 1;
@@ -207,7 +223,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
     } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
       break;
     } else if (*begin != opts.thousands && *begin != '+') {
-      value = (value * base) + decode_digit<T, as_hex>(*begin, &all_digits_valid);
+      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
     }
     ++begin;
   }
@@ -221,7 +237,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
         break;
       } else if (*begin != opts.thousands && *begin != '+') {
         divisor /= base;
-        value += decode_digit<T, as_hex>(*begin, &all_digits_valid) * divisor;
+        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
       }
       ++begin;
     }
@@ -232,12 +248,12 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
       while (begin < end) {
-        exponent = (exponent * 10) + decode_digit<T, as_hex>(*(begin++), &all_digits_valid);
+        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return {}; }
+  if (!all_digits_valid) { return error_result; }
 
   return value * sign;
 }
@@ -510,9 +526,9 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 /**
  * @brief Adjusts the range to ignore starting/trailing quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
@@ -526,6 +542,65 @@ __inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const
     thrust::advance(end, -1);
   }
   return {begin, end};
+}
+
+/**
+ * @brief Decodes a numeric value base on templated cudf type T with specified
+ * base.
+ *
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param opts The global parsing behavior options
+ *
+ * @return The parsed numeric value
+ */
+template <typename T, int base>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
+}
+
+/**
+ * @brief Decodes a numeric value base on templated cudf type T
+ *
+ * @param[in] begin Beginning of the character string
+ * @param[in] end End of the character string
+ * @param opts The global parsing behavior options
+ *
+ * @return The parsed numeric value
+ */
+template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  return cudf::io::parse_numeric<T>(begin, end, opts);
+}
+
+template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
+  return to_timestamp<T>(begin, end, opts.dayfirst);
+}
+
+template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
+__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
+{
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
+  return to_duration<T>(begin, end);
 }
 
 struct ConvertFunctor {
@@ -547,17 +622,15 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
-    auto const value = [as_hex, &opts, begin, end]() -> std::optional<T> {
+    static_cast<T*>(out_buffer)[row] = [as_hex, &opts, begin, end]() -> T {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
-      return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
-                    : cudf::io::parse_numeric<T>(begin, end, opts);
+      return as_hex ? decode_value<T, 16>(begin, end, opts) : decode_value<T>(begin, end, opts);
     }();
-    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return value.has_value();
+    return true;
   }
 
   /**
@@ -574,15 +647,13 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    // TODO what's invalid input
-    bool all_digits_valid = true;
     static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
-      [&opts, &all_digits_valid, output_type, begin, end]() -> device_storage_type_t<T> {
+      [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
       return strings::detail::parse_decimal<device_storage_type_t<T>>(
         begin, end, output_type.scale());
     }();
 
-    return all_digits_valid;
+    return true;
   }
 
   /**
@@ -597,16 +668,15 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> std::optional<T> {
+    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
-      return cudf::io::parse_numeric<T>(begin, end, opts);
+      return decode_value<T>(begin, end, opts);
     }();
-    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return value.has_value();
+    return true;
   }
 
   /**
@@ -622,16 +692,10 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> std::optional<T> {
-      // Check for user-specified true/false values
-      auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
-      return cudf::io::parse_numeric<T>(begin, end, opts);
-    }();
-    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
+    T const value                    = decode_value<T>(begin, end, opts);
+    static_cast<T*>(out_buffer)[row] = value;
 
-    return value.has_value() and !std::isnan(*value);
+    return !std::isnan(value);
   }
 
   /**
@@ -648,15 +712,12 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    // TODO what's invalid input
-    if constexpr (cudf::is_timestamp<T>()) {
-      static_cast<T*>(out_buffer)[row] = to_timestamp<T>(begin, end, opts.dayfirst);
-    } else if constexpr (cudf::is_duration<T>()) {
-      static_cast<T*>(out_buffer)[row] = to_duration<T>(begin, end);
+    if constexpr (cudf::is_timestamp<T>() or cudf::is_duration<T>()) {
+      static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
+      return true;
     } else {
       return false;
     }
-    return true;
   }
 };
 
