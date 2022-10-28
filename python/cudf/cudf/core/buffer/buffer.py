@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
-from typing import Any, Dict, Mapping, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Sequence, Tuple
 
 import numpy
 
@@ -18,104 +18,79 @@ from cudf.utils.string import format_bytes
 class Buffer(Serializable):
     """A Buffer represents device memory.
 
-    Usually buffers will be created using `as_buffer(obj)`,
-    which will make sure that `obj` is buffer and not a `Buffer`
-    necessarily.
+    Usually the factory function `as_buffer` should be used to
+    create a Buffer instance.
 
     Parameters
     ----------
-    data : int or buffer-like or array-like
-        An integer representing a pointer to device memory or a buffer-like
-        or array-like object. When not an integer, `size` and `owner` must
-        be None.
-    size : int, optional
-        Size of device memory in bytes. Must be specified if `data` is an
-        integer.
-    owner : object, optional
+    ptr : int
+        An integer representing a pointer to device memory.
+    size : int
+        Size of device memory in bytes.
+    owner : object
         Python object to which the lifetime of the memory allocation is tied.
-        A reference to this object is kept in the returned Buffer.
     """
 
     _ptr: int
     _size: int
     _owner: object
 
-    def __init__(
-        self, data: Union[int, Any], *, size: int = None, owner: object = None
-    ):
-        if isinstance(data, int):
-            if size is None:
-                raise ValueError(
-                    "size must be specified when `data` is an integer"
-                )
-            if size < 0:
-                raise ValueError("size cannot be negative")
-            self._ptr = data
-            self._size = size
-            self._owner = owner
-            return
-        if size is not None or owner is not None:
-            raise ValueError(
-                "`size` and `owner` must be None when "
-                "`data` is a buffer-like object"
-            )
-        # `data` is a buffer-like or array-like object
-        buf: Any = data
-        if isinstance(buf, rmm.DeviceBuffer):
-            self._ptr = buf.ptr
-            self._size = buf.size
-            self._owner = buf
-            return
-        iface = getattr(buf, "__cuda_array_interface__", None)
-        if iface:
-            self._ptr, self._size = get_ptr_and_size(iface)
-            self._owner = buf
-            return
-        # At this point, `buf` must represents host memory, let's deligate
-        # to `._init_from_host_memory()`
-        buf = memoryview(buf)
-        if not buf.c_contiguous:
-            raise ValueError("`data` must be C-contiguous")
-        self._init_from_host_memory(buf)
-
-    def _init_from_host_memory(self, data: memoryview) -> None:
-        """Initialize in the case where `data` represents host memory.
-
-        Sub-classes can overwrite this and still use `super().__init__()`
-        to handle the (trivial) case where `data` represents device memory.
-
-        This default implemention copies `data` to a newly allocated RMM
-        device buffer.
-        """
-        ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
-        buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-        self._ptr = buf.ptr
-        self._size = buf.size
-        self._owner = buf
+    def __init__(self, ptr: int, size: int, owner: object):
+        if size < 0:
+            raise ValueError("size cannot be negative")
+        self._ptr = ptr
+        self._size = size
+        self._owner = owner
 
     @classmethod
     def from_device_memory(cls, data: Any) -> Buffer:
-        ret = cls.__new__(cls)
+        """Create a Buffer from an object exposing `__cuda_array_interface__`.
+
+        No data is being copied.
+
+        Parameters
+        ----------
+        data : device-buffer-like
+            An object implementing the CUDA Array Interface.
+
+        Returns
+        -------
+        Buffer
+            Buffer representing the same device memory as `data`
+        """
+
         if isinstance(data, rmm.DeviceBuffer):
-            ret._ptr = data.ptr
-            ret._size = data.size
-            ret._owner = data
-        else:
-            ret._ptr, ret._size = get_ptr_and_size(
-                data.__cuda_array_interface__
-            )
-            ret._owner = data
-        return ret
+            return cls(data.ptr, data.size, owner=data)  # Common case shortcut
+
+        ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+        return cls(ptr, size, owner=data)
 
     @classmethod
     def from_host_memory(cls, data: Any) -> Buffer:
-        ret = cls.__new__(cls)
+        """Create a Buffer from a buffer or array like object
+
+        Data must implement `__array_interface__`, the buffer protocol, and/or
+        be convertible to a buffer object using `numpy.asarray()`
+
+        The host memory is copied to a new device allocation.
+
+        Parameters
+        ----------
+        data : array-like or buffer-like
+            An object that represens host memory.
+
+        Returns
+        -------
+        Buffer
+            Buffer representing a copy of `data`.
+        """
+
+        # Extract pointer and size
         ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
+        # And copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-        ret._ptr = buf.ptr
-        ret._size = buf.size
-        ret._owner = buf
-        return ret
+        # Then we can crate from device memory
+        return cls.from_device_memory(buf)
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
@@ -123,10 +98,11 @@ class Buffer(Serializable):
         without having to handle non-slice inputs.
         """
         return self.__class__(
-            data=self.ptr + offset, size=size, owner=self.owner
+            ptr=self.ptr + offset, size=size, owner=self.owner
         )
 
     def __getitem__(self, key: slice) -> Buffer:
+        """Create a new slice of the buffer."""
         if not isinstance(key, slice):
             raise TypeError(
                 "Argument 'key' has incorrect type "
@@ -139,22 +115,27 @@ class Buffer(Serializable):
 
     @property
     def size(self) -> int:
+        """Size of the buffer in bytes."""
         return self._size
 
     @property
     def nbytes(self) -> int:
+        """Size of the buffer in bytes."""
         return self._size
 
     @property
     def ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
         return self._ptr
 
     @property
     def owner(self) -> Any:
+        """Object owning the memory of the buffer."""
         return self._owner
 
     @property
-    def __cuda_array_interface__(self) -> dict:
+    def __cuda_array_interface__(self) -> Mapping:
+        """Implementation of the CUDA Array Interface."""
         return {
             "data": (self.ptr, False),
             "shape": (self.size,),
@@ -164,12 +145,24 @@ class Buffer(Serializable):
         }
 
     def memoryview(self) -> memoryview:
+        """Read-only access to the buffer through host memory."""
         host_buf = bytearray(self.size)
         rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, host_buf)
         return memoryview(host_buf).toreadonly()
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
+        """Serialize the buffer into header and frames.
+
+        The frames can be a mixture of memoryview and Buffer objects.
+
+        Returns
+        -------
+        Tuple[dict, List]
+            The first element of the returned tuple is a dict containing any
+            serializable metadata required to reconstruct the object. The
+            second element is a list containing Buffers and memoryviews.
+        """
+        header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
@@ -180,12 +173,28 @@ class Buffer(Serializable):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
+        """Create an Buffer from a serialized representation.
+
+        Parameters
+        ----------
+        header : dict
+            The metadata required to reconstruct the object.
+        frames : list
+            The Buffer and memoryview that makes up the Buffer.
+
+        Returns
+        -------
+        Buffer
+            The deserialized Buffer.
+        """
+        from cudf.core.buffer import as_buffer
+
         if header["frame_count"] != 1:
             raise ValueError("Deserializing a Buffer expect a single frame")
         frame = frames[0]
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
-        return cls(frame)
+        return as_buffer(frame)
 
     def __repr__(self) -> str:
         return (
@@ -197,8 +206,7 @@ class Buffer(Serializable):
 def is_c_contiguous(
     shape: Sequence[int], strides: Sequence[int], itemsize: int
 ) -> bool:
-    """
-    Determine if shape and strides are C-contiguous
+    """Determine if shape and strides are C-contiguous
 
     Parameters
     ----------
@@ -226,8 +234,7 @@ def is_c_contiguous(
 
 
 def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
-    """
-    Retrieve the pointer and size from an array interface.
+    """Retrieve the pointer and size from an array interface.
 
     Raises ValueError if array isn't C-contiguous.
 
