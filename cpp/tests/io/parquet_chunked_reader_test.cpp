@@ -74,13 +74,13 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
+      auto const col_typeid = col->type().id();
       col->set_null_mask(
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset));
 
-      if (col->type().id() == cudf::type_id::STRUCT) {
+      if (col_typeid == cudf::type_id::STRUCT) {
         auto const null_mask  = col->view().null_mask();
         auto const null_count = col->null_count();
-        bool is_complex_type  = false;
 
         for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
           cudf::structs::detail::superimpose_parent_nulls(null_mask,
@@ -88,51 +88,15 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                                                           col->child(idx),
                                                           cudf::get_default_stream(),
                                                           rmm::mr::get_current_device_resource());
-
-          if (auto const child_typeid = col->child(idx).type().id();
-              child_typeid == cudf::type_id::LIST || child_typeid == cudf::type_id::STRUCT ||
-              child_typeid == cudf::type_id::STRING) {
-            is_complex_type = true;
-          }
         }
+      }
 
-        // If there is lists column in this struct column, rebuild it.
-        // Note that this does not recursively rebuild the column thus will not work correctly with
-        // nested types having many nested levels.
-        if (is_complex_type) {
-          auto const dtype      = col->type();
-          auto const size       = col->size();
-          auto const null_count = col->null_count();
-          auto col_content      = col->release();
-
-          std::vector<std::unique_ptr<cudf::column>> children;
-          for (std::size_t idx = 0; idx < col_content.children.size(); ++idx) {
-            auto& child = col_content.children[idx];
-
-            if (child->type().id() == cudf::type_id::LIST) {
-              children.emplace_back(
-                cudf::purge_nonempty_nulls(cudf::lists_column_view{child->view()}));
-            } else if (child->type().id() == cudf::type_id::STRUCT) {
-              children.emplace_back(
-                cudf::purge_nonempty_nulls(cudf::structs_column_view{child->view()}));
-            } else if (child->type().id() == cudf::type_id::STRING) {
-              children.emplace_back(
-                cudf::purge_nonempty_nulls(cudf::strings_column_view{child->view()}));
-            } else {
-              children.emplace_back(std::move(child));
-            }
-          }
-
-          col = std::make_unique<cudf::column>(dtype,
-                                               size,
-                                               std::move(*col_content.data),
-                                               std::move(*col_content.null_mask),
-                                               null_count,
-                                               std::move(children));
-        }
-      } else if (col->type().id() == cudf::type_id::LIST) {
+      // Can't use `cudf::detail::purge_nonempty_nulls` since it requires to be compiled with CUDA.
+      if (col_typeid == cudf::type_id::LIST) {
         col = cudf::purge_nonempty_nulls(cudf::lists_column_view{col->view()});
-      } else if (col->type().id() == cudf::type_id::STRING) {
+      } else if (col_typeid == cudf::type_id::STRUCT) {
+        col = cudf::purge_nonempty_nulls(cudf::structs_column_view{col->view()});
+      } else if (col_typeid == cudf::type_id::STRING) {
         col = cudf::purge_nonempty_nulls(cudf::strings_column_view{col->view()});
       }
     }
