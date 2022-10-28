@@ -80,7 +80,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
       if (col->type().id() == cudf::type_id::STRUCT) {
         auto const null_mask  = col->view().null_mask();
         auto const null_count = col->null_count();
-        bool has_list         = false;
+        bool is_complex_type  = false;
 
         for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
           cudf::structs::detail::superimpose_parent_nulls(null_mask,
@@ -89,11 +89,17 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                                                           cudf::get_default_stream(),
                                                           rmm::mr::get_current_device_resource());
 
-          if (col->child(idx).type().id() == cudf::type_id::LIST) { has_list = true; }
+          if (auto const child_typeid = col->child(idx).type().id();
+              child_typeid == cudf::type_id::LIST || child_typeid == cudf::type_id::STRUCT ||
+              child_typeid == cudf::type_id::STRING) {
+            is_complex_type = true;
+          }
         }
 
         // If there is lists column in this struct column, rebuild it.
-        if (has_list) {
+        // Note that this does not recursively rebuild the column thus will not work correctly with
+        // nested types having many nested levels.
+        if (is_complex_type) {
           auto const dtype      = col->type();
           auto const size       = col->size();
           auto const null_count = col->null_count();
@@ -106,6 +112,12 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
             if (child->type().id() == cudf::type_id::LIST) {
               children.emplace_back(
                 cudf::purge_nonempty_nulls(cudf::lists_column_view{child->view()}));
+            } else if (child->type().id() == cudf::type_id::STRUCT) {
+              children.emplace_back(
+                cudf::purge_nonempty_nulls(cudf::structs_column_view{child->view()}));
+            } else if (child->type().id() == cudf::type_id::STRING) {
+              children.emplace_back(
+                cudf::purge_nonempty_nulls(cudf::strings_column_view{child->view()}));
             } else {
               children.emplace_back(std::move(child));
             }
