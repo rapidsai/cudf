@@ -146,11 +146,18 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
   } else if (encoding == Encoding::RLE) {
-    if (cur + 4 < end) {
-      uint32_t run;
+    // V2 only uses RLE encoding, so only perform check here
+    if (s->page.def_lvl_bytes || s->page.rep_lvl_bytes) {
+      len = lvl == level_type::DEFINITION ? s->page.def_lvl_bytes : s->page.rep_lvl_bytes;
+    } else if (cur + 4 < end) {
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
       cur += 4;
-      run                     = get_vlq32(cur, end);
+    } else {
+      len      = 0;
+      s->error = 2;
+    }
+    if (!s->error) {
+      uint32_t run            = get_vlq32(cur, end);
       s->initial_rle_run[lvl] = run;
       if (!(run & 1)) {
         int v = (cur < end) ? cur[0] : 0;
@@ -163,9 +170,6 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
       }
       s->lvl_start[lvl] = cur;
       if (cur > end) { s->error = 2; }
-    } else {
-      len      = 0;
-      s->error = 2;
     }
   } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
@@ -176,7 +180,7 @@ __device__ uint32_t InitLevelSection(page_state_s* s,
     s->error = 3;
     len      = 0;
   }
-  return (uint32_t)len;
+  return static_cast<uint32_t>(len);
 }
 
 /**

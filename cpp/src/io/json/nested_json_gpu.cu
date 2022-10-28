@@ -1540,7 +1540,7 @@ auto parsing_options(cudf::io::json_reader_options const& options)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = cudf::default_stream_value;
+  auto const stream     = cudf::get_default_stream();
   parse_opts.dayfirst   = options.is_enabled_dayfirst();
   parse_opts.keepquotes = options.is_enabled_keep_quotes();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);

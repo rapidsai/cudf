@@ -14,7 +14,7 @@ from cudf._lib.scalar cimport DeviceScalar
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
     cdef unique_ptr[scalar] cpp_reduce "cudf::reduce" (
         column_view col,
-        const unique_ptr[reduce_aggregation] agg,
+        const reduce_aggregation& agg,
         data_type type
     ) except +
 
@@ -24,7 +24,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] cpp_scan "cudf::scan" (
         column_view col,
-        const unique_ptr[scan_aggregation] agg,
+        const scan_aggregation& agg,
         scan_type inclusive
     ) except +
 

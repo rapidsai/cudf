@@ -284,7 +284,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_vocabulary_file(filename_hashed_vocabulary, cudf::default_stream_value, mr);
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

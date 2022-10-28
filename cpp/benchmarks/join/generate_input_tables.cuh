@@ -154,7 +154,7 @@ void generate_input_tables(key_type* const build_tbl,
 
   const int num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-  rmm::device_uvector<curandState> devStates(num_states, cudf::default_stream_value);
+  rmm::device_uvector<curandState> devStates(num_states, cudf::get_default_stream());
 
   init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 

@@ -46,7 +46,7 @@ cpdef read_json(object filepaths_or_buffers,
 
     # If input data is a JSON string (or StringIO), hold a reference to
     # the encoded memoryview externally to ensure the encoded buffer
-    # isn't destroyed before calling libcudf++ `read_json()`
+    # isn't destroyed before calling libcudf `read_json()`
     for idx in range(len(filepaths_or_buffers)):
         if isinstance(filepaths_or_buffers[idx], io.StringIO):
             filepaths_or_buffers[idx] = \

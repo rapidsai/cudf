@@ -458,7 +458,7 @@ mixed_inner_join(
                             compare_nulls,
                             detail::join_kind::INNER_JOIN,
                             output_size_data,
-                            cudf::default_stream_value,
+                            cudf::get_default_stream(),
                             mr);
 }
 
@@ -479,7 +479,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
-                                                cudf::default_stream_value,
+                                                cudf::get_default_stream(),
                                                 mr);
 }
 
@@ -504,7 +504,7 @@ mixed_left_join(
                             compare_nulls,
                             detail::join_kind::LEFT_JOIN,
                             output_size_data,
-                            cudf::default_stream_value,
+                            cudf::get_default_stream(),
                             mr);
 }
 
@@ -525,7 +525,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::LEFT_JOIN,
-                                                cudf::default_stream_value,
+                                                cudf::get_default_stream(),
                                                 mr);
 }
 
@@ -550,7 +550,7 @@ mixed_full_join(
                             compare_nulls,
                             detail::join_kind::FULL_JOIN,
                             output_size_data,
-                            cudf::default_stream_value,
+                            cudf::get_default_stream(),
                             mr);
 }
 
