@@ -68,9 +68,9 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
   // Just shift nulls of the next column by one position to avoid having all nulls in the same
   // table rows.
   if (nullable) {
-    // Generate deterministic bitmask instead of random bitmask for easy verification.
+    // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
     auto const valid_iter = cudf::detail::make_counting_transform_iterator(
-      0, [&](int32_t i) -> bool { return static_cast<bool>(i % 2); });
+      0, [](cudf::size_type i) { return i % 4 == 3 ? 0 : 1; });
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
@@ -362,7 +362,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     // 20000 rows in 1 page consist of:
     //
@@ -370,7 +370,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     // 30000 ints    :   120000 bytes
     // total         :   200004 bytes
     auto const template_lists = int32s_lists_col{
-      int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{0, 1}, int32s_lists_col{0, 1, 2}};
+      int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{1, 2}, int32s_lists_col{3, 4, 5}};
 
     auto const gather_iter =
       cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
@@ -380,7 +380,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 
     auto [input_table, filepath] = write_file(input_columns,
                                               "chunked_read_with_lists",
-                                              nullable,
+                                              false /*nullable*/,
                                               512 * 1024,  // 512KB per page
                                               20000        // 20k rows per page
     );
@@ -390,28 +390,28 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 
   // chunk size slightly less than 1 page (forcing it to be at least 1 page per read)
   {
-    auto const [expected, result, num_chunks] = do_test(200'000, false);
+    auto const [expected, result, num_chunks] = do_test(200'000);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // chunk size exactly 1 page
   {
-    auto const [expected, result, num_chunks] = do_test(200'004, false);
+    auto const [expected, result, num_chunks] = do_test(200'004);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // chunk size 2 pages. 3 chunks (2 pages + 2 pages + 1 page)
   {
-    auto const [expected, result, num_chunks] = do_test(400'008, false);
+    auto const [expected, result, num_chunks] = do_test(400'008);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // chunk size 2 pages minus one byte: each chunk will be just one page
   {
-    auto const [expected, result, num_chunks] = do_test(400'007, false);
+    auto const [expected, result, num_chunks] = do_test(400'007);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -421,35 +421,29 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const do_test = [num_rows](std::size_t chunk_read_limit, bool nullable) {
+  auto const do_test = [num_rows](std::size_t chunk_read_limit) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     // 20000 rows in 1 page consist of:
     //
-    // 625 validity words :   2500 bytes
+    // 625 validity words :   2500 bytes   (a null every 4 rows: null at indices [3, 7, 11, ...])
     // 20001 offsets      :   80004  bytes
     // 15000 ints         :   60000 bytes
     // total              :   142504 bytes
-    auto const template_lists = int32s_lists_col{// these will all be null
-                                                 int32s_lists_col{},
-                                                 int32s_lists_col{0},
-                                                 int32s_lists_col{1, 2},
-                                                 int32s_lists_col{3, 4, 5}};
+    auto const template_lists =
+      int32s_lists_col{// these will all be null
+                       int32s_lists_col{},
+                       int32s_lists_col{0},
+                       int32s_lists_col{1, 2},
+                       int32s_lists_col{3, 4, 5, 6, 7, 8, 9} /* this list will be nullified out */};
     auto const gather_iter =
       cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
     auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
-    auto intermediate =
-      std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front());
-    auto const valids = cudf::detail::make_counting_transform_iterator(
-      0, [](cudf::size_type i) { return i % 4 == 3 ? 0 : 1; });
-    intermediate->set_null_mask(cudf::test::detail::make_null_mask(valids, valids + num_rows),
-                                num_rows / 4);
-
     input_columns.emplace_back(
-      cudf::purge_nonempty_nulls(cudf::lists_column_view{intermediate->view()}));
+      std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
 
     auto [input_table, filepath] = write_file(input_columns,
                                               "chunked_read_with_lists_nulls",
-                                              nullable,
+                                              true /*nullable*/,
                                               512 * 1024,  // 512KB per page
                                               20000        // 20k rows per page
     );
@@ -459,28 +453,28 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
 
   // chunk size slightly less than 1 page (forcing it to be at least 1 page per read)
   {
-    auto const [input, result, num_chunks] = do_test(142'500, false);
+    auto const [input, result, num_chunks] = do_test(142'500);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }
 
   // chunk size exactly 1 page
   {
-    auto const [input, result, num_chunks] = do_test(142'504, false);
+    auto const [input, result, num_chunks] = do_test(142'504);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*input, *result);
   }
 
   // chunk size 2 pages. 3 chunks (2 pages + 2 pages + 1 page)
   {
-    auto const [expected, result, num_chunks] = do_test(285'008, false);
+    auto const [expected, result, num_chunks] = do_test(285'008);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // chunk size 2 pages minus 1 byte: each chunk will be just one page
   {
-    auto const [expected, result, num_chunks] = do_test(285'007, false);
+    auto const [expected, result, num_chunks] = do_test(285'007);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
