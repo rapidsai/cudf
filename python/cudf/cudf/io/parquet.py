@@ -460,7 +460,7 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(
-        filepath_or_buffer, storage_options
+        path_or_data=filepath_or_buffer, storage_options=storage_options
     )
 
     # Use pyarrow dataset to detect/process directory-partitioned
@@ -476,8 +476,8 @@ def read_parquet(
             partition_keys,
             partition_categories,
         ) = _process_dataset(
-            paths,
-            fs,
+            paths=paths,
+            fs=fs,
             filters=filters,
             row_groups=row_groups,
             categorical_partitions=categorical_partitions,
@@ -489,9 +489,9 @@ def read_parquet(
     filepaths_or_buffers = []
     if use_python_file_object:
         open_file_options = _default_open_file_options(
-            open_file_options,
-            columns,
-            row_groups,
+            open_file_options=open_file_options,
+            columns=columns,
+            row_groups=row_groups,
             fs=fs,
         )
     for source in filepath_or_buffer:
@@ -632,6 +632,16 @@ def _read_parquet(
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following parameters: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following non key-word arguments: {list(args)}"
+            )
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,

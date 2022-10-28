@@ -298,7 +298,6 @@ def test_read_parquet_ext(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
-            footer_sample_size=3200,
             columns=columns,
         )
     if index:
