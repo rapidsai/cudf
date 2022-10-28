@@ -1529,14 +1529,9 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
 
     EXPECT_EQ(result.tbl->num_columns(), 1);
     EXPECT_EQ(result.tbl->num_rows(), 16);
-
-    EXPECT_EQ(result.tbl->get_column(0).type().id(), dtypes[col_type].id());
-
     EXPECT_EQ(result.metadata.schema_info[0].name, "0");
 
-    std::cout << "Column: " << col_type << std::endl;
-    cudf::test::print(result.tbl->get_column(0));
-
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), dtypes[col_type].id());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), cols[col_type]);
   }
 }
