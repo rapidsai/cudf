@@ -1481,7 +1481,7 @@ TEST_F(JsonReaderTest, ByteRange)
       datasources,
       json_lines_options,
       chunk_size,
-      cudf::default_stream_value,
+      cudf::get_default_stream(),
       rmm::mr::get_current_device_resource());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
