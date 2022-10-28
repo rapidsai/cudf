@@ -86,6 +86,9 @@ else
   CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 fi
 
+# TODO: remove
+sed '/rapidsai$/d' /opt/conda/.condarc
+
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
