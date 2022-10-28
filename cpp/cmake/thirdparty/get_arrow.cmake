@@ -68,6 +68,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     return()
   endif()
 
+  # TODO: How would the targets have been created before this function is
+  # called? Is that really something we should support?
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND TRUE PARENT_SCOPE)
@@ -82,8 +84,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
   endif()
 
-  set(ARROW_BUILD_SHARED ON)
-  set(ARROW_BUILD_STATIC OFF)
+  # TODO: AFAICT this variable is not used anywhere. Safe to remove?
   set(CPMAddOrFindPackage CPMFindPackage)
 
   if(NOT ARROW_ARMV8_ARCH)
@@ -99,7 +100,11 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ARROW_BUILD_SHARED OFF)
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
     # library
+    # TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`) instead? This is a big hammer.
     set(CPM_DOWNLOAD_ALL TRUE)
+  else()
+    set(ARROW_BUILD_SHARED ON)
+    set(ARROW_BUILD_STATIC OFF)
   endif()
 
   set(ARROW_PYTHON_OPTIONS "")
@@ -120,6 +125,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   rapids_cpm_find(
     Arrow ${VERSION}
+    # TODO: Should we set the list of global targets conditionally based on
+    # whether we're building shared/static and whether parquet is enabled?
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared
                    arrow_static parquet_static arrow_dataset_static
     CPM_ARGS
@@ -155,12 +162,17 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             "xsimd_SOURCE AUTO"
   )
 
+  # TODO: Will this not get set by rapids_cpm_find?
   set(ARROW_FOUND TRUE)
   set(ARROW_LIBRARIES "")
 
   # Arrow_ADDED: set if CPM downloaded Arrow from Github
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
   if(Arrow_ADDED OR Arrow_DIR)
+    # TODO: We can set the ARROW_LIBRARIES in a single place based on
+    # BUILD_STATIC at the very beginning of this function and then get rid of
+    # the if directly above this one. Then this whole if/else becomes:
+    # if(Arrow_DIR)... elseif(Arrow_ADDED)...else() message(FATAL_ERROR)
     if(BUILD_STATIC)
       list(APPEND ARROW_LIBRARIES arrow_static)
     else()
@@ -168,6 +180,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
 
     if(Arrow_DIR)
+      # TODO: Under what circumstances do we need a `find_package` _after_ `rapids_cpm_find`??
       find_package(Arrow REQUIRED QUIET)
       if(ENABLE_PARQUET)
         if(NOT Parquet_DIR)
@@ -213,6 +226,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
   endif()
 
+  # TODO: This can go into the block above for Arrow_ADDED
   if(Arrow_ADDED)
 
     set(arrow_code_string
@@ -260,6 +274,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       BUILD Arrow
       VERSION ${VERSION}
       EXPORT_SET arrow_targets
+      # TODO: What about all the other GLOBAL_TARGETS specified in the
+      # `rapids_cpm_find` command? Also, should this be constructed
+      # conditionally based on whether we're using shared or static libs for
+      # arrow?
       GLOBAL_TARGETS arrow_shared arrow_static
       NAMESPACE cudf::
       FINAL_CODE_BLOCK arrow_code_string
@@ -309,6 +327,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
   endif()
   # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
+  # TODO: Isn't the second call here redundant? The above `rapids_export`
+  # command will also encode a `find_dependency` in the INSTALL export set.
+  # It's less obvious whether we should still include the first
+  # `rapids_export_package` below since that will translate to a
+  # `find_dependency` call in the build config and `rapids-export` will put a
+  # `CPMFindPackage` there instead; is our goal to add `find_dependency`? Since
+  # it'll happen after `CPMFindPackage` I think it'll just be redundant.
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
