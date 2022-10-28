@@ -24,40 +24,38 @@ include_guard(GLOBAL)
 
 # Generate a FindArrow module for the case where we need to search for arrow
 # within a pip install pyarrow.
-function(find_libarrow_in_python_wheel VERSION)
-  function(find_arrow_lib _name _alias _lib)
-    find_package(Python REQUIRED)
-    execute_process(
-        COMMAND "${Python_EXECUTABLE}"
-        -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-        OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR 
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-    list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
-    rapids_find_generate_module(
-      "${_name}"
-      NO_CONFIG
-      VERSION "${VERSION}"
-      LIBRARY_NAMES "${_lib}"
-      BUILD_EXPORT_SET cudf-exports
-      INSTALL_EXPORT_SET cudf-exports
-      HEADER_NAMES arrow/python/arrow_to_pandas.h
-    )
+function(find_libarrow_in_python_wheel PYARROW_VERSION)
+  string(REPLACE "." "" PYARROW_SO_VER "${PYARROW_VERSION}")
+  set(PYARROW_LIB libarrow.so.${PYARROW_SO_VER})
 
-    find_package(${_name} ${VERSION} MODULE REQUIRED GLOBAL)
-    add_library(${_alias} ALIAS ${_name}::${_name})
+  find_package(Python REQUIRED)
+  execute_process(
+      COMMAND "${Python_EXECUTABLE}"
+      -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
+      OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+  list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+  rapids_find_generate_module(
+    Arrow
+    NO_CONFIG
+    VERSION "${PYARROW_VERSION}"
+    LIBRARY_NAMES "${PYARROW_LIB}"
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+    HEADER_NAMES arrow/python/arrow_to_pandas.h
+  )
 
-    # TODO: Should these both be here? I think so, the
-    # `rapids_find_generate_module` doesn't seems to create the necessary
-    # `find_dependency` calls in the config files.
-    rapids_export_package(BUILD Arrow cudf-exports)
-    rapids_export_package(INSTALL Arrow cudf-exports)
+  find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
+  add_library(arrow_shared ALIAS Arrow::Arrow)
 
-    list(POP_BACK CMAKE_PREFIX_PATH)
-  endfunction()
+  # TODO: Should these both be here? I think so, the
+  # `rapids_find_generate_module` doesn't seems to create the necessary
+  # `find_dependency` calls in the config files.
+  rapids_export_package(BUILD Arrow cudf-exports)
+  rapids_export_package(INSTALL Arrow cudf-exports)
 
-  string(REPLACE "." "" PYARROW_SO_VER "${VERSION}")
-  find_arrow_lib(Arrow arrow_shared libarrow.so.${PYARROW_SO_VER})
+  list(POP_BACK CMAKE_PREFIX_PATH)
 endfunction()
 
 # This function finds arrow and sets any additional necessary environment variables.
