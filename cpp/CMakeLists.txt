@@ -60,7 +60,7 @@ option(
          stream to external libraries."
   OFF
 )
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
@@ -79,7 +79,7 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
+  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
@@ -752,13 +752,8 @@ endif()
 
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
-  rapids_cpm_find(
-    benchmark 1.5.2
-    GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.5.2
-    GIT_SHALLOW TRUE
-    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
-  )
+  include(${rapids-cmake-dir}/cpm/gbench.cmake)
+  rapids_cpm_gbench()
 
   # Find or install NVBench
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)

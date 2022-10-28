@@ -23,6 +23,7 @@
 
 #include "parquet.hpp"
 #include "parquet_gpu.hpp"
+#include "reader_impl_helpers.cuh"
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -69,8 +70,8 @@ class reader::impl {
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
-   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
-   * bounds
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    * @param row_group_indices Lists of row groups to read, one per source
    *
    * @return The set of columns along with metadata
@@ -83,7 +84,9 @@ class reader::impl {
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
    *
-   * @param chunk_read_limit The byte size limit to read each chunk
+   * By using this constructor, the reader will supports chunked reading with read size limit.
+   *
+   * @param chunk_read_limit The size limit (in bytes) to read each chunk
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -96,105 +99,62 @@ class reader::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * TODO
-   *
-   * @brief read_chunk
-   * @param chunk_info
-   * @return
-   */
-  table_with_metadata read_chunk();
-
-  /**
-   * TODO
-   *
-   * @brief read_completed
-   * @return
+   * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
   bool has_next();
 
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+   */
+  table_with_metadata read_chunk();
+
  private:
-  // TODO
-  void preprocess_file_and_columns(size_type skip_rows,
-                                   size_type num_rows,
-                                   bool uses_custom_row_bounds,
-                                   const std::vector<std::vector<size_type>>& row_group_list);
-
-  // TODO
-  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
-
   /**
-   * TODO
+   * @brief Perform the necessary data preprocessing for reading data later on.
    *
-   * @brief load_column_chunk_descriotions
-   * @return
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @param row_group_indices Lists of row groups to read, one per source
    */
-  std::pair<size_type, size_type> preprocess_file(
-    size_type skip_rows,
-    size_type num_rows,
-    std::vector<std::vector<size_type>> const& row_group_list);
+  void prepare_data(size_type skip_rows,
+                    size_type num_rows,
+                    bool uses_custom_row_bounds,
+                    const std::vector<std::vector<size_type>>& row_group_indices);
 
   /**
-   * TODO
-   *
-   * @brief make_output
-   * @param out_metadata
-   * @param out_columns
-   * @return
+   * @brief Load and decompress the input file(s) into memory.
    */
-  table_with_metadata finalize_output(table_metadata& out_metadata,
-                                      std::vector<std::unique_ptr<column>>& out_columns);
+  void load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
+                                size_type num_rows);
 
   /**
-   * TODO: Rename this into something more meaningful
+   * @brief Compute the reading info (skip_rows, num_rows) for the output chunks.
    *
-   * @brief Reads compressed page data to device memory
+   * There are several pieces of information we can't compute directly from row counts in
+   * the parquet headers when dealing with nested schemas:
+   * - The total sizes of all output columns at all nesting levels
+   * - The starting output buffer offset for each page, for each nesting level
    *
-   * @param page_data Buffers to hold compressed page data for each chunk
-   * @param chunks List of column chunk descriptors
-   * @param begin_chunk Index of first column chunk to read
-   * @param end_chunk Index after the last column chunk to read
-   * @param column_chunk_offsets File offset for all chunks
+   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
    *
+   * @param chunks All chunks to be decoded
+   * @param pages All pages to be decoded
+   * @param skip_rows Crop all rows below skip_rows
+   * @param num_rows Maximum number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    */
-  std::future<void> read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>>& page_data,
-                                       hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                       size_t begin_chunk,
-                                       size_t end_chunk,
-                                       const std::vector<size_t>& column_chunk_offsets,
-                                       std::vector<size_type> const& chunk_source_map);
+  void compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                               hostdevice_vector<gpu::PageInfo>& pages,
+                               size_t skip_rows,
+                               size_t num_rows,
+                               bool uses_custom_row_bounds,
+                               size_type chunked_read_size);
 
   /**
-   * @brief Returns the number of total pages from the given column chunks
-   *
-   * @param chunks List of column chunk descriptors
-   *
-   * @return The total number of pages
-   */
-  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks);
-
-  /**
-   * @brief Returns the page information from the given column chunks.
-   *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   */
-  void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                           hostdevice_vector<gpu::PageInfo>& pages);
-
-  /**
-   * @brief Decompresses the page data, at page granularity.
-   *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   *
-   * @return Device buffer to decompressed page data
-   */
-  rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                          hostdevice_vector<gpu::PageInfo>& pages);
-
-  /**
-   * @brief Allocate nesting information storage for all pages and set pointers
-   *        to it.
+   * @brief Allocate nesting information storage for all pages and set pointers to it.
    *
    * One large contiguous buffer of PageNestingInfo structs is allocated and
    * distributed among the PageInfo structs.
@@ -211,47 +171,43 @@ class reader::impl {
                              hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
 
   /**
-   * @brief Preprocess column information and allocate output buffers.
+   * @brief Read a chunk of data and return an output table.
    *
-   * TODO
+   * This function is called internally and expects all preprocessing steps have been done.
    *
-   * There are several pieces of information we can't compute directly from row counts in
-   * the parquet headers when dealing with nested schemas.
-   * - The total sizes of all output columns at all nesting levels
-   * - The starting output buffer offset for each page, for each nesting level
-   *
-   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
-   *
-   * @param chunks All chunks to be decoded
-   * @param pages All pages to be decoded
-   * @param min_rows crop all rows below min_row
-   * @param total_rows Maximum number of rows to read
-   * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
-   * bounds
-   * a preprocess.
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @return The output table along with columns' metadata
    */
-  void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                          hostdevice_vector<gpu::PageInfo>& pages,
-                          size_t min_row,
-                          size_t total_rows,
-                          bool uses_custom_row_bounds,
-                          size_type chunked_read_size);
+  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
 
   /**
-   * TODO
-   * @brief allocate_columns
-   * @param chunks
-   * @param pages
-   * @param id
-   * @param min_row
-   * @param total_rows
-   * @param uses_custom_row_bounds
+   * @brief Finalize the output table by adding empty columns for the non-selected columns in
+   * schema.
+   *
+   * @param out_metadata The output table metadata
+   * @param out_columns The columns for building the output table
+   * @return The output table along with columns' metadata
+   */
+  table_with_metadata finalize_output(table_metadata& out_metadata,
+                                      std::vector<std::unique_ptr<column>>& out_columns);
+
+  /**
+   * @brief Allocate data bufers for the output columns.
+   *
+   * @param chunks List of column chunk descriptors
+   * @param pages List of page information
+   * @param id The chunk intermediate data
+   * @param skip_rows Crop all rows below skip_rows
+   * @param num_rows Maximum number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    */
   void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         gpu::chunk_intermediate_data const& id,
-                        size_t min_row,
-                        size_t total_rows,
+                        size_t skip_rows,
+                        size_t num_rows,
                         bool uses_custom_row_bounds);
 
   /**
@@ -260,14 +216,14 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
    * @param page_nesting Page nesting array
-   * @param min_row Minimum number of rows from start
-   * @param total_rows Number of rows to output
+   * @param skip_rows Minimum number of rows from start
+   * @param num_rows Number of rows to output
    */
   void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                        size_t min_row,
-                        size_t total_rows);
+                        size_t skip_rows,
+                        size_t num_rows);
 
  private:
   rmm::cuda_stream_view _stream;
@@ -279,16 +235,16 @@ class reader::impl {
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
 
-  // output columns to be generated
-  std::vector<column_buffer> _output_columns;
+  // Buffers for generating output columns
+  std::vector<column_buffer> _output_buffers;
 
-  // data of output columns saved after construction for reuse
-  std::vector<column_buffer> _output_columns_template;
+  // Buffers copied from `_output_buffers` after construction for reuse
+  std::vector<column_buffer> _output_buffers_template;
 
-  // _output_columns associated schema indices
+  // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
 
-  // _output_columns associated metadata
+  // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;

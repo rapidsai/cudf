@@ -42,7 +42,7 @@ namespace detail {
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
   dictionary_column_view const& replacement,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -60,7 +60,7 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   dictionary_column_view const& input,
   scalar const& replacement,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
