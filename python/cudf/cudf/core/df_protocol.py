@@ -324,7 +324,7 @@ class _CuDFColumn:
 
         elif kind in _SUPPORTED_KINDS:
             # currently, we return a bit mask
-            return 3, 0
+            return _MaskKind.BITMASK, 0
 
         else:
             raise NotImplementedError(
