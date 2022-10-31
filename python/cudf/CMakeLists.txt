@@ -34,8 +34,8 @@ option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulti
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  set(USE_ARROW_PIP TRUE)
-  if(USE_ARROW_PIP)
+  set(USE_LIBARROW_FROM_PYARROW TRUE)
+  if(USE_LIBARROW_FROM_PYARROW)
     # TODO: These options should probably all become optional since in practice
     # they aren't meaningful except in the case where we actually compile Arrow.
     set(CUDF_USE_ARROW_STATIC OFF)
