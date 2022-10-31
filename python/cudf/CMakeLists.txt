@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(cudf_version 22.10.00)
+set(cudf_version 22.12.00)
 
 include(../../fetch_rapids.cmake)
 
@@ -63,3 +63,7 @@ include(rapids-cython)
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
+
+include(cmake/Modules/ProtobufHelpers.cmake)
+
+codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)

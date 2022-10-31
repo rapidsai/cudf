@@ -418,11 +418,6 @@ def to_orc(
     """{docstring}"""
 
     for col in df._data.columns:
-        if isinstance(col, cudf.core.column.StructColumn):
-            warnings.warn(
-                "Support for writing tables with struct columns is "
-                "currently experimental."
-            )
         if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "

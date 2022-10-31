@@ -64,7 +64,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream        = cudf::default_stream_value,
+         rmm::cuda_stream_view stream        = cudf::get_default_stream(),
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -146,7 +146,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -208,7 +208,7 @@ class column {
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count     = UNKNOWN_NULL_COUNT,
-                     rmm::cuda_stream_view stream = cudf::default_stream_value);
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Updates the count of null elements.

@@ -171,7 +171,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::extract_all_record(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

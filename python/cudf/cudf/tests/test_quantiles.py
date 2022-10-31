@@ -16,7 +16,7 @@ def test_single_q():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
@@ -28,7 +28,7 @@ def test_with_index():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
@@ -48,7 +48,7 @@ def test_with_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     pdf_q = pdf.quantile(q, interpolation="nearest")
-    gdf_q = gdf.quantiles(q, interpolation="nearest")
+    gdf_q = gdf.quantile(q, interpolation="nearest", method="table")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 

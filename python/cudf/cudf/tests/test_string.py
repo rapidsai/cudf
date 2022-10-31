@@ -3423,3 +3423,64 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
         sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
     )
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "patterns, expected",
+    [
+        (
+            lambda: ["a", "s", "g", "i", "o", "r"],
+            [
+                [-1, 0, 5, 3, -1, 2],
+                [-1, -1, -1, -1, 1, -1],
+                [2, 0, -1, -1, -1, 3],
+                [-1, -1, -1, 0, -1, -1],
+            ],
+        ),
+        (
+            lambda: cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"]),
+            [
+                [-1, 0, 5, -1, -1, 2, -1],
+                [-1, -1, -1, -1, 1, -1, -1],
+                [2, -1, -1, -1, -1, 3, 0],
+                [-1, -1, -1, -1, -1, -1, -1],
+            ],
+        ),
+    ],
+)
+def test_str_find_multiple(patterns, expected):
+    s = cudf.Series(["strings", "to", "search", "in"])
+    t = patterns()
+
+    expected = cudf.Series(expected)
+
+    # We convert to pandas because find_multiple returns ListDtype(int32)
+    # and expected is ListDtype(int64).
+    # Currently there is no easy way to type-cast these to match.
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+    s = cudf.Index(s)
+    t = cudf.Index(t)
+
+    expected.index = s
+
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+
+def test_str_find_multiple_error():
+    s = cudf.Series(["strings", "to", "search", "in"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "patterns should be an array-like or a Series object, found "
+            "<class 'str'>"
+        ),
+    ):
+        s.str.find_multiple("a")
+
+    t = cudf.Series([1, 2, 3])
+    with pytest.raises(
+        TypeError,
+        match=re.escape("patterns can only be of 'string' dtype, got: int64"),
+    ):
+        s.str.find_multiple(t)
