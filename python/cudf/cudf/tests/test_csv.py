@@ -789,9 +789,6 @@ def test_csv_reader_bools_custom():
         true_values=trues,
         false_values=falses,
     )
-    assert len(df.columns) == 2
-    assert df["text"].dtype == np.dtype("object")
-    assert df["int"].dtype == np.dtype("int64")
     expected = pd.read_csv(
         StringIO(buffer),
         names=names,
@@ -800,7 +797,7 @@ def test_csv_reader_bools_custom():
         true_values=trues,
         false_values=falses,
     )
-    assert_eq(df, expected)
+    assert_eq(df, expected, check_dtype=True)
 
 
 def test_csv_reader_bools_NA():
