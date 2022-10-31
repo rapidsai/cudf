@@ -54,7 +54,7 @@ def _write_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=None,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -121,7 +121,7 @@ def write_to_dataset(
     return_metadata=False,
     statistics="ROWGROUP",
     int96_timestamps=False,
-    row_group_size_bytes=None,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -209,7 +209,7 @@ def write_to_dataset(
             preserve_index=preserve_index,
             storage_options=storage_options,
         )
-
+        metadata_file_path = metadata_file_paths if return_metadata else None
         metadata = to_parquet(
             df=grouped_df,
             path=full_paths,
@@ -217,9 +217,7 @@ def write_to_dataset(
             index=preserve_index,
             partition_offsets=part_offsets,
             storage_options=storage_options,
-            metadata_file_path=metadata_file_paths
-            if return_metadata
-            else None,
+            metadata_file_path=metadata_file_path,
             statistics=statistics,
             int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
@@ -440,7 +438,7 @@ def read_parquet(
         open_file_options = {}
 
     if bytes_per_thread is None:
-        bytes_per_thread = 256_000_000
+        bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -672,7 +670,7 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=None,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,

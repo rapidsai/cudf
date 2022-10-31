@@ -25,6 +25,9 @@ except ImportError:
     fsspec_parquet = None
 
 
+_BYTES_PER_THREAD_DEFAULT = 256_000_000
+_ROW_GROUP_SIZE_BYTES_DEFAULT = 134217728
+
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
   available sources
@@ -190,7 +193,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    256_000_000 bytes.
+    {bytes_per_thread_bytes} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 
 Returns
@@ -217,7 +220,8 @@ cudf.io.parquet.read_parquet_metadata
 cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
-    remote_data_sources=_docstring_remote_sources
+    remote_data_sources=_docstring_remote_sources,
+    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_parquet = docfmt_partial(docstring=_docstring_read_parquet)
 
@@ -230,7 +234,7 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {'snappy', 'ZSTD', None}, default 'snappy'
+compression : {{'snappy', 'ZSTD', None}}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output. If
@@ -250,7 +254,7 @@ partition_file_name : str, optional, default None
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
-statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
+statistics : {{'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}}, default 'ROWGROUP'
     Level at which column statistics should be included in file.
 metadata_file_path : str, optional, default None
     If specified, this function will return a binary blob containing the footer
@@ -263,9 +267,9 @@ int96_timestamps : bool, default False
     timestamp[us] to the int96 format, which is the number of Julian
     days and the number of nanoseconds since midnight. If ``False``,
     timestamps will not be altered.
-row_group_size_bytes: integer or None, default None
+row_group_size_bytes: integer, default {row_group_size_bytes_val}
     Maximum size of each stripe of the output.
-    If None, 134217728 (128MB) will be used.
+    If None, {row_group_size_bytes_val} (128MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -295,7 +299,9 @@ return_metadata : bool, default False
 See Also
 --------
 cudf.read_parquet
-"""
+""".format(
+    row_group_size_bytes_val=_ROW_GROUP_SIZE_BYTES_DEFAULT
+)
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_merge_parquet_filemetadata = """
@@ -438,7 +444,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    256_000_000 bytes.
+    {bytes_per_thread_bytes} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 
 Returns
@@ -463,7 +469,8 @@ See Also
 --------
 cudf.DataFrame.to_orc
 """.format(
-    remote_data_sources=_docstring_remote_sources
+    remote_data_sources=_docstring_remote_sources,
+    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
@@ -1120,7 +1127,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    256_000_000 bytes.
+    {bytes_per_thread_bytes} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 Returns
 -------
@@ -1158,7 +1165,8 @@ See Also
 --------
 cudf.DataFrame.to_csv
 """.format(
-    remote_data_sources=_docstring_remote_sources
+    remote_data_sources=_docstring_remote_sources,
+    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
@@ -1555,7 +1563,7 @@ def get_reader_filepath_or_buffer(
     open_file_options=None,
     allow_raw_text_input=False,
     storage_options=None,
-    bytes_per_thread=256_000_000,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1911,10 +1919,12 @@ def _fsspec_data_transfer(
     path_or_fob,
     fs=None,
     file_size=None,
-    bytes_per_thread=256_000_000,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
     max_gap=64_000,
     mode="rb",
 ):
+    if bytes_per_thread is None:
+        bytes_per_thread = _BYTES_PER_THREAD_DEFAULT
 
     # Require `fs` if `path_or_fob` is not file-like
     file_like = is_file_like(path_or_fob)

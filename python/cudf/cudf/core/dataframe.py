@@ -6031,7 +6031,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         statistics="ROWGROUP",
         metadata_file_path=None,
         int96_timestamps=False,
-        row_group_size_bytes=None,
+        row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
         row_group_size_rows=None,
         max_page_size_bytes=None,
         max_page_size_rows=None,

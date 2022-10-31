@@ -62,7 +62,7 @@ def read_csv(
         )
 
     if bytes_per_thread is None:
-        bytes_per_thread = 256_000_000
+        bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer,

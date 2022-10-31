@@ -312,7 +312,7 @@ cpdef write_parquet(
         object statistics="ROWGROUP",
         object metadata_file_path=None,
         object int96_timestamps=False,
-        object row_group_size_bytes=None,
+        object row_group_size_bytes=134217728,
         object row_group_size_rows=None,
         object max_page_size_bytes=None,
         object max_page_size_rows=None,

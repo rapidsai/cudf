@@ -343,9 +343,7 @@ def read_orc(
             compression=None,
             use_python_file_object=use_python_file_object,
             storage_options=storage_options,
-            bytes_per_thread=256_000_000
-            if bytes_per_thread is None
-            else bytes_per_thread,
+            bytes_per_thread=bytes_per_thread,
         )
         if compression is not None:
             raise ValueError(
