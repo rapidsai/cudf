@@ -24,7 +24,7 @@ from cudf.testing._utils import assert_eq
 
 @pytest.fixture
 def pandas_df():
-    return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", None]})
 
 
 def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
