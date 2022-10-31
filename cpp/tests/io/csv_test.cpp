@@ -2264,19 +2264,54 @@ TEST_F(CsvReaderTest, UseColsValidation)
 {
   std::string buffer = "1,2,3";
 
-  cudf::io::csv_reader_options indexes_options =
+  cudf::io::csv_reader_options idx_cnt_options =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
-      .header(-1)
       .names({"a", "b"})
       .use_cols_indexes({0});
-  EXPECT_THROW(cudf::io::read_csv(indexes_options), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_csv(idx_cnt_options), cudf::logic_error);
 
-  cudf::io::csv_reader_options names_options =
+  cudf::io::csv_reader_options unique_idx_cnt_options =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
-      .header(-1)
+      .names({"a", "b"})
+      .use_cols_indexes({0, 0});
+  EXPECT_THROW(cudf::io::read_csv(unique_idx_cnt_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options name_cnt_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .names({"a", "b"})
+      .use_cols_names({"a"});
+  EXPECT_THROW(cudf::io::read_csv(name_cnt_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options unique_name_cnt_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .names({"a", "b"})
+      .use_cols_names({"a", "a"});
+  EXPECT_THROW(cudf::io::read_csv(unique_name_cnt_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options bad_name_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
       .names({"a", "b", "c"})
       .use_cols_names({"nonexistent_name"});
-  EXPECT_THROW(cudf::io::read_csv(names_options), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_csv(bad_name_options), cudf::logic_error);
+}
+
+TEST_F(CsvReaderTest, CropColumns)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
+      .names({"a", "b"})
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  ASSERT_EQ(result_table.num_columns(), 2);
+  ASSERT_EQ(result_table.column(0).type(), data_type{type_id::INT32});
+  ASSERT_EQ(result_table.column(1).type(), data_type{type_id::FLOAT32});
+  expect_column_data_equal(std::vector<int32_t>{12, 34, 56}, result_table.column(0));
+  expect_column_data_equal(std::vector<float>{9., 8., 7.}, result_table.column(1));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -684,10 +684,26 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // Exclude the end-of-data row from number of rows with actual data
   auto num_records = std::max(row_offsets.size(), 1ul) - 1;
 
+  auto const unique_use_cols_names = std::unordered_set<std::string>(
+    reader_opts.get_use_cols_names().cbegin(), reader_opts.get_use_cols_names().cend());
+  auto const unique_use_cols_indexes = std::set<int>(reader_opts.get_use_cols_indexes().cbegin(),
+                                                     reader_opts.get_use_cols_indexes().cend());
+  auto const is_column_selection_used =
+    not unique_use_cols_names.empty() or not unique_use_cols_indexes.empty();
+
   auto const detected_column_names =
     get_column_names(header, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
   auto const opts_have_all_col_names =
-    detected_column_names.empty() or reader_opts.get_names().size() == detected_column_names.size();
+    not reader_opts.get_names().empty() and
+    (
+      // no data to detect (the number of) columns
+      detected_column_names.empty() or
+      // number of user specified names matches what is detected
+      reader_opts.get_names().size() == detected_column_names.size() or
+      // Column are selected by name - user passed names should be used if the number matches
+      reader_opts.get_names().size() == unique_use_cols_names.size() or
+      // Columns are not selected by user; read first reader_opts.get_names().size() columns
+      not is_column_selection_used);
   auto column_names = opts_have_all_col_names ? reader_opts.get_names() : detected_column_names;
 
   auto num_actual_columns = static_cast<int32_t>(column_names.size());
@@ -756,15 +772,12 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   }
 
   // User can specify which columns should be parsed
-  if (!reader_opts.get_use_cols_indexes().empty() || !reader_opts.get_use_cols_names().empty()) {
+  if (is_column_selection_used) {
     std::fill(column_flags.begin(), column_flags.end(), column_parse::disabled);
     num_active_columns = 0;
   }
 
-  if (not reader_opts.get_use_cols_indexes().empty()) {
-    auto const unique_use_cols_indexes = std::set<int>(reader_opts.get_use_cols_indexes().cbegin(),
-                                                       reader_opts.get_use_cols_indexes().cend());
-
+  if (not unique_use_cols_indexes.empty()) {
     auto const are_opts_col_names_used =
       not reader_opts.get_names().empty() and not opts_have_all_col_names;
     CUDF_EXPECTS(not are_opts_col_names_used or
@@ -780,10 +793,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     }
   }
 
-  if (not reader_opts.get_use_cols_names().empty()) {
-    auto const unique_use_cols_names = std::unordered_set<std::string>(
-      reader_opts.get_use_cols_names().cbegin(), reader_opts.get_use_cols_names().cend());
-
+  if (not unique_use_cols_names.empty()) {
     for (auto const& name : unique_use_cols_names) {
       auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
       CUDF_EXPECTS(it != column_names.end(), "Nonexistent column selected");
