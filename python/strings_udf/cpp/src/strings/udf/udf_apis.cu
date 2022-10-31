@@ -34,21 +34,6 @@ namespace detail {
 namespace {
 
 /**
- * @brief Frees udf_strings device memory
- *
- * @param d_buffer Array of udf_strings
- */
-void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
-                           cudf::size_type size,
-                           rmm::cuda_stream_view stream)
-{
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     size,
-                     [d_strings] __device__(auto idx) { d_strings[idx].clear(); });
-}
-
-/**
  * @brief Functor wraps string_view objects around udf_string objects
  *
  * No string data is copied.
@@ -78,7 +63,7 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 
 /**
  * @copydoc column_from_udf_string_array
-
+ *
  * @param stream CUDA stream used for allocating/copying device memory and launching kernels
  */
 std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
@@ -93,13 +78,22 @@ std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings
                     indices.data(),
                     udf_string_to_string_view_transform_fn{});
 
-  auto results = cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
+  return cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
+}
 
-  // free the individual udf_string elements
-  free_udf_string_array(d_strings, size, stream);
-
-  // return new column
-  return results;
+/**
+ * @copydoc free_udf_string_array
+ *
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
+void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
+                           cudf::size_type size,
+                           rmm::cuda_stream_view stream)
+{
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator(0),
+                     size,
+                     [d_strings] __device__(auto idx) { d_strings[idx].clear(); });
 }
 
 }  // namespace detail
@@ -115,6 +109,11 @@ std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings
                                                            cudf::size_type size)
 {
   return detail::column_from_udf_string_array(d_strings, size, rmm::cuda_stream_default);
+}
+
+void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
+{
+  detail::free_udf_string_array(d_strings, size, rmm::cuda_stream_default);
 }
 
 }  // namespace udf

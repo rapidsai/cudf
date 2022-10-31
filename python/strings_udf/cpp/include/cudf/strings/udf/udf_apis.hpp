@@ -57,6 +57,17 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
                                                            cudf::size_type size);
 
+/**
+ * @brief Frees a vector of udf_string objects
+ *
+ * The individual udf_strings are cleared freeing each of their internal
+ * device memory buffers.
+ *
+ * @param d_strings Pointer to device memory of udf_string objects
+ * @param size The number of elements in the d_strings array
+ */
+void free_udf_string_array(udf_string* d_strings, cudf::size_type size);
+
 }  // namespace udf
 }  // namespace strings
 }  // namespace cudf
