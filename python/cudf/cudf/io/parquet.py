@@ -184,8 +184,8 @@ def write_to_dataset(
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
         key-value pairs are forwarded to ``urllib.request.Request`` as
-        header options. For other URLs (e.g. starting with “s3://”, and
-        “gcs://”) the key-value pairs are forwarded to ``fsspec.open``.
+        header options. For other URLs (e.g. starting with "s3://", and
+        "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
     """
 

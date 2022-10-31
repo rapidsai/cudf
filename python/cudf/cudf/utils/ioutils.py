@@ -1112,7 +1112,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 bytes_per_thread : int, default None
@@ -1208,7 +1208,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 Returns
@@ -1687,8 +1687,8 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
         key-value pairs are forwarded to ``urllib.request.Request`` as
-        header options. For other URLs (e.g. starting with “s3://”, and
-        “gcs://”) the key-value pairs are forwarded to ``fsspec.open``.
+        header options. For other URLs (e.g. starting with "s3://", and
+        "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
 
     Returns
