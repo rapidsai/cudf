@@ -83,7 +83,7 @@ class udf_string {
    *
    * @param str String to copy
    */
-  __device__ udf_string(cudf::string_view const str);
+  __device__ udf_string(cudf::string_view str);
 
   /**
    * @brief Create a string object with `count` copies of character `chr`
@@ -201,7 +201,7 @@ class udf_string {
    *            not match is ordered after the corresponding character in `str`,
    *            or all compared characters match but the `str` string is longer.
    */
-  __device__ int compare(cudf::string_view const str) const noexcept;
+  __device__ int compare(cudf::string_view str) const noexcept;
 
   /**
    * @brief Comparing target character array with this string
@@ -221,32 +221,32 @@ class udf_string {
   /**
    * @brief Returns true if `rhs` matches this string exactly
    */
-  __device__ bool operator==(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator==(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` does not match this string
    */
-  __device__ bool operator!=(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator!=(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Returns true if this string is ordered before `rhs`
    */
-  __device__ bool operator<(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator<(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` is ordered before this string
    */
-  __device__ bool operator>(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator>(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Returns true if this string matches or is ordered before `rhs`
    */
-  __device__ bool operator<=(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator<=(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Returns true if `rhs` matches or is ordered before this string
    */
-  __device__ bool operator>=(cudf::string_view const rhs) const noexcept;
+  __device__ bool operator>=(cudf::string_view rhs) const noexcept;
 
   /**
    * @brief Remove all bytes from this string
@@ -308,7 +308,7 @@ class udf_string {
    * @param str String to copy
    * @return This string with new contents
    */
-  __device__ udf_string& assign(cudf::string_view const str);
+  __device__ udf_string& assign(cudf::string_view str);
 
   /**
    * @brief Replaces the contents of this string with contents of `str`
@@ -333,7 +333,7 @@ class udf_string {
    * @param str String to append
    * @return This string with the appended argument
    */
-  __device__ udf_string& operator+=(cudf::string_view const str);
+  __device__ udf_string& operator+=(cudf::string_view str);
 
   /**
    * @brief Append a character to the end of this string
@@ -375,7 +375,7 @@ class udf_string {
    * @param str String to append
    * @return This string with the appended argument
    */
-  __device__ udf_string& append(cudf::string_view const str);
+  __device__ udf_string& append(cudf::string_view str);
 
   /**
    * @brief Append a character to the end of this string
@@ -396,7 +396,7 @@ class udf_string {
    * @param str String to insert into this one
    * @return This string with the inserted argument
    */
-  __device__ udf_string& insert(cudf::size_type pos, cudf::string_view const str);
+  __device__ udf_string& insert(cudf::size_type pos, cudf::string_view str);
 
   /**
    * @brief Insert a null-terminated character array into the character position specified
@@ -457,9 +457,7 @@ class udf_string {
    * @param str String to replace the given range
    * @return This string modified with the replacement
    */
-  __device__ udf_string& replace(cudf::size_type pos,
-                                 cudf::size_type count,
-                                 cudf::string_view const str);
+  __device__ udf_string& replace(cudf::size_type pos, cudf::size_type count, cudf::string_view str);
 
   /**
    * @brief Replace a range of characters with a null-terminated character array

@@ -124,7 +124,7 @@ __device__ inline udf_string::udf_string(udf_string&& src) noexcept
   src.m_capacity = 0;
 }
 
-__device__ inline udf_string::udf_string(cudf::string_view const str)
+__device__ inline udf_string::udf_string(cudf::string_view str)
   : udf_string(str.data(), str.size_bytes())
 {
 }
@@ -138,10 +138,7 @@ __device__ inline udf_string& udf_string::operator=(udf_string&& str) noexcept
   return assign(std::move(str));
 }
 
-__device__ inline udf_string& udf_string::operator=(cudf::string_view const str)
-{
-  return assign(str);
-}
+__device__ inline udf_string& udf_string::operator=(cudf::string_view str) { return assign(str); }
 
 __device__ inline udf_string& udf_string::operator=(char const* str) { return assign(str); }
 
@@ -157,7 +154,7 @@ __device__ udf_string& udf_string::assign(udf_string&& str) noexcept
   return *this;
 }
 
-__device__ udf_string& udf_string::assign(cudf::string_view const str)
+__device__ udf_string& udf_string::assign(cudf::string_view str)
 {
   return assign(str.data(), str.size_bytes());
 }
@@ -236,7 +233,7 @@ __device__ inline cudf::size_type udf_string::byte_offset(cudf::size_type pos) c
   return offset;
 }
 
-__device__ inline int udf_string::compare(cudf::string_view const in) const noexcept
+__device__ inline int udf_string::compare(cudf::string_view in) const noexcept
 {
   return compare(in.data(), in.size_bytes());
 }
@@ -247,32 +244,32 @@ __device__ inline int udf_string::compare(char const* data, cudf::size_type byte
   return view.compare(data, bytes);
 }
 
-__device__ inline bool udf_string::operator==(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator==(cudf::string_view rhs) const noexcept
 {
   return m_bytes == rhs.size_bytes() && compare(rhs) == 0;
 }
 
-__device__ inline bool udf_string::operator!=(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator!=(cudf::string_view rhs) const noexcept
 {
   return compare(rhs) != 0;
 }
 
-__device__ inline bool udf_string::operator<(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator<(cudf::string_view rhs) const noexcept
 {
   return compare(rhs) < 0;
 }
 
-__device__ inline bool udf_string::operator>(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator>(cudf::string_view rhs) const noexcept
 {
   return compare(rhs) > 0;
 }
 
-__device__ inline bool udf_string::operator<=(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator<=(cudf::string_view rhs) const noexcept
 {
   return compare(rhs) <= 0;
 }
 
-__device__ inline bool udf_string::operator>=(cudf::string_view const rhs) const noexcept
+__device__ inline bool udf_string::operator>=(cudf::string_view rhs) const noexcept
 {
   return compare(rhs) >= 0;
 }
@@ -340,15 +337,12 @@ __device__ inline udf_string& udf_string::append(cudf::char_utf8 chr, cudf::size
   return *this;
 }
 
-__device__ inline udf_string& udf_string::append(cudf::string_view const in)
+__device__ inline udf_string& udf_string::append(cudf::string_view in)
 {
   return append(in.data(), in.size_bytes());
 }
 
-__device__ inline udf_string& udf_string::operator+=(cudf::string_view const in)
-{
-  return append(in);
-}
+__device__ inline udf_string& udf_string::operator+=(cudf::string_view in) { return append(in); }
 
 __device__ inline udf_string& udf_string::operator+=(cudf::char_utf8 chr) { return append(chr); }
 
@@ -366,7 +360,7 @@ __device__ inline udf_string& udf_string::insert(cudf::size_type pos, char const
   return insert(pos, str, detail::bytes_in_null_terminated_string(str));
 }
 
-__device__ inline udf_string& udf_string::insert(cudf::size_type pos, cudf::string_view const in)
+__device__ inline udf_string& udf_string::insert(cudf::size_type pos, cudf::string_view in)
 {
   return insert(pos, in.data(), in.size_bytes());
 }
@@ -443,7 +437,7 @@ __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
 
 __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
                                                   cudf::size_type count,
-                                                  cudf::string_view const in)
+                                                  cudf::string_view in)
 {
   return replace(pos, count, in.data(), in.size_bytes());
 }
