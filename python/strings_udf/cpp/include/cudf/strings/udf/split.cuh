@@ -29,8 +29,8 @@ namespace udf {
  * @brief Split string using given string
  *
  * The caller must allocate an array of cudf::string_view to be filled
- * in by this function. Calling this with a `nullptr` for the `result`
- * will return the number of elements.
+ * in by this function. This function can be called with a `result=nullptr`
+ * to compute the number of tokens.
  *
  * @code{.cpp}
  * auto d_str = cudf::string_view{"the best  of times ", 19};
