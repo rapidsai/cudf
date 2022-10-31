@@ -367,7 +367,7 @@ orc_metadata read_orc_metadata(source_info const& src_info)
   auto sources = make_datasources(src_info);
 
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  auto const footer = orc::metadata(sources.front().get(), cudf::default_stream_value).ff;
+  auto const footer = orc::metadata(sources.front().get(), cudf::detail::default_stream_value).ff;
 
   return {{make_orc_column_schema(footer.types, 0, "")},
           static_cast<size_type>(footer.numberOfRows),
