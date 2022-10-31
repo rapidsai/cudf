@@ -439,6 +439,9 @@ def read_parquet(
             )
         open_file_options = {}
 
+    if bytes_per_thread is None:
+        bytes_per_thread = 256_000_000
+
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
     if not is_list_like(filepath_or_buffer):
@@ -502,9 +505,7 @@ def read_parquet(
             use_python_file_object=use_python_file_object,
             open_file_options=open_file_options,
             storage_options=storage_options,
-            bytes_per_thread=256_000_000
-            if bytes_per_thread is None
-            else bytes_per_thread,
+            bytes_per_thread=bytes_per_thread,
         )
 
         if compression is not None:
