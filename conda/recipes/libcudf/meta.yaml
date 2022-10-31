@@ -32,12 +32,10 @@ requirements:
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
-    - libprotobuf>=3.20.1,<3.21.0a0
   host:
-    - rapidsai-nightly::librmm {{ minor_version }}.*
+    - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp {{ arrow_cpp_version }}
-    - libprotobuf>=3.20.1,<3.21.0a0
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
 
@@ -57,9 +55,8 @@ outputs:
         - cmake {{ cmake_version }}
       run:
         - cudatoolkit {{ cuda_spec }}
-        - rapidsai-nightly::librmm {{ minor_version }}.*
+        - librmm {{ minor_version }}.*
         - arrow-cpp {{ arrow_cpp_version }}
-        - libprotobuf>=3.20.1,<3.21.0a0
         - dlpack {{ dlpack_version }}
     test:
       commands:

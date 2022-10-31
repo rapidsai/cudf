@@ -49,7 +49,7 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-gpuci_mamba_retry install rapidsai-nightly::rmm==22.10.00a221026 rapidsai-nightly::librmm==22.10.00a221026
+#gpuci_mamba_retry install rapidsai-nightly::rmm==22.10.00a221026 rapidsai-nightly::librmm==22.10.00a221026
 
 # Remove `rapidsai-nightly` & `dask/label/dev` channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
@@ -87,7 +87,7 @@ else
 fi
 
 # TODO: remove
-sed -i '/rapidsai$/d' /opt/conda/.condarc
+#sed -i '/rapidsai$/d' /opt/conda/.condarc
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
