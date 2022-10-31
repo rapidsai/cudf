@@ -193,7 +193,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    {bytes_per_thread_bytes} bytes.
+    {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 
 Returns
@@ -221,7 +221,7 @@ cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources,
-    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_parquet = docfmt_partial(docstring=_docstring_read_parquet)
 
@@ -444,7 +444,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    {bytes_per_thread_bytes} bytes.
+    {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 
 Returns
@@ -470,7 +470,7 @@ See Also
 cudf.DataFrame.to_orc
 """.format(
     remote_data_sources=_docstring_remote_sources,
-    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
@@ -1167,7 +1167,7 @@ See Also
 cudf.DataFrame.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources,
-    bytes_per_thread_bytes=_BYTES_PER_THREAD_DEFAULT,
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
 )
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
