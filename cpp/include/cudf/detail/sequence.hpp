@@ -36,7 +36,7 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   scalar const& step,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -49,7 +49,7 @@ std::unique_ptr<column> sequence(
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(
   size_type size,
   scalar const& init,
   size_type months,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

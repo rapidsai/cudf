@@ -2,7 +2,6 @@
 
 # cython: boundscheck = False
 
-
 import io
 import os
 from collections import abc
@@ -16,13 +15,12 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
-cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.io.json cimport (
     json_reader_options,
     read_json as libcudf_read_json,
     schema_element,
 )
-from cudf._lib.cpp.types cimport data_type, size_type, type_id
+from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr

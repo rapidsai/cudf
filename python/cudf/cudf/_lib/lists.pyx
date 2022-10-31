@@ -12,10 +12,12 @@ from cudf._lib.cpp.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
 from cudf._lib.cpp.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
 from cudf._lib.cpp.lists.explode cimport explode_outer as cpp_explode_outer
+from cudf._lib.cpp.lists.extract cimport extract_list_element
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.lists.sorting cimport sort_lists as cpp_sort_lists
 from cudf._lib.cpp.lists.stream_compaction cimport distinct as cpp_distinct
@@ -26,20 +28,10 @@ from cudf._lib.cpp.types cimport (
     nan_equality,
     null_equality,
     null_order,
-    null_policy,
     order,
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.types cimport (
-    underlying_type_t_null_order,
-    underlying_type_t_order,
-)
-
-from cudf.core.dtypes import ListDtype
-
-from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
-from cudf._lib.cpp.lists.extract cimport extract_list_element
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 

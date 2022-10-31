@@ -1,11 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import cudf
-
 from cpython cimport pycapsule
-from libcpp cimport bool
 from libcpp.memory cimport shared_ptr, unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
@@ -18,7 +14,6 @@ from cudf._lib.cpp.interop cimport (
     to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
-from cudf._lib.cpp.io.types cimport column_in_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
