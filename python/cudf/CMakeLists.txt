@@ -31,12 +31,11 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  if(USE_LIBARROW_FROM_PYARROW)
+  set(USE_ARROW_PIP TRUE)
+  if(USE_ARROW_PIP)
     # TODO: These options should probably all become optional since in practice
     # they aren't meaningful except in the case where we actually compile Arrow.
     set(CUDF_USE_ARROW_STATIC OFF)

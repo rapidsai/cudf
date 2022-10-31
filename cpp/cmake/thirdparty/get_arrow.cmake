@@ -63,7 +63,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
          ENABLE_PARQUET
 )
 
-  if(USE_LIBARROW_FROM_PYARROW)
+  # TODO: Hardcoding for now.
+  set(USE_ARROW_PIP TRUE)
+  if(USE_ARROW_PIP)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
     set(ARROW_FOUND TRUE PARENT_SCOPE)
@@ -71,16 +73,17 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
     # When using the libarrow inside a wheel we must build libcudf with the old
     # ABI because pyarrow's `libarrow.so` is compiled for manylinux2014
-    # (centos7 toolchain) which uses the old ABI. Note that these flags will
-    # often be redundant because we build wheels in manylinux containers that
-    # actually have the old libc++ anyway, but setting them explicitly ensures
-    # correct and consistent behavior in all other cases such as aarch builds
-    # on newer manylinux or testing builds in newer containers.
+    # (centos7 toolchain) which uses the old ABI.
     # TODO: Tests will not build successfully now without also propagating
     # these options to builds of GTest. Similarly, benchmarks will not work
-    # without updating GBench (and possibly NVBench) builds. Do we care about
-    # that since we don't anticipate using this feature except when building
-    # wheels?
+    # without updating GBench (and possibly NVBench) builds. Unclear if we are
+    # going to test that regularly anyway, though, so we may not need to update
+    # that.
+    # TODO: How to propagate these flags up to the Python build?
+    # Note: These flags will be redundant in some cases where we build wheels
+    # in manylinux containers that actually have the old libc++, but not in all
+    # cases e.g. aarch builds on newer manylinux or testing builds in newer
+    # containers.
     list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
     set(CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}" PARENT_SCOPE)
@@ -90,7 +93,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   # TODO: How would the targets have been created before this function is
-  # called? Is this just to ensure that the function is idempotent?
+  # called? Is that really something we should support?
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND TRUE PARENT_SCOPE)
@@ -118,9 +121,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ARROW_BUILD_SHARED OFF)
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
     # library
-    # TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`)
-    # instead? This is a big hammer, although I guess it is effectively limited
-    # which packages will be affected by the scope of the variable here.
+    # TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`) instead? This is a big hammer.
     set(CPM_DOWNLOAD_ALL TRUE)
   else()
     set(ARROW_BUILD_SHARED ON)
