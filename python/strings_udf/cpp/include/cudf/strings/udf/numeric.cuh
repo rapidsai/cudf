@@ -59,7 +59,7 @@ __device__ inline udf_string to_string(int64_t value)
 /**
  * @brief Converts a string into a double
  *
- * Support scientific notation as well.
+ * This function supports scientific notation.
  * Overflow goes to inf or -inf and underflow may go to 0.
  */
 __device__ inline double stod(string_view const& d_str)

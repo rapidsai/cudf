@@ -34,11 +34,11 @@ namespace udf {
  *
  * @code{.cpp}
  * auto d_str = cudf::string_view{"the best  of times ", 19};
- * auto tgt = cudf::string_view{}; // empty string
+ * auto tgt = cudf::string_view{" ", 1};
  * auto token_count = split(d_str, tgt, nullptr);
  * auto result = new cudf::string_view[token_count];
  * split(d_str, tgt, result);
- * // result is array like ["the", "best", "of", "times"]
+ * // result is array like ["the", "best", "", "of", "times", ""]
  * @endcode
  *
  * @param d_str String to split

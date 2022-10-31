@@ -28,7 +28,7 @@ namespace udf {
  * @brief Pad beginning and/or end of a string with the given fill character
  *
  * The side_type::BOTH will attempt to center the text using the `fill_char`.
- * If the `width` is smaller than the length of `d_str` no change occurs.
+ * If the `width <= d_str.length()` no change occurs.
  *
  * @tparam side Specify where the padding should occur
  * @param d_str String to pad
