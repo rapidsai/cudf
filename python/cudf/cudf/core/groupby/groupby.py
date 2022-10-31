@@ -689,10 +689,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         else:
             grouped_keys = cudf.core.index.as_index([], name=None)
-        if isinstance(self.grouping.keys, cudf.MultiIndex):
-            grouped_keys.names = self.grouping.keys.names
-        else:
-            grouped_keys.name = self.grouping.keys.name
+
+        num_keys = len(self.grouping._key_columns)
+        if num_keys > 1:
+            grouped_keys.names = self.grouping.names
+        elif num_keys == 1:
+            grouped_keys.name = self.grouping.names[0]
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
@@ -1379,7 +1381,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
-        ).groupby(by=self.grouping.keys)
+        ).groupby(by=self.grouping)
 
         try:
             gb_cov_corr = column_pair_groupby.agg(func)
@@ -1752,7 +1754,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping.keys,
+            by=self.grouping,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
