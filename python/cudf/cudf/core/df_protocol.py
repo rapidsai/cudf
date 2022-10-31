@@ -320,7 +320,7 @@ class _CuDFColumn:
         kind = self.dtype[0]
         if self.null_count == 0:
             # there is no validity mask so it is non-nullable
-            return 0, None
+            return _MaskKind.NON_NULLABLE, None
 
         elif kind in _SUPPORTED_KINDS:
             # currently, we return a bit mask
