@@ -265,8 +265,8 @@ int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
     timestamp[us] to the int96 format, which is the number of Julian
-    days and the number of nanoseconds since midnight. If ``False``,
-    timestamps will not be altered.
+    days and the number of nanoseconds since midnight of 1970-01-01.
+    If ``False``, timestamps will not be altered.
 row_group_size_bytes: integer, default {row_group_size_bytes_val}
     Maximum size of each stripe of the output.
     If None, {row_group_size_bytes_val} (128MB) will be used.
