@@ -864,6 +864,8 @@ def test_memory_usage():
     assert s1.memory_usage() == 44
     s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
     assert s2.memory_usage() == 68
+    s3 = cudf.Series([[{"b": 1, "a": 10}, {"b": 2, "a": 100}]])
+    assert s3.memory_usage() == 40
 
 
 @pytest.mark.parametrize(

@@ -627,6 +627,13 @@ class StructDtype(_BaseDtype):
                 fields[k] = pickle.loads(dtype)
         return cls(fields)
 
+    @property
+    def itemsize(self):
+        return sum(
+            cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
+            for field in self._typ
+        )
+
 
 decimal_dtype_template = textwrap.dedent(
     """
