@@ -21,6 +21,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.index import _index_from_data
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
@@ -475,12 +476,17 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
 
+        grouped_key_cols = [
+            k._with_type_metadata(c.dtype)
+            for c, k in zip(self.grouping._key_columns, grouped_key_cols)
+        ]
+
         if self._as_index:
             result = cudf.DataFrame._from_data(data)
-            result_index = self.grouping.keys._from_columns_like_self(
-                grouped_key_cols,
-            )
-            result.index = result_index
+            if len(self.grouping._key_columns):
+                result.index = _index_from_data(
+                    dict(zip(self.grouping.names, grouped_key_cols))
+                )
         else:
             result = cudf.DataFrame._from_columns(
                 [*grouped_key_cols, *data.columns],
@@ -677,7 +683,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        if grouped_key_cols:
+            grouped_keys = cudf.core.index._index_from_columns(
+                grouped_key_cols
+            )
+        else:
+            grouped_keys = cudf.core.index.as_index([], name=None)
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
         else:
