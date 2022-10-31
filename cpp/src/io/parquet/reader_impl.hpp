@@ -55,6 +55,9 @@ class reader::impl {
   /**
    * @brief Constructor from an array of dataset sources with reader options.
    *
+   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
+   * entire given file.
+   *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -84,9 +87,22 @@ class reader::impl {
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
    *
-   * By using this constructor, the reader will supports chunked reading with read size limit.
+   * By using this constructor, the reader will supports iterative (chunked) reading through
+   * `has_next() ` and `read_chunk()`. For example:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
    *
-   * @param chunk_read_limit The size limit (in bytes) to read each chunk
+   * ```
+   *
+   * Reading the whole given file at once through `read()` function is still supported if
+   * `chunk_read_limit == 0` (i.e., no reading limit). In such case, `read_chunk()` will also return
+   * rows of the entire file.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
+   *        is no limit
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -110,13 +126,13 @@ class reader::impl {
 
  private:
   /**
-   * @brief Perform the necessary data preprocessing for reading data later on.
+   * @brief Perform the necessary data preprocessing for reading columns later on.
    *
    * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read
+   * @param num_rows Number of rows to read, or `-1` to read all rows
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
-   * @param row_group_indices Lists of row groups to read, one per source
+   * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
    */
   void prepare_data(size_type skip_rows,
                     size_type num_rows,
@@ -130,7 +146,7 @@ class reader::impl {
                                 size_type num_rows);
 
   /**
-   * @brief Compute the reading info (skip_rows, num_rows) for the output chunks.
+   * @brief Compute the split locations {skip_rows, num_rows} for the output chunks.
    *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas:
@@ -145,13 +161,15 @@ class reader::impl {
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
+   *        is no limit
    */
   void compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                hostdevice_vector<gpu::PageInfo>& pages,
                                size_t skip_rows,
                                size_t num_rows,
                                bool uses_custom_row_bounds,
-                               size_t chunked_read_size);
+                               size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -173,7 +191,7 @@ class reader::impl {
   /**
    * @brief Read a chunk of data and return an output table.
    *
-   * This function is called internally and expects all preprocessing steps have been done.
+   * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds

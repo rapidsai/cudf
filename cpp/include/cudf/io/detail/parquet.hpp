@@ -82,7 +82,7 @@ class reader {
 };
 
 /**
- * @brief The reader class that supports chunked reading of a given file.
+ * @brief The reader class that supports iterative reading of a given file.
  *
  * This class intentionally subclasses the `reader` class with private inheritance to hide the
  * `reader::read()` API. As such, only chunked reading APIs are supported.
@@ -90,9 +90,22 @@ class reader {
 class chunked_reader : reader {
  public:
   /**
-   * @brief Constructor from a read limit and an array of data sources with reader options.
+   * @brief Constructor from a read size limit and an array of data sources with reader options.
    *
-   * @param chunk_read_limit The size limit (in bytes) to read each chunk
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * If `chunk_read_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
+   * whole file and return a table containing all rows.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
+   *        is no limit
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.

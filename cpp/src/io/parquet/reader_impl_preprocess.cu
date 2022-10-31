@@ -1010,11 +1010,11 @@ struct row_total_size {
  *
  * @param sizes Vector of cumulative {row_count, byte_size} pairs
  * @param num_rows Total number of rows to read
- * @param chunked_read_size Limit on total number of bytes to be returned per read, for all columns
+ * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
  */
 std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes,
                                               size_t num_rows,
-                                              size_t chunked_read_size)
+                                              size_t chunk_read_limit)
 {
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
@@ -1030,12 +1030,12 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
     });
     auto end   = start + sizes.size();
     while (cur_row_count < num_rows) {
-      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, chunked_read_size) - start;
+      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, chunk_read_limit) - start;
 
-      // if we're past the end, or if the returned bucket is > than the chunked_read_size, move back
+      // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
       // one.
       if (static_cast<size_t>(p) >= sizes.size() ||
-          (sizes[p].size_bytes - cur_cumulative_size > chunked_read_size)) {
+          (sizes[p].size_bytes - cur_cumulative_size > chunk_read_limit)) {
         p--;
       }
 
@@ -1064,18 +1064,18 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
 /**
  * @brief Given a set of pages that have had their sizes computed by nesting level and
  * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
- * a set of reads that will generate output columns of total size <= `chunked_read_size` bytes.
+ * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
  *
  * @param pages All pages in the file
  * @param id Additional intermediate information required to process the pages
  * @param num_rows Total number of rows to read
- * @param chunked_read_size Limit on total number of bytes to be returned per read, for all columns
+ * @param chunk_read_limit Limit on total number of bytes to be returned per read, for all columns
  * @param stream CUDA stream to use, default 0
  */
 std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
                                                  gpu::chunk_intermediate_data const& id,
                                                  size_t num_rows,
-                                                 size_t chunked_read_size,
+                                                 size_t chunk_read_limit,
                                                  rmm::cuda_stream_view stream)
 {
   auto const& page_keys  = id.page_keys;
@@ -1150,7 +1150,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                   stream);
   stream.synchronize();
 
-  return find_splits(h_adjusted, num_rows, chunked_read_size);
+  return find_splits(h_adjusted, num_rows, chunk_read_limit);
 }
 
 struct get_page_chunk_idx {
@@ -1259,7 +1259,7 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
                                            size_t skip_rows,
                                            size_t num_rows,
                                            bool uses_custom_row_bounds,
-                                           size_t chunked_read_size)
+                                           size_t chunk_read_limit)
 {
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
@@ -1326,7 +1326,7 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
   }
 
   // intermediate data we will need for further chunked reads
-  if (has_lists || chunked_read_size > 0) {
+  if (has_lists || chunk_read_limit > 0) {
     // computes:
     // PageNestingInfo::num_rows for each page. the true number of rows (taking repetition into
     // account), not just the number of values. PageNestingInfo::size for each level of nesting, for
@@ -1340,8 +1340,8 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
                           chunks,
                           0,  // 0-max size_t. process all possible rows
                           std::numeric_limits<size_t>::max(),
-                          true,                   // compute num_rows
-                          chunked_read_size > 0,  // compute string sizes
+                          true,                  // compute num_rows
+                          chunk_read_limit > 0,  // compute string sizes
                           _stream);
 
     // computes:
@@ -1401,10 +1401,9 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
 
   // compute splits if necessary. otherwise retun a single split representing
   // the whole file.
-  _chunk_read_info =
-    chunked_read_size > 0
-      ? compute_splits(pages, _chunk_itm_data, num_rows, chunked_read_size, _stream)
-      : std::vector<gpu::chunk_read_info>{{skip_rows, num_rows}};
+  _chunk_read_info = chunk_read_limit > 0
+                       ? compute_splits(pages, _chunk_itm_data, num_rows, chunk_read_limit, _stream)
+                       : std::vector<gpu::chunk_read_info>{{skip_rows, num_rows}};
 }
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
