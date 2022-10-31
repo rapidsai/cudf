@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef HASH_ALLOCATOR_CUH
-#define HASH_ALLOCATOR_CUH
+#pragma once
 
 #include <new>
 
@@ -61,5 +60,3 @@ bool operator!=(const default_allocator<T>&, const default_allocator<U>&)
 {
   return false;
 }
-
-#endif
