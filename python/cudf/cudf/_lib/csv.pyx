@@ -2,13 +2,13 @@
 
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.cpp.types cimport data_type
 from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.types cimport dtype_to_data_type
 
@@ -45,11 +45,7 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.utils cimport (
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
 
@@ -121,8 +117,6 @@ cdef csv_reader_options make_csv_reader_options(
 ) except *:
     cdef source_info c_source_info = make_source_info([datasource])
     cdef compression_type c_compression
-    cdef size_type c_header
-    cdef string c_prefix
     cdef vector[string] c_names
     cdef size_t c_byte_range_offset = (
         byte_range[0] if byte_range is not None else 0
