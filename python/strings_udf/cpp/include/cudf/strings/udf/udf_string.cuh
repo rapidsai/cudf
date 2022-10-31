@@ -306,12 +306,12 @@ __device__ void udf_string::shrink_to_fit()
   if (m_bytes < m_capacity) { reallocate(m_bytes); }
 }
 
-__device__ inline udf_string& udf_string::append(char const* str, cudf::size_type in_bytes)
+__device__ inline udf_string& udf_string::append(char const* str, cudf::size_type bytes)
 {
-  if (in_bytes <= 0) { return *this; }
-  auto const nbytes = m_bytes + in_bytes;
+  if (bytes <= 0) { return *this; }
+  auto const nbytes = m_bytes + bytes;
   if (nbytes > m_capacity) { reallocate(2 * nbytes); }
-  memcpy(m_data + m_bytes, str, in_bytes);
+  memcpy(m_data + m_bytes, str, bytes);
   m_bytes         = nbytes;
   m_data[m_bytes] = '\0';
   return *this;

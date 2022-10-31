@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -108,12 +109,12 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
 std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
                                                            cudf::size_type size)
 {
-  return detail::column_from_udf_string_array(d_strings, size, rmm::cuda_stream_default);
+  return detail::column_from_udf_string_array(d_strings, size, cudf::get_default_stream());
 }
 
 void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
 {
-  detail::free_udf_string_array(d_strings, size, rmm::cuda_stream_default);
+  detail::free_udf_string_array(d_strings, size, cudf::get_default_stream());
 }
 
 }  // namespace udf
