@@ -6121,7 +6121,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """{docstring}"""
         from cudf.io import orc
 
-        orc.to_orc(
+        return orc.to_orc(
             df=self,
             fname=fname,
             compression=compression,

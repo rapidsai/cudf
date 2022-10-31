@@ -54,7 +54,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 
@@ -144,7 +144,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 filters : list of tuple, list of lists of tuples default None
@@ -279,12 +279,12 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 return_metadata : bool, default False
     Return parquet metadata for written data. Returned metadata will
-    include the file-path metadata (relative to `root_path`).
+    include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
 **kwargs
@@ -430,7 +430,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 bytes_per_thread : int, default None
@@ -496,7 +496,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 index : bool, default None
@@ -679,7 +679,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 
@@ -1311,7 +1311,7 @@ storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
     pairs are forwarded to ``urllib.request.Request`` as header options.
-    For other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 
@@ -1595,7 +1595,7 @@ def get_reader_filepath_or_buffer(
         Determines the number of bytes to be allocated per thread to read the
         files in parallel. When there is a file of large size, we get slightly
         better throughput by decomposing it and transferring multiple "blocks"
-        in parallel (using a python thread pool). Default allocation is
+        in parallel (using a Python thread pool). Default allocation is
         256_000_000 bytes.
         This parameter is functional only when `use_python_file_object=False`.
 
