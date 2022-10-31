@@ -21,8 +21,8 @@
 
 #include <cudf/io/csv.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 256 << 20;
 constexpr cudf::size_type num_cols = 64;
 
