@@ -85,7 +85,7 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
     if col.null_count == 0:
         assert col.describe_null == (0, None)
     else:
-        assert col.describe_null == (3, 0)
+        assert col.describe_null == (4, 0)
 
 
 def assert_dataframe_equal(dfo: DataFrameObject, df: cudf.DataFrame):
@@ -202,7 +202,7 @@ def test_NA_categorical_dtype():
     col = df.__dataframe__().get_column_by_name("B")
     assert col.dtype[0] == _DtypeKind.CATEGORICAL
     assert col.null_count == 2
-    assert col.describe_null == (3, 0)
+    assert col.describe_null == (4, 0)
     assert col.num_chunks() == 1
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
     assert_from_dataframe_equals(df, allow_copy=False)
@@ -223,7 +223,7 @@ def test_NA_string_dtype():
     col = df.__dataframe__().get_column_by_name("B")
     assert col.dtype[0] == _DtypeKind.STRING
     assert col.null_count == 1
-    assert col.describe_null == (3, 0)
+    assert col.describe_null == (4, 0)
     assert col.num_chunks() == 1
     assert_from_dataframe_equals(df, allow_copy=False)
     assert_from_dataframe_equals(df, allow_copy=True)
@@ -246,5 +246,4 @@ def test_NA_mixed_dtype():
 )
 def test_from_cpu_df(pandas_df):
     df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
-    with pytest.raises(NotImplementedError):
-        cudf.from_dataframe(df, allow_copy=True)
+    cudf.from_dataframe(df, allow_copy=True)
