@@ -37,7 +37,7 @@ def read_avro(
 
     if engine == "cudf":
         warnings.warn(
-            "`engine` parameter is deprecated and will be removed in a "
+            "The `engine` parameter is deprecated and will be removed in a "
             "future release",
             FutureWarning,
         )
