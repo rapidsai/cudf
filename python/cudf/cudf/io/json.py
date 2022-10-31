@@ -32,9 +32,9 @@ def read_json(
 
     if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
         raise TypeError(
-            "'dtype' parameter only support "
-            "a dict of column name and types key-value paris, "
-            f"or a bool or None. Got {type(dtype)}"
+            "'dtype' parameter only supports "
+            "a dict of column names and types as key-value pairs, "
+            f"or a bool, or None. Got {type(dtype)}"
         )
 
     if engine == "cudf" and not lines:
