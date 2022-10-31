@@ -1,11 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from collections import defaultdict
-
-import numpy as np
 from pandas.core.groupby.groupby import DataError
-
-import rmm
 
 from cudf.api.types import (
     is_categorical_dtype,
@@ -22,16 +17,9 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-import cudf
-
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -44,13 +32,11 @@ from cudf._lib.aggregation cimport (
     make_groupby_scan_aggregation,
 )
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.utilities.host_span cimport host_span
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
