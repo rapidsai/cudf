@@ -5,7 +5,6 @@ from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.reshape cimport (
     interleave_columns as cpp_interleave_columns,
     tile as cpp_tile,
