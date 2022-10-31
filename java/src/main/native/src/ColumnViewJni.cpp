@@ -1299,8 +1299,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(JNIEnv *env, jobject j_object,
-                                                            jlong j_view_handle,
-                                                            jlong pattern,
+                                                            jlong j_view_handle, jlong pattern,
                                                             jlong escapeChar) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, pattern, "pattern is null", false);
