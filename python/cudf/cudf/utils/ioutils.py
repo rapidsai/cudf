@@ -1332,6 +1332,66 @@ result : Series
 doc_read_text = docfmt_partial(docstring=_docstring_text_datasource)
 
 
+_docstring_get_reader_filepath_or_buffer = """
+Return either a filepath string to data, or a memory buffer of data.
+If filepath, then the source filepath is expanded to user's environment.
+If buffer, then data is returned in-memory as bytes or a ByteIO object.
+
+Parameters
+----------
+path_or_data : str, file-like object, bytes, ByteIO
+    Path to data or the data itself.
+compression : str
+    Type of compression algorithm for the content
+mode : str
+    Mode in which file is opened
+iotypes : (), default (BytesIO)
+    Object type to exclude from file-like check
+use_python_file_object : boolean, default False
+    If True, Arrow-backed PythonFile objects will be used in place
+    of fsspec AbstractBufferedFile objects.
+open_file_options : dict, optional
+    Optional dictionary of key-word arguments to pass to
+    `_open_remote_files` (used for remote storage only).
+allow_raw_text_input : boolean, default False
+    If True, this indicates the input `path_or_data` could be a raw text
+    input and will not check for its existence in the filesystem. If False,
+    the input must be a path and an error will be raised if it does not
+    exist.
+storage_options : dict, optional
+    Extra options that make sense for a particular storage connection, e.g.
+    host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details, and for more examples on storage options
+    refer `here <https://pandas.pydata.org/docs/user_guide/io.html?
+    highlight=storage_options#reading-writing-remote-files>`__.
+bytes_per_thread : int, default None
+    Determines the number of bytes to be allocated per thread to read the
+    files in parallel. When there is a file of large size, we get slightly
+    better throughput by decomposing it and transferring multiple "blocks"
+    in parallel (using a Python thread pool). Default allocation is
+    {bytes_per_thread} bytes.
+    This parameter is functional only when `use_python_file_object=False`.
+
+Returns
+-------
+filepath_or_buffer : str, bytes, BytesIO, list
+    Filepath string or in-memory buffer of data or a
+    list of Filepath strings or in-memory buffers of data.
+compression : str
+    Type of compression algorithm for the content
+    """.format(
+    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT
+)
+
+
+doc_get_reader_filepath_or_buffer = docfmt_partial(
+    docstring=_docstring_get_reader_filepath_or_buffer
+)
+
+
 def is_url(url):
     """Check if a string is a valid URL to a network location.
 
@@ -1554,6 +1614,7 @@ def _open_remote_files(
     ]
 
 
+@doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
     compression,
@@ -1566,56 +1627,8 @@ def get_reader_filepath_or_buffer(
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
 ):
-    """Return either a filepath string to data, or a memory buffer of data.
-    If filepath, then the source filepath is expanded to user's environment.
-    If buffer, then data is returned in-memory as bytes or a ByteIO object.
+    """{docstring}"""
 
-    Parameters
-    ----------
-    path_or_data : str, file-like object, bytes, ByteIO
-        Path to data or the data itself.
-    compression : str
-        Type of compression algorithm for the content
-    mode : str
-        Mode in which file is opened
-    iotypes : (), default (BytesIO)
-        Object type to exclude from file-like check
-    use_python_file_object : boolean, default False
-        If True, Arrow-backed PythonFile objects will be used in place
-        of fsspec AbstractBufferedFile objects.
-    open_file_options : dict, optional
-        Optional dictionary of key-word arguments to pass to
-        `_open_remote_files` (used for remote storage only).
-    allow_raw_text_input : boolean, default False
-        If True, this indicates the input `path_or_data` could be a raw text
-        input and will not check for its existence in the filesystem. If False,
-        the input must be a path and an error will be raised if it does not
-        exist.
-    storage_options : dict, optional
-        Extra options that make sense for a particular storage connection, e.g.
-        host, port, username, password, etc. For HTTP(S) URLs the key-value
-        pairs are forwarded to ``urllib.request.Request`` as header options.
-        For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
-        pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
-        ``urllib`` for more details, and for more examples on storage options
-        refer `here <https://pandas.pydata.org/docs/user_guide/io.html?
-        highlight=storage_options#reading-writing-remote-files>`__.
-    bytes_per_thread : int, default None
-        Determines the number of bytes to be allocated per thread to read the
-        files in parallel. When there is a file of large size, we get slightly
-        better throughput by decomposing it and transferring multiple "blocks"
-        in parallel (using a Python thread pool). Default allocation is
-        256_000_000 bytes.
-        This parameter is functional only when `use_python_file_object=False`.
-
-    Returns
-    -------
-    filepath_or_buffer : str, bytes, BytesIO, list
-        Filepath string or in-memory buffer of data or a
-        list of Filepath strings or in-memory buffers of data.
-    compression : str
-        Type of compression algorithm for the content
-    """
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
