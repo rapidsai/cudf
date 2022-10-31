@@ -164,8 +164,8 @@ def write_to_dataset(
         If ``True``, write timestamps in int96 format. This will convert
         timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
         timestamp[us] to the int96 format, which is the number of Julian
-        days and the number of nanoseconds since midnight. If ``False``,
-        timestamps will not be altered.
+        days and the number of nanoseconds since midnight of 1970-01-01.
+        If ``False``, timestamps will not be altered.
     row_group_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
         If None, 134217728 (128MB) will be used.
@@ -229,12 +229,13 @@ def write_to_dataset(
         filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
 
+        metadata_file_path = (filename if return_metadata else None,)
         metadata = df.to_parquet(
             path=full_path,
             compression=compression,
             index=preserve_index,
             storage_options=storage_options,
-            metadata_file_path=filename if return_metadata else None,
+            metadata_file_path=metadata_file_path,
             statistics=statistics,
             int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
