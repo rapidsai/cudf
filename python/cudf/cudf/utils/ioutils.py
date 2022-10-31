@@ -46,7 +46,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     (such as builtin `open()` file handler function or `BytesIO`).
 engine : ['cudf'], default 'cudf'
     Parser engine to use.
-    This Parameter is deprecated.
+    This parameter is deprecated.
 columns : list, default None
     If not None, only these columns will be read.
 skiprows : int, default None
