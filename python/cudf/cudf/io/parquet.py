@@ -633,7 +633,7 @@ def _read_parquet(
         if kwargs:
             raise ValueError(
                 "cudf engine doesn't support the "
-                f"following parameters: {list(kwargs.keys())}"
+                f"following keyword arguments: {list(kwargs.keys())}"
             )
         if args:
             raise ValueError(
