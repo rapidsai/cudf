@@ -253,9 +253,10 @@ def hash_vocab(
 
     hashed_vocab = {_sdbm_hash(key): value for key, value in vocab.items()}
 
-    error_message = """Collision occurred and only sdbm token hash current supported :(
-      Can be extended to use random hashes if needed"""
-
+    error_message = (
+        "A collision occurred and only sdbm token hash is currently "
+        "supported. This can be extended to use random hashes if needed."
+    )
     assert len(hashed_vocab) == len(vocab), error_message
 
     (

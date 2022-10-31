@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -16,7 +16,7 @@ from cudf._lib.utils cimport data_from_unique_ptr
 
 cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     """
-    Cython function to call libcudf++ read_avro, see `read_avro`.
+    Cython function to call libcudf read_avro, see `read_avro`.
 
     See Also
     --------

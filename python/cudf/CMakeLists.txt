@@ -63,3 +63,7 @@ include(rapids-cython)
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
+
+include(cmake/Modules/ProtobufHelpers.cmake)
+
+codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)

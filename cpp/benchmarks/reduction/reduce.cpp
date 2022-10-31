@@ -45,7 +45,7 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregat
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(*input_column, agg, output_dtype);
+    auto result = cudf::reduce(*input_column, *agg, output_dtype);
   }
 }
 

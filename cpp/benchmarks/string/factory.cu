@@ -55,7 +55,7 @@ static void BM_factory(benchmark::State& state)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   auto d_column     = cudf::column_device_view::create(column->view());
-  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::default_stream_value);
+  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
@@ -63,7 +63,7 @@ static void BM_factory(benchmark::State& state)
                     string_view_to_pair{});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::make_strings_column(pairs);
   }
 

@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef UNARY_OPS_H
-#define UNARY_OPS_H
+#pragma once
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -78,5 +77,3 @@ struct launcher {
 
 }  // namespace unary
 }  // namespace cudf
-
-#endif  // UNARY_OPS_H

@@ -69,7 +69,7 @@ class table {
    * @param mr Device memory resource used for allocating the device memory for the new columns
    */
   table(table_view view,
-        rmm::cuda_stream_view stream        = cudf::default_stream_value,
+        rmm::cuda_stream_view stream        = cudf::get_default_stream(),
         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

@@ -4,6 +4,7 @@ import functools
 import hashlib
 import os
 import traceback
+import warnings
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -213,6 +214,15 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
+    warnings.warn(
+        "The cudf.set_allocator function is deprecated and will be removed in "
+        "a future release. Please use rmm.reinitialize "
+        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
+        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
+        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
+        FutureWarning,
+    )
+
     use_managed_memory = allocator == "managed"
 
     rmm.reinitialize(

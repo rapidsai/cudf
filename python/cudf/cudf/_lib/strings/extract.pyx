@@ -6,12 +6,10 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.extract cimport extract as cpp_extract
 from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 from cudf._lib.cpp.table.table cimport table
-from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 
 

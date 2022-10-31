@@ -9,18 +9,18 @@ All data types in cuDF are [nullable](missing-data).
 
 <div class="special-table">
 
-| Kind of data         | Data type(s)                                                                    |
-|----------------------|---------------------------------------------------------------------------------|
-| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                       |
-| Unsigned integer     | `'uint32'`, `'uint64'`                                                          |
-| Floating-point       | `'float32'`, `'float64'`                                                        |
-| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`  |
-| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`      |
-| Category             | `cudf.CategoricalDtype`                                                         |
-| String               | `'object'` or `'string'`                                                        |
-| Decimal              | `cudf.Decimal32Dtype`, `cudf.Decimal64Dtype`, `cudf.Decimal64Dtype`             |
-| List                 | `cudf.ListDtype`                                                                |
-| Struct               | `cudf.StructDtype`                                                              |
+| Kind of data         | Data type(s)                                                                                      |
+|----------------------|---------------------------------------------------------------------------------------------------|
+| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                         |
+| Unsigned integer     | `'uint32'`, `'uint64'`                                                                            |
+| Floating-point       | `'float32'`, `'float64'`                                                                          |
+| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                    |
+| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                        |
+| Category             | {py:func}`cudf.CategoricalDtype`                                                                  |
+| String               | `'object'` or `'string'`                                                                          |
+| Decimal              | {py:func}`cudf.Decimal32Dtype`, {py:func}`cudf.Decimal64Dtype`, {py:func}`cudf.Decimal128Dtype`   |
+| List                 | {py:func}`cudf.ListDtype`                                                                         |
+| Struct               | {py:func}`cudf.StructDtype`                                                                       |
 
 </div>
 
