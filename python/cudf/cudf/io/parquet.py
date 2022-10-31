@@ -9,7 +9,6 @@ from contextlib import ExitStack
 from typing import Dict, List, Tuple
 from uuid import uuid4
 
-import numpy as np
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -726,6 +725,14 @@ def to_parquet(
                 storage_options=storage_options,
             )
 
+        partition_info = (
+            [
+                (i, j - i)
+                for i, j in zip(partition_offsets, partition_offsets[1:])
+            ]
+            if partition_offsets is not None
+            else None
+        )
         return _write_parquet(
             df,
             paths=path if is_list_like(path) else [path],
@@ -738,11 +745,7 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
-            partitions_info=list(
-                zip(partition_offsets, np.diff(partition_offsets))
-            )
-            if partition_offsets is not None
-            else None,
+            partitions_info=partition_info,
             storage_options=storage_options,
         )
 
@@ -1130,10 +1133,11 @@ class ParquetDatasetWriter:
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
+        partition_info = [(i, j - i) for i, j in zip(offsets, offsets[1:])]
 
         for path, part_info, meta_path in zip(
             paths,
-            zip(offsets, np.roll(offsets, -1) - offsets),
+            partition_info,
             metadata_file_paths,
         ):
             if path in self.path_cw_map:  # path is a currently open file
