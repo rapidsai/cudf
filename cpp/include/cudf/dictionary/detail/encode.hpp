@@ -74,7 +74,7 @@ std::unique_ptr<column> encode(
  */
 std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

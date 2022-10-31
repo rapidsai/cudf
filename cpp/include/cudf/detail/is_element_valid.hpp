@@ -41,7 +41,7 @@ namespace detail {
 
 bool is_element_valid_sync(column_view const& col_view,
                            size_type element_index,
-                           rmm::cuda_stream_view stream = cudf::get_default_stream());
+                           rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

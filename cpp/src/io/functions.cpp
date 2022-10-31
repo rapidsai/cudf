@@ -349,7 +349,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   auto reader      = std::make_unique<detail_orc::reader>(
     std::move(datasources), options, cudf::get_default_stream(), mr);
 
-  return reader->read(options);
+  return reader->read(options, cudf::get_default_stream());
 }
 
 /**

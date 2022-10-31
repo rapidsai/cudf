@@ -11,6 +11,13 @@ arith_ops = [
     operator.floordiv,
     operator.mod,
     operator.pow,
+    operator.iadd,
+    operator.isub,
+    operator.imul,
+    operator.itruediv,
+    operator.floordiv,
+    operator.ipow,
+    operator.imod,
 ]
 
 bitwise_ops = [operator.and_, operator.or_, operator.xor]
