@@ -140,7 +140,8 @@ void BM_iterator(benchmark::State& state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1);
+  auto dev_result =
+    cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1, cudf::get_default_stream());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
@@ -208,7 +209,8 @@ void BM_pair_iterator(benchmark::State& state)
   cudf::column_view hasnull_T = wrap_hasnull_T;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(1);
+  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(
+    1, cudf::get_default_stream());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {

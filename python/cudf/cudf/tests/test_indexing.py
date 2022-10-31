@@ -1696,3 +1696,10 @@ def test_iloc_single_row_with_nullable_column():
 
     df.iloc[0]  # before the fix for #11349 this would segfault
     assert_eq(pdf.iloc[0], df.iloc[0])
+
+
+def test_loc_single_row_from_slice():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    pdf = pd.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    df = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[5:10], df.loc[5:10])

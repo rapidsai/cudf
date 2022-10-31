@@ -197,6 +197,10 @@ def test_arith_masked_vs_constant(op, constant, data):
         operator.pow,
         operator.truediv,
         operator.floordiv,
+        operator.imod,
+        operator.ipow,
+        operator.itruediv,
+        operator.ifloordiv,
     }:
         # The following tests cases yield undefined behavior:
         # - truediv(x, False) because its dividing by zero
@@ -219,7 +223,7 @@ def test_arith_masked_vs_constant_reflected(op, constant, data):
     # Just a single column -> result will be all NA
     gdf = cudf.DataFrame({"data": data})
 
-    if constant == 1 and op is operator.pow:
+    if constant == 1 and op in {operator.pow, operator.ipow}:
         # The following tests cases yield differing results from pandas:
         # - 1**NA
         # - True**NA
@@ -237,7 +241,7 @@ def test_arith_masked_vs_null(op, data):
 
     gdf = cudf.DataFrame({"data": data})
 
-    if 1 in gdf["data"] and op is operator.pow:
+    if 1 in gdf["data"] and op in {operator.pow, operator.ipow}:
         # In pandas, 1**NA == 1.
         pytest.skip()
     run_masked_udf_test(func, gdf, check_dtype=False)
@@ -483,7 +487,7 @@ def test_series_arith_masked_vs_constant(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-    if constant is cudf.NA and op is operator.pow:
+    if constant is cudf.NA and op in {operator.pow, operator.ipow}:
         # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
         with pytest.xfail():
             run_masked_udf_series(func, data, check_dtype=False)
@@ -499,7 +503,11 @@ def test_series_arith_masked_vs_constant_reflected(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-    if constant is not cudf.NA and constant == 1 and op is operator.pow:
+    if (
+        constant is not cudf.NA
+        and constant == 1
+        and op in {operator.pow, operator.ipow}
+    ):
         # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
         with pytest.xfail():
             run_masked_udf_series(func, data, check_dtype=False)

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
@@ -12,7 +12,6 @@ from cudf._lib.cpp.strings.replace cimport (
     replace as cpp_replace,
     replace_slice as cpp_replace_slice,
 )
-from cudf._lib.cpp.strings.substring cimport slice_strings as cpp_slice_strings
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
