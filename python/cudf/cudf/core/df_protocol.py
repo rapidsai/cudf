@@ -17,6 +17,8 @@ import cupy as cp
 import numpy as np
 from numba.cuda import as_cuda_array
 
+import rmm
+
 import cudf
 from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
 from cudf.core.column import as_column, build_categorical_column, build_column
@@ -44,6 +46,14 @@ class _Device(enum.IntEnum):
     METAL = 8
     VPI = 9
     ROCM = 10
+
+
+class _MaskKind(enum.IntEnum):
+    NON_NULLABLE = (0,)
+    NAN = (1,)
+    SENTINEL = (2,)
+    BITMASK = (3,)
+    BYTEMASK = 4
 
 
 _SUPPORTED_KINDS = {
@@ -400,7 +410,7 @@ class _CuDFColumn:
         """
         null, invalid = self.describe_null
 
-        if null == 3:
+        if null == _MaskKind.BITMASK:
             assert self._col.mask is not None
             buffer = _CuDFBuffer(
                 self._col.mask, cp.uint8, allow_copy=self._allow_copy
@@ -408,12 +418,12 @@ class _CuDFColumn:
             dtype = (_DtypeKind.UINT, 8, "C", "=")
             return buffer, dtype
 
-        elif null == 1:
+        elif null == _MaskKind.NAN:
             raise RuntimeError(
                 "This column uses NaN as null "
                 "so does not have a separate mask"
             )
-        elif null == 0:
+        elif null == _MaskKind.NON_NULLABLE:
             raise RuntimeError(
                 "This column is non-nullable so does not have a mask"
             )
@@ -723,9 +733,10 @@ def _protocol_to_cudf_column_numeric(
     return _set_missing_values(col, cudfcol_num, allow_copy), buffers
 
 
-def _ensure_gpu_buffer(buf, data_type, allow_copy: bool):
-    import rmm
-
+def _ensure_gpu_buffer(buf, data_type, allow_copy: bool) -> _CuDFBuffer:
+    # if `buf` is a (protocol) buffer that lives on the GPU already,
+    # return it as is.  Otherwise, copy it to the device and return
+    # the resulting buffer.
     if buf.__dlpack_device__()[0] != _Device.CUDA:
         if not allow_copy:
             raise TypeError(
@@ -751,14 +762,14 @@ def _set_missing_values(
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         null, invalid = protocol_col.describe_null
-        if null == 4:  # boolmask
+        if null == _MaskKind.BYTEMASK:
             valid_mask = _ensure_gpu_buffer(
                 valid_mask[0], valid_mask[1], allow_copy
             )
             boolmask = as_column(valid_mask._buf, dtype="bool")
             bitmask = cudf._lib.transform.bools_to_mask(boolmask)
             return cudf_col.set_mask(bitmask)
-        elif null == 3:  # bitmask:
+        elif null == _MaskKind.BITMASK:
             valid_mask = _ensure_gpu_buffer(
                 valid_mask[0], valid_mask[1], allow_copy
             )
@@ -848,3 +859,9 @@ def _protocol_to_cudf_column_string(
         None, dtype=cp.dtype("O"), children=(offsets, encoded_string)
     )
     return _set_missing_values(col, cudfcol_str, allow_copy), buffers
+
+
+def _protocol_buffer_to_cudf_buffer(protocol_buffer):
+    return as_device_buffer_like(
+        rmm.DeviceBuffer(ptr=protocol_buffer.ptr, size=protocol_buffer.bufsize)
+    )

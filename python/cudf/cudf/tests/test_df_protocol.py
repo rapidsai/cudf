@@ -6,17 +6,16 @@ import cupy as cp
 import pandas as pd
 import pytest
 
-import rmm
-
 import cudf
 from cudf.core._compat import PANDAS_GE_150
-from cudf.core.buffer import Buffer, as_device_buffer_like
 from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (
     DataFrameObject,
     _CuDFBuffer,
     _CuDFColumn,
     _DtypeKind,
+    _MaskKind,
+    _protocol_buffer_to_cudf_buffer,
     from_dataframe,
     protocol_dtype_to_cupy_dtype,
 )
@@ -29,30 +28,22 @@ def pandas_df():
 
 
 def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
-    if null == 3:
-        # boolmask
-        protocol_mask = as_device_buffer_like(
-            rmm.DeviceBuffer(
-                ptr=protocol_buffer[0].ptr, size=protocol_buffer[0].bufsize
-            )
-        )
+    if null == _MaskKind.BYTEMASK:
+        protocol_mask = _protocol_buffer_to_cudf_buffer(protocol_buffer)
         assert_eq(
             as_column(protocol_mask, dtype="bool"),
             as_column(cudf_buffer, dtype="bool"),
         )
-    elif null == 4:
-        # bitmask
-        protocol_mask = as_device_buffer_like(
-            rmm.DeviceBuffer(
-                ptr=protocol_buffer[0].ptr, size=protocol_buffer[0].bufsize
-            )
-        )
+    elif null == _MaskKind.BITMASK:
+        protocol_mask = _protocol_buffer_to_cudf_buffer(protocol_buffer)
         cudf_mask = cudf_buffer
         assert_eq(
             build_column(
-                None, "string", size, mask=protocol_mask, children=()
+                None, "string", size=size, mask=protocol_mask, children=()
             ),
-            build_column(None, "string", size, mask=cudf_mask, children=()),
+            build_column(
+                None, "string", size=size, mask=cudf_mask, children=()
+            ),
         )
     else:
         raise NotImplementedError()
@@ -63,7 +54,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
     col_from_buf = build_column(
-        Buffer(data=buf.ptr, size=buf.bufsize, owner=None),
+        _protocol_buffer_to_cudf_buffer(buf),
         protocol_dtype_to_cupy_dtype(dtype),
     )
     # check that non null values are the equals as nulls are represented
@@ -78,7 +69,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     )
 
     if dtype[0] != _DtypeKind.BOOL:
-        array_from_dlpack = cp.fromDlpack(buf.__dlpack__()).get()
+        array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
         col_array = cp.asarray(cudfcol.data_array_view).get()
         assert_eq(
             array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
@@ -98,7 +89,7 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
         assert col.get_buffers()["validity"] is None
     else:
         assert_validity_equal(
-            col.get_buffers()["validity"],
+            col.get_buffers()["validity"][0],
             cudfcol.mask,
             cudfcol.size,
             *col.describe_null,
