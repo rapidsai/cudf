@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import numpy as np
 from numba.np import numpy_support
 
 import cudf
@@ -31,9 +30,7 @@ from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
-    table_view_from_table,
 )
 
 
@@ -45,7 +42,6 @@ def bools_to_mask(Column col):
     cdef column_view col_view = col.view()
     cdef pair[unique_ptr[device_buffer], size_type] cpp_out
     cdef unique_ptr[device_buffer] up_db
-    cdef size_type null_count
 
     with nogil:
         cpp_out = move(libcudf_transform.bools_to_mask(col_view))

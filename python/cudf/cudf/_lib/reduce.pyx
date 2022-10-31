@@ -3,17 +3,6 @@
 from cython.operator import dereference
 
 import cudf
-from cudf.api.types import is_decimal_dtype
-
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type, type_id
-from cudf._lib.scalar cimport DeviceScalar
-
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
@@ -24,15 +13,14 @@ from cudf._lib.aggregation cimport (
     make_reduce_aggregation,
     make_scan_aggregation,
 )
-from cudf._lib.types cimport (
-    dtype_to_data_type,
-    is_decimal_type_id,
-    underlying_type_t_type_id,
-)
-
-import numpy as np
-
-cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type
+from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.types cimport dtype_to_data_type, is_decimal_type_id
 
 
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):

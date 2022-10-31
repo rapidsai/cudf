@@ -3,9 +3,7 @@
 import pickle
 import warnings
 
-import pandas as pd
-
-from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -42,7 +40,6 @@ from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
 )
 
