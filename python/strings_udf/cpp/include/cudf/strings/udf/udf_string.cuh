@@ -30,6 +30,12 @@ namespace strings {
 namespace udf {
 namespace detail {
 
+/**
+ * @brief Count the bytes in a null-terminated character array
+ *
+ * @param str Null-terminated string
+ * @return Number of bytes in `str` upto but not including the null-terminator
+ */
 __device__ inline static cudf::size_type bytes_in_null_terminated_string(char const* str)
 {
   if (!str) return 0;
@@ -41,18 +47,38 @@ __device__ inline static cudf::size_type bytes_in_null_terminated_string(char co
 
 }  // namespace detail
 
+/**
+ * @brief Allocate memory for strings operation
+ *
+ * @param bytes Number of bytes in to allocate
+ * @return Pointer to allocated memory
+ */
 __device__ inline char* udf_string::allocate(cudf::size_type bytes)
 {
   char* data  = static_cast<char*>(malloc(bytes + 1));
-  data[bytes] = 0;  // add null-terminator so we can printf strings in device code
+  data[bytes] = '\0';  // add null-terminator so we can printf strings in device code
   return data;
 }
 
+/**
+ * @brief Free memory created by allocate()
+ *
+ * @param data Pointer to allocated memory
+ */
 __device__ inline void udf_string::deallocate(char* data)
 {
   if (data) free(data);
 }
 
+/**
+ * @brief Allocate memory for strings operation
+ *
+ * Reallocates memory for `m_data` with new size `bytes`
+ * The original data in `m_data` is preserved up to `min(bytes,m_bytes)`
+ *
+ * @param bytes Number of bytes in to allocate
+ * @return Pointer to allocated memory
+ */
 __device__ void udf_string::reallocate(cudf::size_type bytes)
 {
   m_capacity    = bytes;
@@ -75,23 +101,19 @@ __device__ udf_string::udf_string(cudf::size_type count, cudf::char_utf8 chr)
   m_bytes = m_capacity = cudf::strings::detail::bytes_in_char_utf8(chr) * count;
   m_data               = allocate(m_capacity);
   auto out_ptr         = m_data;
-  for (auto idx = 0; idx < count; ++idx) {
+  for (cudf::size_type idx = 0; idx < count; ++idx) {
     out_ptr += cudf::strings::detail::from_char_utf8(chr, out_ptr);
   }
 }
 
 __device__ inline udf_string::udf_string(char const* data)
+  : udf_string(data, detail::bytes_in_null_terminated_string(data))
 {
-  m_bytes = m_capacity = detail::bytes_in_null_terminated_string(data);
-  m_data               = allocate(m_capacity);
-  memcpy(m_data, data, m_bytes);
 }
 
 __device__ inline udf_string::udf_string(udf_string const& src)
-  : m_bytes(src.m_bytes), m_capacity(src.m_bytes)
+  : udf_string(src.m_data, src.m_bytes)
 {
-  m_data = allocate(m_capacity);
-  memcpy(m_data, src.m_data, m_bytes);
 }
 
 __device__ inline udf_string::udf_string(udf_string&& src) noexcept
@@ -103,10 +125,8 @@ __device__ inline udf_string::udf_string(udf_string&& src) noexcept
 }
 
 __device__ inline udf_string::udf_string(cudf::string_view const str)
-  : m_bytes(str.size_bytes()), m_capacity(str.size_bytes())
+  : udf_string(str.data(), str.size_bytes())
 {
-  m_data = allocate(m_capacity);
-  memcpy(m_data, str.data(), m_bytes);
 }
 
 __device__ inline udf_string::~udf_string() { deallocate(m_data); }
@@ -156,7 +176,7 @@ __device__ udf_string& udf_string::assign(char const* str, cudf::size_type bytes
   }
   m_bytes = bytes;
   memcpy(m_data, str, bytes);
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
   return *this;
 }
 
@@ -167,7 +187,7 @@ __device__ inline cudf::size_type udf_string::length() const noexcept
   return cudf::strings::detail::characters_in_string(m_data, m_bytes);
 }
 
-__device__ cudf::size_type udf_string::max_size() const noexcept
+__device__ constexpr cudf::size_type udf_string::max_size() const noexcept
 {
   return std::numeric_limits<cudf::size_type>::max() - 1;
 }
@@ -249,14 +269,12 @@ __device__ inline bool udf_string::operator>(cudf::string_view const rhs) const 
 
 __device__ inline bool udf_string::operator<=(cudf::string_view const rhs) const noexcept
 {
-  int rc = compare(rhs);
-  return (rc == 0) || (rc < 0);
+  return compare(rhs) <= 0;
 }
 
 __device__ inline bool udf_string::operator>=(cudf::string_view const rhs) const noexcept
 {
-  int rc = compare(rhs);
-  return (rc == 0) || (rc > 0);
+  return compare(rhs) >= 0;
 }
 
 __device__ inline void udf_string::clear() noexcept
@@ -276,7 +294,7 @@ __device__ inline void udf_string::resize(cudf::size_type count)
   if (count > m_bytes) { memset(m_data + m_bytes, 0, count - m_bytes); }
 
   m_bytes         = count;
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
 }
 
 __device__ void udf_string::reserve(cudf::size_type count)
@@ -298,7 +316,7 @@ __device__ inline udf_string& udf_string::append(char const* str, cudf::size_typ
   if (nbytes > m_capacity) { reallocate(2 * nbytes); }
   memcpy(m_data + m_bytes, str, in_bytes);
   m_bytes         = nbytes;
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
   return *this;
 }
 
@@ -318,7 +336,7 @@ __device__ inline udf_string& udf_string::append(cudf::char_utf8 chr, cudf::size
     out_ptr += cudf::strings::detail::from_char_utf8(chr, out_ptr);
   }
   m_bytes         = nbytes;
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
   return *this;
 }
 
@@ -412,7 +430,7 @@ __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
   memcpy(m_data + spos, str, in_bytes);
 
   m_bytes         = nbytes;
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
   return *this;
 }
 
@@ -456,7 +474,7 @@ __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
   }
 
   m_bytes         = nbytes;
-  m_data[m_bytes] = 0;
+  m_data[m_bytes] = '\0';
   return *this;
 }
 

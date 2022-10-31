@@ -132,7 +132,7 @@ class udf_string {
   /**
    * @brief Return the maximum number of bytes a udf_string can hold
    */
-  __device__ cudf::size_type max_size() const noexcept;
+  __device__ constexpr cudf::size_type max_size() const noexcept;
 
   /**
    * @brief Return the internal pointer to the character array for this object
@@ -181,6 +181,8 @@ class udf_string {
    * The byte offset for the character at `pos` such that
    * `data() + byte_offset(pos)` points to the memory location
    * the character at position `pos`.
+   *
+   * The behavior is undefined if `pos < 0 or pos >= length()`
    *
    * @param pos Index position of character to return byte offset.
    * @return Byte offset for character at `pos`
@@ -260,6 +262,8 @@ class udf_string {
    * If `count < size_bytes()` then the string is truncated to size `count`.
    *
    * All pointers, references, and iterators may be invalidated.
+   *
+   * The behavior is undefined if `count > max_size()`
    *
    * @param count Size in bytes of this string.
    */
