@@ -640,7 +640,7 @@ def _read_parquet(
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
-                f"following non key-word arguments: {list(args)}"
+                f"following positional arguments: {list(args)}"
             )
         return libparquet.read_parquet(
             filepaths_or_buffers,
@@ -686,12 +686,12 @@ def to_parquet(
         if kwargs:
             raise ValueError(
                 "cudf engine doesn't support the "
-                f"following parameters: {list(kwargs.keys())}"
+                f"following keyword arguments: {list(kwargs.keys())}"
             )
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
-                f"following non key-word arguments: {list(args)}"
+                f"following positional arguments: {list(args)}"
             )
         # Ensure that no columns dtype is 'category'
         for col in df._column_names:
@@ -746,7 +746,7 @@ def to_parquet(
                 )
             )[:-1]
             if partition_offsets is not None
-            else partition_offsets,
+            else None,
             storage_options=storage_options,
         )
 
@@ -959,8 +959,8 @@ class ParquetDatasetWriter:
         Extra options that make sense for a particular storage connection,
         e.g. host, port, username, password, etc. For HTTP(S) URLs the
         key-value pairs are forwarded to ``urllib.request.Request`` as
-        header options. For other URLs (e.g. starting with “s3://”, and
-        “gcs://”) the key-value pairs are forwarded to ``fsspec.open``.
+        header options. For other URLs (e.g. starting with "s3://", and
+        "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
 
 

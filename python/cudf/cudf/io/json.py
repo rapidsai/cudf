@@ -56,7 +56,7 @@ def read_json(
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
-                f"following non key-word arguments: {list(args)}"
+                f"following positional arguments: {list(args)}"
             )
 
         # Multiple sources are passed as a list. If a single source is passed,
