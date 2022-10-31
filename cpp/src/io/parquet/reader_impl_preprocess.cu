@@ -774,7 +774,7 @@ namespace {
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count
-  size_t size_bytes;  // cumulative size in bytes  
+  size_t size_bytes;  // cumulative size in bytes
   int key;            // schema index
 };
 
@@ -798,32 +798,35 @@ void print_pages(hostdevice_vector<gpu::PageInfo>& pages, rmm::cuda_stream_view 
 }
 
 void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
-                                rmm::device_uvector<int32_t> const& page_index, 
+                                rmm::device_uvector<int32_t> const& page_index,
                                 rmm::device_uvector<cumulative_row_info> const& c_info,
                                 rmm::cuda_stream_view stream)
-{  
+{
   pages.device_to_host(stream, true);
 
   printf("------------\nCumulative sizes by page\n");
 
   std::vector<int> schemas(pages.size());
   std::vector<int> h_page_index(pages.size());
-  cudaMemcpy(h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDeviceToHost);
+  cudaMemcpy(
+    h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDeviceToHost);
   std::vector<cumulative_row_info> h_cinfo(pages.size());
-  cudaMemcpy(h_cinfo.data(), c_info.data(), sizeof(cumulative_row_info) * pages.size(), cudaMemcpyDeviceToHost);
-  auto schema_iter = cudf::detail::make_counting_transform_iterator(0, [&](size_type i){
-    return pages[h_page_index[i]].src_col_schema;
-  });
+  cudaMemcpy(h_cinfo.data(),
+             c_info.data(),
+             sizeof(cumulative_row_info) * pages.size(),
+             cudaMemcpyDeviceToHost);
+  auto schema_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](size_type i) { return pages[h_page_index[i]].src_col_schema; });
   thrust::copy(thrust::seq, schema_iter, schema_iter + pages.size(), schemas.begin());
   auto last = thrust::unique(thrust::seq, schemas.begin(), schemas.end());
   schemas.resize(last - schemas.begin());
   printf("Num schemas: %lu\n", schemas.size());
-    
-  for(size_t idx=0; idx<schemas.size(); idx++){
+
+  for (size_t idx = 0; idx < schemas.size(); idx++) {
     printf("Schema %d\n", schemas[idx]);
-    for(size_t pidx=0; pidx<pages.size(); pidx++){
+    for (size_t pidx = 0; pidx < pages.size(); pidx++) {
       auto const& page = pages[h_page_index[pidx]];
-      if(page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY || page.src_col_schema != schemas[idx]){
+      if (page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY || page.src_col_schema != schemas[idx]) {
         continue;
       }
       printf("\tP: {%lu, %lu}\n", h_cinfo[pidx].row_count, h_cinfo[pidx].size_bytes);
@@ -831,31 +834,38 @@ void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
   }
 }
 
-void print_cumulative_row_info(std::vector<cumulative_row_info> const& sizes, std::string const& label, std::optional<std::vector<gpu::chunk_read_info>> splits = std::nullopt)
+void print_cumulative_row_info(
+  std::vector<cumulative_row_info> const& sizes,
+  std::string const& label,
+  std::optional<std::vector<gpu::chunk_read_info>> splits = std::nullopt)
 {
-  if(splits.has_value()){
+  if (splits.has_value()) {
     printf("------------\nSplits\n");
-    for(size_t idx=0; idx<splits->size(); idx++){
+    for (size_t idx = 0; idx < splits->size(); idx++) {
       printf("{%lu, %lu}\n", splits.value()[idx].skip_rows, splits.value()[idx].num_rows);
     }
   }
 
   printf("------------\nCumulative sizes %s\n", label.c_str());
-  for(size_t idx=0; idx<sizes.size(); idx++){
+  for (size_t idx = 0; idx < sizes.size(); idx++) {
     printf("{%lu, %lu, %d}", sizes[idx].row_count, sizes[idx].size_bytes, sizes[idx].key);
-    if(splits.has_value()){
+    if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
-      auto start = thrust::make_transform_iterator(splits->begin(), [](gpu::chunk_read_info const& i) { return i.skip_rows; });
-      auto end = start + splits->size();
-      auto split = std::find(start, end, sizes[idx].row_count);
+      auto start = thrust::make_transform_iterator(
+        splits->begin(), [](gpu::chunk_read_info const& i) { return i.skip_rows; });
+      auto end               = start + splits->size();
+      auto split             = std::find(start, end, sizes[idx].row_count);
       auto const split_index = [&]() -> int {
-        if(split != end && ((idx == sizes.size() - 1) || (sizes[idx+1].row_count > sizes[idx].row_count))){
+        if (split != end &&
+            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_count > sizes[idx].row_count))) {
           return static_cast<int>(std::distance(start, split));
-        }   
+        }
         return idx == 0 ? 0 : -1;
       }();
-      if(split_index >= 0){
-        printf(" <-- split {%lu, %lu}", splits.value()[split_index].skip_rows, splits.value()[split_index].num_rows);
+      if (split_index >= 0) {
+        printf(" <-- split {%lu, %lu}",
+               splits.value()[split_index].skip_rows,
+               splits.value()[split_index].num_rows);
       }
     }
     printf("\n");
@@ -863,6 +873,9 @@ void print_cumulative_row_info(std::vector<cumulative_row_info> const& sizes, st
 }
 #endif  // PREPROCESS_DEBUG
 
+/**
+ * @brief Functor which reduces two cumulative_row_info structs of the same key.
+ */
 struct cumulative_row_sum {
   cumulative_row_info operator()
     __device__(cumulative_row_info const& a, cumulative_row_info const& b) const
@@ -871,6 +884,12 @@ struct cumulative_row_sum {
   }
 };
 
+/**
+ * @brief Functor which computes the total data size for a given type of cudf column.
+ *
+ * In the case of strings, the return size does not include the chars themselves. That
+ * information is tracked seperately (see PageInfo::str_bytes).
+ */
 struct row_size_functor {
   __device__ size_t validity_size(size_t num_rows, bool nullable)
   {
@@ -890,7 +909,7 @@ __device__ size_t row_size_functor::operator()<list_view>(size_t num_rows, bool 
 {
   auto const offset_size = sizeof(offset_type);
   // NOTE: Adding the + 1 offset here isn't strictly correct.  There will only be 1 extra offset
-  // for the entire column, whereas this is adding an extra offset per page.  So we will get a 
+  // for the entire column, whereas this is adding an extra offset per page.  So we will get a
   // small over-estimate of the real size of the order :  # of pages * 4 bytes. It seems better
   // to overestimate size somewhat than to underestimate it and potentially generate chunks
   // that are too large.
@@ -913,6 +932,12 @@ __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, boo
   return (offset_size * (num_rows + 1)) + validity_size(num_rows, nullable);
 }
 
+/**
+ * @brief Functor which computes the total output cudf data size for all of
+ * the data in this page.
+ *
+ * Sums across all nesting levels.
+ */
 struct get_cumulative_row_info {
   gpu::PageInfo const* const pages;
 
@@ -942,6 +967,21 @@ struct get_cumulative_row_info {
   }
 };
 
+/**
+ * @brief Functor which computes the effective size of all input columns by page.
+ *
+ * For a given row, we want to find the cost of all pages for all columns involved
+ * in loading up to that row.  The complication here is that not all pages are the
+ * same size between columns. Example:
+ *
+ *              page row counts
+ * Column A:    0 <----> 100 <----> 200
+ * Column B:    0 <---------------> 200 <--------> 400
+                          |
+ * if we decide to split at row 100, we don't really know the actual amount of bytes in column B
+ * at that point.  So we have to proceed as if we are taking the bytes from all 200 rows of that
+ * page. Essentially, a conservative over-estimate of the real size.
+ */
 struct row_total_size {
   cumulative_row_info const* const c_info;
   size_type const* const key_offsets;
@@ -964,14 +1004,18 @@ struct row_total_size {
   }
 };
 
+/**
+ * @brief Given a vector of cumulative {row_count, byte_size} pairs and a chunk read
+ * limit, determine the set of splits.
+ *
+ * @param sizes Vector of cumulative {row_count, byte_size} pairs
+ * @param num_rows Total number of rows to read
+ * @param chunked_read_size Limit on total number of bytes to be returned per read, for all columns
+ */
 std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> const& sizes,
-                                              size_type num_rows,
+                                              size_t num_rows,
                                               size_t chunked_read_size)
 {
-  //  for (auto x : sizes) {
-  //    printf("size: %d | %d \n", (int)x.row_count, (int)x.size_bytes);
-  //  }
-
   // now we have an array of {row_count, real output bytes}. just walk through it and generate
   // splits.
   // TODO: come up with a clever way to do this entirely in parallel. For now, as long as batch
@@ -985,15 +1029,13 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
       return i.size_bytes - cur_cumulative_size;
     });
     auto end   = start + sizes.size();
-    while (cur_row_count < static_cast<size_t>(num_rows)) {
-      int64_t p = thrust::lower_bound(
-                    thrust::seq, start + cur_pos, end, static_cast<size_t>(chunked_read_size)) -
-                  start;
+    while (cur_row_count < num_rows) {
+      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, chunked_read_size) - start;
 
       // if we're past the end, or if the returned bucket is > than the chunked_read_size, move back
       // one.
       if (static_cast<size_t>(p) >= sizes.size() ||
-          (sizes[p].size_bytes - cur_cumulative_size > static_cast<size_t>(chunked_read_size))) {
+          (sizes[p].size_bytes - cur_cumulative_size > chunked_read_size)) {
         p--;
       }
 
@@ -1013,16 +1055,27 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
       cur_pos             = p;
       cur_cumulative_size = sizes[p].size_bytes;
     }
-  }  
+  }
   // print_cumulative_row_info(sizes, "adjusted", splits);
 
   return splits;
 }
 
+/**
+ * @brief Given a set of pages that have had their sizes computed by nesting level and
+ * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
+ * a set of reads that will generate output columns of total size <= `chunked_read_size` bytes.
+ *
+ * @param pages All pages in the file
+ * @param id Additional intermediate information required to process the pages
+ * @param num_rows Total number of rows to read
+ * @param chunked_read_size Limit on total number of bytes to be returned per read, for all columns
+ * @param stream CUDA stream to use, default 0
+ */
 std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo>& pages,
                                                  gpu::chunk_intermediate_data const& id,
-                                                 size_type num_rows,
-                                                 size_type chunked_read_size,
+                                                 size_t num_rows,
+                                                 size_t chunked_read_size,
                                                  rmm::cuda_stream_view stream)
 {
   auto const& page_keys  = id.page_keys;
@@ -1039,7 +1092,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                                 page_input,
                                 c_info.begin(),
                                 thrust::equal_to{},
-                                cumulative_row_sum{});  
+                                cumulative_row_sum{});
   // print_cumulative_page_info(pages, page_index, c_info, stream);
 
   // sort by row count
@@ -1052,7 +1105,10 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                });
 
   std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
-  cudaMemcpy(h_c_info_sorted.data(), c_info_sorted.data(), sizeof(cumulative_row_info) * c_info_sorted.size(), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_c_info_sorted.data(),
+             c_info_sorted.data(),
+             sizeof(cumulative_row_info) * c_info_sorted.size(),
+             cudaMemcpyDeviceToHost);
   // print_cumulative_row_info(h_c_info_sorted, "raw");
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
@@ -1109,6 +1165,9 @@ struct get_page_schema {
   __device__ size_type operator()(gpu::PageInfo const& page) { return page.src_col_schema; }
 };
 
+/**
+ * @brief Returns the size field of a PageInfo struct for a given depth, keyed by schema.
+ */
 struct get_page_nesting_size {
   size_type const src_col_schema;
   size_type const depth;
@@ -1124,6 +1183,9 @@ struct get_page_nesting_size {
   }
 };
 
+/**
+ * @brief Writes to the chunk_row field of the PageInfo struct
+ */
 struct chunk_row_output_iter {
   gpu::PageInfo* p;
   using value_type        = size_type;
@@ -1141,9 +1203,11 @@ struct chunk_row_output_iter {
 
   __device__ reference operator[](int i) { return p[i].chunk_row; }
   __device__ reference operator*() { return p->chunk_row; }
-  // __device__ void operator=(value_type v) { p->chunk_row = v; }
 };
 
+/**
+ * @brief Writes to the page_start_value field of the PageNestingInfo struct, keyed by schema.
+ */
 struct start_offset_output_iterator {
   gpu::PageInfo* pages;
   int const* page_indices;
@@ -1195,7 +1259,7 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
                                            size_t skip_rows,
                                            size_t num_rows,
                                            bool uses_custom_row_bounds,
-                                           size_type chunked_read_size)
+                                           size_t chunked_read_size)
 {
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
@@ -1209,8 +1273,8 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
-      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
-      // to know how big this buffer actually is.
+      // if this has a list parent, we have to get column sizes from the
+      // data computed during gpu::ComputePageSizes
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
         has_lists = true;
         break;
@@ -1335,7 +1399,8 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
     // print_pages(pages, _stream);
   }
 
-  // compute splits if necessary.
+  // compute splits if necessary. otherwise retun a single split representing
+  // the whole file.
   _chunk_read_info =
     chunked_read_size > 0
       ? compute_splits(pages, _chunk_itm_data, num_rows, chunked_read_size, _stream)
@@ -1379,8 +1444,8 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
-      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
-      // to know how big this buffer actually is.
+      // if this has a list parent, we have to get column sizes from the
+      // data computed during gpu::ComputePageSizes
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
         has_lists = true;
       }

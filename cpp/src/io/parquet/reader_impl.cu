@@ -161,7 +161,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
-  // on each buffer.  Or potentially do it in PreprocessColumnData
+  // on each buffer.
   // Note : the reason we are doing this here instead of in the decode kernel is
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span

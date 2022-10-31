@@ -151,7 +151,7 @@ class reader::impl {
                                size_t skip_rows,
                                size_t num_rows,
                                bool uses_custom_row_bounds,
-                               size_type chunked_read_size);
+                               size_t chunked_read_size);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
