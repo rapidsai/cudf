@@ -739,11 +739,8 @@ def to_parquet(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             partitions_info=list(
-                zip(
-                    partition_offsets,
-                    np.roll(partition_offsets, -1) - partition_offsets,
-                )
-            )[:-1]
+                zip(partition_offsets, np.diff(partition_offsets))
+            )
             if partition_offsets is not None
             else None,
             storage_options=storage_options,
