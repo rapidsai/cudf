@@ -25,7 +25,7 @@ except ImportError:
     fsspec_parquet = None
 
 
-_BYTES_PER_THREAD_DEFAULT = 256_000_000
+_BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 134217728
 
 _docstring_remote_sources = """
