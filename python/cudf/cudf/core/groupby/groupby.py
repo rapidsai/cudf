@@ -377,7 +377,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     @cached_property
     def _groupby(self):
         return libgroupby.GroupBy(
-            [*self.grouping.keys._columns], dropna=self._dropna
+            [*self.grouping._key_columns], dropna=self._dropna
         )
 
     @_cudf_nvtx_annotate
@@ -459,10 +459,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             included_aggregations,
         ) = self._groupby.aggregate(columns, normalized_aggs)
 
-        result_index = self.grouping.keys._from_columns_like_self(
-            grouped_key_cols,
-        )
-
         multilevel = _is_multi_agg(func)
         data = {}
         for col_name, aggs, cols in zip(
@@ -478,13 +474,26 @@ class GroupBy(Serializable, Reducible, Scannable):
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
-        result = cudf.DataFrame._from_data(data, index=result_index)
+
+        if self._as_index:
+            result = cudf.DataFrame._from_data(data)
+            result_index = self.grouping.keys._from_columns_like_self(
+                grouped_key_cols,
+            )
+            result.index = result_index
+        else:
+            result = cudf.DataFrame._from_columns(
+                [*grouped_key_cols, *data.columns],
+                [*self.grouping.names, *data.names],
+            )
 
         if self._sort:
-            result = result.sort_index()
+            result = result.take(
+                cudf.DataFrame._from_columns(
+                    [*grouped_key_cols], range(len(grouped_key_cols))
+                ).argsort()
+            )
 
-        if not self._as_index:
-            result = result.reset_index()
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
