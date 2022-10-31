@@ -1128,7 +1128,7 @@ bytes_per_thread : int, default None
     files in parallel. When there is a file of large size, we get slightly
     better throughput by decomposing it and transferring multiple "blocks"
     in parallel (using a python thread pool). Default allocation is
-    {bytes_per_thread_bytes} bytes.
+    {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
 Returns
 -------
