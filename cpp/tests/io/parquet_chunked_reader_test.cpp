@@ -696,15 +696,56 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // Other tests:
 
+  // for these tests, different columns get written to different numbers of pages so it's a
+  // little tricky to describe the expected results by page counts. To get an idea of how
+  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in 
+  // reader_impl_preprocess.cu -> find_splits()
+
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 500'000);
-    EXPECT_EQ(num_chunks, 10);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
+    EXPECT_EQ(num_chunks, 7);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 500'000);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'500'000);
+    EXPECT_EQ(num_chunks, 4);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2'000'000);
+    EXPECT_EQ(num_chunks, 4);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 5'000'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000);
     EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000);
+    EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2'000'000);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 5'000'000);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 }
@@ -793,17 +834,55 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
-  // Other tests:
-
+  // for these tests, different columns get written to different numbers of pages so it's a
+  // little tricky to describe the expected results by page counts. To get an idea of how
+  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in 
+  // reader_impl_preprocess.cu -> find_splits()  
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
     EXPECT_EQ(num_chunks, 7);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }  
+  
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'500'000);
+    EXPECT_EQ(num_chunks, 4);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }  
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2'000'000);
+    EXPECT_EQ(num_chunks, 4);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
+  }  
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, 5'000'000);
+    EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000);
     EXPECT_EQ(num_chunks, 5);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000);
+    EXPECT_EQ(num_chunks, 4);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2'000'000);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 5'000'000);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 }
