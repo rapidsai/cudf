@@ -279,7 +279,7 @@ struct column_to_strings_fn {
 //
 void write_chunked_begin(data_sink* out_sink,
                          table_view const& table,
-                         std::vector<std::string> const& user_column_names,
+                         host_span<std::string const> user_column_names,
                          csv_writer_options const& options,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
@@ -398,7 +398,7 @@ void write_chunked(data_sink* out_sink,
 
 void write_csv(data_sink* out_sink,
                table_view const& table,
-               std::vector<std::string> const& user_column_names,
+               host_span<std::string const> user_column_names,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
