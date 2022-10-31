@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/span.hpp>
@@ -24,6 +25,14 @@
 #include <string>
 
 namespace cudf::io::text {
+
+/**
+ * @brief Creates a data source capable of producing device-buffered views of a datasource.
+ * @param data the datasource to be exposed as a data chunk source
+ * @return the data chunk source for the provided datasource. It must not outlive the datasource
+ *         used to construct it.
+ */
+std::unique_ptr<data_chunk_source> make_source(datasource& data);
 
 /**
  * @brief Creates a data source capable of producing device-buffered views of the given string.

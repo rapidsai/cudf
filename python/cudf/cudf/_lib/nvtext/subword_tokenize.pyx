@@ -1,13 +1,12 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint32_t, uintptr_t
+from libc.stdint cimport uint32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.subword_tokenize cimport (
     hashed_vocabulary as cpp_hashed_vocabulary,
