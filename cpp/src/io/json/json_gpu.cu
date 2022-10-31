@@ -207,8 +207,8 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
     *trimmed_value_range.first == opts.quotechar and
     *thrust::prev(trimmed_value_range.second) == opts.quotechar;
   return {desc_pre_trim.column,
-          trimmed_value_range.first + is_quoted,
-          trimmed_value_range.second - is_quoted,
+          trimmed_value_range.first + static_cast<std::ptrdiff_t>(is_quoted),
+          trimmed_value_range.second - static_cast<std::ptrdiff_t>(is_quoted),
           is_quoted};
 }
 
