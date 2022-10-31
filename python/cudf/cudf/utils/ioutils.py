@@ -573,10 +573,11 @@ orient : string
         ``'columns'``, and ``'records'``.
 typ : type of object to recover (series or frame), default 'frame'
     With cudf engine, only frame output is supported.
-dtype : boolean or dict, default True
+dtype : boolean or dict, default None
     If True, infer dtypes for all columns; if False, then don't infer dtypes at all,
     if a dict, provide a mapping from column names to their respective dtype (any missing
     columns will have their dtype inferred). Applies only to the data.
+    For all ``orient`` values except ``'table'``, default is ``True``.
 convert_axes : boolean, default True
 
     .. admonition:: Not GPU-accelerated

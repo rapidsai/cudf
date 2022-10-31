@@ -19,7 +19,7 @@ def read_json(
     path_or_buf,
     engine="auto",
     orient=None,
-    dtype=True,
+    dtype=None,
     lines=False,
     compression="infer",
     byte_range=None,
@@ -30,12 +30,11 @@ def read_json(
 ):
     """{docstring}"""
 
-    if not isinstance(dtype, (abc.Mapping, bool)):
-        warnings.warn(
-            "passing 'dtype' as list is deprecated, instead pass "
-            "a dict of column name and types key-value paris."
-            "in future versions 'dtype' can only be a dict or bool",
-            FutureWarning,
+    if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
+        raise TypeError(
+            "'dtype' parameter only support "
+            "a dict of column name and types key-value paris, "
+            f"or a bool or None. Got {type(dtype)}"
         )
 
     if engine == "cudf" and not lines:
@@ -48,6 +47,9 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine == "cudf" or engine == "cudf_experimental":
+        if dtype is None:
+            dtype = True
+
         if kwargs:
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -121,28 +123,20 @@ def read_json(
             storage_options=storage_options,
         )
 
-        if orient == "table":
-            pd_value = pd.read_json(
-                path_or_buf,
-                lines=lines,
-                compression=compression,
-                storage_options=storage_options,
-                orient=orient,
-                *args,
-                **kwargs,
-            )
-        else:
-            pd_value = pd.read_json(
-                path_or_buf,
-                lines=lines,
-                dtype=dtype,
-                compression=compression,
-                storage_options=storage_options,
-                orient=orient,
-                *args,
-                **kwargs,
-            )
+        pd_value = pd.read_json(
+            path_or_buf,
+            lines=lines,
+            dtype=dtype,
+            compression=compression,
+            storage_options=storage_options,
+            orient=orient,
+            *args,
+            **kwargs,
+        )
         df = cudf.from_pandas(pd_value)
+
+    if dtype is None:
+        dtype = True
 
     if dtype is True or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.

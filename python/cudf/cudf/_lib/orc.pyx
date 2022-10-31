@@ -241,7 +241,7 @@ cpdef write_orc(table,
                 object cols_as_map_type=None,
                 object index=None):
     """
-    Cython function to call into libcudf API, see `write_orc`.
+    Cython function to call into libcudf API, see `cudf::io::write_orc`.
 
     See Also
     --------
