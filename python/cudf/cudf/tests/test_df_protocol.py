@@ -6,10 +6,12 @@ import cupy as cp
 import pandas as pd
 import pytest
 
+import rmm
+
 import cudf
 from cudf.core._compat import PANDAS_GE_150
-from cudf.core.buffer import Buffer
-from cudf.core.column import build_column
+from cudf.core.buffer import Buffer, as_device_buffer_like
+from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (
     DataFrameObject,
     _CuDFBuffer,
@@ -24,6 +26,36 @@ from cudf.testing._utils import assert_eq
 @pytest.fixture
 def pandas_df():
     return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+
+
+def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
+    if null == 3:
+        # boolmask
+        protocol_mask = as_device_buffer_like(
+            rmm.DeviceBuffer(
+                ptr=protocol_buffer[0].ptr, size=protocol_buffer[0].bufsize
+            )
+        )
+        assert_eq(
+            as_column(protocol_mask, dtype="bool"),
+            as_column(cudf_buffer, dtype="bool"),
+        )
+    elif null == 4:
+        # bitmask
+        protocol_mask = as_device_buffer_like(
+            rmm.DeviceBuffer(
+                ptr=protocol_buffer[0].ptr, size=protocol_buffer[0].bufsize
+            )
+        )
+        cudf_mask = cudf_buffer
+        assert_eq(
+            build_column(
+                None, "string", size, mask=protocol_mask, children=()
+            ),
+            build_column(None, "string", size, mask=cudf_mask, children=()),
+        )
+    else:
+        raise NotImplementedError()
 
 
 def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
@@ -65,9 +97,11 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
         pytest.raises(RuntimeError, col._get_validity_buffer)
         assert col.get_buffers()["validity"] is None
     else:
-        assert_buffer_equal(
+        assert_validity_equal(
             col.get_buffers()["validity"],
-            cudfcol._get_mask_as_column().astype(cp.uint8),
+            cudfcol.mask,
+            cudfcol.size,
+            *col.describe_null,
         )
 
     if col.dtype[0] == _DtypeKind.CATEGORICAL:
@@ -85,7 +119,7 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
     if col.null_count == 0:
         assert col.describe_null == (0, None)
     else:
-        assert col.describe_null == (4, 0)
+        assert col.describe_null == (3, 0)
 
 
 def assert_dataframe_equal(dfo: DataFrameObject, df: cudf.DataFrame):
@@ -202,7 +236,7 @@ def test_NA_categorical_dtype():
     col = df.__dataframe__().get_column_by_name("B")
     assert col.dtype[0] == _DtypeKind.CATEGORICAL
     assert col.null_count == 2
-    assert col.describe_null == (4, 0)
+    assert col.describe_null == (3, 0)
     assert col.num_chunks() == 1
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
     assert_from_dataframe_equals(df, allow_copy=False)
@@ -223,7 +257,7 @@ def test_NA_string_dtype():
     col = df.__dataframe__().get_column_by_name("B")
     assert col.dtype[0] == _DtypeKind.STRING
     assert col.null_count == 1
-    assert col.describe_null == (4, 0)
+    assert col.describe_null == (3, 0)
     assert col.num_chunks() == 1
     assert_from_dataframe_equals(df, allow_copy=False)
     assert_from_dataframe_equals(df, allow_copy=True)

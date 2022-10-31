@@ -18,7 +18,7 @@ import numpy as np
 from numba.cuda import as_cuda_array
 
 import cudf
-from cudf.core.buffer import as_device_buffer_like, DeviceBufferLike
+from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -55,7 +55,6 @@ _SUPPORTED_KINDS = {
     _DtypeKind.STRING,
 }
 ProtoDtype = Tuple[_DtypeKind, int, str, str]
-
 
 
 class _CuDFBuffer:
@@ -314,8 +313,8 @@ class _CuDFColumn:
             return 0, None
 
         elif kind in _SUPPORTED_KINDS:
-            # currently, we return a byte mask
-            return 4, 0
+            # currently, we return a bit mask
+            return 3, 0
 
         else:
             raise NotImplementedError(
@@ -399,22 +398,12 @@ class _CuDFColumn:
 
         Raises RuntimeError if null representation is not a bit or byte mask.
         """
-
         null, invalid = self.describe_null
-        if null == 4:
-            if self.dtype[0] == _DtypeKind.CATEGORICAL:
-                valid_mask = cast(
-                    cudf.core.column.CategoricalColumn, self._col
-                ).codes._get_mask_as_column()
-            else:
-                valid_mask = self._col._get_mask_as_column()
 
-            assert (valid_mask is not None) and (
-                valid_mask.data is not None
-            ), "valid_mask(.data) should not be None when "
-            "_CuDFColumn.describe_null[0] = 3"
+        if null == 3:
+            assert self._col.mask is not None
             buffer = _CuDFBuffer(
-                valid_mask.data, cp.uint8, allow_copy=self._allow_copy
+                self._col.mask, cp.uint8, allow_copy=self._allow_copy
             )
             dtype = (_DtypeKind.UINT, 8, "C", "=")
             return buffer, dtype
@@ -645,7 +634,13 @@ ColumnObject = Any
 _INTS = {8: cp.int8, 16: cp.int16, 32: cp.int32, 64: cp.int64}
 _UINTS = {8: cp.uint8, 16: cp.uint16, 32: cp.uint32, 64: cp.uint64}
 _FLOATS = {32: cp.float32, 64: cp.float64}
-_CP_DTYPES = {0: _INTS, 1: _UINTS, 2: _FLOATS, 20: {8: bool}, 21: {8: cp.uint8}}
+_CP_DTYPES = {
+    0: _INTS,
+    1: _UINTS,
+    2: _FLOATS,
+    20: {8: bool},
+    21: {8: cp.uint8},
+}
 
 
 def from_dataframe(
@@ -705,7 +700,7 @@ def from_dataframe(
 
 
 def _protocol_to_cudf_column_numeric(
-    col: _CuDFColumn, allow_copy: bool
+    col, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
@@ -742,26 +737,31 @@ def _ensure_gpu_buffer(buf, data_type, allow_copy: bool):
             return _CuDFBuffer(
                 as_device_buffer_like(dbuf),
                 protocol_dtype_to_cupy_dtype(data_type),
-                allow_copy
+                allow_copy,
             )
     return buf
 
 
 def _set_missing_values(
-    protocol_col: _CuDFColumn, cudf_col: cudf.core.column.ColumnBase, allow_copy: bool
+    protocol_col,
+    cudf_col: cudf.core.column.ColumnBase,
+    allow_copy: bool,
 ) -> cudf.core.column.ColumnBase:
 
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
-        breakpoint()
         null, invalid = protocol_col.describe_null
         if null == 4:  # boolmask
-            valid_mask = _ensure_gpu_buffer(valid_mask[0], valid_mask[1], allow_copy)
+            valid_mask = _ensure_gpu_buffer(
+                valid_mask[0], valid_mask[1], allow_copy
+            )
             boolmask = as_column(valid_mask._buf, dtype="bool")
             bitmask = cudf._lib.transform.bools_to_mask(boolmask)
             return cudf_col.set_mask(bitmask)
         elif null == 3:  # bitmask:
-            valid_mask = _ensure_gpu_buffer(valid_mask[0], valid_mask[1], allow_copy)
+            valid_mask = _ensure_gpu_buffer(
+                valid_mask[0], valid_mask[1], allow_copy
+            )
             bitmask = valid_mask._buf
             return cudf_col.set_mask(bitmask)
     return cudf_col
@@ -777,7 +777,7 @@ def protocol_dtype_to_cupy_dtype(_dtype: ProtoDtype) -> cp.dtype:
 
 
 def _protocol_to_cudf_column_categorical(
-    col: _CuDFColumn, allow_copy: bool
+    col, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
@@ -814,7 +814,7 @@ def _protocol_to_cudf_column_categorical(
 
 
 def _protocol_to_cudf_column_string(
-    col: _CuDFColumn, allow_copy: bool
+    col, allow_copy: bool
 ) -> Tuple[
     cudf.core.column.ColumnBase,
     Mapping[str, Optional[Tuple[_CuDFBuffer, ProtoDtype]]],
