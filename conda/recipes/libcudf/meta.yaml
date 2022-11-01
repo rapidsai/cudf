@@ -33,7 +33,7 @@ requirements:
     - {{ compiler('cuda') }} {{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm 22.10.01a*
+    - librmm 22.10.01*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
@@ -55,7 +55,7 @@ outputs:
         - cmake {{ cmake_version }}
       run:
         - cudatoolkit {{ cuda_spec }}
-        - librmm 22.10.01a*
+        - librmm 22.10.01*
         - arrow-cpp {{ arrow_cpp_version }}
         - dlpack {{ dlpack_version }}
     test:
