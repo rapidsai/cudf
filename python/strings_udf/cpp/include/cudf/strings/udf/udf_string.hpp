@@ -452,6 +452,9 @@ class udf_string {
    * Replaces characters in range `[pos, pos + count]` with `str`.
    * There is no effect if `pos < 0 or pos > length()`.
    *
+   * If `count==0` then `str` is inserted starting at `pos`.
+   * If `count==npos` then the replacement range is `[pos,length())`.
+   *
    * @param pos Position of first character to replace
    * @param count Number of characters to replace
    * @param str String to replace the given range
@@ -465,6 +468,9 @@ class udf_string {
    * Replaces characters in range `[pos, pos + count)` with `data`.
    * There is no effect if `pos < 0 or pos > length()`.
    *
+   * If `count==0` then `data` is inserted starting at `pos`.
+   * If `count==npos` then the replacement range is `[pos,length())`.
+   *
    * @param pos Position of first character to replace
    * @param count Number of characters to replace
    * @param data Null-terminated character array to replace the given range
@@ -477,6 +483,9 @@ class udf_string {
    *
    * Replaces characters in range `[pos, pos + count)` with `[data, data + bytes)`.
    * There is no effect if `pos < 0 or pos > length()`.
+   *
+   * If `count==0` then `data` is inserted starting at `pos`.
+   * If `count==npos` then the replacement range is `[pos,length())`.
    *
    * @param pos Position of first character to replace
    * @param count Number of characters to replace
@@ -494,6 +503,9 @@ class udf_string {
    *
    * Replaces characters in range `[pos, pos + count)` with `chr` `chr_count` times.
    * There is no effect if `pos < 0 or pos > length()`.
+   *
+   * If `count==0` then `chr` is inserted starting at `pos`.
+   * If `count==npos` then the replacement range is `[pos,length())`.
    *
    * @param pos Position of first character to replace
    * @param count Number of characters to replace
@@ -527,8 +539,10 @@ class udf_string {
   __device__ char* allocate(cudf::size_type bytes);
   __device__ void deallocate(char* data);
   __device__ void reallocate(cudf::size_type bytes);
-  __device__ cudf::size_type char_offset(cudf::size_type bytepos) const;
-  __device__ void shift_bytes(cudf::size_type spos, cudf::size_type epos, cudf::size_type nbytes);
+  __device__ cudf::size_type char_offset(cudf::size_type byte_pos) const;
+  __device__ void shift_bytes(cudf::size_type start_pos,
+                              cudf::size_type end_pos,
+                              cudf::size_type nbytes);
 };
 
 }  // namespace udf
