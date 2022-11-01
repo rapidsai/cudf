@@ -455,15 +455,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
         (
-            result_columns,
-            grouped_key_cols,
+            result_value_cols,
+            result_key_cols,
             included_aggregations,
         ) = self._groupby.aggregate(columns, normalized_aggs)
 
         multilevel = _is_multi_agg(func)
         data = {}
         for col_name, aggs, cols in zip(
-            column_names, included_aggregations, result_columns
+            column_names, included_aggregations, result_value_cols
         ):
             for agg, col in zip(aggs, cols):
                 if multilevel:
@@ -476,27 +476,35 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
 
-        grouped_key_cols = [
-            k._with_type_metadata(c.dtype)
-            for c, k in zip(self.grouping._key_columns, grouped_key_cols)
+        # Copy the type metadata from the input key columns
+        # to the key columns of the aggregated result:
+        result_key_cols = [
+            result_key_col._with_type_metadata(input_key_col.dtype)
+            for result_key_col, input_key_col in zip(
+                result_key_cols, self.grouping._key_columns
+            )
         ]
 
         if self._as_index:
+            # The key columns are the index of the result:
             result = cudf.DataFrame._from_data(data)
             if len(self.grouping._key_columns):
                 result.index = _index_from_data(
-                    dict(zip(self.grouping.names, grouped_key_cols))
+                    dict(zip(self.grouping.names, result_key_cols))
                 )
         else:
+            # The key columns appear as regular columns,
+            # and are placed *before* the value columns:
             result = cudf.DataFrame._from_columns(
-                [*grouped_key_cols, *data.columns],
+                [*result_key_cols, *data.columns],
                 [*self.grouping.names, *data.names],
             )
 
         if self._sort:
+            # Sort the result by the key columns:
             result = result.take(
                 cudf.DataFrame._from_columns(
-                    [*grouped_key_cols], range(len(grouped_key_cols))
+                    [*result_key_cols], range(len(result_key_cols))
                 ).argsort()
             )
 
