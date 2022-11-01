@@ -1111,17 +1111,17 @@ __global__ void __launch_bounds__(128, 8)
         switch (physical_type) {
           case INT32: [[fallthrough]];
           case FLOAT: {
-            int32_t v;
-            if (dtype_len_in == 8)
-              v = s->col.leaf_column->element<int64_t>(val_idx);
-            else if (dtype_len_in == 4)
-              v = s->col.leaf_column->element<int32_t>(val_idx);
-            else if (dtype_len_in == 2)
-              v = s->col.leaf_column->element<int16_t>(val_idx);
-            else
-              v = s->col.leaf_column->element<int8_t>(val_idx);
-
-            if (auto const ts_scale = s->col.ts_scale; ts_scale != 0) { v *= ts_scale; }
+            auto const v = [dtype_len = dtype_len_in,
+                            idx       = val_idx,
+                            col       = s->col.leaf_column,
+                            scale     = s->col.ts_scale == 0 ? 1 : s->col.ts_scale]() -> int32_t {
+              switch (dtype_len) {
+                case 8: return col->element<int64_t>(idx) * scale;
+                case 4: return col->element<int32_t>(idx) * scale;
+                case 2: return col->element<int16_t>(idx) * scale;
+                default: return col->element<int8_t>(idx) * scale;
+              }
+            }();
 
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
