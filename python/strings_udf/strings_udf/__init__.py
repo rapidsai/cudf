@@ -84,7 +84,7 @@ def _get_ptx_file():
 
 ptxpath = None
 versions = safe_get_versions()
-if not versions == NO_DRIVER:
+if versions != NO_DRIVER:
     driver_version, runtime_version = versions
     maybe_patch_numba_linker(driver_version)
     if "RAPIDS_NO_INITIALIZE" not in os.environ:
