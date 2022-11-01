@@ -28,19 +28,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
-#include <thrust/sort.h>
-#include <thrust/transform.h>
-#include <thrust/unique.h>
 
 namespace cudf::io::detail::parquet {
 
@@ -210,8 +200,6 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 }
 
 /**
- * TODO: Rename this into something more meaningful
- *
  * @brief Reads compressed page data to device memory
  *
  * @param page_data Buffers to hold compressed page data for each chunk
@@ -282,7 +270,7 @@ std::future<void> read_column_chunks_async(
 }
 
 /**
- * @brief Returns the number of total pages from the given column chunks
+ * @brief Returns the number of total pages from the given column chunks.
  *
  * @param chunks List of column chunk descriptors
  *
@@ -766,75 +754,6 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   }
 }
 
-namespace {
-
-/**
- * @brief Returns the size field of a PageInfo struct for a given depth, keyed by schema.
- */
-struct get_page_nesting_size {
-  size_type const src_col_schema;
-  size_type const depth;
-  gpu::PageInfo const* const pages;
-
-  __device__ size_type operator()(int index) const
-  {
-    auto const& page = pages[index];
-    if (page.src_col_schema != src_col_schema || page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
-      return 0;
-    }
-    return page.nesting[depth].size;
-  }
-};
-
-/**
- * @brief Writes to the page_start_value field of the PageNestingInfo struct, keyed by schema.
- */
-struct start_offset_output_iterator {
-  gpu::PageInfo* pages;
-  int const* page_indices;
-  int cur_index;
-  int src_col_schema;
-  int nesting_depth;
-  int empty               = 0;
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
-  using iterator_category = thrust::output_device_iterator_tag;
-
-  __host__ __device__ void operator=(start_offset_output_iterator const& other)
-  {
-    pages          = other.pages;
-    page_indices   = other.page_indices;
-    cur_index      = other.cur_index;
-    src_col_schema = other.src_col_schema;
-    nesting_depth  = other.nesting_depth;
-  }
-
-  __host__ __device__ start_offset_output_iterator operator+(int i)
-  {
-    return start_offset_output_iterator{
-      pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
-  }
-
-  __host__ __device__ void operator++() { cur_index++; }
-
-  __device__ reference operator[](int i) { return dereference(cur_index + i); }
-  __device__ reference operator*() { return dereference(cur_index); }
-
- private:
-  __device__ reference dereference(int index)
-  {
-    gpu::PageInfo const& p = pages[page_indices[index]];
-    if (p.src_col_schema != src_col_schema || p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
-      return empty;
-    }
-    return p.nesting[nesting_depth].page_start_value;
-  }
-};
-
-}  // anonymous namespace
-
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     size_t min_row,
@@ -861,7 +780,6 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
       }
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
-        bool has_lists = false;
         // add 1 for the offset if this is a list column
         out_buf.create(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,

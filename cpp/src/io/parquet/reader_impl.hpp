@@ -55,9 +55,6 @@ class reader::impl {
   /**
    * @brief Constructor from an array of dataset sources with reader options.
    *
-   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
-   * entire given file.
-   *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -86,7 +83,7 @@ class reader::impl {
 
  private:
   /**
-   * @brief Perform the necessary data preprocessing for reading columns later on.
+   * @brief Perform the necessary data preprocessing for parsing file later on.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read, or `-1` to read all rows
@@ -149,7 +146,6 @@ class reader::impl {
    *
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
-   * @param id The chunk intermediate data
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
@@ -196,7 +192,6 @@ class reader::impl {
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 
-  // Variables used for chunked reading:
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
 
   size_type _skip_rows{0};

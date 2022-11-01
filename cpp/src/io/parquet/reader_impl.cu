@@ -23,11 +23,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
-
 namespace cudf::io::detail::parquet {
 
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
@@ -264,7 +259,6 @@ void reader::impl::prepare_data(size_type skip_rows,
 
 table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
 {
-  // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = table_metadata{};
 
   // output cudf columns as determined by the top level schema
@@ -287,10 +281,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   // Create the final output cudf columns
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto const metadata = _reader_column_schema.has_value()
-                            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                            : std::nullopt;
-    // Only construct `out_metadata` if `_output_metadata` has not been cached.
+    auto const metadata        = _reader_column_schema.has_value()
+                                   ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                   : std::nullopt;
     column_name_info& col_name = out_metadata.schema_info.emplace_back("");
     out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream, _mr));
   }
