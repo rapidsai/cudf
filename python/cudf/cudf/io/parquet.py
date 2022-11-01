@@ -150,8 +150,8 @@ def write_to_dataset(
         The file name to use (within each partition directory). If None,
         a random uuid4 hex string will be used for each file name.
     partition_cols : list,
-        Column names by which to partition the dataset
-        Columns are partitioned in the order they are given
+        Column names by which to partition the dataset.
+        Columns are partitioned in the order they are given.
     fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem

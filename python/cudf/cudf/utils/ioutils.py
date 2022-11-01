@@ -26,7 +26,7 @@ except ImportError:
 
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
-_ROW_GROUP_SIZE_BYTES_DEFAULT = 134217728
+_ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -242,7 +242,7 @@ index : bool, default None
     If ``None``, similar to ``True`` the dataframe's index(es) will
     be saved, however, instead of being saved as values any
     ``RangeIndex`` will be stored as a range in the metadata so it
-    doesn’t require much space and is faster. Other indexes will
+    doesn't require much space and is faster. Other indexes will
     be included as columns in the file output.
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
@@ -270,7 +270,7 @@ int96_timestamps : bool, default False
     If ``False``, timestamps will not be altered.
 row_group_size_bytes: integer, default {row_group_size_bytes_val}
     Maximum size of each stripe of the output.
-    If None, {row_group_size_bytes_val} (128MB) will be used.
+    If None, {row_group_size_bytes_val} ({row_group_size_bytes_val/1024/1024} MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -1353,7 +1353,7 @@ use_python_file_object : boolean, default False
     If True, Arrow-backed PythonFile objects will be used in place
     of fsspec AbstractBufferedFile objects.
 open_file_options : dict, optional
-    Optional dictionary of key-word arguments to pass to
+    Optional dictionary of keyword arguments to pass to
     `_open_remote_files` (used for remote storage only).
 allow_raw_text_input : boolean, default False
     If True, this indicates the input `path_or_data` could be a raw text
