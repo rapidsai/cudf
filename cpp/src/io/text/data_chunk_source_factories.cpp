@@ -37,7 +37,7 @@ namespace {
 class datasource_chunk_reader : public data_chunk_reader {
   struct host_ticket {
     cudaEvent_t event;
-    thrust::host_vector<char, thrust::system::cuda::experimental::pinned_allocator<char>> buffer;
+    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
   };
 
   constexpr static int num_tickets = 2;
