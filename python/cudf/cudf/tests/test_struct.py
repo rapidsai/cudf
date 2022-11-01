@@ -388,6 +388,7 @@ def test_struct_with_null_memory_usage():
         }
     )
     s = df.to_struct()
-    s[2:4] = None
+    assert s.memory_usage() == 80
 
+    s[2:4] = None
     assert s.memory_usage() == 272
