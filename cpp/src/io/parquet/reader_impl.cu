@@ -252,7 +252,6 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   allocate_columns(_file_itm_data.chunks,
                    _file_itm_data.pages_info,
-                   _chunk_itm_data,
                    _skip_rows,
                    _num_rows,
                    uses_custom_row_bounds);

@@ -157,7 +157,6 @@ class reader::impl {
    */
   void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
-                        gpu::chunk_intermediate_data const& id,
                         size_t skip_rows,
                         size_t num_rows,
                         bool uses_custom_row_bounds);

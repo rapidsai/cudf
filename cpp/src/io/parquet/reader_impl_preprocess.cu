@@ -543,7 +543,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     auto& schema                          = _metadata->get_schema(src_col_schema);
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -612,9 +611,6 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
           pni[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
           pni[cur_depth].size          = 0;
-          pni[cur_depth].type =
-            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
-          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
         }
 
         // move up the hierarchy
@@ -841,28 +837,10 @@ struct start_offset_output_iterator {
 
 void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
-                                    gpu::chunk_intermediate_data const& id,
-                                    size_t skip_rows,
-                                    size_t num_rows,
+                                    size_t min_row,
+                                    size_t total_rows,
                                     bool uses_custom_row_bounds)
 {
-  // computes:
-  // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input to respect the
-  // user bounds.
-  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
-  // specified artifical bounds).
-  if (uses_custom_row_bounds) {
-    gpu::ComputePageSizes(pages,
-                          chunks,
-                          skip_rows,
-                          num_rows,
-                          false,  // num_rows is already computed
-                          false,  // no need to compute string sizes
-                          _stream);
-    // print_pages(pages, _stream);
-  }
-
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
@@ -876,72 +854,35 @@ void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chu
       auto& out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
-      // if this has a list parent, we have to get column sizes from the
-      // data computed during gpu::ComputePageSizes
+      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
+      // to know how big this buffer actually is.
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
         has_lists = true;
       }
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
+        bool has_lists = false;
         // add 1 for the offset if this is a list column
         out_buf.create(
-          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
+          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
           _stream,
           _mr);
       }
     }
   }
 
-  // compute output column sizes by examining the pages of the -input- columns
+  // if we have columns containing lists, further preprocessing is necessary.
   if (has_lists) {
-    auto& page_keys  = _chunk_itm_data.page_keys;
-    auto& page_index = _chunk_itm_data.page_index;
-    for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-      auto const& input_col = _input_columns[idx];
-      auto src_col_schema   = input_col.schema_idx;
-      size_t max_depth      = input_col.nesting_depth();
-
-      auto* cols = &_output_buffers;
-      for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
-        auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-        cols          = &out_buf.children;
-
-        // size iterator. indexes pages by sorted order
-        auto size_input = thrust::make_transform_iterator(
-          page_index.begin(),
-          get_page_nesting_size{src_col_schema, static_cast<size_type>(l_idx), pages.device_ptr()});
-
-        // if this buffer is part of a list hierarchy, we need to determine it's
-        // final size and allocate it here.
-        //
-        // for struct columns, higher levels of the output columns are shared between input
-        // columns. so don't compute any given level more than once.
-        if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) && out_buf.size == 0) {
-          int size =
-            thrust::reduce(rmm::exec_policy(_stream), size_input, size_input + pages.size());
-
-          // if this is a list column add 1 for non-leaf levels for the terminating offset
-          if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
-
-          // allocate
-          out_buf.create(size, _stream, _mr);
-        }
-
-        // for nested hierarchies, compute per-page start offset
-        if (input_col.has_repetition) {
-          thrust::exclusive_scan_by_key(
-            rmm::exec_policy(_stream),
-            page_keys.begin(),
-            page_keys.end(),
-            size_input,
-            start_offset_output_iterator{pages.device_ptr(),
-                                         page_index.begin(),
-                                         0,
-                                         static_cast<int>(src_col_schema),
-                                         static_cast<int>(l_idx)});
-        }
-      }
-    }
+    gpu::PreprocessColumnData(pages,
+                              chunks,
+                              _input_columns,
+                              _output_buffers,
+                              total_rows,
+                              min_row,
+                              uses_custom_row_bounds,
+                              _stream,
+                              _mr);
+    _stream.synchronize();
   }
 }
 
