@@ -2280,6 +2280,8 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+        # pyarrow can't read values with non-zero nanoseconds
+        pdf["col_timedelta64[ns]"] = pdf["col_timedelta64[ns]"] * 1000
 
     gdf = cudf.from_pandas(pdf)
     if add_nulls:
@@ -2662,3 +2664,57 @@ def test_parquet_writer_zstd():
     else:
         got = pd.read_orc(buff)
         assert_eq(expected, got)
+
+
+def test_parquet_writer_time_delta_physical_type():
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series([1], dtype="timedelta64[s]"),
+            "ms": cudf.Series([2], dtype="timedelta64[ms]"),
+            "us": cudf.Series([3], dtype="timedelta64[us]"),
+            # 4K because Pandas/pyarrow don't support non-zero nanoseconds
+            # in Parquet files
+            "ns": cudf.Series([4000], dtype="timedelta64[ns]"),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    got = pd.read_parquet(buffer)
+    expected = pd.DataFrame(
+        {
+            "s": ["00:00:01"],
+            "ms": ["00:00:00.002000"],
+            "us": ["00:00:00.000003"],
+            "ns": ["00:00:00.000004"],
+        },
+        dtype="str",
+    )
+    assert_eq(got.astype("str"), expected)
+
+
+def test_parquet_roundtrip_time_delta():
+    num_rows = 12345
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[s]",
+            ),
+            "ms": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[ms]",
+            ),
+            "us": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[us]",
+            ),
+            "ns": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[ns]",
+            ),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    assert_eq(df, cudf.read_parquet(buffer))
