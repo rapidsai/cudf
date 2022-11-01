@@ -231,7 +231,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   return csv::write_csv(  //
     sinks[0].get(),
     options.get_table(),
-    options.get_metadata(),
+    options.get_names(),
     options,
     cudf::get_default_stream(),
     mr);
