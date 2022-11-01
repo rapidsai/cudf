@@ -242,7 +242,8 @@ index : bool, default None
     If ``None``, similar to ``True`` the dataframe's index(es) will
     be saved, however, instead of being saved as values any
     ``RangeIndex`` will be stored as a range in the metadata so it
-    doesn’t require much space and is faster.
+    doesn’t require much space and is faster. Other indexes will
+    be included as columns in the file output.
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
@@ -512,7 +513,8 @@ index : bool, default None
     If ``None``, similar to ``True`` the dataframe's index(es) will
     be saved, however, instead of being saved as values any
     ``RangeIndex`` will be stored as a range in the metadata so it
-    doesn’t require much space and is faster.
+    doesn’t require much space and is faster. Other indexes will
+    be included as columns in the file output.
 
 See Also
 --------
