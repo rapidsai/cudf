@@ -12,14 +12,8 @@
 # the License.
 # =============================================================================
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
-  file(
-    DOWNLOAD
-    https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/rapids_cython_lib_rpath/RAPIDS.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
+  file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.12/RAPIDS.cmake
+       ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake
   )
 endif()
-
-set(rapids-cmake-repo vyasr/rapids-cmake)
-set(rapids-cmake-branch feature/rapids_cython_lib_rpath)
-
 include(${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
