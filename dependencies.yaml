@@ -24,128 +24,152 @@ channels:
 # - rapidsai-nightly
 # - dask/label/dev
 dependencies:
-  conda_and_requirements:
+  build:
     common:
-      build:
-        - arrow-cpp=9
-        - cmake>=3.23.1
-        - cmake_setuptools>=0.1.3
-        - cython>=0.29,<0.30
-        - dlpack>=0.5,<0.6.0a0
-        - librdkafka=1.7.0
-        - protobuf>=3.20.1,<3.21.0a0
-        - pyarrow=9
-        - python>=3.8,<3.10
-        - rmm=22.12.*
-        - scikit-build>=0.13.1
-        # Not sure if these are used anywhere?
-        # - double-conversion
-        # - rapidjson
-      run:
-        - cachetools
-        - cubinlinker  # TODO: Is this conda or requirements or both?
-        - cupy>=9.5.0,<12.0.0a0  # TODO: cupy for conda, cupy-cuda115 for requirements?
-        - dask>=2022.9.2
-        - distributed>=2022.9.2
-        - fsspec>=0.6.0
-        - numba>=0.56.2
-        - numpy  # Does this need a lower bound?
-        - nvtx>=0.2.1
-        - packaging
-        - pandas>=1.0,<1.6.0dev0
-        - python-confluent-kafka=1.7.0
-        - streamz
-        - typing_extensions
-      develop:
-        - black=22.3.0
-        - cmakelang=0.6.13
-        - doxygen=1.8.20  # We rely on this being installed for pre-commit but pre-commit handles all the rest of this section for us (except pre-commit itself). We can probably remove black, etc.
-        - flake8=3.8.3
-        - gcovr>=5.0
-        - isort=5.10.1
-        - pre-commit
-        - pydocstyle=6.1.1
-      test:
-        - aiobotocore>=2.2.0
-        - boto3>=1.21.21
-        - botocore>=1.24.21
-        - dask-cuda=22.12.*  # TODO: This only looks like a testing dependency?
-        - fastavro>=0.22.9
-        - hypothesis
-        - mimesis>=4.1.0
-        - moto>=3.1.6
-        - pytest
-        - pytest-benchmark
-        - pytest-cases
-        - pytest-cov
-        - pytest-xdist
-        - python-snappy>=0.6.0
-        - pytorch<1.12.0  # We should check and fix all "<=" pinnings
-        - s3fs>=2022.3.0
-        - scipy  # Does this need a lower bound?
-        - transformers<=4.10.3  # We should check and fix all "<=" pinnings
-        - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
-      doc:
-        - myst-nb
-        - nbsphinx
-        - numpydoc
-        - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
-        - pydata-sphinx-theme
-        - sphinx
-        - sphinx-autobuild
-        - sphinx-copybutton
-        - sphinx-markdown-tables
-        - sphinxcontrib-websupport
-      notebook:
-        - ipython
-        - notebook>=0.5.0
+      - output_types: [conda, requirements]
+        packages:
+          - arrow-cpp=9
+          - cmake>=3.23.1
+          - cmake_setuptools>=0.1.3
+          - cython>=0.29,<0.30
+          - dlpack>=0.5,<0.6.0a0
+          - librdkafka=1.7.0
+          - protobuf>=3.20.1,<3.21.0a0
+          - pyarrow=9
+          - python>=3.8,<3.10
+          - rmm=22.12.*
+          - scikit-build>=0.13.1
+          # Not sure if these are used anywhere?
+          # - double-conversion
+          # - rapidjson
+      - output_types: conda
+        packages:
+          - c-compiler
+          - cxx-compiler
     specific:
-      - matrix:
-          cuda: "11.5"
-        build:
-          - cuda-python>=11.5,<11.7.1  # TODO: Check this, it should be updated very soon for the hotfix
-  conda:
+      - output_types: [conda, requirements]
+        matrices:
+        - matrix:
+            cuda: "11.5"
+          packages:
+            - cuda-python>=11.5,<11.7.1  # TODO: Check this, it should be updated very soon for the hotfix
+      - output_types: conda
+        matrices:
+        - matrix:
+            arch: x86_64
+          packages:
+            - gcc_linux-64=9.*
+            - sysroot_linux-64==2.17
+        - matrix:
+            arch: aarch64
+          packages:
+            - gcc_linux-aarch64=9.*
+            - sysroot_linux-aarch64==2.17
+      - output_types: conda
+        matrices:
+        - matrix:
+            cuda: "11.5"
+          packages:
+            - cudatoolkit=11.5
+      - output_types: conda
+        matrices:
+        - matrix:
+          packages:  # TODO: Test priority of empty matrix!
+        - matrix:
+            arch: x86_64
+            cuda: "11.5"
+          packages:
+            - nvcc_linux-64=11.5
+        - matrix:
+            arch: aarch64
+            cuda: "11.5"
+          packages:
+            - nvcc_linux-aarch64=11.5
+  run:
     common:
-      build:
-        - c-compiler
-        - cxx-compiler
-      develop:
-        # Are these needed? For what?
-        - clang=11.1.0
-        - clang-tools=11.1.0
-      run:
+      - output_types: [conda, requirements]
+        packages:
+          - cachetools
+          - cubinlinker  # TODO: Is this conda or requirements or both?
+          - cupy>=9.5.0,<12.0.0a0  # TODO: cupy for conda, cupy-cuda115 for requirements?
+          - dask>=2022.9.2
+          - distributed>=2022.9.2
+          - fsspec>=0.6.0
+          - numba>=0.56.2
+          - numpy  # Does this need a lower bound?
+          - nvtx>=0.2.1
+          - packaging
+          - pandas>=1.0,<1.6.0dev0
+          - python-confluent-kafka=1.7.0
+          - streamz
+          - typing_extensions
+      - output_types: [conda, requirements]
+        packages:
         - pip
         - pip:
             - git+https://github.com/python-streamz/streamz.git@master
             - pyorc  # I think there is an issue filed about removing this. Maybe need to check that.
-        - ptxcompiler  # Not available on PyPI, may be needed?
-    specific:
-      - matrix:
-          arch: x86_64
-        build:
-          - gcc_linux-64=9.*
-          - sysroot_linux-64==2.17
-      - matrix:
-          arch: aarch64
-        build:
-          - gcc_linux-aarch64=9.*
-          - sysroot_linux-aarch64==2.17
-      - matrix:
-          cuda: "11.5"
-        build:
-          - cudatoolkit=11.5
-      - matrix:
-          arch: x86_64
-          cuda: "11.5"
-        build:
-          - nvcc_linux-64=11.5
-      - matrix:
-          arch: aarch64
-          cuda: "11.5"
-        build:
-          - nvcc_linux-aarch64=11.5
-  requirements:
+        - ptxcompiler  # Not available on PyPI, but may be needed?
+      - output_types: requirements
+        packages:
+          - git+https://github.com/python-streamz/streamz.git@master
+          - pyorc
+  develop:
     common:
-      run:
-        - git+https://github.com/python-streamz/streamz.git@master
-        - pyorc
+      - output_types: [conda, requirements]
+        packages:
+          - black=22.3.0
+          - cmakelang=0.6.13
+          - flake8=3.8.3
+          - gcovr>=5.0
+          - isort=5.10.1
+          - pre-commit
+          - pydocstyle=6.1.1
+      - output_types: conda
+        packages:
+          - clang=11.1.0  # Are these clang packages needed? For what?
+          - clang-tools=11.1.0  # Are these clang packages needed? For what?
+          - doxygen=1.8.20  # We rely on this being installed for pre-commit but pre-commit handles all the rest of this section for us (except pre-commit itself). We can probably remove black, etc.
+  test:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - aiobotocore>=2.2.0
+          - boto3>=1.21.21
+          - botocore>=1.24.21
+          - dask-cuda=22.12.*  # TODO: This only looks like a testing dependency?
+          - fastavro>=0.22.9
+          - hypothesis
+          - mimesis>=4.1.0
+          - moto>=3.1.6
+          - pytest
+          - pytest-benchmark
+          - pytest-cases
+          - pytest-cov
+          - pytest-xdist
+          - python-snappy>=0.6.0
+          - pytorch<1.12.0  # We should check and fix all "<=" pinnings
+          - s3fs>=2022.3.0
+          - scipy  # Does this need a lower bound?
+          - transformers<=4.10.3  # We should check and fix all "<=" pinnings
+          - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
+  doc:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - myst-nb
+          - nbsphinx
+          - numpydoc
+          - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
+          - pydata-sphinx-theme
+          - sphinx
+          - sphinx-autobuild
+          - sphinx-copybutton
+          - sphinx-markdown-tables
+          - sphinxcontrib-websupport
+  notebook:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - ipython
+          - notebook>=0.5.0
