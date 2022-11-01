@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -41,7 +41,7 @@ def url_encode(Column source_strings):
     """
     Encode each string in column. No format checking is performed.
     All characters are encoded except for ASCII letters, digits,
-    and these characters: ‘.’,’_’,’-‘,’~’. Encoding converts to
+    and these characters: '.','_','-','~'. Encoding converts to
     hex using UTF-8 encoded bytes.
 
     Parameters
