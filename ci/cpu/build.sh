@@ -130,7 +130,7 @@ if [ "$BUILD_CUDF" == '1' ]; then
 
   gpuci_logger "Build conda pkg for custreamz"
   gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
-  
+
   gpuci_logger "Build conda pkg for strings_udf"
   gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 

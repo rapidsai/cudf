@@ -26,7 +26,7 @@
 
 // clang-format off
 std::string json_string{
-  "{" 
+  "{"
     "\"store\": {""\"book\": ["
         "{"
           "\"category\": \"reference\","
@@ -101,7 +101,7 @@ TEST_F(JsonPathTests, GetJsonObjectChildOp)
     auto result     = drop_whitespace(*result_raw);
 
     // clang-format off
-    cudf::test::strings_column_wrapper expected_raw{     
+    cudf::test::strings_column_wrapper expected_raw{
       "{"
         "\"book\": ["
           "{"
@@ -246,7 +246,7 @@ TEST_F(JsonPathTests, GetJsonObjectWildcardOp)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected_raw{
-      "[" 
+      "["
         "{"
           "\"book\": ["
             "{"
@@ -676,7 +676,7 @@ TEST_F(JsonPathTests, MixedOutput)
          "\"z\": {\"i\": 10, \"j\": 100},"
          "\"b\": [\"c\",null,true,-1]"
       "}"
-      }, 
+      },
       {1, 1, 0, 1, 1, 1});
     // clang-format on
 
@@ -708,11 +708,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "c", 
-      "c", 
-      "", 
-      "", 
-      "", 
+      "c",
+      "c",
+      "",
+      "",
+      "",
       "[\"c\",null,true,-1]"},
       {1, 1, 0, 0, 0, 1});
     // clang-format on
@@ -726,11 +726,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "[\"c\"]", 
-      "[\"c\"]", 
-      "", 
-      "[\"y\",500]", 
-      "[]", 
+      "[\"c\"]",
+      "[\"c\"]",
+      "",
+      "[\"y\",500]",
+      "[]",
       "["
         "{\"i\": 10, \"j\": 100},"
         "[\"c\",null,true,-1]"
@@ -747,11 +747,11 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "[]", 
-      "[]", 
-      "", 
+      "[]",
+      "[]",
       "",
-      "",      
+      "",
+      "",
       "[\"c\",null,true,-1]"},
       {1, 1, 0, 0, 0, 1});
     // clang-format on
@@ -835,7 +835,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
                 "\'b\': [\'c\',null,true,-1]"
               "}"
     "}",
-    
+
     "{"
       "\'a\': \"abc'def\""
     "}",
@@ -869,7 +869,7 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
       "}",
       "abc'def",
       "'abc'def'"
-      }, 
+      },
       {1, 1, 0, 1, 1, 1, 1, 1});
     // clang-format on
 

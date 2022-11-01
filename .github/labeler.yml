@@ -3,14 +3,14 @@
 cuDF (Python):
   - 'python/**'
   - 'notebooks/**'
-  
+
 libcudf:
   - 'cpp/**'
 
 CMake:
   - '**/CMakeLists.txt'
   - '**/cmake/**'
-  
+
 cuDF (Java):
   - 'java/**'
 

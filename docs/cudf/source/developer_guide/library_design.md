@@ -27,24 +27,24 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class RangeIndex
 % class DataFrame
 % class Series
-% 
+%
 % Frame <|-- IndexedFrame
-% 
+%
 % Frame <|-- SingleColumnFrame
-% 
+%
 % SingleColumnFrame <|-- Series
 % IndexedFrame <|-- Series
-% 
+%
 % IndexedFrame <|-- DataFrame
-% 
+%
 % BaseIndex <|-- RangeIndex
-% 
+%
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
-% 
+%
 % BaseIndex <|-- GenericIndex
 % SingleColumnFrame <|-- GenericIndex
-% 
+%
 % @enduml
 
 

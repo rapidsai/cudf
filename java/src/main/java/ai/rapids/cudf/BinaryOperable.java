@@ -383,7 +383,7 @@ public interface BinaryOperable {
   }
 
   /**
-   * Logical or (||) with the given output type. this || rhs  
+   * Logical or (||) with the given output type. this || rhs
    */
   default ColumnVector or(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.LOGICAL_OR, rhs, outType);

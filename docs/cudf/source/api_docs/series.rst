@@ -280,7 +280,7 @@ Datetime properties
    is_year_start
    is_year_end
    is_leap_year
-   days_in_month   
+   days_in_month
 
 Datetime methods
 ^^^^^^^^^^^^^^^^
@@ -303,7 +303,7 @@ Timedelta properties
    :toctree: api/
 
    days
-   seconds   
+   seconds
    microseconds
    nanoseconds
    components

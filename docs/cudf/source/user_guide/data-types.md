@@ -46,7 +46,7 @@ dtype: float32
 The data type associated with string data in cuDF is `"np.object"`.
 
 ```python
->>> import cudf 
+>>> import cudf
 >>> s = cudf.Series(["abc", "def", "ghi"])
 >>> s.dtype
 dtype("object")

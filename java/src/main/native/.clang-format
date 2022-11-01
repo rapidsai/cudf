@@ -8,12 +8,12 @@ AlignAfterOpenBracket: Align
 # int aaaa = 12;
 # int b    = 23;
 # int ccc  = 23;
-# leaving OFF 
+# leaving OFF
 AlignConsecutiveAssignments: false
 # int         aaaa = 12;
 # float       b = 23;
 # std::string ccc = 23;
-# leaving OFF 
+# leaving OFF
 AlignConsecutiveDeclarations: false
 ##define A                                                                      \
 #  int aaaa;                                                                    \
@@ -59,14 +59,14 @@ AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
 
-# if all the arguments for a function don't fit in a single line, 
+# if all the arguments for a function don't fit in a single line,
 # with a value of "false", it'll split each argument into different lines
 BinPackArguments: true
 BinPackParameters: true
 
 # if this is set to Custom, the BraceWrapping flags apply
 BreakBeforeBraces: Custom
-BraceWrapping:   
+BraceWrapping:
   AfterClass:      false
   AfterControlStatement: false
   AfterEnum:       false
@@ -129,12 +129,12 @@ DisableFormat:   false
 ExperimentalAutoDetectBinPacking: false
 # } // namespace a => useful
 FixNamespaceComments: true
-ForEachMacros:   
+ForEachMacros:
   - foreach
   - Q_FOREACH
   - BOOST_FOREACH
 IncludeBlocks:   Regroup
-IncludeCategories: 
+IncludeCategories:
   - Regex:           '<[[:alnum:]]+>'
     Priority:        0
   - Regex:           '<[[:alnum:].]+>'
@@ -146,7 +146,7 @@ IncludeCategories:
   - Regex:           '.*'
     Priority:        4
 # if a header matches this in an include group, it will be moved up to the
-# top of the group. 
+# top of the group.
 IncludeIsMainRegex: '(Test)?$'
 IndentCaseLabels: true
 IndentPPDirectives: None

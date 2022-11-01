@@ -250,7 +250,7 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindow)
   auto const group_col = fwcw<int32_t>{0, 0, 0, 0, 0, 0,
                                        10, 10, 10, 10, 10, 10, 10,
                                        20};
-  auto const input_col = fwcw<T> {0, 1, 2, 3, 4, 5,           // Group 0 
+  auto const input_col = fwcw<T> {0, 1, 2, 3, 4, 5,           // Group 0
                                   10, 11, 12, 13, 14, 15, 16, // Group 10
                                   20};                        // Group 20
   // clang-format on
@@ -267,16 +267,16 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindow)
                                                  20},                        // Group 20
                                                 no_nulls()});
     auto const last_element = tester.test_grouped_nth_element(-1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element, 
-                                        fwcw<T>{{2, 3, 4, 5, 5, 5,           // Group 0 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element,
+                                        fwcw<T>{{2, 3, 4, 5, 5, 5,           // Group 0
                                                  12, 13, 14, 15, 16, 16, 16, // Group 10
-                                                 20},                        // Group 20 
+                                                 20},                        // Group 20
                                                 no_nulls()});
     auto const third_element = tester.test_grouped_nth_element(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*third_element, 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*third_element,
                                         fwcw<T>{{2, 2, 2, 3, 4, 5,           // Group 0
                                                  12, 12, 12, 13, 14, 15, 16, // Group 10
-                                                 X},                         // Group 20                     
+                                                 X},                         // Group 20
                                                 null_at(13)});
     auto const second_last_element = tester.test_grouped_nth_element(-2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_last_element,
@@ -292,27 +292,27 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindow)
     auto const first_element = tester.test_grouped_nth_element(0);
     // clang-format off
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*first_element,
-                                        fwcw<T>{{X, 0, 1, 2, 3, X,         // Group 0 
+                                        fwcw<T>{{X, 0, 1, 2, 3, X,         // Group 0
                                                  X, 10, 11, 12, 13, 14, X, // Group 10
                                                  X},                       // Group 20
                                                 nulls_at({0, 5, 6, 12, 13})});
     auto const last_element = tester.test_grouped_nth_element(-1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element,
-                                        fwcw<T>{{X, 2, 3, 4, 5, X,         // Group 0 
+                                        fwcw<T>{{X, 2, 3, 4, 5, X,         // Group 0
                                                  X, 12, 13, 14, 15, 16, X, // Group 10
-                                                 X},                       // Group 20 
+                                                 X},                       // Group 20
                                                 nulls_at({0, 5, 6, 12, 13})});
     auto const second_element = tester.test_grouped_nth_element(1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_element,
-                                        fwcw<T>{{X, 1, 2, 3, 4, X,         // Group 0 
+                                        fwcw<T>{{X, 1, 2, 3, 4, X,         // Group 0
                                                  X, 11, 12, 13, 14, 15, X, // Group 10
-                                                 X},                       // Group 20 
+                                                 X},                       // Group 20
                                                 nulls_at({0, 5, 6, 12, 13})});
     auto const second_last_element = tester.test_grouped_nth_element(-2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_last_element,
                                         fwcw<T>{{X, 1, 2, 3, 4, X,         // Group 0
                                                  X, 11, 12, 13, 14, 15, X, // Group 10
-                                                 X},                       // Group 20               
+                                                 X},                       // Group 20
                                                 nulls_at({0, 5, 6, 12, 13})});
     // clang-format on
   }
@@ -341,7 +341,7 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindowExcludeNulls)
                                        10, 10, 10, 10, 10, 10, 10,
                                        20,
                                        30};
-  auto const input_col = fwcw<T> {{0, 1, X, 3, X, 5,         // Group 0 
+  auto const input_col = fwcw<T> {{0, 1, X, 3, X, 5,         // Group 0
                                    10, X, X, 13, 14, 15, 16, // Group 10
                                    20,                       // Group 20
                                    X},                       // Group 30
@@ -361,25 +361,25 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindowExcludeNulls)
                                                  X},                         // Group 30
                                                 null_at(14)});
     auto const last_element = tester.test_grouped_nth_element(-1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element, 
-                                        fwcw<T>{{1, 3, 3, 5, 5, 5,           // Group 0 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element,
+                                        fwcw<T>{{1, 3, 3, 5, 5, 5,           // Group 0
                                                  10, 13, 14, 15, 16, 16, 16, // Group 10
-                                                 20,                         // Group 20 
-                                                 X},                         // Group 30 
+                                                 20,                         // Group 20
+                                                 X},                         // Group 30
                                                 null_at(14)});
     auto const third_element = tester.test_grouped_nth_element(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*third_element, 
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*third_element,
                                         fwcw<T>{{X, 3, 3, 5, X, X,          // Group 0
                                                  X, X, 14, 15, 15, 15, 16,  // Group 10
-                                                 X,                         // Group 20 
-                                                 X},                        // Group 30                     
+                                                 X,                         // Group 20
+                                                 X},                        // Group 30
                                                 nulls_at({0, 4, 5, 6, 7, 13, 14})});
     auto const second_last_element = tester.test_grouped_nth_element(-2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_last_element,
                                         fwcw<T>{{0, 1, 1, 3, 3, 3,          // Group 0
                                                  X, 10, 13, 14, 15, 15, 15, // Group 10
                                                  X,                         // Group 20
-                                                 X},                        // Group 30                     
+                                                 X},                        // Group 30
                                                 nulls_at({6, 13, 14})});
     // clang-format on
   }
@@ -389,30 +389,30 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindowExcludeNulls)
     auto const first_element = tester.test_grouped_nth_element(0);
     // clang-format off
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*first_element,
-                                        fwcw<T>{{X, 0, 1, 3, 3, X,         // Group 0 
+                                        fwcw<T>{{X, 0, 1, 3, 3, X,         // Group 0
                                                  X, 10, 13, 13, 13, 14, X, // Group 10
                                                  X,                        // Group 20
                                                  X},                       // Group 30
                                                 nulls_at({0, 5, 6, 12, 13, 14})});
     auto const last_element = tester.test_grouped_nth_element(-1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*last_element,
-                                        fwcw<T>{{X, 1, 3, 3, 5, X,         // Group 0 
+                                        fwcw<T>{{X, 1, 3, 3, 5, X,         // Group 0
                                                  X, 10, 13, 14, 15, 16, X, // Group 10
-                                                 X,                        // Group 20 
+                                                 X,                        // Group 20
                                                  X},                       // Group 30
                                                 nulls_at({0, 5, 6, 12, 13, 14})});
     auto const second_element = tester.test_grouped_nth_element(1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_element,
-                                        fwcw<T>{{X, 1, 3, X, 5, X,       // Group 0 
+                                        fwcw<T>{{X, 1, 3, X, 5, X,       // Group 0
                                                  X, X, X, 14, 14, 15, X, // Group 10
-                                                 X,                      // Group 20 
+                                                 X,                      // Group 20
                                                  X},                     // Group 30
                                                 nulls_at({0, 3, 5, 6, 7, 8, 12, 13, 14})});
     auto const second_last_element = tester.test_grouped_nth_element(-2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_last_element,
                                         fwcw<T>{{X, 0, 1, X, 3, X,       // Group 0
                                                  X, X, X, 13, 14, 15, X, // Group 10
-                                                 X,                      // Group 20               
+                                                 X,                      // Group 20
                                                  X},                     // Group 30
                                                 nulls_at({0, 3, 5, 6, 7, 8, 12, 13, 14})});
     // clang-format on
@@ -526,11 +526,11 @@ TEST_F(NthElementTest, GroupedRollingWindowForStrings)
   auto constexpr X = "";  // Placeholder for null strings.
 
   // clang-format off
-  auto const group_col = fwcw<int32_t>{0, 0, 0, 0, 0, 0,  
-                                       10, 10, 10, 10, 10, 10, 10,  
+  auto const group_col = fwcw<int32_t>{0, 0, 0, 0, 0, 0,
+                                       10, 10, 10, 10, 10, 10, 10,
                                        20};
   auto const input_col = strings{{"", "1", "22", "333", "4444", X,          // Group 0
-                                  "10", "11", "12", "13", "14", "15", "16", // Group 10 
+                                  "10", "11", "12", "13", "14", "15", "16", // Group 10
                                   "20"},                                    // Group 20
                                  null_at(5)};
   // clang-format on
@@ -543,22 +543,22 @@ TEST_F(NthElementTest, GroupedRollingWindowForStrings)
     auto const first_element = tester.test_grouped_nth_element(0);
     // clang-format off
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      *first_element, 
-      strings{{"", "", "", "1", "22", "333",             // Group 0 
+      *first_element,
+      strings{{"", "", "", "1", "22", "333",             // Group 0
                "10", "10", "10", "11", "12", "13", "14", // Group 10
-               "20"},                                    // Group 20 
+               "20"},                                    // Group 20
               no_nulls()});
     auto const last_element = tester.test_grouped_nth_element(-1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      *last_element, 
-      strings{{"22", "333", "4444", X, X, X,             // Group 0 
+      *last_element,
+      strings{{"22", "333", "4444", X, X, X,             // Group 0
                "12", "13", "14", "15", "16", "16", "16", // Group 10
-               "20"},                                    // Group 20 
+               "20"},                                    // Group 20
               nulls_at({3, 4, 5})});
     auto const third_element = tester.test_grouped_nth_element(2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      *third_element, 
-      strings{{"22", "22", "22", "333", "4444", X,       // Group 0 
+      *third_element,
+      strings{{"22", "22", "22", "333", "4444", X,       // Group 0
                "12", "12", "12", "13", "14", "15", "16", // Group 10
                X},                                       // Group 20
               nulls_at({5, 13})});
@@ -567,7 +567,7 @@ TEST_F(NthElementTest, GroupedRollingWindowForStrings)
       *second_last_element,
       strings{{"1", "22", "333", "4444", "4444", "4444", // Group 0
                "11", "12", "13", "14", "15", "15", "15", // Group 10
-               X},                                       // Group 20 
+               X},                                       // Group 20
               null_at(13)});
     // clang-format on
   }
@@ -578,30 +578,30 @@ TEST_F(NthElementTest, GroupedRollingWindowForStrings)
     // clang-format off
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
       *first_element,
-      strings{{X, "", "1", "22", "333", X,         // Group 0 
+      strings{{X, "", "1", "22", "333", X,         // Group 0
                X, "10", "11", "12", "13", "14", X, // Group 10
-               X},                                 // Group 20 
+               X},                                 // Group 20
               nulls_at({0, 5, 6, 12, 13})});
     auto const last_element = tester.test_grouped_nth_element(-1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
       *last_element,
-      strings{{X, "22", "333", "4444", X, X,       // Group 0 
+      strings{{X, "22", "333", "4444", X, X,       // Group 0
                X, "12", "13", "14", "15", "16", X, // Group 10
-               X},                                 // Group 20 
+               X},                                 // Group 20
               nulls_at({0, 4, 5, 6, 12, 13})});
     auto const second_element = tester.test_grouped_nth_element(1);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
       *second_element,
-      strings{{X, "1", "22", "333", "4444", X,     // Group 0 
+      strings{{X, "1", "22", "333", "4444", X,     // Group 0
                X, "11", "12", "13", "14", "15", X, // Group 10
-               X},                                 // Group 20 
+               X},                                 // Group 20
               nulls_at({0, 5, 6, 12, 13})});
     auto const second_last_element = tester.test_grouped_nth_element(-2);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
       *second_last_element,
-      strings{{X, "1", "22", "333", "4444", X,     // Group 0 
+      strings{{X, "1", "22", "333", "4444", X,     // Group 0
                X, "11", "12", "13", "14", "15", X, // Group 10
-               X},                                 // Group 20 
+               X},                                 // Group 20
               nulls_at({0, 5, 6, 12, 13})});
     // clang-format on
   }

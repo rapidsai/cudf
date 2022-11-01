@@ -93,7 +93,7 @@ To satisfy these requirements, one must follow these rules when writing benchmar
    This enables running the benchmarks in "test" mode on small datasets, which will be much faster.
 
 
-### Writing benchmarks 
+### Writing benchmarks
 
 Just as benchmarks should be written in terms of the highest level classes in the hierarchy,
 they should also assume as little as possible about the nature of the data.

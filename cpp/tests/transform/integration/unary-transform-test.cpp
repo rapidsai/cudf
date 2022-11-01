@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -153,13 +153,13 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
   const char cuda[] =
     R"***(
 __device__ inline void f(
-  signed char* output, 
+  signed char* output,
   signed char input
 ){
-	if(input > 96 && input < 123){	
+	if(input > 96 && input < 123){
   	*output = input - 32;
   }else{
-  	*output = input;    
+  	*output = input;
   }
 }
 )***";

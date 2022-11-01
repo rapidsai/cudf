@@ -9,7 +9,7 @@
           "VERSION": "?",
           "GIT_SHALLOW": "?",
           "OPTIONS": "*",
-          "FIND_PACKAGE_ARGUMENTS": "*" 
+          "FIND_PACKAGE_ARGUMENTS": "*"
         }
       },
       "ConfigureTest": {
