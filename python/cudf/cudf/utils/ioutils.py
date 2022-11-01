@@ -237,12 +237,12 @@ path : str or list of str
 compression : {{'snappy', 'ZSTD', None}}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
-    If ``True``, include the dataframe's index(es) in the file output. If
-    ``False``, they will not be written to the file. If ``None``, the
-    engine's default behavior will be used. However, instead of being saved
-    as values, the ``RangeIndex`` will be stored as a range in the metadata
-    so it doesn’t require much space and is faster. Other indexes will
-    be included as columns in the file output.
+    If ``True``, include the dataframe's index(es) in the file output.
+    If ``False``, they will not be written to the file.
+    If ``None``, similar to ``True`` the dataframe's index(es) will
+    be saved, however, instead of being saved as values any
+    ``RangeIndex`` will be stored as a range in the metadata so it
+    doesn’t require much space and is faster.
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
@@ -507,12 +507,12 @@ storage_options : dict, optional, default None
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 index : bool, default None
-    If ``True``, include the dataframe's index(es) in the file output. If
-    ``False``, they will not be written to the file. If ``None``, the
-    engine's default behavior will be used. However, instead of being saved
-    as values, the ``RangeIndex`` will be stored as a range in the metadata
-    so it doesn’t require much space and is faster. Other indexes will
-    be included as columns in the file output.
+    If ``True``, include the dataframe's index(es) in the file output.
+    If ``False``, they will not be written to the file.
+    If ``None``, similar to ``True`` the dataframe's index(es) will
+    be saved, however, instead of being saved as values any
+    ``RangeIndex`` will be stored as a range in the metadata so it
+    doesn’t require much space and is faster.
 
 See Also
 --------
