@@ -3,6 +3,7 @@
 import decimal
 import operator
 import pickle
+import textwrap
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
@@ -20,6 +21,7 @@ from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
 from cudf.core.abc import Serializable
 from cudf.core.buffer import DeviceBufferLike
+from cudf.utils.docutils import doc_apply
 
 if PANDAS_GE_150:
     from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
@@ -152,14 +154,22 @@ class CategoricalDtype(_BaseDtype):
     Categories (2, object): ['b' < 'a']
     """
 
-    ordered: bool
-
     def __init__(self, categories=None, ordered: bool = False) -> None:
         self._categories = self._init_categories(categories)
-        self.ordered = ordered
+        self._ordered = ordered
 
     @property
     def categories(self) -> "cudf.core.index.BaseIndex":
+        """
+        An ``Index`` containing the unique categories allowed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype.categories
+        StringIndex(['b' 'a'], dtype='object')
+        """
         if self._categories is None:
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
@@ -178,13 +188,50 @@ class CategoricalDtype(_BaseDtype):
     def str(self):
         return "|O08"
 
+    @property
+    def ordered(self) -> bool:
+        """
+        Whether the categories have an ordered relationship.
+        """
+        return self._ordered
+
+    @ordered.setter
+    def ordered(self, value) -> None:
+        self._ordered = value
+
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
+        """
+        Convert a ``pandas.CategrocialDtype`` to ``cudf.CategoricalDtype``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> pd_dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
+        >>> cudf_dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        """
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
 
     def to_pandas(self) -> pd.CategoricalDtype:
+        """
+        Convert a ``cudf.CategoricalDtype`` to ``pandas.CategoricalDtype``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        >>> dtype.to_pandas()
+        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        """
         if self._categories is None:
             categories = None
         else:
@@ -257,8 +304,33 @@ class CategoricalDtype(_BaseDtype):
         )
         return klass(categories=categories, ordered=ordered)
 
+    def __repr__(self):
+        return self.to_pandas().__repr__()
+
 
 class ListDtype(_BaseDtype):
+    """
+    Type to represent list data.
+
+    Parameters
+    ----------
+    element_type : object
+        A dtype with which represents the element types in the list.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> list_dtype = cudf.ListDtype("int32")
+    >>> list_dtype
+    ListDtype(int32)
+
+    A nested list dtype can be created by:
+
+    >>> nested_list_dtype = cudf.ListDtype(list_dtype)
+    >>> nested_list_dtype
+    ListDtype(ListDtype(int32))
+    """
+
     _typ: pa.ListType
     name: str = "list"
 
@@ -273,6 +345,26 @@ class ListDtype(_BaseDtype):
 
     @property
     def element_type(self) -> Dtype:
+        """
+        Returns the element type of the ``ListDtype``.
+
+        Returns
+        -------
+        Dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> deep_nested_type = cudf.ListDtype(cudf.ListDtype(cudf.ListDtype("float32")))
+        >>> deep_nested_type
+        ListDtype(ListDtype(ListDtype(float32)))
+        >>> deep_nested_type.element_type
+        ListDtype(ListDtype(float32))
+        >>> deep_nested_type.element_type.element_type
+        ListDtype(float32)
+        >>> deep_nested_type.element_type.element_type.element_type
+        'float32'
+        """  # noqa: E501
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         elif isinstance(self._typ.value_type, pa.StructType):
@@ -282,6 +374,18 @@ class ListDtype(_BaseDtype):
 
     @property
     def leaf_type(self):
+        """
+        Returns the type of the leaf values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> deep_nested_type = cudf.ListDtype(cudf.ListDtype(cudf.ListDtype("float32")))
+        >>> deep_nested_type
+        ListDtype(ListDtype(ListDtype(float32)))
+        >>> deep_nested_type.leaf_type
+        'float32'
+        """  # noqa: E501
         if isinstance(self.element_type, ListDtype):
             return self.element_type.leaf_type
         else:
@@ -295,11 +399,47 @@ class ListDtype(_BaseDtype):
 
     @classmethod
     def from_arrow(cls, typ):
+        """
+        Creates a ``ListDtype`` from ``pyarrow.ListType``.
+
+        Parameters
+        ----------
+        typ : pyarrow.ListType
+            A ``pyarrow.ListType`` that has to be converted to
+            ``ListDtype``.
+
+        Returns
+        -------
+        obj : ``ListDtype``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> arrow_type = pa.infer_type([[1]])
+        >>> arrow_type
+        ListType(list<item: int64>)
+        >>> list_dtype = cudf.ListDtype.from_arrow(arrow_type)
+        >>> list_dtype
+        ListDtype(int64)
+        """
         obj = object.__new__(cls)
         obj._typ = typ
         return obj
 
     def to_arrow(self):
+        """
+        Convert to a ``pyarrow.ListType``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> list_dtype = cudf.ListDtype(cudf.ListDtype("float32"))
+        >>> list_dtype
+        ListDtype(ListDtype(float32))
+        >>> list_dtype.to_arrow()
+        ListType(list<item: list<item: float>>)
+        """
         return self._typ
 
     def __eq__(self, other):
@@ -345,9 +485,27 @@ class ListDtype(_BaseDtype):
 
 class StructDtype(_BaseDtype):
     """
+    Type to represent a struct data.
+
+    Parameters
+    ----------
     fields : dict
-        A mapping of field names to dtypes
-    """
+        A mapping of field names to dtypes, the dtypes can themselves
+        be of ``StructDtype`` too.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
+    >>> struct_dtype
+    StructDtype({'a': dtype('int64'), 'b': dtype('O')})
+
+    A nested ``StructDtype`` can also be constructed in the following way:
+
+    >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
+    >>> nested_struct_dtype
+    StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('O')}), 'c': dtype('uint8')})
+    """  # noqa: E501
 
     name = "struct"
 
@@ -360,6 +518,18 @@ class StructDtype(_BaseDtype):
 
     @property
     def fields(self):
+        """
+        Returns an ordered dict of column name and dtype key-value.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> struct_dtype = cudf.StructDtype({"a": "int64", "b": "string"})
+        >>> struct_dtype
+        StructDtype({'a': dtype('int64'), 'b': dtype('O')})
+        >>> struct_dtype.fields
+        {'a': dtype('int64'), 'b': dtype('O')}
+        """
         return {
             field.name: cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type)
             for field in self._typ
@@ -373,11 +543,36 @@ class StructDtype(_BaseDtype):
 
     @classmethod
     def from_arrow(cls, typ):
+        """
+        Convert a ``pyarrow.StructType`` to ``StructDtype``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> pa_struct_type = pa.struct({'x': pa.int32(), 'y': pa.string()})
+        >>> pa_struct_type
+        StructType(struct<x: int32, y: string>)
+        >>> cudf.StructDtype.from_arrow(pa_struct_type)
+        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        """
         obj = object.__new__(cls)
         obj._typ = typ
         return obj
 
     def to_arrow(self):
+        """
+        Convert a ``StructDtype`` to a ``pyarrow.StructType``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> struct_type = cudf.StructDtype({"x": "int32", "y": "string"})
+        >>> struct_type
+        StructDtype({'x': dtype('int32'), 'y': dtype('O')})
+        >>> struct_type.to_arrow()
+        StructType(struct<x: int32, y: string>)
+        """
         return self._typ
 
     def __eq__(self, other):
@@ -433,30 +628,42 @@ class StructDtype(_BaseDtype):
         return cls(fields)
 
 
+decimal_dtype_template = textwrap.dedent(
+    """
+        Type to represent a ``decimal{size}`` data.
+
+        Parameters
+        ----------
+        precision : int
+            The total number of digits in each value of this dtype
+        scale : int, optional
+            The scale of the dtype. See Notes below.
+
+        Notes
+        -----
+            When the scale is positive:
+                - numbers with fractional parts (e.g., 0.0042) can be represented
+                - the scale is the total number of digits to the right of the
+                decimal point
+            When the scale is negative:
+                - only multiples of powers of 10 (including 10**0) can be
+                represented (e.g., 1729, 4200, 1000000)
+                - the scale represents the number of trailing zeros in the value.
+            For example, 42 is representable with precision=2 and scale=0.
+            13.0051 is representable with precision=6 and scale=4,
+            and *not* representable with precision<6 or scale<4.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> decimal{size}_dtype = cudf.Decimal{size}Dtype(precision=9, scale=2)
+        >>> decimal{size}_dtype
+        Decimal{size}Dtype(precision=9, scale=2)
+    """  # noqa: E501
+)
+
+
 class DecimalDtype(_BaseDtype):
-    """
-    Parameters
-    ----------
-    precision : int
-        The total number of digits in each value of this dtype
-    scale : int, optional
-        The scale of the dtype. See Notes below.
-
-    Notes
-    -----
-        When the scale is positive:
-            - numbers with fractional parts (e.g., 0.0042) can be represented
-            - the scale is the total number of digits to the right of the
-            decimal point
-        When the scale is negative:
-            - only multiples of powers of 10 (including 10**0) can be
-            represented (e.g., 1729, 4200, 1000000)
-            - the scale represents the number of trailing zeros in the value.
-        For example, 42 is representable with precision=2 and scale=0.
-        13.0051 is representable with precision=6 and scale=4,
-        and *not* representable with precision<6 or scale<4.
-    """
-
     _metadata = ("precision", "scale")
 
     def __init__(self, precision, scale=0):
@@ -469,6 +676,9 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def precision(self):
+        """
+        The decimal precision, in number of decimal digits (an integer).
+        """
         return self._typ.precision
 
     @precision.setter
@@ -478,10 +688,16 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def scale(self):
+        """
+        The decimal scale (an integer).
+        """
         return self._typ.scale
 
     @property
     def itemsize(self):
+        """
+        Length of one column element in bytes.
+        """
         return self.ITEMSIZE
 
     @property
@@ -490,10 +706,37 @@ class DecimalDtype(_BaseDtype):
         return decimal.Decimal
 
     def to_arrow(self):
+        """
+        Return the equivalent ``pyarrow`` dtype.
+        """
         return self._typ
 
     @classmethod
     def from_arrow(cls, typ):
+        """
+        Construct a cudf decimal dtype from a ``pyarrow`` dtype
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> pa_type = pa.decimal128(precision=9, scale=2)
+
+        Constructing a ``Decimal32Dtype``:
+
+        >>> cudf.Decimal32Dtype.from_arrow(pa_type)
+        Decimal64Dtype(precision=9, scale=2)
+
+        Constructing a ``Decimal64Dtype``:
+
+        >>> cudf.Decimal64Dtype.from_arrow(pa_type)
+        Decimal64Dtype(precision=9, scale=2)
+
+        Constructing a ``Decimal128Dtype``:
+
+        >>> cudf.Decimal128Dtype.from_arrow(pa_type)
+        Decimal128Dtype(precision=9, scale=2)
+        """
         return cls(typ.precision, typ.scale)
 
     def __repr__(self):
@@ -551,18 +794,33 @@ class DecimalDtype(_BaseDtype):
         return hash(self._typ)
 
 
+@doc_apply(
+    decimal_dtype_template.format(
+        size="32",
+    )
+)
 class Decimal32Dtype(DecimalDtype):
     name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
     ITEMSIZE = 4
 
 
+@doc_apply(
+    decimal_dtype_template.format(
+        size="64",
+    )
+)
 class Decimal64Dtype(DecimalDtype):
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
     ITEMSIZE = 8
 
 
+@doc_apply(
+    decimal_dtype_template.format(
+        size="128",
+    )
+)
 class Decimal128Dtype(DecimalDtype):
     name = "decimal128"
     MAX_PRECISION = 38

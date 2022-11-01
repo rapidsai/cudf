@@ -176,7 +176,7 @@ Resource ownership is an essential concept in libcudf. In short, an "owning" obj
 resource (such as device memory). It acquires that resource during construction and releases the
 resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)). A "non-owning"
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
-detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
+detail see the [`libcudf` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
 libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
@@ -346,7 +346,64 @@ the device view can be obtained via function `column_device_view::create(column_
 data, a specialized device view for list columns can be constructed via
 `lists_column_device_view(column_device_view)`.
 
-# libcudf++ API and Implementation
+# libcudf Policies and Design Principles
+
+`libcudf` is designed to provide thread-safe, single-GPU accelerated algorithm primitives for solving a wide variety of problems that arise in data science.
+APIs are written to execute on the default GPU, which can be controlled by the caller through standard CUDA device APIs or environment variables like `CUDA_VISIBLE_DEVICES`.
+Our goal is to enable diverse use cases like Spark or Pandas to benefit from the performance of GPUs, and libcudf relies on these higher-level layers like Spark or Dask to orchestrate multi-GPU tasks.
+
+To best satisfy these use-cases, libcudf prioritizes performance and flexibility, which sometimes may come at the cost of convenience.
+While we welcome users to use libcudf directly, we design with the expectation that most users will be consuming libcudf through higher-level layers like Spark or cuDF Python that handle some of details that direct users of libcudf must handle on their own.
+We document these policies and the reasons behind them here.
+
+## libcudf does not introspect data
+
+libcudf APIs generally do not perform deep introspection and validation of input data.
+There are numerous reasons for this:
+1. It violates the single responsibility principle: validation is separate from execution.
+2. Since libcudf data structures store data on the GPU, any validation incurs _at minimum_ the overhead of a kernel launch, and may in general be prohibitively expensive.
+3. API promises around data introspection often significantly complicate implementation.
+
+Users are therefore responsible for passing valid data into such APIs.
+_Note that this policy does not mean that libcudf performs no validation whatsoever_.
+libcudf APIs should still perform any validation that does not require introspection.
+To give some idea of what should or should not be validated, here are (non-exhaustive) lists of examples.
+
+**Things that libcudf should validate**:
+- Input column/table sizes or dtypes
+
+**Things that libcudf should not validate**:
+- Integer overflow
+- Ensuring that outputs will not exceed the 2GB size limit for a given set of inputs
+
+
+## libcudf expects nested types to have sanitized null masks
+
+Various libcudf APIs accepting columns of nested dtypes (such as `LIST` or `STRUCT`) may assume that these columns have been sanitized.
+In this context, sanitization refers to ensuring that the null elements in a column with a nested dtype are compatible with the elements of nested columns.
+Specifically:
+- Null elements of list columns should also be empty. The starting offset of a null element should be equal to the ending offset.
+- Null elements of struct columns should also be null elements in the underlying structs.
+- For compound columns, nulls should only be present at the level of the parent column. Child columns should not contain nulls.
+- Slice operations on nested columns do not propagate offsets to child columns.
+
+libcudf APIs _should_ promise to never return "dirty" columns, i.e. columns containing unsanitized data.
+Therefore, the only problem is if users construct input columns that are not correctly sanitized and then pass those into libcudf APIs.
+
+## Treat libcudf APIs as if they were asynchronous
+
+libcudf APIs called on the host do not guarantee that the stream is synchronized before returning.
+Work in libcudf occurs on `cudf::get_default_stream().value`, which defaults to the CUDA default stream (stream 0).
+Note that the stream 0 behavior differs if [per-thread default stream is enabled](https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html) via `CUDF_USE_PER_THREAD_DEFAULT_STREAM`.
+Any data provided to or returned by libcudf that uses a separate non-blocking stream requires synchronization with the default libcudf stream to ensure stream safety.
+
+## libcudf generally does not make ordering guarantees
+
+Functions like merge or groupby in libcudf make no guarantees about the order of entries in the output.
+Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
+Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
+
+# libcudf API and Implementation
 
 ## Streams
 
@@ -359,7 +416,7 @@ internal API in the `detail` namespace. The internal `detail` API has the same p
 public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
 detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
 just *before* the memory resource. The public API will call the detail API and provide
-`cudf::default_stream_value`. The implementation should be wholly contained in the `detail` API
+`cudf::get_default_stream()`. The implementation should be wholly contained in the `detail` API
 definition and use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
@@ -390,7 +447,7 @@ namespace detail{
 
 void external_function(...){
     CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., cudf::default_stream_value);
+    detail::external_function(..., cudf::get_default_stream());
 }
 ```
 

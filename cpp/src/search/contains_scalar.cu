@@ -128,7 +128,8 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 {
   auto const dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
-  auto const index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
+  auto const index = cudf::dictionary::detail::get_index(
+    dict_col, needle, stream, rmm::mr::get_current_device_resource());
   // if found, check the index is actually in the indices column
   return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
                                                           contains_scalar_dispatch{},
@@ -153,7 +154,7 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
 bool contains(column_view const& haystack, scalar const& needle)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::default_stream_value);
+  return detail::contains(haystack, needle, cudf::get_default_stream());
 }
 
 }  // namespace cudf

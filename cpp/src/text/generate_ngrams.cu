@@ -84,12 +84,11 @@ struct ngram_generator_fn {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> generate_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
+                                              cudf::size_type ngrams,
+                                              cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
@@ -151,7 +150,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_ngrams(strings, ngrams, separator, cudf::default_stream_value, mr);
+  return detail::generate_ngrams(strings, ngrams, separator, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -261,7 +260,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_character_ngrams(strings, ngrams, cudf::default_stream_value, mr);
+  return detail::generate_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

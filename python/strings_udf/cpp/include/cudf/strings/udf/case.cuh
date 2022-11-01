@@ -25,7 +25,9 @@ namespace cudf {
 namespace strings {
 namespace udf {
 
-// global variables for character-type flags and case conversion
+/**
+ * @brief Global variables for character-type flags and case conversion
+ */
 struct chars_tables {
   cudf::strings::detail::character_flags_table_type* flags_table;
   cudf::strings::detail::character_cases_table_type* cases_table;
@@ -98,9 +100,10 @@ __device__ inline udf_string convert_case(
 /**
  * @brief Utility for capitalize and title functions
  *
- * @tparam CaptializeNextFn returns true if the next candidate character should be capitalized
+ * @tparam CapitalizeNextFn returns true if the next candidate character should be capitalized
  * @param tables The char tables required for conversion
  * @param d_str Input string to convert
+ * @param next_fn Function for next character capitalized
  * @return New string containing the converted characters
  */
 template <typename CapitalizeNextFn>
@@ -135,8 +138,8 @@ __device__ inline udf_string capitalize(chars_tables const tables,
  */
 __device__ inline udf_string to_lower(chars_tables const tables, string_view d_str)
 {
-  cudf::strings::detail::character_flags_table_type case_flag =
-    cudf::strings::detail::IS_UPPER(0xFF);  // convert only upper case characters
+  cudf::strings::detail::character_flags_table_type case_flag = cudf::strings::detail::IS_UPPER(
+    cudf::strings::detail::ALL_FLAGS);  // convert only upper case characters
   return detail::convert_case(tables, d_str, case_flag);
 }
 
@@ -149,8 +152,8 @@ __device__ inline udf_string to_lower(chars_tables const tables, string_view d_s
  */
 __device__ inline udf_string to_upper(chars_tables const tables, string_view d_str)
 {
-  cudf::strings::detail::character_flags_table_type case_flag =
-    cudf::strings::detail::IS_LOWER(0xFF);  // convert only lower case characters
+  cudf::strings::detail::character_flags_table_type case_flag = cudf::strings::detail::IS_LOWER(
+    cudf::strings::detail::ALL_FLAGS);  // convert only lower case characters
   return detail::convert_case(tables, d_str, case_flag);
 }
 
@@ -164,10 +167,11 @@ __device__ inline udf_string to_upper(chars_tables const tables, string_view d_s
  * @param d_str Input string to convert
  * @return New string containing the converted characters
  */
-__device__ inline udf_string swapcase(chars_tables const tables, string_view d_str)
+__device__ inline udf_string swap_case(chars_tables const tables, string_view d_str)
 {
   cudf::strings::detail::character_flags_table_type case_flag =
-    cudf::strings::detail::IS_LOWER(0xFF) | cudf::strings::detail::IS_UPPER(0xFF);
+    cudf::strings::detail::IS_LOWER(cudf::strings::detail::ALL_FLAGS) |
+    cudf::strings::detail::IS_UPPER(cudf::strings::detail::ALL_FLAGS);
   return detail::convert_case(tables, d_str, case_flag);
 }
 

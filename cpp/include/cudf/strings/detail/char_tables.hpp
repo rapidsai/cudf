@@ -46,6 +46,7 @@ constexpr uint8_t IS_LOWER(uint8_t x) { return ((x) & (1 << 6)); }
 constexpr uint8_t IS_SPECIAL(uint8_t x) { return ((x) & (1 << 7)); }
 constexpr uint8_t IS_ALPHANUM(uint8_t x) { return ((x) & (0x0F)); }
 constexpr uint8_t IS_UPPER_OR_LOWER(uint8_t x) { return ((x) & ((1 << 5) | (1 << 6))); }
+constexpr uint8_t ALL_FLAGS = 0xFF;
 
 // Type for the character cases table.
 using character_cases_table_type = uint16_t;

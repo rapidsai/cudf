@@ -45,7 +45,7 @@ static void BM_find_scalar(benchmark::State& state, FindAPI find_api)
   cudf::test::strings_column_wrapper targets({"+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (find_api) {
       case find: cudf::strings::find(input, target); break;
       case find_multi:

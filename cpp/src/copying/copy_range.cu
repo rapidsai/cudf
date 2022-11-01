@@ -172,7 +172,8 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   auto target_matched =
     cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
-  auto source_matched = cudf::dictionary::detail::set_keys(dict_source, target_view.keys(), stream);
+  auto source_matched    = cudf::dictionary::detail::set_keys(
+    dict_source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices
@@ -274,7 +275,7 @@ void copy_range_in_place(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value);
+    source, target, source_begin, source_end, target_begin, cudf::get_default_stream());
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -286,7 +287,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, cudf::default_stream_value, mr);
+    source, target, source_begin, source_end, target_begin, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -170,10 +170,9 @@ struct codepoint_to_utf8_fn {
 }  // namespace
 
 // detail API
-std::unique_ptr<cudf::column> normalize_spaces(
-  cudf::strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
@@ -244,7 +243,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, cudf::default_stream_value, mr);
+  return detail::normalize_spaces(strings, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -255,7 +254,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, cudf::default_stream_value, mr);
+  return detail::normalize_characters(strings, do_lower_case, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

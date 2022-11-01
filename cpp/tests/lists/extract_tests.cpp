@@ -228,7 +228,8 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElementsFromNonCompactedNullLists)
       .release();
 
   // Set null at index 4.
-  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 4, 5, false);
+  cudf::detail::set_null_mask(
+    input->mutable_view().null_mask(), 4, 5, false, cudf::get_default_stream());
 
   {
     auto result   = cudf::lists::extract_list_element(cudf::lists_column_view{*input}, 0);

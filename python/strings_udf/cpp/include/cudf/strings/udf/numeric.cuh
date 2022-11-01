@@ -27,7 +27,7 @@ namespace strings {
 namespace udf {
 
 /**
- * @brief Converts a string into an integer.
+ * @brief Converts a string into an integer
  *
  * The '+' and '-' are allowed but only at the beginning of the string.
  * The string is expected to contain base-10 [0-9] characters only.
@@ -51,17 +51,15 @@ __device__ inline udf_string to_string(int64_t value)
     result.append("0");
     return result;
   }
-  auto const d_value = static_cast<double>(abs(value));
-  auto digits        = static_cast<int32_t>(log10(d_value)) + 1 + (value < 0);
-  result.resize(digits);
+  result.resize(cudf::strings::detail::count_digits(value));
   cudf::strings::detail::integer_to_string(value, result.data());
   return result;
 }
 
 /**
- * @brief Converts a string into a double.
+ * @brief Converts a string into a double
  *
- * Support scientific notation as well.
+ * This function supports scientific notation.
  * Overflow goes to inf or -inf and underflow may go to 0.
  */
 __device__ inline double stod(string_view const& d_str)

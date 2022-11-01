@@ -68,16 +68,16 @@ void BM_NESTED_JSON(nvbench::state& state)
   auto const string_size{size_type(state.get_int64("string_size"))};
   auto const default_options = cudf::io::json_reader_options{};
 
-  auto input = make_test_json_data(string_size, cudf::default_stream_value);
+  auto input = make_test_json_data(string_size, cudf::get_default_stream());
   state.add_element_count(input.size());
 
   // Run algorithm
   auto const mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     cudf::io::json::detail::device_parse_nested_json(
-      input, default_options, cudf::default_stream_value);
+      input, default_options, cudf::get_default_stream());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

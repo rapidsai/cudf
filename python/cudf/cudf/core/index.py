@@ -2053,6 +2053,56 @@ class DatetimeIndex(GenericIndex):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def microsecond(self):
+        """
+        The microseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="us"))
+        >>> datetime_index
+        DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.000001',
+               '2000-01-01 00:00:00.000002'],
+              dtype='datetime64[ns]')
+        >>> datetime_index.microsecond
+        Int32Index([0, 1, 2], dtype='int32')
+        """  # noqa: E501
+        return as_index(
+            (
+                self._values.get_dt_field("millisecond")
+                * cudf.Scalar(1000, dtype="int32")
+            )
+            + self._values.get_dt_field("microsecond"),
+            name=self.name,
+        )
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def nanosecond(self):
+        """
+        The nanoseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="ns"))
+        >>> datetime_index
+        DatetimeIndex([          '2000-01-01 00:00:00',
+                       '2000-01-01 00:00:00.000000001',
+                       '2000-01-01 00:00:00.000000002'],
+                      dtype='datetime64[ns]')
+        >>> datetime_index.nanosecond
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("nanosecond")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def weekday(self):
         """
         The day of the week with Monday=0, Sunday=6.

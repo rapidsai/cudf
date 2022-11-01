@@ -6,7 +6,7 @@ from libcpp.utility cimport move
 from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column, column_view
+from cudf._lib.cpp.column.column cimport column_view
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from strings_udf._lib.cpp.strings_udf cimport (

@@ -953,7 +953,7 @@ class Frame(BinaryOperand, Scannable):
         return self[out_cols]
 
     @_cudf_nvtx_annotate
-    def _quantiles(
+    def _quantile_table(
         self,
         q,
         interpolation="LINEAR",
@@ -972,7 +972,7 @@ class Frame(BinaryOperand, Scannable):
         ]
 
         return self._from_columns_like_self(
-            libcudf.quantiles.quantiles(
+            libcudf.quantiles.quantile_table(
                 [*self._columns],
                 q,
                 interpolation,
@@ -1412,7 +1412,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf++ search_sorted primitive
+        # Call libcudf search_sorted primitive
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
