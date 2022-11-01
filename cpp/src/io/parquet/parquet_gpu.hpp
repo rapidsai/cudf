@@ -255,7 +255,6 @@ struct ColumnChunkDesc {
   int32_t src_col_schema;  // my schema index in the file
 };
 
-// TODO: rename?
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
   rmm::device_buffer decomp_page_data;
@@ -264,16 +263,10 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
 };
 
-// TODO: rename?
 struct chunk_intermediate_data {
   rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
   rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
-};
-
-struct chunk_read_info {
-  size_t skip_rows;
-  size_t num_rows;
 };
 
 /**

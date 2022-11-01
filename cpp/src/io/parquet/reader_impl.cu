@@ -30,28 +30,6 @@
 
 namespace cudf::io::detail::parquet {
 
-namespace {
-
-/**
- * @brief Recursively copy the output buffer from one to another.
- *
- * This only copies `name` and `user_data` fields, which are generated during reader construction.
- *
- * @param buff The old output buffer
- * @param new_buff The new output buffer
- */
-void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
-{
-  new_buff.name      = buff.name;
-  new_buff.user_data = buff.user_data;
-  for (auto const& child : buff.children) {
-    auto& new_child = new_buff.children.emplace_back(column_buffer(child.type, child.is_nullable));
-    copy_output_buffer(child, new_child);
-  }
-}
-
-}  // namespace
-
 void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
@@ -246,100 +224,53 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               _timestamp_type.id());
 }
 
-reader::impl::impl(std::size_t chunk_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   parquet_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : impl(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-         options,
-         stream,
-         mr)
-{
-  _chunk_read_limit = chunk_read_limit;
-
-  // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    auto& new_buff =
-      _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
-  }
-}
-
 void reader::impl::prepare_data(size_type skip_rows,
                                 size_type num_rows,
                                 bool uses_custom_row_bounds,
                                 std::vector<std::vector<size_type>> const& row_group_indices)
 {
-  if (_file_preprocessed) { return; }
-
   const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
+  _skip_rows = skip_rows_corrected;
+  _num_rows  = num_rows_corrected;
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
-
-    compute_chunk_read_info(_file_itm_data.chunks,
-                            _file_itm_data.pages_info,
-                            skip_rows_corrected,
-                            num_rows_corrected,
-                            uses_custom_row_bounds,
-                            _chunk_read_limit);
-
-    if (_chunk_read_limit == 0) {  // read the whole file at once
-      CUDF_EXPECTS(_chunk_read_info.size() == 1,
-                   "Reading the whole file should yield only one chunk.");
-    }
   }
-
-  _file_preprocessed = true;
 }
 
 table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bounds)
 {
   // If `_output_metadata` has been constructed, just copy it over.
-  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
+  auto out_metadata = table_metadata{};
 
   // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  if (!has_next() || _chunk_read_info.size() == 0) {
-    return finalize_output(out_metadata, out_columns);
-  }
+  if (_num_rows == 0) { return finalize_output(out_metadata, out_columns); }
 
-  auto const& read_info = _chunk_read_info[_current_read_chunk++];
-
-  // allocate outgoing columns
   allocate_columns(_file_itm_data.chunks,
                    _file_itm_data.pages_info,
                    _chunk_itm_data,
-                   read_info.skip_rows,
-                   read_info.num_rows,
+                   _skip_rows,
+                   _num_rows,
                    uses_custom_row_bounds);
 
-  //  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows,
-  //  (int)read_info.num_rows);
-
-  // decoding column data
   decode_page_data(_file_itm_data.chunks,
                    _file_itm_data.pages_info,
                    _file_itm_data.page_nesting_info,
-                   read_info.skip_rows,
-                   read_info.num_rows);
+                   _skip_rows,
+                   _num_rows);
 
-  // create the final output cudf columns
+  // Create the final output cudf columns
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
     auto const metadata = _reader_column_schema.has_value()
                             ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
                             : std::nullopt;
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
-    if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-      out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream, _mr));
-    } else {
-      out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream, _mr));
-    }
+    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+    out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream, _mr));
   }
 
   return finalize_output(out_metadata, out_columns);
@@ -350,68 +281,32 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
-    if (!_output_metadata) {
-      column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-      out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
-    } else {
-      out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
-    }
+    column_name_info& col_name = out_metadata.schema_info.emplace_back("");
+    out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
   }
 
-  if (!_output_metadata) {
-    // Return column names (must match order of returned columns)
-    out_metadata.column_names.resize(_output_buffers.size());
-    for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-      auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
-      out_metadata.column_names[i] = schema.name;
-    }
-
-    // Return user metadata
-    out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-    out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
-                              out_metadata.per_file_user_data[0].end()};
-
-    // Finally, save the output table metadata into `_output_metadata` for reuse next time.
-    _output_metadata = std::make_unique<table_metadata>(out_metadata);
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_output_buffers.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.column_names[i] = schema.name;
   }
+
+  // Return user metadata
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-// #define ALLOW_PLAIN_READ_CHUNK_LIMIT
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_indices)
 {
-#if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
-  prepare_data(
-    skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
-  return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
-#else
-  CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
   prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
   return read_chunk_internal(uses_custom_row_bounds);
-#endif
-}
-
-table_with_metadata reader::impl::read_chunk()
-{
-  // Reset the output buffers to their original states (right after reader construction).
-  _output_buffers.resize(0);
-  for (auto const& buff : _output_buffers_template) {
-    auto& new_buff = _output_buffers.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
-  }
-
-  prepare_data(0, -1, true, {});
-  return read_chunk_internal(true);
-}
-
-bool reader::impl::has_next()
-{
-  prepare_data(0, -1, true, {});
-  return _current_read_chunk < _chunk_read_info.size();
 }
 
 }  // namespace cudf::io::detail::parquet
