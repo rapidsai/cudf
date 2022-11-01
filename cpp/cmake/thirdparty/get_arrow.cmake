@@ -22,23 +22,21 @@
 
 include_guard(GLOBAL)
 
-# Generate a FindArrow module for the case where we need to search for arrow
-# within a pip install pyarrow.
+# Generate a FindArrow module for the case where we need to search for arrow within a pip install
+# pyarrow.
 function(find_libarrow_in_python_wheel PYARROW_VERSION)
   string(REPLACE "." "" PYARROW_SO_VER "${PYARROW_VERSION}")
   set(PYARROW_LIB libarrow.so.${PYARROW_SO_VER})
 
   find_package(Python REQUIRED)
   execute_process(
-      COMMAND "${Python_EXECUTABLE}"
-      -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
-      OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      )
+    COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
+    OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
   list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
   rapids_find_generate_module(
-    Arrow
-    NO_CONFIG
+    Arrow NO_CONFIG
     VERSION "${PYARROW_VERSION}"
     LIBRARY_NAMES "${PYARROW_LIB}"
     BUILD_EXPORT_SET cudf-exports
@@ -49,9 +47,8 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
   add_library(arrow_shared ALIAS Arrow::Arrow)
 
-  # TODO: Should these both be here? I think so, the
-  # `rapids_find_generate_module` doesn't seems to create the necessary
-  # `find_dependency` calls in the config files.
+  # TODO: Should these both be here? I think so, the `rapids_find_generate_module` doesn't seems to
+  # create the necessary `find_dependency` calls in the config files.
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
@@ -66,42 +63,62 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   if(USE_LIBARROW_FROM_PYARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
-    set(ARROW_FOUND TRUE PARENT_SCOPE)
-    set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+    set(ARROW_FOUND
+        TRUE
+        PARENT_SCOPE
+    )
+    set(ARROW_LIBRARIES
+        arrow_shared
+        PARENT_SCOPE
+    )
 
-    # When using the libarrow inside a wheel we must build libcudf with the old
-    # ABI because pyarrow's `libarrow.so` is compiled for manylinux2014
-    # (centos7 toolchain) which uses the old ABI. Note that these flags will
-    # often be redundant because we build wheels in manylinux containers that
-    # actually have the old libc++ anyway, but setting them explicitly ensures
-    # correct and consistent behavior in all other cases such as aarch builds
-    # on newer manylinux or testing builds in newer containers.
-    # TODO: Tests will not build successfully now without also propagating
-    # these options to builds of GTest. Similarly, benchmarks will not work
-    # without updating GBench (and possibly NVBench) builds. Do we care about
-    # that since we don't anticipate using this feature except when building
-    # wheels?
+    # When using the libarrow inside a wheel we must build libcudf with the old ABI because
+    # pyarrow's `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old
+    # ABI. Note that these flags will often be redundant because we build wheels in manylinux
+    # containers that actually have the old libc++ anyway, but setting them explicitly ensures
+    # correct and consistent behavior in all other cases such as aarch builds on newer manylinux or
+    # testing builds in newer containers. TODO: Tests will not build successfully now without also
+    # propagating these options to builds of GTest. Similarly, benchmarks will not work without
+    # updating GBench (and possibly NVBench) builds. Do we care about that since we don't anticipate
+    # using this feature except when building wheels?
     list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
-    set(CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}" PARENT_SCOPE)
-    set(CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}" PARENT_SCOPE)
+    set(CUDF_CXX_FLAGS
+        "${CUDF_CXX_FLAGS}"
+        PARENT_SCOPE
+    )
+    set(CUDF_CUDA_FLAGS
+        "${CUDF_CUDA_FLAGS}"
+        PARENT_SCOPE
+    )
 
     return()
   endif()
 
-  # TODO: How would the targets have been created before this function is
-  # called? Is this just to ensure that the function is idempotent? If so, why
-  # do we need to set these variables again?
+  # TODO: How would the targets have been created before this function is called? Is this just to
+  # ensure that the function is idempotent? If so, why do we need to set these variables again?
   if(BUILD_STATIC)
     if(TARGET arrow_static)
-      set(ARROW_FOUND TRUE PARENT_SCOPE)
-      set(ARROW_LIBRARIES arrow_static PARENT_SCOPE)
+      set(ARROW_FOUND
+          TRUE
+          PARENT_SCOPE
+      )
+      set(ARROW_LIBRARIES
+          arrow_static
+          PARENT_SCOPE
+      )
       return()
     endif()
   else()
     if(TARGET arrow_shared)
-      set(ARROW_FOUND TRUE PARENT_SCOPE)
-      set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+      set(ARROW_FOUND
+          TRUE
+          PARENT_SCOPE
+      )
+      set(ARROW_LIBRARIES
+          arrow_shared
+          PARENT_SCOPE
+      )
       return()
     endif()
   endif()
@@ -118,10 +135,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ARROW_BUILD_STATIC ON)
     set(ARROW_BUILD_SHARED OFF)
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
-    # library
-    # TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`)
-    # instead? This is a big hammer, although I guess it is effectively limited
-    # which packages will be affected by the scope of the variable here.
+    # library TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`) instead? This
+    # is a big hammer, although I guess it is effectively limited which packages will be affected by
+    # the scope of the variable here.
     set(CPM_DOWNLOAD_ALL TRUE)
   else()
     set(ARROW_BUILD_SHARED ON)
@@ -145,11 +161,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   rapids_cpm_find(
-    Arrow ${VERSION}
-    # TODO: Should we set the list of global targets conditionally based on
-    # whether we're building shared/static and whether parquet is enabled?
-    GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared
-                   arrow_static parquet_static arrow_dataset_static
+    Arrow
+    ${VERSION}
+    # TODO: Should we set the list of global targets conditionally based on whether we're building
+    # shared/static and whether parquet is enabled?
+    GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared arrow_static parquet_static
+                   arrow_dataset_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
@@ -184,12 +201,21 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   )
 
   # TODO: Will this not get set by rapids_cpm_find?
-  set(ARROW_FOUND TRUE PARENT_SCOPE)
+  set(ARROW_FOUND
+      TRUE
+      PARENT_SCOPE
+  )
 
   if(BUILD_STATIC)
-    set(ARROW_LIBRARIES arrow_static PARENT_SCOPE)
- else()
-    set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+    set(ARROW_LIBRARIES
+        arrow_static
+        PARENT_SCOPE
+    )
+  else()
+    set(ARROW_LIBRARIES
+        arrow_shared
+        PARENT_SCOPE
+    )
   endif()
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
@@ -201,12 +227,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)`
-      # TODO: Should this be conditional like the Parquet_DIR setting above?
+      # Set this to enable `find_package(ArrowDataset)` TODO: Should this be conditional like the
+      # Parquet_DIR setting above?
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
-  # Arrow_ADDED: set if CPM downloaded Arrow from Github
+    # Arrow_ADDED: set if CPM downloaded Arrow from Github
   elseif(Arrow_ADDED)
     # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
     # target_include_directories. That defeats ccache.
@@ -237,7 +263,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       )
     endforeach()
   else()
-    set(ARROW_FOUND FALSE PARENT_SCOPE)
+    set(ARROW_FOUND
+        FALSE
+        PARENT_SCOPE
+    )
     message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
   endif()
 
@@ -288,10 +317,9 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       BUILD Arrow
       VERSION ${VERSION}
       EXPORT_SET arrow_targets
-      # TODO: What about all the other GLOBAL_TARGETS specified in the
-      # `rapids_cpm_find` command? Also, should this be constructed
-      # conditionally based on whether we're using shared or static libs for
-      # arrow?
+      # TODO: What about all the other GLOBAL_TARGETS specified in the `rapids_cpm_find` command?
+      # Also, should this be constructed conditionally based on whether we're using shared or static
+      # libs for arrow?
       GLOBAL_TARGETS arrow_shared arrow_static
       NAMESPACE cudf::
       FINAL_CODE_BLOCK arrow_code_string
@@ -341,13 +369,12 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
   endif()
   # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
-  # TODO: Isn't the second call here redundant? The above `rapids_export`
-  # command will also encode a `find_dependency` in the INSTALL export set.
-  # It's less obvious whether we should still include the first
-  # `rapids_export_package` below since that will translate to a
-  # `find_dependency` call in the build config and `rapids-export` will put a
-  # `CPMFindPackage` there instead; is our goal to add `find_dependency`? Since
-  # it'll happen after `CPMFindPackage` I think it'll just be redundant.
+  # TODO: Isn't the second call here redundant? The above `rapids_export` command will also encode a
+  # `find_dependency` in the INSTALL export set. It's less obvious whether we should still include
+  # the first `rapids_export_package` below since that will translate to a `find_dependency` call in
+  # the build config and `rapids-export` will put a `CPMFindPackage` there instead; is our goal to
+  # add `find_dependency`? Since it'll happen after `CPMFindPackage` I think it'll just be
+  # redundant.
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
