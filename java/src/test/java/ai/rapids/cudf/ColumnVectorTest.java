@@ -4195,173 +4195,40 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testLike() {
-    Scalar defaultEscape = Scalar.fromString("\\");
-    // Basic patterns (with null string entry)
-    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "ovér the", "lazy @dog", "1234", "00:0:00");
-         Scalar patternString1 = Scalar.fromString("");
-         Scalar patternString2 = Scalar.fromString("1234");
-         ColumnVector res1 = testStrings.like(patternString1, defaultEscape);
-         ColumnVector res2 = testStrings.like(patternString2, defaultEscape);
-         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
-           true, null, false, false, false, false);
-         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
-           false, null, false, false, true, false)) {
-      assertColumnsAreEqual(expected1, res1);
-      assertColumnsAreEqual(expected2, res2);
-    }
-    // Wildcard patterns
+    // Default escape character
     try (ColumnVector testStrings = ColumnVector.fromStrings(
            "a", "aa", "aaa", "aba", "b", "bb", "bba", "", "áéêú", "a1b2c3");
-         Scalar patternString1 = Scalar.fromString("_");
-         Scalar patternString2 = Scalar.fromString("%");
-         Scalar patternString3 = Scalar.fromString("a_");
-         Scalar patternString4 = Scalar.fromString("_a_");
-         Scalar patternString5 = Scalar.fromString("b_a");
-         Scalar patternString6 = Scalar.fromString("__a");
-         Scalar patternString7 = Scalar.fromString("a%");
-         Scalar patternString8 = Scalar.fromString("á%");
-         Scalar patternString9 = Scalar.fromString("__a%");
-         Scalar patternString10 = Scalar.fromString("%a");
-         Scalar patternString11 = Scalar.fromString("%a%");
-         Scalar patternString12 = Scalar.fromString("%_a");
-         Scalar patternString13 = Scalar.fromString("a%b_");
-         Scalar patternString14 = Scalar.fromString("a%b_%");
-         Scalar patternString15 = Scalar.fromString("a%b%c");
-         Scalar patternString16 = Scalar.fromString("a%b%c%");
+         Scalar patternString1 = Scalar.fromString("a1b2c3");
+         Scalar patternString2 = Scalar.fromString("__a%");
+         Scalar defaultEscape = Scalar.fromString("\\");
          ColumnVector res1 = testStrings.like(patternString1, defaultEscape);
          ColumnVector res2 = testStrings.like(patternString2, defaultEscape);
-         ColumnVector res3 = testStrings.like(patternString3, defaultEscape);
-         ColumnVector res4 = testStrings.like(patternString4, defaultEscape);
-         ColumnVector res5 = testStrings.like(patternString5, defaultEscape);
-         ColumnVector res6 = testStrings.like(patternString6, defaultEscape);
-         ColumnVector res7 = testStrings.like(patternString7, defaultEscape);
-         ColumnVector res8 = testStrings.like(patternString8, defaultEscape);
-         ColumnVector res9 = testStrings.like(patternString9, defaultEscape);
-         ColumnVector res10 = testStrings.like(patternString10, defaultEscape);
-         ColumnVector res11 = testStrings.like(patternString11, defaultEscape);
-         ColumnVector res12 = testStrings.like(patternString12, defaultEscape);
-         ColumnVector res13 = testStrings.like(patternString13, defaultEscape);
-         ColumnVector res14 = testStrings.like(patternString14, defaultEscape);
-         ColumnVector res15 = testStrings.like(patternString15, defaultEscape);
-         ColumnVector res16 = testStrings.like(patternString16, defaultEscape);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
-           true, false, false, false, true, false, false, false, false, false);
+           false, false, false, false, false, false, false, false, false, true);
          ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
-           true, true, true, true, true, true, true, true, true, true);
-         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(
-           false, true, false, false, false, false, false, false, false, false);
-         ColumnVector expected4 = ColumnVector.fromBoxedBooleans(
-           false, false, true, false, false, false, false, false, false, false);
-         ColumnVector expected5 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, true, false, false, false);
-         ColumnVector expected6 = ColumnVector.fromBoxedBooleans(
-           false, false, true, true, false, false, true, false, false, false);
-         ColumnVector expected7 = ColumnVector.fromBoxedBooleans(
-           true, true, true, true, false, false, false, false, false, true);
-         ColumnVector expected8 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, false, false, true, false);
-         ColumnVector expected9 = ColumnVector.fromBoxedBooleans(
-           false, false, true, true, false, false, true, false, false, false);
-         ColumnVector expected10 = ColumnVector.fromBoxedBooleans(
-           true, true, true, true, false, false, true, false, false, false);
-         ColumnVector expected11 = ColumnVector.fromBoxedBooleans(
-           true, true, true, true, false, false, true, false, false, true);
-         ColumnVector expected12 = ColumnVector.fromBoxedBooleans(
-           false, true, true, true, false, false, true, false, false, false);
-         ColumnVector expected13 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, false, false, false, false, false, false);
-         ColumnVector expected14 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, false, false, false, false, false, true);
-         ColumnVector expected15 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, false, false, false, false);
-         ColumnVector expected16 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, false, false, false, true)) {
+           false, false, true, true, false, false, true, false, false, false)) {
       assertColumnsAreEqual(expected1, res1);
       assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
-      assertColumnsAreEqual(expected4, res4);
-      assertColumnsAreEqual(expected5, res5);
-      assertColumnsAreEqual(expected6, res6);
-      assertColumnsAreEqual(expected7, res7);
-      assertColumnsAreEqual(expected8, res8);
-      assertColumnsAreEqual(expected9, res9);
-      assertColumnsAreEqual(expected10, res10);
-      assertColumnsAreEqual(expected11, res11);
-      assertColumnsAreEqual(expected12, res12);
-      assertColumnsAreEqual(expected13, res13);
-      assertColumnsAreEqual(expected14, res14);
-      assertColumnsAreEqual(expected15, res15);
-      assertColumnsAreEqual(expected16, res16);
     }
-    // Patterns with escape characters
+    // Non-default escape character
     try (ColumnVector testStrings = ColumnVector.fromStrings(
            "10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "aéb", "_%_", "_%a");
-         Scalar patternString1 = Scalar.fromString("%\\_%");
-         Scalar patternString2 = Scalar.fromString("_\\_%");
-         Scalar patternString3 = Scalar.fromString("%\\%%");
-         Scalar patternString4 = Scalar.fromString("\\__\\_");
-         Scalar patternString5 = Scalar.fromString("_\\%\\_");
-         Scalar patternString6 = Scalar.fromString("10\\%-20\\%");
-         Scalar patternString7 = Scalar.fromString("10%%%%-20%%");
-         Scalar patternString8 = Scalar.fromString("_%__");
-         Scalar patternString9 = Scalar.fromString("a__b");
-         Scalar patternString10 = Scalar.fromString("___%%");
-         Scalar patternString11 = Scalar.fromString("__a_");
-         Scalar patternString12 = Scalar.fromString("%a%%a%%");
+         Scalar patternString1 = Scalar.fromString("10%%%%-20%%");
+         Scalar patternString2 = Scalar.fromString("___%%");
          Scalar escapeChar1 = Scalar.fromString("%");
          Scalar escapeChar2 = Scalar.fromString("_");
-         Scalar escapeChar3 = Scalar.fromString("a");
-         ColumnVector res1 = testStrings.like(patternString1, defaultEscape);
-         ColumnVector res2 = testStrings.like(patternString2, defaultEscape);
-         ColumnVector res3 = testStrings.like(patternString3, defaultEscape);
-         ColumnVector res4 = testStrings.like(patternString4, defaultEscape);
-         ColumnVector res5 = testStrings.like(patternString5, defaultEscape);
-         ColumnVector res6 = testStrings.like(patternString6, defaultEscape);
-         ColumnVector res7 = testStrings.like(patternString7, escapeChar1);
-         ColumnVector res8 = testStrings.like(patternString8, escapeChar1);
-         ColumnVector res9 = testStrings.like(patternString9, escapeChar2);
-         ColumnVector res10 = testStrings.like(patternString10, escapeChar2);
-         ColumnVector res11 = testStrings.like(patternString11, escapeChar3);
-         ColumnVector res12 = testStrings.like(patternString12, escapeChar3);
+         ColumnVector res1 = testStrings.like(patternString1, escapeChar1);
+         ColumnVector res2 = testStrings.like(patternString2, escapeChar2);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, true, true, false, false, true, true);
-         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, true, true, false, false, false, false);
-         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(
-           true, false, true, false, false, false, false, false, true, true);
-         ColumnVector expected4 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, true, false, false, true, false);
-         ColumnVector expected5 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, false, false, true, false);
-         ColumnVector expected6 = ColumnVector.fromBoxedBooleans(
-           true, false, false, false, false, false, false, false, false, false);
-         ColumnVector expected7 = ColumnVector.fromBoxedBooleans(
            false, false, true, false, false, false, false, false, false, false);
-         ColumnVector expected8 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, true, true, false, false, false, false);
-         ColumnVector expected9 = ColumnVector.fromBoxedBooleans(
-           false, false, false, true, false, false, false, false, false, false);
-         ColumnVector expected10 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, false, false, false, true, true);
-         ColumnVector expected11 = ColumnVector.fromBoxedBooleans(
-           false, false, false, false, false, true, false, false, true, false);
-         ColumnVector expected12 = ColumnVector.fromBoxedBooleans(
-           true, false, true, false, false, false, false, false, false, false)) {
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, false, false, false, false, false, false, false, true, true)) {
       assertColumnsAreEqual(expected1, res1);
       assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
-      assertColumnsAreEqual(expected4, res4);
-      assertColumnsAreEqual(expected5, res5);
-      assertColumnsAreEqual(expected6, res6);
-      assertColumnsAreEqual(expected7, res7);
-      assertColumnsAreEqual(expected8, res8);
-      assertColumnsAreEqual(expected9, res9);
-      assertColumnsAreEqual(expected10, res10);
-      assertColumnsAreEqual(expected11, res11);
-      assertColumnsAreEqual(expected12, res12);
     }
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar defaultEscape = Scalar.fromString("\\");
            ColumnVector res = testStrings.like(null, defaultEscape)) {}
     });
     assertThrows(AssertionError.class, () -> {
@@ -4378,18 +4245,8 @@ public class ColumnVectorTest extends CudfTestBase {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
            Scalar intScalar = Scalar.fromInt(1);
+           Scalar defaultEscape = Scalar.fromString("\\");
            ColumnVector res = testStrings.like(intScalar, defaultEscape)) {}
-    });
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
-           Scalar emptyString = Scalar.fromString(null);
-           ColumnVector res = testStrings.like(emptyString, defaultEscape);) {}
-    });
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
-           Scalar patternString = Scalar.fromString("");
-           Scalar emptyEscape = Scalar.fromString(null);
-           ColumnVector res = testStrings.like(patternString, emptyEscape);) {}
     });
   }
 

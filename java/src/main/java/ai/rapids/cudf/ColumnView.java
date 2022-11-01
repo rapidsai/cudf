@@ -3304,14 +3304,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Any null string entries return corresponding null output column entries.
    *
    * @param pattern Like pattern to match to each string.
-   * @param escapeChar Character specifies the escape prefix; default is "\\"
+   * @param escapeChar Character specifies the escape prefix; default is "\\".
    * @return New ColumnVector of boolean results for each string.
    */
   public final ColumnVector like(Scalar pattern, Scalar escapeChar) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern scalar may not be null";
+    assert pattern != null : "pattern scalar must not be null";
     assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
-    assert escapeChar != null : "escapeChar scalar may not be null";
+    assert escapeChar != null : "escapeChar scalar must not be null";
     assert escapeChar.getType().equals(DType.STRING) : "escapeChar scalar must be a string scalar";
     return new ColumnVector(like(getNativeView(), pattern.getScalarHandle(), escapeChar.getScalarHandle()));
   }
@@ -4078,11 +4078,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for checking if strings match the passed in like pattern
    * and escape character.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
-   * @param pattern string like pattern.
-   * @param escapeChar string escape character.
+   * @param patternHandle handle of scalar containing the string like pattern.
+   * @param escapeCharHandle handle of scalar containing the string escape character.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long like(long cudfViewHandle, long pattern, long escapeChar) throws CudfException;
+  private static native long like(long cudfViewHandle, long patternHandle, long escapeCharHandle) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
