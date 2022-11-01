@@ -38,12 +38,8 @@ set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_ ASSOCIATED_TARGETS cudf
 )
-
-foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../cpp")
-endforeach()
 
 add_subdirectory(convert)
 add_subdirectory(split)
