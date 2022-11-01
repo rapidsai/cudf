@@ -58,9 +58,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
 
     cats = values._column.dropna().unique().astype(values.dtype)
 
-    name = values.name  # label_encoding mutates self.name
     labels = values._label_encoding(cats=cats, na_sentinel=na_sentinel).values
-    values.name = name
 
     return labels, cats.values if return_cupy_array else Index(cats)
 

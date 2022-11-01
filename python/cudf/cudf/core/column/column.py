@@ -77,6 +77,8 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     get_time_unit,
+    is_mixed_with_object_dtype,
+    min_scalar_type,
     min_unsigned_type,
     np_to_pa_dtype,
     pandas_dtypes_alias_to_cudf_alias,
@@ -894,8 +896,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             ordered = False
 
-        sr = cudf.Series(self)
-
         # Re-label self w.r.t. the provided categories
         if (
             isinstance(dtype, cudf.CategoricalDtype)
@@ -904,7 +904,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             isinstance(dtype, pd.CategoricalDtype)
             and dtype.categories is not None
         ):
-            labels = sr._label_encoding(cats=dtype.categories)
+            labels = self._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -913,20 +913,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),
-                codes=labels._column,
+                codes=labels,
                 mask=self.mask,
                 ordered=dtype.ordered,
             )
 
-        cats = sr.unique().astype(sr.dtype)
+        cats = self.unique().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr._label_encoding(
+        labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=1
         )
 
         # columns include null index in factorization; remove:
         if self.has_nulls():
-            cats = cats._column.dropna(drop_nan=False)
+            cats = cats.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
@@ -934,7 +934,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return build_categorical_column(
             categories=cats,
-            codes=labels._column,
+            codes=labels,
             mask=self.mask,
             ordered=ordered,
         )
@@ -1211,6 +1211,42 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         the children of ``self``.
         """
         return self
+
+    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+        from cudf._lib.join import join as cpp_join
+
+        def _return_sentinel_column():
+            return cudf.core.column.full(
+                size=len(self), fill_value=na_sentinel, dtype=dtype
+            )
+
+        if dtype is None:
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+
+        cats = as_column(cats)
+        if is_mixed_with_object_dtype(self, cats):
+            return _return_sentinel_column()
+
+        try:
+            # Where there is a type-cast failure, we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return _return_sentinel_column()
+
+        order = arange(len(self))
+        codes = arange(len(cats), dtype=dtype)
+        left_gather_map, right_gather_map = cpp_join(
+            [self], [cats], how="left"
+        )
+        codes = codes.take(
+            right_gather_map, nullify=True, check_bounds=False
+        ).fillna(na_sentinel)
+        order = order.take(left_gather_map, check_bounds=False)
+        codes = codes.take(order.argsort())
+        return codes
 
 
 def column_empty_like(
