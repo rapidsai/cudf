@@ -2,20 +2,13 @@
 
 from enum import Enum, IntEnum
 
-import numba
-import numpy as np
 import pandas as pd
 
-from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.types import (
-    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
-    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
-    NullHandling,
-)
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES, NullHandling
 from cudf.utils import cudautils
 
 from cudf._lib.types cimport (

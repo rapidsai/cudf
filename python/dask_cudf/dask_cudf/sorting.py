@@ -48,7 +48,10 @@ def _quantile(a, q):
     n = len(a)
     if not len(a):
         return None, n
-    return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
+    return (
+        a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
+        n,
+    )
 
 
 @_dask_cudf_nvtx_annotate
@@ -133,7 +136,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantiles(q=q)
+    meta = df._meta_nonempty.quantile(q=q, method="table")
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):

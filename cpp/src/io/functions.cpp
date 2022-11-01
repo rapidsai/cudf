@@ -231,7 +231,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   return csv::write_csv(  //
     sinks[0].get(),
     options.get_table(),
-    options.get_metadata(),
+    options.get_names(),
     options,
     cudf::get_default_stream(),
     mr);
@@ -349,7 +349,7 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
   auto reader      = std::make_unique<detail_orc::reader>(
     std::move(datasources), options, cudf::get_default_stream(), mr);
 
-  return reader->read(options);
+  return reader->read(options, cudf::get_default_stream());
 }
 
 /**

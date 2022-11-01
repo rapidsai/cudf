@@ -1338,8 +1338,8 @@ class csv_writer_options {
   std::string _true_value = std::string{"true"};
   // string to use for values == 0 in INT8 types (default 'false')
   std::string _false_value = std::string{"false"};
-  // Optional associated metadata
-  table_metadata const* _metadata = nullptr;
+  // Names of all columns; if empty, writer will generate column names
+  std::vector<std::string> _names;
 
   /**
    * @brief Constructor from sink and table.
@@ -1387,11 +1387,11 @@ class csv_writer_options {
   [[nodiscard]] table_view const& get_table() const { return _table; }
 
   /**
-   * @brief Returns optional associated metadata.
+   * @brief Returns names of the columns.
    *
-   * @return Optional associated metadata
+   * @return Names of the columns in the output file
    */
-  [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
 
   /**
    * @brief Returns string to used for null entries.
@@ -1444,11 +1444,11 @@ class csv_writer_options {
 
   // Setter
   /**
-   * @brief Sets optional associated metadata.
+   * @brief Sets optional associated column names.
    *
-   @param metadata Associated metadata
+   @param names Associated column names
    */
-  void set_metadata(table_metadata* metadata) { _metadata = metadata; }
+  void set_names(std::vector<std::string> names) { _names = std::move(names); }
 
   /**
    * @brief Sets string to used for null entries.
@@ -1526,14 +1526,14 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets optional associated metadata.
+   * @brief Sets optional column names.
    *
-   * @param metadata Associated metadata
+   * @param names Column names
    * @return this for chaining
    */
-  csv_writer_options_builder& metadata(table_metadata* metadata)
+  csv_writer_options_builder& names(std::vector<std::string> names)
   {
-    options._metadata = metadata;
+    options._names = names;
     return *this;
   }
 
