@@ -24,9 +24,9 @@ def search_sorted(
         List of columns to search in
     values : List of columns
         List of value columns to search for
-    side : str {‘left’, ‘right’} optional
-        If ‘left’, the index of the first suitable location is given.
-        If ‘right’, return the last such index
+    side : str {'left', 'right'} optional
+        If 'left', the index of the first suitable location is given.
+        If 'right', return the last such index
     """
     cdef unique_ptr[column] c_result
     cdef vector[libcudf_types.order] c_column_order

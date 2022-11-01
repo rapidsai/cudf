@@ -83,7 +83,7 @@ doc_describe = docfmt_partial(
         Generate descriptive statistics.
 
         Descriptive statistics include those that summarize the
-        central tendency, dispersion and shape of a dataset’s
+        central tendency, dispersion and shape of a dataset's
         distribution, excluding ``NaN`` values.
 
         Analyzes both numeric and object series, as well as

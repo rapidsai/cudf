@@ -484,7 +484,7 @@ def melt(
     4  b        C      4
     5  c        C      6
 
-    The names of ‘variable’ and ‘value’ columns can be customized:
+    The names of 'variable' and 'value' columns can be customized:
 
     >>> cudf.melt(df, id_vars=['A'], value_vars=['B'],
     ...         var_name='myVarname', value_name='myValname')

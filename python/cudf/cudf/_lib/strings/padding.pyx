@@ -59,7 +59,7 @@ def zfill(Column source_strings,
           size_type width):
     """
     Returns a Column by prepending strings in `source_strings`
-    with ‘0’ characters up to the given `width`.
+    with '0' characters up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

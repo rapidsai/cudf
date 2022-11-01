@@ -515,7 +515,7 @@ index : bool, default None
     If ``None``, similar to ``True`` the dataframe's index(es) will
     be saved, however, instead of being saved as values any
     ``RangeIndex`` will be stored as a range in the metadata so it
-    doesn’t require much space and is faster. Other indexes will
+    doesn't require much space and is faster. Other indexes will
     be included as columns in the file output.
 
 See Also
@@ -1046,7 +1046,7 @@ dtype : type, str, list of types, or dict of column -> type, default None
     are mapped to the particular type passed. If list, types are applied in
     the same order as the column names. If dict, types are mapped to the
     column names.
-    E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
+    E.g. {{'a': np.float64, 'b': int32, 'c': 'float'}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
 true_values : list, default None
@@ -1084,9 +1084,9 @@ parse_dates : list of int or names, default None
 dayfirst : bool, default False
     DD/MM format dates, international and European format.
 compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
-    For on-the-fly decompression of on-disk data. If ‘infer’, then detect
-    compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
-    decompression). If using ‘zip’, the ZIP file must contain only one
+    For on-the-fly decompression of on-disk data. If 'infer', then detect
+    compression from the following extensions: '.gz','.zip' (otherwise no
+    decompression). If using 'zip', the ZIP file must contain only one
     data file to be read in, otherwise the first non-zero-sized file will
     be used. Set to None for no decompression.
 thousands : char, default None
@@ -1210,7 +1210,7 @@ index : bool, default True
     Write out the index as a column
 encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
-    Only ‘utf-8’ is currently supported
+    Only 'utf-8' is currently supported
 compression : str, None
     A string representing the compression scheme to use in the the output file
     Compression while writing csv is not supported currently

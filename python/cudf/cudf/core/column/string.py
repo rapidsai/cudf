@@ -116,8 +116,8 @@ class StringMethods(ColumnMethods):
 
     This mimics pandas ``df.str`` interface. nulls stay null
     unless handled otherwise by a particular method.
-    Patterned after Python’s string methods, with some
-    inspiration from R’s stringr package.
+    Patterned after Python's string methods, with some
+    inspiration from R's stringr package.
     """
 
     _column: StringColumn
@@ -709,7 +709,7 @@ class StringMethods(ColumnMethods):
         >>> idx.str.contains('23', regex=False)
         GenericIndex([False, False, False, True, <NA>], dtype='bool')
 
-        Returning ‘house’ or ‘dog’ when either expression occurs in a string.
+        Returning 'house' or 'dog' when either expression occurs in a string.
 
         >>> s1.str.contains('house|dog', regex=True)
         0    False
@@ -732,7 +732,7 @@ class StringMethods(ColumnMethods):
         Ensure ``pat`` is a not a literal pattern when ``regex`` is set
         to True. Note in the following example one might expect
         only `s2[1]` and `s2[3]` to return True. However,
-        ‘.0’ as a regex matches any character followed by a 0.
+        '.0' as a regex matches any character followed by a 0.
 
         >>> s2 = cudf.Series(['40', '40.0', '41', '41.0', '35'])
         >>> s2.str.contains('.0', regex=True)
@@ -2903,7 +2903,7 @@ class StringMethods(ColumnMethods):
             additional characters will be filled with
             character defined in fillchar.
 
-        side : {‘left’, ‘right’, ‘both’}, default ‘left’
+        side : {'left', 'right', 'both'}, default 'left'
             Side from which to fill resulting string.
 
         fillchar : str,  default ' ' (whitespace)
@@ -2930,7 +2930,7 @@ class StringMethods(ColumnMethods):
             Equivalent to ``Series.str.pad(side='both')``.
 
         zfill
-            Pad strings in the Series/Index by prepending ‘0’ character.
+            Pad strings in the Series/Index by prepending '0' character.
             Equivalent to ``Series.str.pad(side='left', fillchar='0')``.
 
         Examples
@@ -2970,7 +2970,7 @@ class StringMethods(ColumnMethods):
             side = libstrings.SideType[side.upper()]
         except KeyError:
             raise ValueError(
-                "side has to be either one of {‘left’, ‘right’, ‘both’}"
+                "side has to be either one of {'left', 'right', 'both'}"
             )
 
         return self._return_or_inplace(
@@ -2979,9 +2979,9 @@ class StringMethods(ColumnMethods):
 
     def zfill(self, width: int) -> SeriesOrIndex:
         """
-        Pad strings in the Series/Index by prepending ‘0’ characters.
+        Pad strings in the Series/Index by prepending '0' characters.
 
-        Strings in the Series/Index are padded with ‘0’ characters
+        Strings in the Series/Index are padded with '0' characters
         on the left of the string to reach a total string length
         width. Strings in the Series/Index with length greater
         or equal to width are unchanged.
@@ -2994,12 +2994,12 @@ class StringMethods(ColumnMethods):
         width : int
             Minimum length of resulting string;
             strings with length less than width
-            be prepended with ‘0’ characters.
+            be prepended with '0' characters.
 
         Returns
         -------
         Series/Index of str dtype
-            Returns Series or Index with prepended ‘0’ characters.
+            Returns Series or Index with prepended '0' characters.
 
         See Also
         --------
@@ -3405,7 +3405,7 @@ class StringMethods(ColumnMethods):
         `expand_tabsbool` are not yet supported and will raise a
         NotImplementedError if they are set to any value.
 
-        This method currently achieves behavior matching R’s
+        This method currently achieves behavior matching R's
         stringr library ``str_wrap`` function, the equivalent
         pandas implementation can be obtained using the
         following parameter setting:
@@ -3576,7 +3576,7 @@ class StringMethods(ColumnMethods):
         >>> import cudf
         >>> s = cudf.Series(['Lion', 'Monkey', 'Rabbit'])
 
-        The search for the pattern ‘Monkey’ returns one match:
+        The search for the pattern 'Monkey' returns one match:
 
         >>> s.str.findall('Monkey')
         0          []
@@ -3595,7 +3595,7 @@ class StringMethods(ColumnMethods):
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
-        the word ‘on’ is shown next:
+        the word 'on' is shown next:
 
         >>> s.str.findall('on$')
         0    [on]
@@ -4228,7 +4228,7 @@ class StringMethods(ColumnMethods):
         Returns a URL-encoded format of each string.
         No format checking is performed.
         All characters are encoded except for ASCII letters,
-        digits, and these characters: ``‘.’,’_’,’-‘,’~’``.
+        digits, and these characters: ``'.','_','-','~'``.
         Encoding converts to hex using UTF-8 encoded bytes.
 
         Returns

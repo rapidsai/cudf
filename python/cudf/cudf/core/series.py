@@ -815,7 +815,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy : boolean, default True
         level: Not Supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit: Not Supported
         tolerance: Not Supported
 
@@ -1605,7 +1605,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
-        of duplicated entries. Setting the value of ‘inplace’ to
+        of duplicated entries. Setting the value of 'inplace' to
         `True` performs the operation inplace and returns `None`.
 
         >>> s.drop_duplicates(keep=False, inplace=True)
@@ -1881,7 +1881,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -2763,7 +2763,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             only works with numeric data.
 
         dropna : bool, default True
-            Don’t include counts of NaN and None.
+            Don't include counts of NaN and None.
 
         Returns
         -------
@@ -2886,7 +2886,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
-        interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
         columns : list of str
@@ -4352,7 +4352,7 @@ class DatetimeProperties:
         Parameters
         ----------
         date_format : str
-            Date format string (e.g. “%Y-%m-%d”).
+            Date format string (e.g. "%Y-%m-%d").
 
         Returns
         -------

@@ -52,9 +52,9 @@ Parameters
 ----------
 by : mapping, function, label, or list of labels
     Used to determine the groups for the groupby. If by is a
-    function, it’s called on each value of the object’s index.
+    function, it's called on each value of the object's index.
     If a dict or Series is passed, the Series or dict VALUES will
-    be used to determine the groups (the Series’ values are first
+    be used to determine the groups (the Series' values are first
     aligned; see .align() method). If an cupy array is passed, the
     values are used as-is determine the groups. A label or list
     of labels may be passed to group by the columns in self.
@@ -65,7 +65,7 @@ level : int, level name, or sequence of such, default None
 as_index : bool, default True
     For aggregated output, return object with group labels as
     the index. Only relevant for DataFrame input.
-    as_index=False is effectively “SQL-style” grouped output.
+    as_index=False is effectively "SQL-style" grouped output.
 sort : bool, default False
     Sort result by group key. Differ from Pandas, cudf defaults to
     ``False`` for better performance. Note this does not influence
@@ -717,7 +717,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def pipe(self, func, *args, **kwargs):
         """
         Apply a function `func` with arguments to this GroupBy
-        object and return the function’s result.
+        object and return the function's result.
 
         Parameters
         ----------
@@ -1103,13 +1103,13 @@ class GroupBy(Serializable, Reducible, Scannable):
     def describe(self, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
-        dispersion and shape of a dataset’s distribution, excluding NaN values.
+        dispersion and shape of a dataset's distribution, excluding NaN values.
 
         Analyzes numeric DataFrames only
 
         Parameters
         ----------
-        include: ‘all’, list-like of dtypes or None (default), optional
+        include: 'all', list-like of dtypes or None (default), optional
             list of data types to include in the result.
             Ignored for Series.
 
