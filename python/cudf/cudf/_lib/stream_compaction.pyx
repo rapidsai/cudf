@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pandas as pd
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -27,12 +25,7 @@ from cudf._lib.cpp.types cimport (
     order,
     size_type,
 )
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def drop_nulls(list columns, how="any", keys=None, thresh=None):

@@ -26,6 +26,10 @@ repos:
                 types: [file]
                 types_or: [python, cython]
                 additional_dependencies: ["flake8-force"]
+      - repo: https://github.com/MarcoGorelli/cython-lint
+        rev: v0.1.10
+        hooks:
+              - id: cython-lint
       - repo: https://github.com/pre-commit/mirrors-mypy
         rev: 'v0.971'
         hooks:
@@ -48,6 +52,16 @@ repos:
               - id: clang-format
                 types_or: [c, c++, cuda]
                 args: ["-fallback-style=none", "-style=file", "-i"]
+      - repo: https://github.com/sirosen/texthooks
+        rev: 0.4.0
+        hooks:
+              - id: fix-smartquotes
+                exclude: |
+                  (?x)^(
+                    ^cpp/include/cudf_test/cxxopts.hpp|
+                    ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
+                    ^python/cudf/cudf/tests/test_text.py
+                  )
       - repo: local
         hooks:
               - id: no-deprecationwarning

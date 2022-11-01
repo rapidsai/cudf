@@ -1,8 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import numpy as np
-
-from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -15,11 +12,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
@@ -64,7 +57,6 @@ def repeat(list inp, object count):
 def _repeat_via_column(list inp, Column count):
     cdef table_view c_inp = table_view_from_columns(inp)
     cdef column_view c_count = count.view()
-    cdef bool c_check_count = False
     cdef unique_ptr[table] c_result
 
     with nogil:

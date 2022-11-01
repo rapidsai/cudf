@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -13,7 +13,6 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
     tokenize as cpp_tokenize,
 )
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
