@@ -2,7 +2,7 @@
 line-length = 79
 target-version = ["py38"]
 include = '\.py?$'
-exclude = '''
+force-exclude = '''
 /(
     thirdparty |
     \.eggs |
