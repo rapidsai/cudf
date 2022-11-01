@@ -34,6 +34,8 @@
 #include <cudf/utilities/error.hpp>
 #include <io/orc/orc.hpp>
 
+#include <cudf/detail/iterator.cuh>
+
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options
@@ -336,6 +338,40 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
   }
 
   return result;
+}
+namespace {
+orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_schema,
+                                         uint32_t column_id,
+                                         std::string column_name)
+{
+  auto const& orc_col_schema = orc_schema[column_id];
+  std::vector<orc_column_schema> children;
+  children.reserve(orc_col_schema.subtypes.size());
+  std::transform(
+    orc_col_schema.subtypes.cbegin(),
+    orc_col_schema.subtypes.cend(),
+    cudf::detail::make_counting_transform_iterator(0,
+                                                   [&names = orc_col_schema.fieldNames](size_t i) {
+                                                     return i < names.size() ? names[i]
+                                                                             : std::string{};
+                                                   }),
+    std::back_inserter(children),
+    [&](auto& type, auto name) { return make_orc_column_schema(orc_schema, type, name); });
+
+  return {std::move(column_name), orc_schema[column_id].kind, std::move(children)};
+}
+};  // namespace
+
+orc_metadata read_orc_metadata(source_info const& src_info)
+{
+  auto sources = make_datasources(src_info);
+
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  auto const footer = orc::metadata(sources.front().get(), cudf::detail::default_stream_value).ff;
+
+  return {{make_orc_column_schema(footer.types, 0, "")},
+          static_cast<size_type>(footer.numberOfRows),
+          static_cast<size_type>(footer.stripes.size())};
 }
 
 /**

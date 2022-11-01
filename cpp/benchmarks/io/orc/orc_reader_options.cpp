@@ -21,17 +21,27 @@
 #include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/orc.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
+// The number of separate read calls to use when reading files in multiple chunks
+// Each call reads roughly equal amounts of data
+constexpr int32_t chunked_read_num_chunks = 8;
 
 std::vector<std::string> get_col_names(cudf::io::source_info const& source)
 {
-  cudf::io::orc_reader_options const read_options =
-    cudf::io::orc_reader_options::builder(source).num_rows(1);
-  return cudf::io::read_orc(read_options).metadata.column_names;
+  auto const top_lvl_cols = cudf::io::read_orc_metadata(source).schema().root().children();
+  std::vector<std::string> col_names;
+  std::transform(top_lvl_cols.cbegin(),
+                 top_lvl_cols.cend(),
+                 std::back_inserter(col_names),
+                 [](auto const& col_meta) { return col_meta.name(); });
+  return col_names;
 }
 
 template <column_selection ColSelection,
@@ -48,7 +58,7 @@ void BM_orc_read_varying_options(nvbench::state& state,
 {
   cudf::rmm_pool_raii rmm_pool;
 
-  auto constexpr num_chunks = 1;
+  auto const num_chunks = RowSelection == row_selection::ALL ? 1 : chunked_read_num_chunks;
 
   auto const use_index     = UsesIndex == uses_index::YES;
   auto const use_np_dtypes = UsesNumpyDType == uses_numpy_dtype::YES;
@@ -79,7 +89,8 @@ void BM_orc_read_varying_options(nvbench::state& state,
       .use_np_dtypes(use_np_dtypes)
       .timestamp_type(ts_type);
 
-  auto const num_stripes              = data_size / (64 << 20);
+  auto const num_stripes =
+    cudf::io::read_orc_metadata(source_sink.make_source_info()).num_stripes();
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -94,14 +105,9 @@ void BM_orc_read_varying_options(nvbench::state& state,
         auto const is_last_chunk = chunk == (num_chunks - 1);
         switch (RowSelection) {
           case row_selection::ALL: break;
-          case row_selection::STRIPES: {
-            auto stripes_to_read = segments_in_chunk(num_stripes, num_chunks, chunk);
-            if (is_last_chunk) {
-              // Need to assume that an additional "overflow" stripe is present
-              stripes_to_read.push_back(num_stripes);
-            }
-            read_options.set_stripes({stripes_to_read});
-          } break;
+          case row_selection::STRIPES:
+            read_options.set_stripes({segments_in_chunk(num_stripes, num_chunks, chunk)});
+            break;
           case row_selection::NROWS:
             read_options.set_skip_rows(chunk * chunk_row_cnt);
             read_options.set_num_rows(chunk_row_cnt);
@@ -129,6 +135,8 @@ using col_selections = nvbench::enum_type_list<column_selection::ALL,
                                                column_selection::ALTERNATE,
                                                column_selection::FIRST_HALF,
                                                column_selection::SECOND_HALF>;
+using row_selections =
+  nvbench::enum_type_list<row_selection::ALL, row_selection::STRIPES, row_selection::NROWS>;
 
 NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
                     NVBENCH_TYPE_AXES(col_selections,
@@ -141,11 +149,22 @@ NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
     {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
   .set_min_samples(4);
 
+NVBENCH_BENCH_TYPES(BM_orc_read_varying_options,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
+                                      row_selections,
+                                      nvbench::enum_type_list<uses_index::YES>,
+                                      nvbench::enum_type_list<uses_numpy_dtype::YES>,
+                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
+  .set_name("orc_read_row_selection")
+  .set_type_axes_names(
+    {"column_selection", "row_selection", "uses_index", "uses_numpy_dtype", "timestamp_type"})
+  .set_min_samples(4);
+
 NVBENCH_BENCH_TYPES(
   BM_orc_read_varying_options,
   NVBENCH_TYPE_AXES(
     nvbench::enum_type_list<column_selection::ALL>,
-    nvbench::enum_type_list<row_selection::NROWS>,
+    nvbench::enum_type_list<row_selection::ALL>,
     nvbench::enum_type_list<uses_index::YES, uses_index::NO>,
     nvbench::enum_type_list<uses_numpy_dtype::YES, uses_numpy_dtype::NO>,
     nvbench::enum_type_list<cudf::type_id::EMPTY, cudf::type_id::TIMESTAMP_NANOSECONDS>))

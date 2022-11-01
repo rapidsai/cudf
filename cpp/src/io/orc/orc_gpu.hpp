@@ -19,8 +19,8 @@
 #include "timezone.cuh"
 
 #include "orc.hpp"
-#include "orc_common.hpp"
 
+#include <cudf/io/orc_types.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
