@@ -62,7 +62,7 @@ requirements:
     - packaging
     - cachetools
     - cubinlinker  # [linux64]  # CUDA enhanced compatibility.
-    - cuda-python >=11.5,<11.7.1
+    - cuda-python >=11.7.1,<12.0
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]

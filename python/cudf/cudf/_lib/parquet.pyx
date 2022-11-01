@@ -63,6 +63,8 @@ from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
 
+from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
+
 
 cdef class BufferArrayFromVector:
     cdef Py_ssize_t length
@@ -312,7 +314,7 @@ cpdef write_parquet(
         object statistics="ROWGROUP",
         object metadata_file_path=None,
         object int96_timestamps=False,
-        object row_group_size_bytes=None,
+        object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
         object row_group_size_rows=None,
         object max_page_size_bytes=None,
         object max_page_size_rows=None,
@@ -481,7 +483,7 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
-                  int row_group_size_bytes=134217728,
+                  int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
                   int max_page_size_rows=20000):

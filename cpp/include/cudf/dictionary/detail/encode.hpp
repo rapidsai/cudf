@@ -51,11 +51,10 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Returns a dictionary column.
  */
-std::unique_ptr<column> encode(
-  column_view const& column,
-  data_type indices_type              = data_type{type_id::UINT32},
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> encode(column_view const& column,
+                               data_type indices_type,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -72,10 +71,9 @@ std::unique_ptr<column> encode(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode(
-  dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> decode(dictionary_column_view const& dictionary_column,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Return minimal integer type for the given number of elements.
