@@ -5,7 +5,6 @@ from enum import Enum
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
-from libcpp.utility cimport move
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
 from cudf._lib.cpp.types cimport size_type

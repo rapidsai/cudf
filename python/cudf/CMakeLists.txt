@@ -56,6 +56,8 @@ else()
   set(cudf_FOUND OFF)
 endif()
 
+include(rapids-cython)
+
 if(NOT cudf_FOUND)
   # TODO: This will not be necessary once we upgrade to CMake 3.22, which will pull in the required
   # languages for the C++ project even if this project does not require those languges.
@@ -71,9 +73,10 @@ if(NOT cudf_FOUND)
   add_subdirectory(../../cpp cudf-cpp)
 
   # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
-  # library in the _lib/cpp directory as a single source of truth and modify the other rpaths
+  # library in the cudf directory as a single source of truth and modify the other rpaths
   # appropriately.
-  install(TARGETS cudf DESTINATION cudf/_lib/cpp)
+  set(cython_lib_dir cudf)
+  install(TARGETS cudf DESTINATION ${cython_lib_dir})
 endif()
 
 if(USE_LIBARROW_FROM_PYARROW)
@@ -85,11 +88,13 @@ if(USE_LIBARROW_FROM_PYARROW)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0")
 endif()
 
-include(rapids-cython)
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
 
 include(cmake/Modules/ProtobufHelpers.cmake)
-
 codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)
+
+if(DEFINED cython_lib_dir)
+  rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
+endif()

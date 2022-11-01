@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
@@ -16,7 +15,6 @@ from cudf._lib.cpp.strings.combine cimport (
     separator_on_nulls as separator_on_nulls,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport table_view_from_columns
 

@@ -2,11 +2,9 @@
 
 from io import TextIOBase
 
-import cudf
-
 from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
@@ -43,7 +41,6 @@ def read_text(object filepaths_or_buffers,
 
     cdef size_t c_byte_range_offset
     cdef size_t c_byte_range_size
-    cdef byte_range_info c_byte_range
     cdef uint64_t c_compression_begin_offset
     cdef uint64_t c_compression_end_offset
     cdef parse_options c_options
