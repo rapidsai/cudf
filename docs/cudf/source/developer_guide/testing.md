@@ -2,7 +2,7 @@
 
 ## Tooling
 Tests in cuDF are written using [`pytest`](https://docs.pytest.org/en/latest/).
-Test coverage is measured using [`coverage.py`](https://coverage.readthedocs.io/en/6.4.1/),
+Test coverage is measured using [`coverage.py`](https://coverage.readthedocs.io/en/latest/),
 specifically the [`pytest-cov`](https://github.com/pytest-dev/pytest-cov) plugin.
 Code coverage reports are uploaded to [Codecov](https://app.codecov.io/gh/rapidsai/cudf).
 Each PR also indicates whether it increases or decreases test coverage.
@@ -15,7 +15,7 @@ How tests are organized depends on which of the following two groups they fall i
 2. Methods of the above classes.
 
 Tests of free functions should be grouped into files based on the
-[API sections in the documentation](https://docs.rapids.ai/api/cudf/stable/api_docs/index.html).
+[API sections in the documentation](https://docs.rapids.ai/api/cudf/latest/api_docs/index.html).
 This places tests of similar functionality in the same module.
 Tests of class methods should be organized in the same way, except that this organization should be within a subdirectory corresponding to the class.
 For instance, tests of `DataFrame` indexing should be placed into `dataframe/test_indexing.py`.
@@ -46,7 +46,6 @@ Here are some of the most common exceptional cases to test:
   3. Containing/all inf
   4. Containing/all nan
   5. `INT${PRECISION}_MAX` for a given precision (e.g. `2**32` for `int32`).
-7. For strings, non-`en_US` locale.
 
 Most specific APIs will also include a range of other cases.
 
@@ -59,8 +58,8 @@ Such tests may test exceptional cases alongside more typical cases since the log
 ### Parametrization: custom fixtures and `pytest.mark.parametrize`
 
 When it comes to parametrizing tests written with `pytest`,
-the two main options are [fixtures](https://docs.pytest.org/en/stable/explanation/fixtures.html)
-and [`mark.parametrize`](https://docs.pytest.org/en/stable/how-to/parametrize.html#pytest-mark-parametrize).
+the two main options are [fixtures](https://docs.pytest.org/en/latest/explanation/fixtures.html)
+and [`mark.parametrize`](https://docs.pytest.org/en/latest/how-to/parametrize.html#pytest-mark-parametrize).
 By virtue of being functions, fixtures are both more verbose and more self-documenting.
 Fixtures also have the significant benefit of being constructed lazily,
 whereas parametrizations are constructed at test collection time.
@@ -81,11 +80,11 @@ Use fixtures when:
   and all of those inputs can be constructed with simple parametrizations.
   In practice, that means that it is acceptable to use a fixture like this:
   ```python
-      @pytest.fixture(params=['a', 'b'])
+      @pytest.fixture(params=["a", "b"])
       def foo(request):
-          if request.param == 'a':
+          if request.param == "a":
               # Some complex initialization
-          elif request.param == 'b':
+          elif request.param == "b":
               # Some other complex initialization
   ```
   In other words, the construction of the fixture may be complex,
@@ -95,11 +94,11 @@ Use fixtures when:
   In this case, the parametrization of a fixture should be decomposed
   by using fixtures that depend on other fixtures.
   ```python
-      @pytest.fixture(params=['a', 'b'])
+      @pytest.fixture(params=["a", "b"])
       def foo(request):
-          if request.param == 'a':
+          if request.param == "a":
               # Some complex initialization
-          elif request.param == 'b':
+          elif request.param == "b":
               # Some other complex initialization
 
       @pytest.fixture
@@ -121,7 +120,7 @@ Fixtures and parametrization are only capable of handling the Cartesian product 
 i.e. "run this test for all values of `a` and all values of `b`".
 
 There are multiple potential solutions to this problem.
-One possibility is to encapsulate common test logic a helper function,
+One possibility is to encapsulate common test logic in a helper function,
 then call it from multiple `test_*` functions that construct the necessary inputs.
 Another possibility is to use functions rather than fixtures to construct inputs, allowing for more flexible input construction:
 ```python
