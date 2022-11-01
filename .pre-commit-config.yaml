@@ -52,6 +52,16 @@ repos:
               - id: clang-format
                 types_or: [c, c++, cuda]
                 args: ["-fallback-style=none", "-style=file", "-i"]
+      - repo: https://github.com/sirosen/texthooks
+        rev: 0.4.0
+        hooks:
+              - id: fix-smartquotes
+                exclude: |
+                  (?x)^(
+                    ^cpp/include/cudf_test/cxxopts.hpp|
+                    ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
+                    ^python/cudf/cudf/tests/test_text.py
+                  )
       - repo: local
         hooks:
               - id: no-deprecationwarning

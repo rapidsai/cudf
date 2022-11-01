@@ -50,7 +50,7 @@ For additional examples, browse our complete [API documentation](https://docs.ra
 
 ## Quick Start
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you're running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
 
 ## Installation
 

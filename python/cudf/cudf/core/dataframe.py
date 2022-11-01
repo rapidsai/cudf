@@ -2293,7 +2293,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Return a new object, even if the passed indexes are the same.
         level : Not supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit : Not supported
         tolerance : Not supported
 
@@ -2358,7 +2358,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         IE10               404       <NA>
         Konqueror          301       <NA>
 
-        Or we can use “axis-style” keyword arguments
+        Or we can use "axis-style" keyword arguments
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -3028,7 +3028,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
-        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        a dict / Series will be left as-is. Extra labels listed don't throw an
         error.
 
         ``DataFrame.rename`` supports two calling conventions:
@@ -3635,8 +3635,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {‘left’, ‘outer’, ‘inner’, 'leftsemi', 'leftanti'}, \
-            default ‘inner’
+        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+            default 'inner'
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
@@ -5363,7 +5363,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ----------
         values : iterable, Series, DataFrame or dict
             The result will only be true at a location if all
-            the labels match. If values is a Series, that’s the index.
+            the labels match. If values is a Series, that's the index.
             If values is a dict, the keys must be the column names,
             which must match. If values is a DataFrame, then both the
             index and column labels must match.
