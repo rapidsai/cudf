@@ -1307,10 +1307,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(JNIEnv *env, jobject
 
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const*>(j_view_handle);
+    auto const column_view = reinterpret_cast<cudf::column_view const *>(j_view_handle);
     auto const strings_column = cudf::strings_column_view{*column_view};
-    auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const*>(pattern);
-    auto const escape_scalar = reinterpret_cast<cudf::string_scalar const*>(escapeChar);
+    auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const *>(pattern);
+    auto const escape_scalar = reinterpret_cast<cudf::string_scalar const *>(escapeChar);
     return release_as_jlong(cudf::strings::like(strings_column, *pattern_scalar, *escape_scalar));
   }
   CATCH_STD(env, 0);
