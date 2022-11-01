@@ -381,8 +381,13 @@ def test_struct_memory_usage():
 
 
 def test_struct_with_null_memory_usage():
-    s = cudf.Series(
-        [{"a": 1, "b": 10}, {"a": 2, "b": 20}, None, None, {"a": 3, "b": 30}]
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, -1, -1, 3], dtype="int64"),
+            "b": cudf.Series([10, 20, -1, -1, 30], dtype="int64"),
+        }
     )
+    s = df.to_struct()
+    s[2:4] = None
 
     assert s.memory_usage() == 272
