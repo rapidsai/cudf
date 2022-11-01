@@ -22,8 +22,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <arrow/buffer.h>
+#pragma nv_diag_suppress 611
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
+#pragma nv_diag_default 611
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>

@@ -25,7 +25,9 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
+#pragma nv_diag_suppress 611
 #include <arrow/filesystem/filesystem.h>
+#pragma nv_diag_default 611
 #include <arrow/io/api.h>
 
 #include <fstream>
