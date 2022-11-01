@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/copying.hpp>
@@ -23,6 +23,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -34,7 +36,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (end < 0 || end > strings.size()) end = strings.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   auto const strings_count  = end - start;
@@ -42,7 +44,9 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
 
   // slice the offsets child column
   auto offsets_column = std::make_unique<cudf::column>(
-    cudf::slice(strings.offsets(), {offsets_offset, offsets_offset + strings_count + 1}).front(),
+    cudf::detail::slice(
+      strings.offsets(), {offsets_offset, offsets_offset + strings_count + 1}, stream)
+      .front(),
     stream,
     mr);
   auto const chars_offset =
@@ -61,7 +65,9 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto const data_size =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = std::make_unique<cudf::column>(
-    cudf::slice(strings.chars(), {chars_offset, chars_offset + data_size}).front(), stream, mr);
+    cudf::detail::slice(strings.chars(), {chars_offset, chars_offset + data_size}, stream).front(),
+    stream,
+    mr);
 
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(
@@ -71,9 +77,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                              std::move(offsets_column),
                              std::move(chars_column),
                              UNKNOWN_NULL_COUNT,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

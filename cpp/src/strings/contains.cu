@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <strings/count_matches.hpp>
+#include <strings/regex/utilities.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -22,120 +25,105 @@
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
 namespace detail {
+
 namespace {
 /**
- * @brief This functor handles both contains_re and match_re to minimize the number
- * of regex calls to find() to be inlined greatly reducing compile time.
- *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex
- * pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory.
+ * @brief This functor handles both contains_re and match_re to regex-match a pattern
+ * to each string in a column.
  */
-template <int stack_size>
 struct contains_fn {
-  reprog_device prog;
-  column_device_view d_strings;
-  bool bmatch{false};  // do not make this a template parameter to keep compile times down
+  column_device_view const d_strings;
+  bool const beginning_only;
 
-  __device__ bool operator()(size_type idx)
+  __device__ bool operator()(size_type const idx,
+                             reprog_device const prog,
+                             int32_t const thread_idx)
   {
-    if (d_strings.is_null(idx)) return 0;
-    string_view d_str = d_strings.element<string_view>(idx);
-    int32_t begin     = 0;
-    int32_t end       = bmatch ? 1    // match only the beginning of the string;
-                               : -1;  // this handles empty strings too
-    return static_cast<bool>(prog.find<stack_size>(idx, d_str, begin, end));
+    if (d_strings.is_null(idx)) return false;
+    auto const d_str = d_strings.element<string_view>(idx);
+
+    size_type begin = 0;
+    size_type end   = beginning_only ? 1    // match only the beginning of the string;
+                                     : -1;  // match anywhere in the string
+    return static_cast<bool>(prog.find(thread_idx, d_str, begin, end));
   }
 };
 
-//
-std::unique_ptr<column> contains_util(
-  strings_column_view const& strings,
-  std::string const& pattern,
-  bool beginning_only                 = false,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains_impl(strings_column_view const& input,
+                                      std::string_view pattern,
+                                      regex_flags const flags,
+                                      bool const beginning_only,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count  = strings.size();
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-
-  // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-
-  // create the output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
-  auto d_results = results->mutable_view().data<bool>();
+  if (input.is_empty()) { return results; }
 
-  // fill the output column
-  int regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      contains_fn<RX_STACK_SMALL>{d_prog, d_column, beginning_only});
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      contains_fn<RX_STACK_MEDIUM>{d_prog, d_column, beginning_only});
-  else if (regex_insts <= RX_LARGE_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      contains_fn<RX_STACK_LARGE>{d_prog, d_column, beginning_only});
-  else
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      contains_fn<RX_STACK_ANY>{d_prog, d_column, beginning_only});
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
 
-  results->set_null_count(strings.null_count());
+  auto d_results       = results->mutable_view().data<bool>();
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  launch_transform_kernel(
+    contains_fn{*d_strings, beginning_only}, *d_prog, d_results, input.size(), stream);
+
+  results->set_null_count(input.null_count());
+
   return results;
 }
 
 }  // namespace
 
 std::unique_ptr<column> contains_re(
-  strings_column_view const& strings,
-  std::string const& pattern,
+  strings_column_view const& input,
+  std::string_view pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(strings, pattern, false, stream, mr);
+  return contains_impl(input, pattern, flags, false, stream, mr);
 }
 
 std::unique_ptr<column> matches_re(
-  strings_column_view const& strings,
-  std::string const& pattern,
+  strings_column_view const& input,
+  std::string_view pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(strings, pattern, true, stream, mr);
+  return contains_impl(input, pattern, flags, true, stream, mr);
+}
+
+std::unique_ptr<column> count_re(
+  strings_column_view const& input,
+  std::string_view pattern,
+  regex_flags const flags,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  // compile regex into device object
+  auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  auto result = count_matches(*d_strings, *d_prog, input.size(), stream, mr);
+  if (input.has_nulls()) {
+    result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                          input.null_count());
+  }
+  return result;
 }
 
 }  // namespace detail
@@ -143,114 +131,30 @@ std::unique_ptr<column> matches_re(
 // external APIs
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
-                                    std::string const& pattern,
+                                    std::string_view pattern,
+                                    regex_flags const flags,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::contains_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
-                                   std::string const& pattern,
+                                   std::string_view pattern,
+                                   regex_flags const flags,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::matches_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
-
-namespace detail {
-namespace {
-/**
- * @brief This counts the number of times the regex pattern matches in each string.
- */
-template <int stack_size>
-struct count_fn {
-  reprog_device prog;
-  column_device_view d_strings;
-
-  __device__ int32_t operator()(unsigned int idx)
-  {
-    if (d_strings.is_null(idx)) return 0;
-    string_view d_str  = d_strings.element<string_view>(idx);
-    auto const nchars  = d_str.length();
-    int32_t find_count = 0;
-    int32_t begin      = 0;
-    while (begin < nchars) {
-      auto end = static_cast<int32_t>(nchars);
-      if (prog.find<stack_size>(idx, d_str, begin, end) <= 0) break;
-      ++find_count;
-      begin = end > begin ? end : begin + 1;
-    }
-    return find_count;
-  }
-};
-
-}  // namespace
-
-std::unique_ptr<column> count_re(
-  strings_column_view const& strings,
-  std::string const& pattern,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto strings_count  = strings.size();
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-
-  // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-
-  // create the output column
-  auto results   = make_numeric_column(data_type{type_id::INT32},
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
-  auto d_results = results->mutable_view().data<int32_t>();
-
-  // fill the output column
-  int regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      count_fn<RX_STACK_SMALL>{d_prog, d_column});
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      count_fn<RX_STACK_MEDIUM>{d_prog, d_column});
-  else if (regex_insts <= RX_LARGE_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      count_fn<RX_STACK_LARGE>{d_prog, d_column});
-  else
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_results,
-                      count_fn<RX_STACK_ANY>{d_prog, d_column});
-
-  results->set_null_count(strings.null_count());
-  return results;
-}
-
-}  // namespace detail
-
-// external API
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
+                                 regex_flags const flags,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::count_re(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

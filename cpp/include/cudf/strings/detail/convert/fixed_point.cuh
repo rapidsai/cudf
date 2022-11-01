@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
+
+#include <cudf/fixed_point/temporary.hpp>
 
 #include <thrust/optional.h>
 #include <thrust/pair.h>
+
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {
@@ -24,22 +29,27 @@ namespace detail {
 /**
  * @brief Return the integer component of a decimal string.
  *
- * This is reads everything up to the exponent 'e' notation.
+ * This reads everything up to the exponent 'e' notation.
  * The return includes the integer digits and any exponent offset.
+ *
+ * @tparam UnsignedDecimalType The unsigned version of the desired decimal type.
+ *                             Use the `std::make_unsigned_t` to create the
+ *                             unsigned type from the storage type.
  *
  * @param[in,out] iter Start of characters to parse
  * @param[in] end End of characters to parse
  * @return Integer component and exponent offset.
  */
-__device__ inline thrust::pair<uint64_t, int32_t> parse_integer(char const*& iter,
-                                                                char const* iter_end,
-                                                                const char decimal_pt_char = '.')
+template <typename UnsignedDecimalType>
+__device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
+  char const*& iter, char const* iter_end, const char decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;
-  // this preserves the most digits when scaling the final result
-  constexpr uint64_t decimal_max = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  // this preserves the most digits when scaling the final result for this type
+  constexpr UnsignedDecimalType decimal_max =
+    (std::numeric_limits<UnsignedDecimalType>::max() - 9L) / 10L;
 
-  uint64_t value     = 0;  // for checking overflow
+  __uint128_t value  = 0;  // for checking overflow
   int32_t exp_offset = 0;
   bool decimal_found = false;
 
@@ -56,7 +66,7 @@ __device__ inline thrust::pair<uint64_t, int32_t> parse_integer(char const*& ite
     if (value > decimal_max) {
       exp_offset += static_cast<int32_t>(!decimal_found);
     } else {
-      value = (value * 10) + static_cast<uint64_t>(ch - '0');
+      value = (value * 10) + static_cast<UnsignedDecimalType>(ch - '0');
       exp_offset -= static_cast<int32_t>(decimal_found);
     }
   }
@@ -112,7 +122,7 @@ __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const
  * @brief Converts the string in the range [iter, iter_end) into a decimal.
  *
  * @tparam DecimalType The decimal type to be returned
- * @param iter The beginning of the string. Unless iter >= iter_end, iter is dereferenced
+ * @param iter The beginning of the string
  * @param iter_end The end of the characters to parse
  * @param scale The scale to be applied
  * @return
@@ -130,7 +140,8 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   // if string begins with a sign, continue with next character
   if (sign != 0) ++iter;
 
-  auto [value, exp_offset] = parse_integer(iter, iter_end);
+  using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
+  auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
   if (value == 0) { return DecimalType{0}; }
 
   // check for exponent
@@ -142,11 +153,11 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   exp_ten += exp_offset;
 
   // shift the output value based on the exp_ten and the scale values
-  if (exp_ten < scale) {
-    value = value / static_cast<uint64_t>(exp10(static_cast<double>(scale - exp_ten)));
-  } else {
-    value = value * static_cast<uint64_t>(exp10(static_cast<double>(exp_ten - scale)));
-  }
+  auto const shift_adjust =
+    abs(scale - exp_ten) > cuda::std::numeric_limits<UnsignedDecimalType>::digits10
+      ? cuda::std::numeric_limits<UnsignedDecimalType>::max()
+      : numeric::detail::exp10<UnsignedDecimalType>(abs(scale - exp_ten));
+  value = exp_ten < scale ? value / shift_adjust : value * shift_adjust;
 
   return static_cast<DecimalType>(value) * (sign == 0 ? 1 : sign);
 }

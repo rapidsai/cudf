@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import warnings
 from typing import Union
-from warnings import warn
 
 import cupy as cp
 
@@ -21,7 +21,7 @@ def _cast_to_appropriate_type(ar, cast_type):
         from torch.utils.dlpack import from_dlpack
 
     elif cast_type == "tf":
-        from tf.experimental.dlpack import from_dlpack
+        from tensorflow.experimental.dlpack import from_dlpack
 
     return from_dlpack(ar.astype("int32").toDlpack())
 
@@ -134,12 +134,12 @@ class SubwordTokenizer:
         Examples
         --------
         >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> from cudf.utils.hash_vocab_utils import hash_vocab
         >>> hash_vocab('bert-base-cased-vocab.txt', 'voc_hash.txt')
 
 
         >>> from cudf.core.subword_tokenizer import SubwordTokenizer
-        >>> cudf_tokenizer  = SubwordTokenizer('voc_hash.txt',
+        >>> cudf_tokenizer = SubwordTokenizer('voc_hash.txt',
         ...                                    do_lower_case=True)
         >>> str_series = cudf.Series(['This is the', 'best book'])
         >>> tokenizer_output = cudf_tokenizer(str_series,
@@ -183,10 +183,10 @@ class SubwordTokenizer:
 
             truncation = False
             warning_msg = (
-                "When truncation is not True, the behaviour currently differs "
+                "When truncation is not True, the behavior currently differs "
                 "from HuggingFace as cudf always returns overflowing tokens"
             )
-            warn(warning_msg)
+            warnings.warn(warning_msg)
 
         if padding != "max_length":
             error_msg = (
@@ -207,7 +207,7 @@ class SubwordTokenizer:
             raise NotImplementedError(error_msg)
 
         stride = max_length - stride
-        # behaviour varies from subword_tokenize but maps with huggingface
+        # behavior varies from subword_tokenize but maps with huggingface
 
         input_ids, attention_mask, metadata = cpp_subword_tokenize(
             text._column,

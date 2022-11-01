@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -25,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 namespace cudf {
@@ -69,7 +71,7 @@ struct find_index_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    if (!key.is_valid())
+    if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
@@ -77,8 +79,7 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter = thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream) and
-                                                     // thrust::cuda::par.on(stream)
+    auto iter        = thrust::equal_range(rmm::exec_policy(cudf::get_default_stream()),
                                     keys_view->begin<Element>(),
                                     keys_view->end<Element>(),
                                     find_key);
@@ -114,7 +115,7 @@ struct find_insert_index_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    if (!key.is_valid())
+    if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
@@ -178,7 +179,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
+  return detail::get_index(dictionary, key, cudf::get_default_stream(), mr);
 }
 
 }  // namespace dictionary

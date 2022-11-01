@@ -19,39 +19,36 @@
 namespace cudf {
 namespace detail {
 
-bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
+bool result_cache::has_result(column_view const& input, aggregation const& agg) const
 {
-  if (col_idx > _cache.size()) return false;
-
-  auto result_it = _cache[col_idx].find(agg);
-
-  return (result_it != _cache[col_idx].end());
+  return _cache.count({input, agg});
 }
 
-void result_cache::add_result(size_t col_idx, aggregation const& agg, std::unique_ptr<column>&& col)
+void result_cache::add_result(column_view const& input,
+                              aggregation const& agg,
+                              std::unique_ptr<column>&& col)
 {
   // We can't guarantee that agg will outlive the cache, so we need to take ownership of a copy.
   // To allow lookup by reference, make the key a reference and keep the owner in the value pair.
   auto owned_agg  = agg.clone();
   auto const& key = *owned_agg;
-  auto value      = std::make_pair(std::move(owned_agg), std::move(col));
-  _cache[col_idx].emplace(key, std::move(value));
+  // try_emplace doesn't update/insert if already present
+  _cache.try_emplace({input, key}, std::move(owned_agg), std::move(col));
 }
 
-column_view result_cache::get_result(size_t col_idx, aggregation const& agg) const
+column_view result_cache::get_result(column_view const& input, aggregation const& agg) const
 {
-  CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
-
-  auto result_it = _cache[col_idx].find(agg);
+  auto result_it = _cache.find({input, agg});
+  CUDF_EXPECTS(result_it != _cache.end(), "Result does not exist in cache");
   return result_it->second.second->view();
 }
 
-std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation const& agg)
+std::unique_ptr<column> result_cache::release_result(column_view const& input,
+                                                     aggregation const& agg)
 {
-  CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
-
-  auto result_it = _cache[col_idx].extract(agg);
-  return std::move(result_it.mapped().second);
+  auto node = _cache.extract({input, agg});
+  CUDF_EXPECTS(not node.empty(), "Result does not exist in cache");
+  return std::move(node.mapped().second);
 }
 
 }  // namespace detail

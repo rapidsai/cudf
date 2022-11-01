@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-#include <structs/utilities.hpp>
-
 #include <cudf/column/column.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <string>
 
@@ -107,13 +109,13 @@ size_type string_scalar::size() const { return _data.size(); }
 
 const char* string_scalar::data() const { return static_cast<const char*>(_data.data()); }
 
-string_scalar::operator std::string() const { return this->to_string(rmm::cuda_stream_default); }
+string_scalar::operator std::string() const { return this->to_string(cudf::get_default_stream()); }
 
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result;
   result.resize(_data.size());
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
   stream.synchronize();
   return result;
@@ -184,7 +186,7 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
 template <typename T>
 fixed_point_scalar<T>::operator value_type() const
 {
-  return this->fixed_point_value(rmm::cuda_stream_default);
+  return this->fixed_point_value(cudf::get_default_stream());
 }
 
 template <typename T>
@@ -209,6 +211,7 @@ typename fixed_point_scalar<T>::rep_type const* fixed_point_scalar<T>::data() co
  */
 template class fixed_point_scalar<numeric::decimal32>;
 template class fixed_point_scalar<numeric::decimal64>;
+template class fixed_point_scalar<numeric::decimal128>;
 
 namespace detail {
 
@@ -266,7 +269,7 @@ T const* fixed_width_scalar<T>::data() const
 template <typename T>
 fixed_width_scalar<T>::operator value_type() const
 {
-  return this->value(rmm::cuda_stream_default);
+  return this->value(cudf::get_default_stream());
 }
 
 /**
@@ -282,6 +285,7 @@ template class fixed_width_scalar<int8_t>;
 template class fixed_width_scalar<int16_t>;
 template class fixed_width_scalar<int32_t>;
 template class fixed_width_scalar<int64_t>;
+template class fixed_width_scalar<__int128_t>;
 template class fixed_width_scalar<uint8_t>;
 template class fixed_width_scalar<uint16_t>;
 template class fixed_width_scalar<uint32_t>;
@@ -340,6 +344,7 @@ template class numeric_scalar<int8_t>;
 template class numeric_scalar<int16_t>;
 template class numeric_scalar<int32_t>;
 template class numeric_scalar<int64_t>;
+template class numeric_scalar<__int128_t>;
 template class numeric_scalar<uint8_t>;
 template class numeric_scalar<uint16_t>;
 template class numeric_scalar<uint32_t>;
@@ -520,6 +525,13 @@ list_scalar::list_scalar(list_scalar const& other,
 
 column_view list_scalar::view() const { return _data.view(); }
 
+struct_scalar::struct_scalar(struct_scalar const& other,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+{
+}
+
 struct_scalar::struct_scalar(table_view const& data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
@@ -567,12 +579,13 @@ void struct_scalar::superimpose_nulls(rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   // push validity mask down
-  std::vector<bitmask_type> host_validity({0});
-  auto validity = cudf::detail::make_device_uvector_sync(host_validity, stream, mr);
+  std::vector<bitmask_type> host_validity(
+    cudf::bitmask_allocation_size_bytes(1) / sizeof(bitmask_type), 0);
+  auto validity = cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream);
   auto iter     = thrust::make_counting_iterator(0);
   std::for_each(iter, iter + _data.num_columns(), [&](size_type i) {
     cudf::structs::detail::superimpose_parent_nulls(
-      validity.data(), 1, _data.get_column(i), stream, mr);
+      static_cast<bitmask_type const*>(validity.data()), 1, _data.get_column(i), stream, mr);
   });
 }
 

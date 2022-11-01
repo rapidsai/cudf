@@ -44,8 +44,12 @@ column_view dictionary_column_view::keys() const noexcept { return child(1); }
 
 size_type dictionary_column_view::keys_size() const noexcept
 {
-  if (size() == 0) return 0;
-  return keys().size();
+  return (size() == 0) ? 0 : keys().size();
+}
+
+data_type dictionary_column_view::keys_type() const noexcept
+{
+  return (size() == 0) ? data_type{type_id::EMPTY} : keys().type();
 }
 
 }  // namespace cudf

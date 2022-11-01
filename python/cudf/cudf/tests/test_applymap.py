@@ -1,62 +1,48 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from itertools import product
-from math import floor
-
-import numpy as np
 import pytest
 
-from cudf import Series
+from cudf import NA, DataFrame
 from cudf.testing import _utils as utils
 
 
 @pytest.mark.parametrize(
-    "nelem,masked", list(product([2, 10, 100, 1000], [True, False]))
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [4, 5, 6]},
+        {"a": [1, 2, 3], "b": [1.0, 2.0, 3.0]},
+        {"a": [1, 2, 3], "b": [True, False, True]},
+        {"a": [1, NA, 2], "b": [NA, 4, NA]},
+    ],
 )
-def test_applymap_round(nelem, masked):
-    # Generate data
-    np.random.seed(0)
-    data = np.random.random(nelem) * 100
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x: x + 1,
+        lambda x: x - 0.5,
+        lambda x: 2 if x is NA else 2 + (x + 1) / 4.1,
+        lambda x: 42,
+    ],
+)
+@pytest.mark.parametrize("na_action", [None, "ignore"])
+def test_applymap_dataframe(data, func, na_action):
+    gdf = DataFrame(data)
+    pdf = gdf.to_pandas(nullable=True)
 
-    if masked:
-        # Make mask
-        bitmask = utils.random_bitmask(nelem)
-        boolmask = np.asarray(
-            utils.expand_bits_to_bytes(bitmask), dtype=np.bool_
-        )[:nelem]
-        data[~boolmask] = np.nan
+    expect = pdf.applymap(func, na_action=na_action)
+    got = gdf.applymap(func, na_action=na_action)
 
-    sr = Series(data)
-
-    if masked:
-        # Mask the Series
-        sr = sr.set_mask(bitmask)
-
-    # Call applymap
-    out = sr.applymap(
-        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
-    )
-
-    if masked:
-        # Fill masked values
-        out = out.fillna(np.nan)
-
-    # Check
-    expect = np.round(data)
-    got = out.to_array()
-    np.testing.assert_array_almost_equal(expect, got)
+    utils.assert_eq(expect, got, check_dtype=False)
 
 
-def test_applymap_change_out_dtype():
-    # Test for changing the out_dtype using applymap
+def test_applymap_raise_cases():
+    df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-    data = list(range(10))
+    def f(x, some_kwarg=0):
+        return x + some_kwarg
 
-    sr = Series(data)
+    with pytest.raises(NotImplementedError):
+        df.applymap(f, some_kwarg=1)
 
-    out = sr.applymap(lambda x: float(x), out_dtype=float)
-
-    # Check
-    expect = np.array(data, dtype=float)
-    got = out.to_array()
-    np.testing.assert_array_equal(expect, got)
+    with pytest.raises(ValueError):
+        df.applymap(f, na_action="some_invalid_option")

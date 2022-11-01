@@ -17,14 +17,7 @@
 #include <cudf/detail/nvtx/nvtx3.hpp>
 
 #include "jni_utils.hpp"
-
-namespace {
-
-struct java_domain {
-  static constexpr char const *name{"Java"};
-};
-
-} // anonymous namespace
+#include "nvtx_common.hpp"
 
 extern "C" {
 
@@ -34,14 +27,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass cl
     cudf::jni::native_jstring range_name(env, name);
     nvtx3::color range_color(static_cast<nvtx3::color::value_type>(color_bits));
     nvtx3::event_attributes attr{range_color, range_name.get()};
-    nvtxDomainRangePushEx(nvtx3::domain::get<java_domain>(), attr.get());
+    nvtxDomainRangePushEx(nvtx3::domain::get<cudf::jni::java_domain>(), attr.get());
   }
   CATCH_STD(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv *env, jclass clazz) {
   try {
-    nvtxDomainRangePop(nvtx3::domain::get<java_domain>());
+    nvtxDomainRangePop(nvtx3::domain::get<cudf::jni::java_domain>());
   }
   CATCH_STD(env, );
 }

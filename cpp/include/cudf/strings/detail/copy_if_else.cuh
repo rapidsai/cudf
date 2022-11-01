@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -33,42 +38,41 @@ namespace detail {
  * strings from the lhs iterator or the rhs iterator.
  *
  * ```
- * output[i] = filter_fn(i) ? lhs(i).first : rhs(i).first
+ * output[i] = filter_fn(i) ? lhs(i) : rhs(i)
  * ```
  *
- * @tparam StringPairIterLeft Pair iterator returning thrust::pair<string_view,bool> where the
- *         bool parameter specifies if the string_view is valid (true) or not (false).
- * @tparam StringPairIterRight Pair iterator returning thrust::pair<string_view,bool> where the
- *         bool parameter specifies if the string_view is valid (true) or not (false).
+ * @tparam StringIterLeft A random access iterator whose value_type is
+ * `thrust::optional<string_view>` where the `optional` has a value iff the element is valid.
+ * @tparam StringIterRight A random access iterator whose value_type is
+ * `thrust::optional<string_view>` where the `optional` has a value iff the element is valid.
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
- * @param lhs_begin Start of first set of data. Used when filter_fn returns true.
+ * @param lhs_begin Start of first set of data. Used when `filter_fn` returns true.
  * @param lhs_end End of first set of data.
- * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
- * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
- * specific row.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param rhs_begin Strings of second set of data. Used when `filter_fn` returns false.
+ * @param filter_fn Called to determine which iterator to use for a specific row.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-template <typename StringPairIterLeft, typename StringPairIterRight, typename Filter>
+template <typename StringIterLeft, typename StringIterRight, typename Filter>
 std::unique_ptr<cudf::column> copy_if_else(
-  StringPairIterLeft lhs_begin,
-  StringPairIterLeft lhs_end,
-  StringPairIterRight rhs_begin,
+  StringIterLeft lhs_begin,
+  StringIterLeft lhs_end,
+  StringIterRight rhs_begin,
   Filter filter_fn,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   // create null mask
   auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
-      return filter_fn(idx) ? thrust::get<1>(lhs_begin[idx]) : thrust::get<1>(rhs_begin[idx]);
+      return filter_fn(idx) ? lhs_begin[idx].has_value() : rhs_begin[idx].has_value();
     },
     stream,
     mr);
@@ -77,13 +81,10 @@ std::unique_ptr<cudf::column> copy_if_else(
 
   // build offsets column
   auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
-    bool bfilter    = filter_fn(idx);
-    size_type bytes = 0;
-    if (bfilter ? thrust::get<1>(lhs_begin[idx]) : thrust::get<1>(rhs_begin[idx]))
-      bytes = bfilter ? thrust::get<0>(lhs_begin[idx]).size_bytes()
-                      : thrust::get<0>(rhs_begin[idx]).size_bytes();
-    return bytes;
+    auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
+    return result.has_value() ? result->size_bytes() : 0;
   };
+
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto offsets_column = make_offsets_child_column(
@@ -101,9 +102,9 @@ std::unique_ptr<cudf::column> copy_if_else(
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [lhs_begin, rhs_begin, filter_fn, d_offsets, d_chars] __device__(size_type idx) {
-      auto bfilter = filter_fn(idx);
-      if (bfilter ? !thrust::get<1>(lhs_begin[idx]) : !thrust::get<1>(rhs_begin[idx])) return;
-      string_view d_str = bfilter ? thrust::get<0>(lhs_begin[idx]) : thrust::get<0>(rhs_begin[idx]);
+      auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
+      if (!result.has_value()) return;
+      auto const d_str = *result;
       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
     });
 
@@ -111,9 +112,7 @@ std::unique_ptr<cudf::column> copy_if_else(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

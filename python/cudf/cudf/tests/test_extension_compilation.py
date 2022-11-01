@@ -1,12 +1,17 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import operator
 
+import cupy as cp
+import numpy as np
 import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
+from numba.np.numpy_support import from_dtype
 
 from cudf import NA
-from cudf.core.udf.classes import Masked
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.api import Masked
+from cudf.core.udf.masked_typing import MaskedType
+from cudf.testing._utils import parametrize_numeric_dtypes_pairwise
 
 arith_ops = (
     operator.add,
@@ -71,8 +76,8 @@ def test_execute_masked_binary(op, ty):
     def func(x, y):
         return op(x, y)
 
-    @cuda.jit(debug=True)
-    def test_kernel(x, y):
+    @cuda.jit
+    def test_kernel(x, y, err):
         # Reference result with unmasked value
         u = func(x, y)
 
@@ -87,14 +92,22 @@ def test_execute_masked_binary(op, ty):
         # Check masks are as expected, and unmasked result matches masked
         # result
         if r0.valid:
-            raise RuntimeError("Expected r0 to be invalid")
+            # TODO: ideally, we would raise an exception here rather
+            # than return an "error code", and that is what the
+            # previous version of this (and below) tests did. But,
+            # Numba kernels cannot currently use `debug=True` with
+            # CUDA enhanced compatibility.  Once a solution to that is
+            # reached, we should switch back to raising exceptions
+            # here.
+            err[0] = 1
         if not r1.valid:
-            raise RuntimeError("Expected r1 to be valid")
+            err[0] = 2
         if u != r1.value:
-            print("Values: ", u, r1.value)
-            raise RuntimeError("u != r1.value")
+            err[0] = 3
 
-    test_kernel[1, 1](1, 2)
+    err = cp.asarray([0], dtype="int8")
+    test_kernel[1, 1](1, 2, err)
+    assert err[0] == 0
 
 
 @pytest.mark.parametrize("op", ops)
@@ -150,18 +163,20 @@ def test_compile_arith_na_vs_masked(op, ty):
 
 
 @pytest.mark.parametrize("op", ops)
-@pytest.mark.parametrize("ty1", number_types, ids=number_ids)
-@pytest.mark.parametrize("ty2", number_types, ids=number_ids)
+@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize(
     "masked",
     ((False, True), (True, False), (True, True)),
     ids=("um", "mu", "mm"),
 )
-def test_compile_arith_masked_ops(op, ty1, ty2, masked):
+def test_compile_arith_masked_ops(op, left_dtype, right_dtype, masked):
     def func(x, y):
         return op(x, y)
 
     cc = (7, 5)
+
+    ty1 = from_dtype(np.dtype(left_dtype))
+    ty2 = from_dtype(np.dtype(right_dtype))
 
     if masked[0]:
         ty1 = MaskedType(ty1)
@@ -187,18 +202,20 @@ def test_is_na(fn):
 
     device_fn = cuda.jit(device=True)(fn)
 
-    @cuda.jit(debug=True)
-    def test_kernel():
+    @cuda.jit
+    def test_kernel(err):
         valid_is_na = device_fn(valid)
         invalid_is_na = device_fn(invalid)
 
         if valid_is_na:
-            raise RuntimeError("Valid masked value is NA and should not be")
+            err[0] = 1
 
         if not invalid_is_na:
-            raise RuntimeError("Invalid masked value is not NA and should be")
+            err[0] = 2
 
-    test_kernel[1, 1]()
+    err = cp.asarray([0], dtype="int8")
+    test_kernel[1, 1](err)
+    assert err[0] == 0
 
 
 def func_lt_na(x):
@@ -271,8 +288,8 @@ def test_na_masked_comparisons(fn, ty):
 
     device_fn = cuda.jit(device=True)(fn)
 
-    @cuda.jit(debug=True)
-    def test_kernel():
+    @cuda.jit
+    def test_kernel(err):
         unmasked = ty(1)
         valid_masked = Masked(unmasked, True)
         invalid_masked = Masked(unmasked, False)
@@ -281,12 +298,14 @@ def test_na_masked_comparisons(fn, ty):
         invalid_cmp_na = device_fn(invalid_masked)
 
         if valid_cmp_na:
-            raise RuntimeError("Valid masked value compared True with NA")
+            err[0] = 1
 
         if invalid_cmp_na:
-            raise RuntimeError("Invalid masked value compared True with NA")
+            err[0] = 2
 
-    test_kernel[1, 1]()
+    err = cp.asarray([0], dtype="int8")
+    test_kernel[1, 1](err)
+    assert err[0] == 0
 
 
 # xfail because scalars do not yet cast for a comparison to NA
@@ -297,13 +316,15 @@ def test_na_scalar_comparisons(fn, ty):
 
     device_fn = cuda.jit(device=True)(fn)
 
-    @cuda.jit(debug=True)
-    def test_kernel():
+    @cuda.jit
+    def test_kernel(err):
         unmasked = ty(1)
 
         unmasked_cmp_na = device_fn(unmasked)
 
         if unmasked_cmp_na:
-            raise RuntimeError("Unmasked value compared True with NA")
+            err[0] = 1
 
-    test_kernel[1, 1]()
+    err = cp.asarray([0], dtype="int8")
+    test_kernel[1, 1](err)
+    assert err[0] == 0

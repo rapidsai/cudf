@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Objects;
-import java.util.PriorityQueue;
+import java.util.Optional;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,19 +45,21 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private static Future<PinnedMemoryPool> initFuture = null;
 
   private final long pinnedPoolBase;
-  private final PriorityQueue<MemorySection> freeHeap = new PriorityQueue<>(new SortedBySize());
+  private final SortedSet<MemorySection> freeHeap = new TreeSet<>(new SortedByAddress());
   private int numAllocatedSections = 0;
   private long availableBytes;
 
   private static class SortedBySize implements Comparator<MemorySection> {
     @Override
     public int compare(MemorySection s0, MemorySection s1) {
-      // We want the largest ones first...
-      int ret = Long.compare(s1.size, s0.size);
-      if (ret == 0) {
-        ret = Long.compare(s0.baseAddress, s1.baseAddress);
-      }
-      return ret;
+      return Long.compare(s0.size, s1.size);
+    }
+  }
+
+  private static class SortedByAddress implements Comparator<MemorySection> {
+    @Override
+    public int compare(MemorySection s0, MemorySection s1) {
+      return Long.compare(s0.baseAddress, s1.baseAddress);
     }
   }
 
@@ -162,6 +166,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   /**
    * Initialize the pool.
+   *
    * @param poolSize size of the pool to initialize.
    */
   public static synchronized void initialize(long poolSize) {
@@ -170,8 +175,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   /**
    * Initialize the pool.
+   *
    * @param poolSize size of the pool to initialize.
-   * @param gpuId gpu id to set to get memory pool from, -1 means to use default
+   * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
    */
   public static synchronized void initialize(long poolSize, int gpuId) {
     if (isInitialized()) {
@@ -207,11 +213,12 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   /**
    * Factory method to create a pinned host memory buffer.
+   *
    * @param bytes size in bytes to allocate
    * @return newly created buffer or null if insufficient pinned memory
    */
   public static HostMemoryBuffer tryAllocate(long bytes) {
-    HostMemoryBuffer result  = null;
+    HostMemoryBuffer result = null;
     PinnedMemoryPool pool = getSingleton();
     if (pool != null) {
       result = pool.tryAllocateInternal(bytes);
@@ -222,6 +229,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   /**
    * Factory method to create a host buffer but preferably pointing to pinned memory.
    * It is not guaranteed that the returned buffer will be pointer to pinned memory.
+   *
    * @param bytes size in bytes to allocate
    * @return newly created buffer
    */
@@ -235,6 +243,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   /**
    * Get the number of bytes free in the pinned memory pool.
+   *
    * @return amount of free memory in bytes or 0 if the pool is not initialized
    */
   public static long getAvailableBytes() {
@@ -246,7 +255,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   private PinnedMemoryPool(long poolSize, int gpuId) {
-    if (gpuId > -1 ) {
+    if (gpuId > -1) {
       // set the gpu device to use
       Cuda.setDevice(gpuId);
       Cuda.freeZero();
@@ -269,20 +278,28 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
     // Align the allocation
     long alignedBytes = ((bytes + ALIGNMENT - 1) / ALIGNMENT) * ALIGNMENT;
-    MemorySection largest = freeHeap.peek();
-    if (largest.size < alignedBytes) {
-      log.debug("Insufficient pinned memory. {} needed, {} found", alignedBytes, largest.size);
+    Optional<MemorySection> firstFit = freeHeap.stream()
+        .filter(section -> section.size >= alignedBytes)
+        .findFirst();
+    if (!firstFit.isPresent()) {
+      if (log.isDebugEnabled()) {
+        MemorySection largest = freeHeap.stream()
+            .max(new SortedBySize())
+            .orElse(new MemorySection(0, 0));
+        log.debug("Insufficient pinned memory. {} needed, {} found", alignedBytes, largest.size);
+      }
       return null;
     }
+    MemorySection first = firstFit.get();
     log.debug("Allocating {}/{} bytes pinned from {} FREE COUNT {} OUTSTANDING COUNT {}",
-        bytes, alignedBytes, largest, freeHeap.size(), numAllocatedSections);
-    freeHeap.remove(largest);
+        bytes, alignedBytes, first, freeHeap.size(), numAllocatedSections);
+    freeHeap.remove(first);
     MemorySection allocated;
-    if (largest.size == alignedBytes) {
-      allocated = largest;
+    if (first.size == alignedBytes) {
+      allocated = first;
     } else {
-      allocated = largest.splitOff(alignedBytes);
-      freeHeap.add(largest);
+      allocated = first.splitOff(alignedBytes);
+      freeHeap.add(first);
     }
     numAllocatedSections++;
     availableBytes -= allocated.size;
@@ -293,25 +310,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   private synchronized void free(MemorySection section) {
     log.debug("Freeing {} with {} outstanding {}", section, freeHeap, numAllocatedSections);
-    // This looks inefficient, but in reality it will only walk through the heap about 2 times.
-    // Because we keep entries up to date, each new entry will at most combine with one above it
-    // and one below it. That will happen in a single pass through the heap.  We do a second pass
-    // simply out of an abundance of caution.
-    // Adding it in will be a log(N) operation because it is a heap.
     availableBytes += section.size;
-    boolean anyReplaced;
-    do {
-      anyReplaced = false;
-      Iterator<MemorySection> it = freeHeap.iterator();
-      while(it.hasNext()) {
-        MemorySection current = it.next();
-        if (section.canCombine(current)) {
-          it.remove();
-          anyReplaced = true;
-          section.combineWith(current);
-        }
+    Iterator<MemorySection> it = freeHeap.iterator();
+    while(it.hasNext()) {
+      MemorySection current = it.next();
+      if (section.canCombine(current)) {
+        it.remove();
+        section.combineWith(current);
       }
-    } while(anyReplaced);
+    }
     freeHeap.add(section);
     numAllocatedSections--;
     log.debug("After freeing {} outstanding {}", freeHeap, numAllocatedSections);

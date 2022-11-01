@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -46,8 +47,9 @@ std::unique_ptr<column> replace(
   strings_column_view const& strings,
   string_scalar const& target,
   string_scalar const& repl,
-  int32_t maxrepl                     = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  int32_t maxrepl = -1,
+  // Move before maxrepl?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -58,10 +60,11 @@ std::unique_ptr<column> replace(
  */
 std::unique_ptr<column> replace_slice(
   strings_column_view const& strings,
-  string_scalar const& repl           = string_scalar(""),
-  size_type start                     = 0,
-  size_type stop                      = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  string_scalar const& repl = string_scalar(""),
+  size_type start           = 0,
+  size_type stop            = -1,
+  // Move before repl?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -74,7 +77,7 @@ std::unique_ptr<column> replace(
   strings_column_view const& strings,
   strings_column_view const& targets,
   strings_column_view const& repls,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -97,8 +100,9 @@ std::unique_ptr<column> replace(
  */
 std::unique_ptr<column> replace_nulls(
   strings_column_view const& strings,
-  string_scalar const& repl           = string_scalar(""),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  string_scalar const& repl = string_scalar(""),
+  // Move before repl?
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

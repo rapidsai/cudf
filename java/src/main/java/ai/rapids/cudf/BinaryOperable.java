@@ -80,25 +80,22 @@ public interface BinaryOperable {
       return DType.BOOL8;
     }
     if (a.isDecimalType() && b.isDecimalType()) {
-      // Here scale is created with value 0 as `scale` is required to create DType of
-      // decimal type. Dtype is discarded for binary operations for decimal types in cudf as a new
-      // DType is created for output type with new scale. New scale for output depends upon operator.
-      int scale = 0;
-      if (a.typeId == DType.DTypeEnum.DECIMAL32) {
-        if (b.typeId == DType.DTypeEnum.DECIMAL32) {
-          return DType.create(DType.DTypeEnum.DECIMAL32,
-              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
-        } else {
-          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
-        }
-      } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
-        if (b.typeId == DType.DTypeEnum.DECIMAL64) {
-          return DType.create(DType.DTypeEnum.DECIMAL64,
-              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
-        } else {
-          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
-        }
+      if (a.typeId != b.typeId) {
+        throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
       }
+      final int scale = ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType());
+      // The output precision/size should be at least as large as the input.
+      // It may be larger if room is needed for it based off of the output scale.
+      final DType.DTypeEnum outputEnum;
+      if (scale <= DType.DECIMAL32_MAX_PRECISION && a.typeId == DType.DTypeEnum.DECIMAL32) {
+        outputEnum = DType.DTypeEnum.DECIMAL32;
+      } else if (scale <= DType.DECIMAL64_MAX_PRECISION &&
+          (a.typeId == DType.DTypeEnum.DECIMAL32 || a.typeId == DType.DTypeEnum.DECIMAL64)) {
+        outputEnum = DType.DTypeEnum.DECIMAL64;
+      } else {
+        outputEnum = DType.DTypeEnum.DECIMAL128;
+      }
+      return DType.create(outputEnum, scale);
     }
     throw new IllegalArgumentException("Unsupported types " + a + " and " + b);
   }

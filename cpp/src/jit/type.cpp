@@ -76,6 +76,7 @@ std::string get_type_name(data_type type)
     case type_id::STRUCT: return CUDF_STRINGIFY(Struct);
     case type_id::DECIMAL32: return CUDF_STRINGIFY(int32_t);
     case type_id::DECIMAL64: return CUDF_STRINGIFY(int64_t);
+    case type_id::DECIMAL128: return CUDF_STRINGIFY(__int128_t);
 
     default: break;
   }

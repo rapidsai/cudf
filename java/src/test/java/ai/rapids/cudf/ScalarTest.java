@@ -25,10 +25,11 @@ import ai.rapids.cudf.HostColumnVector.StructType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ScalarTest extends CudfTestBase {
@@ -186,6 +187,7 @@ public class ScalarTest extends CudfTestBase {
         BigDecimal.valueOf(1234, 0),
         BigDecimal.valueOf(12345678, 2),
         BigDecimal.valueOf(1234567890123L, 6),
+        new BigDecimal(new BigInteger("12312341234123412341234123412341234120"), 4)
     };
     for (BigDecimal dec : bigDecimals) {
       try (Scalar s = Scalar.fromDecimal(dec)) {
@@ -194,17 +196,24 @@ public class ScalarTest extends CudfTestBase {
         assertTrue(s.isValid());
         if (dtype.getTypeId() == DType.DTypeEnum.DECIMAL64) {
           assertEquals(dec.unscaledValue().longValueExact(), s.getLong());
-        } else {
+        } else if (dtype.getTypeId() == DType.DTypeEnum.DECIMAL32) {
           assertEquals(dec.unscaledValue().intValueExact(), s.getInt());
+        } else if (dtype.getTypeId() == DType.DTypeEnum.DECIMAL128) {
+          assertEquals(dec.unscaledValue(), s.getBigDecimal().unscaledValue());
         }
         assertEquals(dec, s.getBigDecimal());
       }
+
       try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue().intValueExact())) {
         assertEquals(dec, s.getBigDecimal());
       } catch (java.lang.ArithmeticException ex) {
         try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue().longValueExact())) {
           assertEquals(dec, s.getBigDecimal());
           assertTrue(s.getType().isBackedByLong());
+        } catch (java.lang.ArithmeticException e) {
+          try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue())) {
+            assertEquals(dec, s.getBigDecimal());
+          }
         }
       }
     }

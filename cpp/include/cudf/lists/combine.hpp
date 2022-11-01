@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
+
+//! Lists column APIs
 namespace lists {
 /**
  * @addtogroup lists_combine
@@ -26,7 +30,7 @@ namespace lists {
  * @file
  */
 
-/*
+/**
  * @brief Flag to specify whether a null list element will be ignored from concatenation, or the
  * entire concatenation result involving null list elements will be a null element.
  */
@@ -47,9 +51,8 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
  * r is now [{0, 1, 8}, {2, 3, 4, 9}, {5}, {10, 11, 12}, {6, 7, 13, 14, 15, 16}]
  * @endcode
  *
- * @throws cudf::logic_error if any column of the input table is not a lists columns.
- * @throws cudf::logic_error if any lists column contains nested typed entry.
- * @throws cudf::logic_error if all lists columns do not have the same entry type.
+ * @throws cudf::logic_error if any column of the input table is not a lists column.
+ * @throws cudf::logic_error if all lists columns do not have the same type.
  *
  * @param input Table of lists to be concatenated.
  * @param null_policy The parameter to specify whether a null list element will be ignored from

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -40,12 +44,12 @@ std::unique_ptr<column> fill(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
   if (begin == end)  // return a copy
-    return std::make_unique<column>(strings.parent());
+    return std::make_unique<column>(strings.parent(), stream, mr);
 
   // string_scalar.data() is null for valid, empty strings
   auto d_value = get_scalar_device_view(const_cast<string_scalar&>(value));
@@ -54,14 +58,18 @@ std::unique_ptr<column> fill(
   auto d_strings      = *strings_column;
 
   // create resulting null mask
-  auto valid_mask = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    [d_strings, begin, end, d_value] __device__(size_type idx) {
-      return ((begin <= idx) && (idx < end)) ? d_value.is_valid() : !d_strings.is_null(idx);
-    },
-    stream,
-    mr);
+  auto valid_mask = [begin, end, d_value, value, d_strings, stream, mr] {
+    if (begin == 0 and end == d_strings.size() and value.is_valid(stream))
+      return std::pair(rmm::device_buffer{}, 0);
+    return cudf::detail::valid_if(
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(d_strings.size()),
+      [d_strings, begin, end, d_value] __device__(size_type idx) {
+        return ((begin <= idx) && (idx < end)) ? d_value.is_valid() : !d_strings.is_null(idx);
+      },
+      stream,
+      mr);
+  }();
   auto null_count               = valid_mask.second;
   rmm::device_buffer& null_mask = valid_mask.first;
 
@@ -98,9 +106,7 @@ std::unique_ptr<column> fill(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

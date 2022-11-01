@@ -1,9 +1,9 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from cudf._fuzz_testing import fuzzer
 
 
-class PythonFuzz(object):
+class PythonFuzz:
     def __init__(self, func, params=None, data_handle=None, **kwargs):
         self.function = func
         self.data_handler_class = data_handle

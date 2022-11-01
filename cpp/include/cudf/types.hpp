@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,9 @@
 #pragma once
 
 #ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE      __device__ inline
+#define CUDF_HOST_DEVICE __host__ __device__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE      inline
+#define CUDF_HOST_DEVICE
 #endif
 
 #include <cassert>
@@ -34,17 +32,11 @@
  * @brief Type declarations for libcudf.
  */
 
-namespace bit_mask {
-using bit_mask_t = uint32_t;
-}
-
 // Forward declarations
+/// @cond
 namespace rmm {
 class device_buffer;
-namespace mr {
-class device_memory_resource;
-device_memory_resource* get_current_device_resource();
-}  // namespace mr
+/// @endcond
 
 }  // namespace rmm
 
@@ -85,10 +77,11 @@ class mutable_table_view;
  * @file
  */
 
-using size_type    = int32_t;
-using bitmask_type = uint32_t;
-using valid_type   = uint8_t;
-using offset_type  = int32_t;
+using size_type         = int32_t;   ///< Row index type for columns and tables
+using bitmask_type      = uint32_t;  ///< Bitmask type stored as 32-bit unsigned integer
+using valid_type        = uint8_t;   ///< Valid type in host memory
+using offset_type       = int32_t;   ///< Offset type for column offsets
+using thread_index_type = int64_t;   ///< Thread index type in kernels
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
@@ -146,7 +139,7 @@ enum class nan_equality /*unspecified*/ {
 };
 
 /**
- * @brief
+ * @brief Enum to consider two nulls as equal or unequal
  */
 enum class null_equality : bool {
   EQUAL,   ///< nulls compare equal
@@ -170,9 +163,9 @@ enum class sorted : bool { NO, YES };
  * @brief Indicates how a collection of values has been ordered.
  */
 struct order_info {
-  sorted is_sorted;
-  order ordering;
-  null_order null_ordering;
+  sorted is_sorted;          ///< Indicates whether the collection is sorted
+  order ordering;            ///< Indicates the order in which the values are sorted
+  null_order null_ordering;  ///< Indicates how null values compare against all other values
 };
 
 /**
@@ -228,6 +221,7 @@ enum class type_id : int32_t {
   LIST,                    ///< List elements
   DECIMAL32,               ///< Fixed-point type with int32_t
   DECIMAL64,               ///< Fixed-point type with int64_t
+  DECIMAL128,              ///< Fixed-point type with __int128_t
   STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -243,9 +237,21 @@ class data_type {
  public:
   data_type()                 = default;
   ~data_type()                = default;
-  data_type(data_type const&) = default;
-  data_type(data_type&&)      = default;
+  data_type(data_type const&) = default;  ///< Copy constructor
+  data_type(data_type&&)      = default;  ///< Move constructor
+
+  /**
+   * @brief Copy assignment operator for data_type
+   *
+   * @return Reference to this object
+   */
   data_type& operator=(data_type const&) = default;
+
+  /**
+   * @brief Move assignment operator for data_type
+   *
+   * @return Reference to this object
+   */
   data_type& operator=(data_type&&) = default;
 
   /**
@@ -263,18 +269,22 @@ class data_type {
    */
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
-    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128);
   }
 
   /**
    * @brief Returns the type identifier
+   *
+   * @return The type identifier
    */
-  constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
+   *
+   * @return The scale
    */
-  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -323,25 +333,10 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
  *
  * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
  *
+ * @param t The `data_type` to get the size of
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
-/**
- *  @brief Identifies the hash function to be used
- */
-enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_MD5,             ///< MD5 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
-};
-
-/**
- * @brief The default seed value for hash functions
- */
-static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

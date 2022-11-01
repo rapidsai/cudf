@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+  Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>21.10.0-SNAPSHOT</version>
+    <version>22.12.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -136,7 +136,19 @@
             <groupId>org.apache.arrow</groupId>
             <artifactId>arrow-vector</artifactId>
             <version>${arrow.version}</version>
-           <scope>test</scope>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>1.10.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>3.2.4</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -146,19 +158,22 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <junit.version>5.4.2</junit.version>
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
+        <ai.rapids.cudf.nvtx.enabled>false</ai.rapids.cudf.nvtx.enabled>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
         <cxx.flags/>
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
-        <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
-        <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
+        <CUDF_USE_PER_THREAD_DEFAULT_STREAM>OFF</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
         <GPU_ARCHS>ALL</GPU_ARCHS>
-        <CUDF_JNI_ARROW_STATIC>ON</CUDF_JNI_ARROW_STATIC>
+        <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
         <arrow.version>0.15.1</arrow.version>
+        <parallel.level>4</parallel.level>
+        <CUDF_CPP_BUILD_DIR/>
+        <cmake.ccache.opts/>
     </properties>
 
     <profiles>
@@ -167,6 +182,42 @@
             <properties>
                 <cxx.flags>-Wno-deprecated-declarations</cxx.flags>
             </properties>
+        </profile>
+        <profile>
+            <id>default-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/CudaFatalTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>main-tests</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>fatal-cuda-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/CudaFatalTest.java</include>
+                                    </includes>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
         <profile>
             <id>no-cufile-tests</id>
@@ -183,8 +234,30 @@
                         <configuration>
                             <excludes>
                                 <exclude>**/CuFileTest.java</exclude>
+                                <exclude>**/CudaFatalTest.java</exclude>
                             </excludes>
                         </configuration>
+                        <executions>
+                            <execution>
+                                <id>main-tests</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>fatal-cuda-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/CudaFatalTest.java</include>
+                                    </includes>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
@@ -264,7 +337,7 @@
                             <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                             <autoReleaseAfterClose>false</autoReleaseAfterClose>
                         </configuration>
-                        </plugin>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
@@ -273,19 +346,16 @@
     <build>
         <resources>
             <resource>
-              <!-- Include the properties file to provide the build information. -->
-              <directory>${project.build.directory}/extra-resources</directory>
-              <filtering>true</filtering>
+                <!-- Include the properties file to provide the build information. -->
+                <directory>${project.build.directory}/extra-resources</directory>
+                <filtering>true</filtering>
             </resource>
             <resource>
-              <directory>${basedir}/..</directory>
-              <targetPath>META-INF</targetPath>
-              <includes>
-                <include>LICENSE</include>
-              </includes>
-            </resource>
-            <resource>
-                <directory>${project.build.directory}/native-deps/</directory>
+                <directory>${basedir}/..</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
             </resource>
         </resources>
         <pluginManagement>
@@ -325,6 +395,12 @@
                             <groupId>org.junit.jupiter</groupId>
                             <artifactId>junit-jupiter-engine</artifactId>
                             <version>5.4.2</version>
+                        </dependency>
+                        <dependency>
+                            <!-- to get around bug https://github.com/junit-team/junit5/issues/1367 -->
+                            <groupId>org.apache.maven.surefire</groupId>
+                            <artifactId>surefire-logger-api</artifactId>
+                            <version>2.21.0</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -371,25 +447,30 @@
                                       failonerror="true"
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
+                                    <arg line="${cmake.ccache.opts}"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
-                                    <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
-                                    <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
+                                    <arg value="-DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${CUDF_USE_PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
-                                    <arg value="-DCUDF_JNI_ARROW_STATIC=${CUDF_JNI_ARROW_STATIC}"/>
+                                    <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
+                                    <arg value="-DBUILD_SHARED_LIBS=ON"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
-                                      executable="make">
-                                    <arg value="-j"/>
+                                      executable="cmake">
+                                    <arg value="--build"/>
+                                    <arg value="."/>
+                                    <arg value="--parallel"/>
+                                    <arg value="${parallel.level}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
-                                <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
-                                  <arg value="${project.basedir}/buildscripts/build-info"/>
-                                  <arg value="${project.version}"/>
+                                <exec executable="bash"
+                                      output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
+                                    <arg value="${project.basedir}/buildscripts/build-info"/>
+                                    <arg value="${project.version}"/>
                                 </exec>
                             </tasks>
                         </configuration>
@@ -411,40 +492,31 @@
                         </goals>
                         <configuration>
                             <source>
-                            def sout = new StringBuffer(), serr = new StringBuffer()
-                            //This only works on linux
-                            def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
-                            proc.consumeProcessOutput(sout, serr)
-                            proc.waitForOrKill(10000)
-                            def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
-                            def cudfm = libcudf.matcher(sout)
-                            if (cudfm.find()) {
-                                pom.properties['native.cudf.path'] = cudfm.group(1)
-                            } else {
-                                fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
-                            def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
-                            def cm = libcudart.matcher(sout)
-                            if (cm.find()) {
-                                if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                    fail("found libcudart when we expect to be statically linked to it")
+                                def sout = new StringBuffer(), serr = new StringBuffer()
+                                //This only works on linux
+                                def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
+                                proc.consumeProcessOutput(sout, serr)
+                                proc.waitForOrKill(10000)
+                                def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
+                                def cudfm = libcudf.matcher(sout)
+                                if (cudfm.find()) {
+                                    pom.properties['native.cudf.path'] = cudfm.group(1)
+                                } else {
+                                    fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
                                 }
-                                def classifier = 'cuda' + cm.group(1)
-                                  .replaceFirst(/\\./, '-') // First . becomes a -
-                                  .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
-                                  .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
-                                pom.properties['cuda.classifier'] = classifier
-                                println 'WARNING FOUND libcudart this means your jar will only work against a single version of the cuda runtime ' + classifier
-                            } else if (pom.properties['CUDA_STATIC_RUNTIME'] == 'OFF') {
-                                fail('could not find libcudart when we expect to be dynamically linked to it')
-                            } else {
-                                pom.properties['cuda.classifier'] = ''
-                            }
 
-                            if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                println 'WARNING RUNNING WITH STATIC LINKING DOES NOT FULLY WORK. USE WITH CAUTION.'
-                            }
+                                def nvccout = new StringBuffer(), nvccerr = new StringBuffer()
+                                def nvccproc = 'nvcc --version'.execute()
+                                nvccproc.consumeProcessOutput(nvccout, nvccerr)
+                                nvccproc.waitForOrKill(10000)
+                                def cudaPattern = ~/Cuda compilation tools, release ([0-9]+)/
+                                def cm = cudaPattern.matcher(nvccout)
+                                if (cm.find()) {
+                                    def classifier = 'cuda' + cm.group(1)
+                                    pom.properties['cuda.classifier'] = classifier
+                                } else {
+                                    fail('could not find CUDA version')
+                                }
                             </source>
                         </configuration>
                     </execution>
@@ -472,12 +544,13 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                  <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
-                  <trimStackTrace>false</trimStackTrace>
-                  <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                  <systemPropertyVariables>
-                    <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
-                  </systemPropertyVariables>
+                    <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
+                    <trimStackTrace>false</trimStackTrace>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <systemPropertyVariables>
+                        <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
+                        <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>
@@ -485,20 +558,23 @@
                 <executions>
                     <execution>
                         <id>copy-native-libs</id>
-                        <phase>validate</phase>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>copy-resources</goal>
                         </goals>
                         <configuration>
                             <overwrite>true</overwrite>
                             <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${project.build.directory}/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <outputDirectory>${project.build.outputDirectory}/${os.arch}/${os.name}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${native.build.path}</directory>
                                     <includes>
                                         <include>libcudfjni.so</include>
                                         <include>libcufilejni.so</include>
+                                        <include>libnvcomp.so</include>
+                                        <include>libnvcomp_gdeflate.so</include>
+                                        <include>libnvcomp_bitcomp.so</include>
                                     </includes>
                                 </resource>
                                 <resource>

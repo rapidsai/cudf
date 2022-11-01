@@ -1,11 +1,17 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
-import cupy
+from io import StringIO
+
 import numpy as np
 import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
+
+
+@pytest.fixture(scope="module")
+def datadir(datadir):
+    return datadir / "text"
 
 
 def test_tokenize():
@@ -225,7 +231,7 @@ def test_ngrams(n, separator, expected_values):
 
 
 @pytest.mark.parametrize(
-    "n, expected_values",
+    "n, expected_values, as_list",
     [
         (
             2,
@@ -242,16 +248,22 @@ def test_ngrams(n, separator, expected_values):
                 "er",
                 "re",
             ],
+            False,
         ),
-        (3, ["thi", "his", "boo", "ook", "her", "ere"]),
+        (3, ["thi", "his", "boo", "ook", "her", "ere"], False),
+        (
+            3,
+            [["thi", "his"], [], [], ["boo", "ook"], ["her", "ere"], []],
+            True,
+        ),
     ],
 )
-def test_character_ngrams(n, expected_values):
+def test_character_ngrams(n, expected_values, as_list):
     strings = cudf.Series(["this", "is", "my", "book", "here", ""])
 
     expected = cudf.Series(expected_values)
 
-    actual = strings.str.character_ngrams(n=n)
+    actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
@@ -296,8 +308,10 @@ def test_character_tokenize_series():
             "hello world",
             "sdf",
             None,
-            "goodbye, one-two:three~four+five_six@sev"
-            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+            (
+                "goodbye, one-two:three~four+five_six@sev"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
+            ),
         ]
     )
     expected = cudf.Series(
@@ -411,8 +425,10 @@ def test_character_tokenize_index():
             "hello world",
             "sdf",
             None,
-            "goodbye, one-two:three~four+five_six@sev"
-            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+            (
+                "goodbye, one-two:three~four+five_six@sev"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
+            ),
         ]
     )
     expected = cudf.core.index.as_index(
@@ -507,8 +523,8 @@ def test_character_tokenize_index():
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
 
-    sr = cudf.core.index.as_index([""])
-    expected = cudf.core.index.StringIndex([], dtype="object")
+    sr = cudf.Index([""])
+    expected = cudf.StringIndex([], dtype="object")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -644,136 +660,6 @@ def test_text_filter_tokens_error_cases():
         sr.str.filter_tokens(3, delimiter=["a", "b"])
 
 
-def test_text_subword_tokenize(tmpdir):
-    sr = cudf.Series(
-        [
-            "This is a test",
-            "A test this is",
-            "Is test a this",
-            "Test   test",
-            "this   This",
-        ]
-    )
-    hash_file = tmpdir.mkdir("nvtext").join("tmp_hashed_vocab.txt")
-    content = "1\n0\n23\n"
-    coefficients = [65559] * 23
-    for c in coefficients:
-        content = content + str(c) + " 0\n"
-    # based on values from the bert_hash_table.txt file for the
-    # test words used here: 'this' 'is' 'a' test'
-    table = [0] * 23
-    table[0] = 3015668
-    table[1] = 6205475701751155871
-    table[5] = 6358029
-    table[16] = 451412625363
-    table[20] = 6206321707968235495
-    content = content + "23\n"
-    for v in table:
-        content = content + str(v) + "\n"
-    content = content + "100\n101\n102\n\n"
-    hash_file.write(content)
-
-    tokens, masks, metadata = sr.str.subword_tokenize(str(hash_file), 8, 8)
-    expected_tokens = cupy.asarray(
-        [
-            2023,
-            2003,
-            1037,
-            3231,
-            0,
-            0,
-            0,
-            0,
-            1037,
-            3231,
-            2023,
-            2003,
-            0,
-            0,
-            0,
-            0,
-            2003,
-            3231,
-            1037,
-            2023,
-            0,
-            0,
-            0,
-            0,
-            3231,
-            3231,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            2023,
-            2023,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ],
-        dtype=np.uint32,
-    )
-    assert_eq(expected_tokens, tokens)
-
-    expected_masks = cupy.asarray(
-        [
-            1,
-            1,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ],
-        dtype=np.uint32,
-    )
-    assert_eq(expected_masks, masks)
-
-    expected_metadata = cupy.asarray(
-        [0, 0, 3, 1, 0, 3, 2, 0, 3, 3, 0, 1, 4, 0, 1], dtype=np.uint32
-    )
-    assert_eq(expected_metadata, metadata)
-
-
 def test_edit_distance():
     sr = cudf.Series(["kitten", "saturday", "address", "book"])
     tg = cudf.Series(["sitting", "sunday", "addressee", "back"])
@@ -876,4 +762,155 @@ def test_is_vowel_consonant():
     )
     actual = strings.str.is_consonant(indices)
     assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_read_text(datadir):
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read().split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(chess_file, delimiter=delimiter)
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_byte_range(datadir):
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file, "r") as f:
+        data = f.read()
+        content = data.split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    byte_range_size = (len(data) // 3) + (len(data) % 3 != 0)
+
+    actual_0 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 0, byte_range_size],
+    )
+    actual_1 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 1, byte_range_size],
+    )
+    actual_2 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 2, byte_range_size],
+    )
+
+    actual = cudf.concat([actual_0, actual_1, actual_2], ignore_index=True)
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_byte_range_large(tmpdir):
+    content = "".join(("\n" if x % 5 == 4 else "x") for x in range(0, 3000))
+    delimiter = "\n"
+    temp_file = str(tmpdir) + "/temp.txt"
+
+    with open(temp_file, "w") as f:
+        f.write(content)
+
+    expected = cudf.Series(["xxxx\n" for i in range(0, 200)])
+
+    actual = cudf.read_text(
+        temp_file, delimiter=delimiter, byte_range=[1000, 1000]
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_in_memory(datadir):
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x::", "y::", "z"])
+
+    actual = cudf.read_text(StringIO("x::y::z"), delimiter="::")
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_in_memory_strip_delimiter(datadir):
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x", "y", "z"])
+
+    actual = cudf.read_text(
+        StringIO("x::y::z"), delimiter="::", strip_delimiters=True
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_bgzip(datadir):
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read().split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file_compressed, compression="bgzip", delimiter=delimiter
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_bgzip_offsets(datadir):
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read()[29:695].split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file_compressed,
+        compression="bgzip",
+        compression_offsets=[58 * 2**16 + 2, 781 * 2**16 + 7],
+        delimiter=delimiter,
+    )
+
     assert_eq(expected, actual)

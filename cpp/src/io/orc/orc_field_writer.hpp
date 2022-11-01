@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
  */
 #pragma once
 
+#include "orc.hpp"
+
 #include <numeric>
 #include <string>
-#include "orc.h"
 
 /**
  * @file orc_field_writer.hpp
@@ -41,7 +42,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_uint(int field, const T& value)
   {
-    struct_size += p->put_uint(field * 8 + PB_TYPE_VARINT);
+    struct_size += p->put_uint(encode_field_number<T>(field));
     struct_size += p->put_uint(static_cast<uint64_t>(value));
   }
 
@@ -52,9 +53,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_packed_uint(int field, const std::vector<T>& value)
   {
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(encode_field_number<std::vector<T>>(field));
     auto lpos = p->m_buf->size();
-    p->putb(0);
+    p->put_byte(0);
     auto sz = std::accumulate(value.begin(), value.end(), 0, [p = this->p](size_t sum, auto val) {
       return sum + p->put_uint(val);
     });
@@ -66,28 +67,14 @@ struct ProtobufWriter::ProtobufFieldWriter {
   }
 
   /**
-   * @brief Function to write a string to the internal buffer
-   */
-  void field_string(int field, const std::string& value)
-  {
-    size_t len = value.length();
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
-    struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++)
-      p->putb(value[i]);
-  }
-
-  /**
    * @brief Function to write a blob to the internal buffer
    */
   template <typename T>
-  void field_blob(int field, const std::vector<T>& value)
+  void field_blob(int field, T const& values)
   {
-    size_t len = value.size();
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
-    struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++)
-      p->putb(value[i]);
+    struct_size += p->put_uint(encode_field_number<T>(field));
+    struct_size += p->put_uint(values.size());
+    struct_size += p->put_bytes<typename T::value_type>(values);
   }
 
   /**
@@ -96,9 +83,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_struct(int field, const T& value)
   {
-    struct_size += p->put_uint((field)*8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(encode_field_number(field, ProtofType::FIXEDLEN));
     auto lpos = p->m_buf->size();
-    p->putb(0);
+    p->put_byte(0);
     auto sz = p->write(value);
     struct_size += sz + 1;
     for (; sz > 0x7f; sz >>= 7, struct_size++)
@@ -112,7 +99,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   void field_repeated_string(int field, const std::vector<std::string>& value)
   {
     for (const auto& elem : value)
-      field_string(field, elem);
+      field_blob(field, elem);
   }
 
   /**

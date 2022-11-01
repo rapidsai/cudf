@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -13,14 +13,13 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.table cimport Table
 from cudf._lib.utils cimport (
+    data_from_unique_ptr,
     make_column_views,
-    make_table_data_views,
-    make_table_views,
+    table_view_from_table,
 )
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_device_buffer_like
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
@@ -32,7 +31,9 @@ cpdef concat_masks(object columns):
     with nogil:
         c_result = move(libcudf_concatenate_masks(c_views))
         c_unique_result = make_unique[device_buffer](move(c_result))
-    return Buffer(DeviceBuffer.c_from_unique_ptr(move(c_unique_result)))
+    return as_device_buffer_like(
+        DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
+    )
 
 
 cpdef concat_columns(object columns):
@@ -46,13 +47,13 @@ cpdef concat_columns(object columns):
 cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
-    if ignore_index is False:
-        c_views = make_table_views(tables)
-    else:
-        c_views = make_table_data_views(tables)
+    c_views.reserve(len(tables))
+    for tbl in tables:
+        c_views.push_back(table_view_from_table(tbl, ignore_index))
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))
-    return Table.from_unique_ptr(
+
+    return data_from_unique_ptr(
         move(c_result),
         column_names=tables[0]._column_names,
         index_names=None if ignore_index else tables[0]._index_names

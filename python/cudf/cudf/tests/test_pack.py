@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+from cudf import DataFrame, GenericIndex, Series
 from cudf._lib.copying import pack, unpack
-from cudf.core import DataFrame, GenericIndex, Series
 from cudf.testing._utils import assert_eq
 
 
@@ -61,7 +61,7 @@ def assert_packed_frame_equality(df):
 
     packed = pack(df)
     del df
-    unpacked = DataFrame._from_table(unpack(packed))
+    unpacked = unpack(packed)
 
     assert_eq(unpacked, pdf)
 
@@ -196,15 +196,13 @@ def check_packed_pickled_equality(df):
         )
         for b in buffers:
             assert isinstance(b, pickle.PickleBuffer)
-        loaded = DataFrame._from_table(
-            unpack(pickle.loads(serialbytes, buffers=buffers))
-        )
+        loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
         assert_eq(loaded, df)
 
 
 def assert_packed_frame_picklable(df):
     serialbytes = pickle.dumps(pack(df))
-    loaded = DataFrame._from_table(unpack(pickle.loads(serialbytes)))
+    loaded = unpack(pickle.loads(serialbytes))
     assert_eq(loaded, df)
 
 
@@ -269,7 +267,7 @@ def check_packed_serialized_equality(df):
 def assert_packed_frame_serializable(df):
     packed = pack(df)
     header, frames = packed.serialize()
-    loaded = DataFrame._from_table(unpack(packed.deserialize(header, frames)))
+    loaded = unpack(packed.deserialize(header, frames))
     assert_eq(loaded, df)
 
 

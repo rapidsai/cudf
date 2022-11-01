@@ -33,7 +33,7 @@ struct ColumnTypeCheckTestTyped : public cudf::test::BaseFixture {
 struct ColumnTypeCheckTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnTypeCheckTestTyped, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnTypeCheckTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ColumnTypeCheckTestTyped, SameFixedWidth)
 {

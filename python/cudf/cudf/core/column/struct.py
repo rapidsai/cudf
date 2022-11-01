@@ -1,14 +1,16 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import pandas as pd
 import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
+from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import is_struct_dtype
+from cudf.core.missing import NA
 
 
 class StructColumn(ColumnBase):
@@ -29,31 +31,6 @@ class StructColumn(ColumnBase):
         else:
             return len(self.base_children[0])
 
-    @classmethod
-    def from_arrow(self, data):
-        size = len(data)
-        dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
-
-        mask = data.buffers()[0]
-        if mask is not None:
-            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
-
-        offset = data.offset
-        null_count = data.null_count
-        children = tuple(
-            cudf.core.column.as_column(data.field(i))
-            for i in range(data.type.num_fields)
-        )
-        return StructColumn(
-            data=None,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
-
     def to_arrow(self):
         children = [
             pa.nulls(len(child))
@@ -70,9 +47,7 @@ class StructColumn(ColumnBase):
         )
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
-            buffers = (nbuf,)
+            buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
 
@@ -80,20 +55,28 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
-    def __getitem__(self, args):
-        result = super().__getitem__(args)
-        if isinstance(result, dict):
-            return {
-                field: value
-                for field, value in zip(self.dtype.fields, result.values())
-            }
-        return result._rename_fields(self.dtype.fields.keys())
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # We cannot go via Arrow's `to_pandas` because of the following issue:
+        # https://issues.apache.org/jira/browse/ARROW-12680
+
+        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        return {
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
+        }
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):
             # filling in fields not in dict
             for field in self.dtype.fields:
-                value[field] = value.get(field, cudf.NA)
+                value[field] = value.get(field, NA)
 
             value = cudf.Scalar(value, self.dtype)
         super().__setitem__(key, value)
@@ -129,7 +112,13 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
-        if isinstance(dtype, StructDtype):
+        from cudf.core.column import IntervalColumn
+        from cudf.core.dtypes import IntervalDtype
+
+        # Check IntervalDtype first because it's a subclass of StructDtype
+        if isinstance(dtype, IntervalDtype):
+            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+        elif isinstance(dtype, StructDtype):
             return build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(
@@ -191,7 +180,15 @@ class StructMethods(ColumnMethods):
             pos = fields.index(key)
             return self._return_or_inplace(self._column.children[pos])
         else:
-            return self._return_or_inplace(self._column.children[key])
+            if isinstance(key, int):
+                try:
+                    return self._return_or_inplace(self._column.children[key])
+                except IndexError:
+                    raise IndexError(f"Index {key} out of range")
+            else:
+                raise KeyError(
+                    f"Field '{key}' is not found in the set of existing keys."
+                )
 
     def explode(self):
         """

@@ -1,10 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-from __future__ import print_function
-
-import pandas as pd
-
-import cudf
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -17,8 +11,14 @@ from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
 from cudf._lib.cpp.types cimport size_type
 
 
-def rolling(Column source_column, Column pre_column_window,
-            Column fwd_column_window, window, min_periods, center, op):
+def rolling(Column source_column,
+            Column pre_column_window,
+            Column fwd_column_window,
+            window,
+            min_periods,
+            center,
+            op,
+            agg_params):
     """
     Rolling on input executing operation within the given window for each row
 
@@ -31,8 +31,8 @@ def rolling(Column source_column, Column pre_column_window,
     min_periods : Minimum number of observations in window required to have
                   a value (otherwise result is null)
     center : Set the labels at the center of the window
-    op : operation to be executed, as of now it supports MIN, MAX, COUNT, SUM,
-         MEAN and UDF
+    op : operation to be executed
+    agg_params : dict, parameter for the aggregation (e.g. ddof for VAR/STD)
 
     Returns
     -------
@@ -51,7 +51,7 @@ def rolling(Column source_column, Column pre_column_window,
         cython_agg = make_rolling_aggregation(
             op, {'dtype': source_column.dtype})
     else:
-        cython_agg = make_rolling_aggregation(op)
+        cython_agg = make_rolling_aggregation(op, agg_params)
 
     if window is None:
         if center:

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -205,9 +205,17 @@ def test_dataframe_to_struct():
     df["a"][0] = 5
     assert_eq(got, expect)
 
+    # check that a non-string (but convertible to string) named column can be
+    # converted to struct
+    df = cudf.DataFrame([[1, 2], [3, 4]], columns=[(1, "b"), 0])
+    expect = cudf.Series([{"(1, 'b')": 1, "0": 2}, {"(1, 'b')": 3, "0": 4}])
+    with pytest.warns(UserWarning, match="will be casted"):
+        got = df.to_struct()
+    assert_eq(got, expect)
+
 
 @pytest.mark.parametrize(
-    "series, start, end",
+    "series, slce",
     [
         (
             [
@@ -216,8 +224,7 @@ def test_dataframe_to_struct():
                 {},
                 None,
             ],
-            1,
-            None,
+            slice(1, None),
         ),
         (
             [
@@ -229,8 +236,7 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            1,
-            5,
+            slice(1, 5),
         ),
         (
             [
@@ -242,19 +248,126 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            None,
-            4,
+            slice(None, 4),
+        ),
+        ([{"a": {"b": 42, "c": -1}}, {"a": {"b": 0, "c": None}}], slice(0, 1)),
+    ],
+)
+def test_struct_slice(series, slce):
+    got = cudf.Series(series)[slce]
+    expected = cudf.Series(series[slce])
+    assert got.to_arrow() == expected.to_arrow()
+
+
+def test_struct_slice_nested_struct():
+    data = [
+        {"a": {"b": 42, "c": "abc"}},
+        {"a": {"b": 42, "c": "hello world"}},
+    ]
+
+    got = cudf.Series(data)[0:1]
+    expect = cudf.Series(data[0:1])
+    assert got.to_arrow() == expect.to_arrow()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}],
+        [{"a": None}],
+        [{"a": 1}],
+        [{"a": "one"}],
+        [{"a": 1}, {"a": 2}],
+        [{"a": 1, "b": "one"}, {"a": 2, "b": "two"}],
+        [{"b": "two", "a": None}, None, {"a": "one", "b": "two"}],
+    ],
+)
+def test_struct_field_errors(data):
+    got = cudf.Series(data)
+
+    with pytest.raises(KeyError):
+        got.struct.field("notWithinFields")
+
+    with pytest.raises(IndexError):
+        got.struct.field(100)
+
+
+@pytest.mark.parametrize("dtype", DATETIME_TYPES + TIMEDELTA_TYPES)
+def test_struct_with_datetime_and_timedelta(dtype):
+    df = cudf.DataFrame(
+        {
+            "a": [12, 232, 2334],
+            "datetime": cudf.Series([23432, 3432423, 324324], dtype=dtype),
+        }
+    )
+    series = df.to_struct()
+    a_array = np.array([12, 232, 2334])
+    datetime_array = np.array([23432, 3432423, 324324]).astype(dtype)
+
+    actual = series.to_pandas()
+    values_list = []
+    for i, val in enumerate(a_array):
+        values_list.append({"a": val, "datetime": datetime_array[i]})
+
+    expected = pd.Series(values_list)
+    assert_eq(expected, actual)
+
+
+def test_struct_int_values():
+    series = cudf.Series(
+        [{"a": 1, "b": 2}, {"a": 10, "b": None}, {"a": 5, "b": 6}]
+    )
+    actual_series = series.to_pandas()
+
+    assert isinstance(actual_series[0]["b"], int)
+    assert isinstance(actual_series[1]["b"], type(None))
+    assert isinstance(actual_series[2]["b"], int)
+
+
+def test_nested_struct_from_pandas_empty():
+    # tests constructing nested structs columns that would result in
+    # libcudf EMPTY type child columns inheriting their parent's null
+    # mask. See GH PR: #10761
+    pdf = pd.Series([[{"c": {"x": None}}], [{"c": None}]])
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf, gdf)
+
+
+def _nested_na_replace(struct_scalar):
+    """
+    Replace `cudf.NA` with `None` in the dict
+    """
+    for key, value in struct_scalar.items():
+        if value is cudf.NA:
+            struct_scalar[key] = None
+    return struct_scalar
+
+
+@pytest.mark.parametrize(
+    "data, idx, expected",
+    [
+        (
+            [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}],
+            0,
+            {"f1": "a", "f2": {"a": "sf21"}},
+        ),
+        (
+            [
+                {"f2": {"a": "sf21"}},
+                {"f1": "sf12", "f2": None},
+            ],
+            0,
+            {"f1": cudf.NA, "f2": {"a": "sf21"}},
+        ),
+        (
+            [{"a": "123"}, {"a": "sf12", "b": {"a": {"b": "c"}}}],
+            1,
+            {"a": "sf12", "b": {"a": {"b": "c"}}},
         ),
     ],
 )
-def test_struct_slice(series, start, end):
-    sr = cudf.Series(series)
-    if not end:
-        expected = cudf.Series(series[start:])
-        assert sr[start:].to_arrow() == expected.to_arrow()
-    elif not start:
-        expected = cudf.Series(series[:end])
-        assert sr[:end].to_arrow() == expected.to_arrow()
-    else:
-        expected = cudf.Series(series[start:end])
-        assert sr[start:end].to_arrow() == expected.to_arrow()
+def test_nested_struct_extract_host_scalars(data, idx, expected):
+    series = cudf.Series(data)
+
+    assert _nested_na_replace(series[idx]) == _nested_na_replace(expected)

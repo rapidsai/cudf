@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -87,7 +88,7 @@ template <int32_t block_size, int32_t leader_lane = 0, typename T>
 __device__ T single_lane_block_sum_reduce(T lane_value)
 {
   static_assert(block_size <= 1024, "Invalid block size.");
-  static_assert(std::is_arithmetic<T>::value, "Invalid non-arithmetic type.");
+  static_assert(std::is_arithmetic_v<T>, "Invalid non-arithmetic type.");
   constexpr auto warps_per_block{block_size / warp_size};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
@@ -127,12 +128,12 @@ cudf::size_type elements_per_thread(Kernel kernel,
 
   // calculate theoretical occupancy
   int max_blocks = 0;
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
 
   int device = 0;
-  CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
   int num_sms = 0;
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
   return std::clamp(per_thread, 1, max_per_thread);
 }
@@ -169,7 +170,7 @@ __global__ void single_thread_kernel(F f)
  * @param stream CUDA stream used for the kernel launch
  */
 template <class Functor>
-void device_single_thread(Functor functor, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+void device_single_thread(Functor functor, rmm::cuda_stream_view stream)
 {
   single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }

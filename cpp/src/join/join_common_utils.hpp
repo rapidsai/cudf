@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,20 @@
  */
 #pragma once
 
+#include <cudf/detail/join.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/device_uvector.hpp>
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
 
-#include <hash/concurrent_unordered_multimap.cuh>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
+
+#include <cuco/static_map.cuh>
+#include <cuco/static_multimap.cuh>
 
 #include <limits>
 
@@ -33,42 +40,30 @@ constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
-using multimap_type =
-  concurrent_unordered_multimap<hash_value_type,
-                                size_type,
-                                size_t,
-                                std::numeric_limits<hash_value_type>::max(),
-                                std::numeric_limits<size_type>::max(),
-                                default_hash<hash_value_type>,
-                                equal_to<hash_value_type>,
-                                default_allocator<thrust::pair<hash_value_type, size_type>>>;
+using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
-using row_hash = cudf::row_hasher<default_hash>;
+using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
 
-using row_equality = cudf::row_equality_comparator<true>;
+using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
-enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
+using multimap_type = cudf::hash_join::impl_type::map_type;
 
-inline bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
-{
-  // If there is nothing to join, then send empty table with all columns
-  if (left.is_empty() || right.is_empty()) { return true; }
+// Multimap type used for mixed joins. TODO: This is a temporary alias used
+// until the mixed joins are converted to using CGs properly. Right now it's
+// using a cooperative group of size 1.
+using mixed_multimap_type = cuco::static_multimap<hash_value_type,
+                                                  size_type,
+                                                  cuda::thread_scope_device,
+                                                  hash_table_allocator_type,
+                                                  cuco::double_hashing<1, hash_type, hash_type>>;
 
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
+using semi_map_type = cuco::
+  static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-    return true;
-  }
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
-  // If left semi join (contains) and right table is empty,
-  // return immediately
-  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
+using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
-  return false;
-}
-
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
 }  // namespace detail
-
 }  // namespace cudf

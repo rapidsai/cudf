@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -73,8 +74,8 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 constexpr bool is_packable()
 {
-  return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value and
+  return std::is_integral_v<key_type> and std::is_integral_v<value_type> and
+         not std::is_void_v<packed_t<pair_type>> and
          std::has_unique_object_representations_v<pair_type>;
 }
 
@@ -113,7 +114,7 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  */
 template <typename Key,
           typename Element,
-          typename Hasher    = default_hash<Key>,
+          typename Hasher    = cudf::detail::default_hash<Key>,
           typename Equality  = equal_to<Key>,
           typename Allocator = default_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
@@ -158,7 +159,7 @@ class concurrent_unordered_map {
    * storage
    */
   static auto create(size_type capacity,
-                     rmm::cuda_stream_view stream     = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream,
                      const mapped_type unused_element = std::numeric_limits<mapped_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
                      const Hasher& hash_function      = hasher(),
@@ -242,7 +243,7 @@ class concurrent_unordered_map {
 
   __host__ __device__ mapped_type get_unused_element() const { return m_unused_element; }
 
-  __host__ __device__ size_type capacity() const { return m_capacity; }
+  [[nodiscard]] __host__ __device__ size_type capacity() const { return m_capacity; }
 
  private:
   /**
@@ -420,8 +421,7 @@ class concurrent_unordered_map {
     }
   }
 
-  void assign_async(const concurrent_unordered_map& other,
-                    rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void assign_async(const concurrent_unordered_map& other, rmm::cuda_stream_view stream)
   {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
@@ -432,14 +432,14 @@ class concurrent_unordered_map {
 
       m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
-    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
-                             other.m_hashtbl_values,
-                             m_capacity * sizeof(value_type),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
+                                  other.m_hashtbl_values,
+                                  m_capacity * sizeof(value_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
-  void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void clear_async(rmm::cuda_stream_view stream)
   {
     constexpr int block_size = 128;
     init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
@@ -454,16 +454,16 @@ class concurrent_unordered_map {
     }
   }
 
-  void prefetch(const int dev_id, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void prefetch(const int dev_id, rmm::cuda_stream_view stream)
   {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      CUDA_TRY(cudaMemPrefetchAsync(
+      CUDF_CUDA_TRY(cudaMemPrefetchAsync(
         m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
     }
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
+    CUDF_CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
   }
 
   /**
@@ -474,7 +474,7 @@ class concurrent_unordered_map {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void destroy(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  void destroy(rmm::cuda_stream_view stream)
   {
     m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
@@ -515,7 +515,7 @@ class concurrent_unordered_map {
                            const Hasher& hash_function,
                            const Equality& equal,
                            const allocator_type& allocator,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                           rmm::cuda_stream_view stream)
     : m_hf(hash_function),
       m_equal(equal),
       m_allocator(allocator),
@@ -532,14 +532,17 @@ class concurrent_unordered_map {
 
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_TRY(cudaGetDevice(&dev_id));
-        CUDA_TRY(cudaMemPrefetchAsync(
+        CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDF_CUDA_TRY(cudaMemPrefetchAsync(
           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
       }
     }
 
-    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
-      m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
-    CUDA_TRY(cudaGetLastError());
+    if (m_capacity > 0) {
+      init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
+        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    }
+
+    CUDF_CHECK_CUDA(stream.value());
   }
 };

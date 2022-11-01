@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -26,6 +26,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -53,7 +54,9 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   if (keys_column->has_nulls()) {
     keys_column = std::make_unique<column>(
-      slice(keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}).front(),
+      cudf::detail::slice(
+        keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}, stream)
+        .front(),
       stream,
       mr);
     keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask
@@ -89,7 +92,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input_column, indices_type, rmm::cuda_stream_default, mr);
+  return detail::encode(input_column, indices_type, cudf::get_default_stream(), mr);
 }
 
 }  // namespace dictionary

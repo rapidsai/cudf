@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,13 @@
 
 #pragma once
 
+#include "byte_array_view.cuh"
+#include "statistics.cuh"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include "statistics.cuh"
 
 #include <cub/cub.cuh>
 
@@ -36,6 +37,7 @@ namespace detail {
 
 template <typename T, int block_size>
 using cub_temp_storage = typename cub::BlockReduce<T, block_size>::TempStorage;
+using statistics::byte_array_view;
 
 #define MEMBER_NAME(TYPE) TYPE##_stats
 
@@ -54,6 +56,7 @@ union block_reduce_storage {
   DECLARE_MEMBER(int16_t)
   DECLARE_MEMBER(int32_t)
   DECLARE_MEMBER(int64_t)
+  DECLARE_MEMBER(__int128_t)
   DECLARE_MEMBER(uint8_t)
   DECLARE_MEMBER(uint16_t)
   DECLARE_MEMBER(uint32_t)
@@ -61,6 +64,7 @@ union block_reduce_storage {
   DECLARE_MEMBER(float)
   DECLARE_MEMBER(double)
   DECLARE_MEMBER(string_view)
+  DECLARE_MEMBER(byte_array_view)
 };
 
 #define STORAGE_WRAPPER_GET(TYPE)                                                                 \
@@ -89,6 +93,7 @@ struct storage_wrapper {
   STORAGE_WRAPPER_GET(int16_t);
   STORAGE_WRAPPER_GET(int32_t);
   STORAGE_WRAPPER_GET(int64_t);
+  STORAGE_WRAPPER_GET(__int128_t);
   STORAGE_WRAPPER_GET(uint8_t);
   STORAGE_WRAPPER_GET(uint16_t);
   STORAGE_WRAPPER_GET(uint32_t);
@@ -96,6 +101,7 @@ struct storage_wrapper {
   STORAGE_WRAPPER_GET(float);
   STORAGE_WRAPPER_GET(double);
   STORAGE_WRAPPER_GET(string_view);
+  STORAGE_WRAPPER_GET(byte_array_view);
 };
 
 #undef DECLARE_MEMBER

@@ -1,9 +1,10 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set py_version = environ.get('PY_VER', '3.8') %}
+{% set py_version_numeric = py_version.replace('.', '') %}
 
 package:
   name: custreamz
@@ -14,37 +15,34 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
 
 requirements:
   host:
     - python
-    - python-confluent-kafka
-    - cudf_kafka {{ version }}
+    - python-confluent-kafka >=1.7.0,<1.8.0a0
+    - cudf_kafka ={{ version }}
   run:
     - python
-    - streamz 
-    - cudf {{ version }}
-    - dask>=2021.6.0
-    - distributed>=2021.6.0
-    - python-confluent-kafka
-    - cudf_kafka {{ version }}
+    - streamz
+    - cudf ={{ version }}
+    - dask>=2022.9.2
+    - distributed>=2022.9.2
+    - python-confluent-kafka >=1.7.0,<1.8.0a0
+    - cudf_kafka ={{ version }}
 
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - custreamz
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - custreamz                         # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: cuStreamz library

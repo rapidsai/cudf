@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@
 
 package ai.rapids.cudf;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Options for reading a ORC file
  */
@@ -27,9 +31,11 @@ public class ORCOptions extends ColumnFilterOptions {
 
   private final boolean useNumPyTypes;
   private final DType unit;
+  private final String[] decimal128Columns;
 
   private ORCOptions(Builder builder) {
     super(builder);
+    decimal128Columns = builder.decimal128Columns.toArray(new String[0]);
     useNumPyTypes = builder.useNumPyTypes;
     unit = builder.unit;
   }
@@ -42,6 +48,10 @@ public class ORCOptions extends ColumnFilterOptions {
     return unit;
   }
 
+  String[] getDecimal128Columns() {
+    return decimal128Columns;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -49,6 +59,8 @@ public class ORCOptions extends ColumnFilterOptions {
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private boolean useNumPyTypes = true;
     private DType unit = DType.EMPTY;
+
+    final List<String> decimal128Columns = new ArrayList<>();
 
     /**
      * Specify whether the parser should implicitly promote TIMESTAMP_DAYS
@@ -70,6 +82,23 @@ public class ORCOptions extends ColumnFilterOptions {
     public ORCOptions.Builder withTimeUnit(DType unit) {
       assert unit.isTimestampType();
       this.unit = unit;
+      return this;
+    }
+
+    /**
+     * Specify decimal columns which shall be read as DECIMAL128. Otherwise, decimal columns
+     * will be read as DECIMAL64 by default in ORC.
+     *
+     * In terms of child columns of nested types, their parents need to be prepended as prefix
+     * of the column name, in case of ambiguity. For struct columns, the names of child columns
+     * are formatted as `{struct_col_name}.{child_col_name}`. For list columns, the data(child)
+     * columns are named as `{list_col_name}.1`.
+     *
+     * @param names names of columns which read as DECIMAL128
+     * @return builder for chaining
+     */
+    public Builder decimal128Column(String... names) {
+      decimal128Columns.addAll(Arrays.asList(names));
       return this;
     }
 

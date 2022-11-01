@@ -21,8 +21,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <stdint.h>
-#include <string.h>
+#include <cstdint>
+#include <cstring>
 
 namespace nvtext {
 namespace detail {

@@ -1,61 +1,119 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import decimal
+import operator
+from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa
-from pandas._libs.missing import NAType as pd_NAType
 
-from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
-from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
-from cudf.core.index import BaseIndex
-from cudf.core.series import Series
+import cudf
+from cudf.api.types import is_scalar
+from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.missing import NA
+from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
 
 
-class Scalar(object):
+# Note that the metaclass below can easily be generalized for use with
+# other classes, if needed in the future. Simply replace the arguments
+# of the `__call__` method with `*args` and `**kwargs`. This will
+# result in additional overhead when constructing the cache key, as
+# unpacking *args and **kwargs is not cheap. See the discussion in
+# https://github.com/rapidsai/cudf/pull/11246#discussion_r955843532
+# for details.
+class CachedScalarInstanceMeta(type):
+    """
+    Metaclass for Scalar that caches `maxsize` instances.
+
+    After `maxsize` is reached, evicts the least recently used
+    instances to make room for new values.
+    """
+
+    def __new__(cls, names, bases, attrs, **kwargs):
+        return type.__new__(cls, names, bases, attrs)
+
+    # choose 128 because that's the default `maxsize` for
+    # `functools.lru_cache`:
+    def __init__(self, names, bases, attrs, maxsize=128):
+        self.__maxsize = maxsize
+        self.__instances = OrderedDict()
+
+    def __call__(self, value, dtype=None):
+        # the cache key is constructed from the arguments, and also
+        # the _types_ of the arguments, since objects of different
+        # types can compare equal
+        cache_key = (value, type(value), dtype, type(dtype))
+        try:
+            # try retrieving an instance from the cache:
+            self.__instances.move_to_end(cache_key)
+            return self.__instances[cache_key]
+        except KeyError:
+            # if an instance couldn't be found in the cache,
+            # construct it and add to cache:
+            obj = super().__call__(value, dtype=dtype)
+            try:
+                self.__instances[cache_key] = obj
+            except TypeError:
+                # couldn't hash the arguments, don't cache:
+                return obj
+            if len(self.__instances) > self.__maxsize:
+                self.__instances.popitem(last=False)
+            return obj
+        except TypeError:
+            # couldn't hash the arguments, don't cache:
+            return super().__call__(value, dtype=dtype)
+
+    def _clear_instance_cache(self):
+        self.__instances.clear()
+
+
+class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
+    """
+    A GPU-backed scalar object with NumPy scalar like properties
+    May be used in binary operations against other scalars, cuDF
+    Series, DataFrame, and Index objects.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Scalar(42, dtype='int64')
+    Scalar(42, dtype=int64)
+    >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
+    Scalar(84.0, dtype=float64)
+    >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
+    Scalar(63, dtype=int64)
+    >>> x = cudf.Scalar(42, dtype='datetime64[s]')
+    >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
+    >>> x - y
+    Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
+    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
+    0    2
+    1    3
+    2    4
+    dtype: int64
+    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
+    >>> slr = cudf.Scalar(10, dtype='uint8')
+    >>> df - slr
+       a    b
+    0 -9 -5.5
+    1 -8 -4.5
+    2 -7 -3.5
+
+    Parameters
+    ----------
+    value : Python Scalar, NumPy Scalar, or cuDF Scalar
+        The scalar value to be converted to a GPU backed scalar object
+    dtype : np.dtype or string specifier
+        The data type
+    """
+
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+
     def __init__(self, value, dtype=None):
-        """
-        A GPU-backed scalar object with NumPy scalar like properties
-        May be used in binary operations against other scalars, cuDF
-        Series, DataFrame, and Index objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> cudf.Scalar(42, dtype='int64')
-        Scalar(42, dtype=int64)
-        >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
-        Scalar(84.0, dtype=float64)
-        >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
-        Scalar(63, dtype=int64)
-        >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-        >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
-        >>> x - y
-        Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-        >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-        0    2
-        1    3
-        2    4
-        dtype: int64
-        >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-        >>> slr = cudf.Scalar(10, dtype='uint8')
-        >>> df - slr
-           a    b
-        0 -9 -5.5
-        1 -8 -4.5
-        2 -7 -3.5
-
-        Parameters
-        ----------
-        value : Python Scalar, NumPy Scalar, or cuDF Scalar
-            The scalar value to be converted to a GPU backed scalar object
-        dtype : np.dtype or string specifier
-            The data type
-        """
 
         self._host_value = None
         self._host_dtype = None
@@ -67,12 +125,23 @@ class Scalar(object):
                 self._host_dtype = value._host_dtype
             else:
                 self._device_value = value._device_value
-        elif isinstance(value, DeviceScalar):
-            self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
                 value, dtype
             )
+
+    @classmethod
+    def from_device_scalar(cls, device_scalar):
+        if not isinstance(device_scalar, cudf._lib.scalar.DeviceScalar):
+            raise TypeError(
+                "Expected an instance of DeviceScalar, "
+                f"got {type(device_scalar).__name__}"
+            )
+        obj = object.__new__(cls)
+        obj._host_value = None
+        obj._host_dtype = None
+        obj._device_value = device_scalar
+        return obj
 
     @property
     def _is_host_value_current(self):
@@ -85,7 +154,7 @@ class Scalar(object):
     @property
     def device_value(self):
         if self._device_value is None:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         return self._device_value
@@ -101,7 +170,7 @@ class Scalar(object):
     def dtype(self):
         if self._is_host_value_current:
             if isinstance(self._host_value, str):
-                return np.dtype("object")
+                return cudf.dtype("object")
             else:
                 return self._host_dtype
         else:
@@ -110,13 +179,13 @@ class Scalar(object):
     def is_valid(self):
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not _is_null_host_scalar(self._host_value)
+        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        valid = not _is_null_host_scalar(value)
+        valid = not cudf._lib.scalar._is_null_host_scalar(value)
 
         if isinstance(value, list):
             if dtype is not None:
@@ -144,12 +213,12 @@ class Scalar(object):
             else:
                 return NA, dtype
 
-        if isinstance(dtype, Decimal64Dtype):
+        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
             ).as_py()
         if isinstance(value, decimal.Decimal) and dtype is None:
-            dtype = Decimal64Dtype._from_decimal(value)
+            dtype = cudf.Decimal128Dtype._from_decimal(value)
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
 
@@ -170,8 +239,8 @@ class Scalar(object):
             else:
                 dtype = value.dtype
 
-        if not isinstance(dtype, Decimal64Dtype):
-            dtype = np.dtype(dtype)
+        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+            dtype = cudf.dtype(dtype)
 
         if not valid:
             value = NA
@@ -186,7 +255,7 @@ class Scalar(object):
         if self._is_host_value_current and self._is_device_value_current:
             return
         elif self._is_host_value_current and not self._is_device_value_current:
-            self._device_value = DeviceScalar(
+            self._device_value = cudf._lib.scalar.DeviceScalar(
                 self._host_value, self._host_dtype
             )
         elif self._is_device_value_current and not self._is_host_value_current:
@@ -209,69 +278,8 @@ class Scalar(object):
     def __bool__(self):
         return bool(self.value)
 
-    # Scalar Binary Operations
-    def __add__(self, other):
-        return self._scalar_binop(other, "__add__")
-
-    def __radd__(self, other):
-        return self._scalar_binop(other, "__radd__")
-
-    def __sub__(self, other):
-        return self._scalar_binop(other, "__sub__")
-
-    def __rsub__(self, other):
-        return self._scalar_binop(other, "__rsub__")
-
-    def __mul__(self, other):
-        return self._scalar_binop(other, "__mul__")
-
-    def __rmul__(self, other):
-        return self._scalar_binop(other, "__rmul__")
-
-    def __truediv__(self, other):
-        return self._scalar_binop(other, "__truediv__")
-
-    def __floordiv__(self, other):
-        return self._scalar_binop(other, "__floordiv__")
-
-    def __rtruediv__(self, other):
-        return self._scalar_binop(other, "__rtruediv__")
-
-    def __mod__(self, other):
-        return self._scalar_binop(other, "__mod__")
-
-    def __divmod__(self, other):
-        return self._scalar_binop(other, "__divmod__")
-
-    def __and__(self, other):
-        return self._scalar_binop(other, "__and__")
-
-    def __xor__(self, other):
-        return self._scalar_binop(other, "__or__")
-
-    def __pow__(self, other):
-        return self._scalar_binop(other, "__pow__")
-
-    def __gt__(self, other):
-        return self._scalar_binop(other, "__gt__")
-
-    def __lt__(self, other):
-        return self._scalar_binop(other, "__lt__")
-
-    def __ge__(self, other):
-        return self._scalar_binop(other, "__ge__")
-
-    def __le__(self, other):
-        return self._scalar_binop(other, "__le__")
-
-    def __eq__(self, other):
-        return self._scalar_binop(other, "__eq__")
-
-    def __ne__(self, other):
-        return self._scalar_binop(other, "__ne__")
-
     def __round__(self, n):
-        return self._scalar_binop(n, "__round__")
+        return self._binaryop(n, "__round__")
 
     # Scalar Unary Operations
     def __abs__(self):
@@ -323,30 +331,36 @@ class Scalar(object):
                     and self.dtype.char == other.dtype.char == "M"
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
-                    return np.dtype("m8" + f"[{res}]")
+                    return cudf.dtype("m8" + f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
 
-        return np.dtype(out_dtype)
+        return cudf.dtype(out_dtype)
 
-    def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
-            # dispatch to column implementation
-            return NotImplemented
-        other = to_cudf_compatible_scalar(other)
-        out_dtype = self._binop_result_dtype_or_error(other, op)
-        valid = self.is_valid and (
-            isinstance(other, np.generic) or other.is_valid
-        )
-        if not valid:
-            return Scalar(None, dtype=out_dtype)
+    def _binaryop(self, other, op: str):
+        if is_scalar(other):
+            other = to_cudf_compatible_scalar(other)
+            out_dtype = self._binop_result_dtype_or_error(other, op)
+            valid = self.is_valid() and (
+                isinstance(other, np.generic) or other.is_valid()
+            )
+            if not valid:
+                return Scalar(None, dtype=out_dtype)
+            else:
+                result = self._dispatch_scalar_binop(other, op)
+                return Scalar(result, dtype=out_dtype)
         else:
-            result = self._dispatch_scalar_binop(other, op)
-            return Scalar(result, dtype=out_dtype)
+            return NotImplemented
 
     def _dispatch_scalar_binop(self, other, op):
         if isinstance(other, Scalar):
             other = other.value
-        return getattr(self.value, op)(other)
+        try:
+            func = getattr(operator, op)
+        except AttributeError:
+            func = getattr(self.value, op)
+        else:
+            return func(self.value, other)
+        return func(other)
 
     def _unaop_result_type_or_error(self, op):
         if op == "__neg__" and self.dtype == "bool":
@@ -357,9 +371,9 @@ class Scalar(object):
 
         if op in {"__ceil__", "__floor__"}:
             if self.dtype.char in "bBhHf?":
-                return np.dtype("float32")
+                return cudf.dtype("float32")
             else:
-                return np.dtype("float64")
+                return cudf.dtype("float64")
         return self.dtype
 
     def _scalar_unaop(self, op):
@@ -379,13 +393,3 @@ class Scalar(object):
 
     def astype(self, dtype):
         return Scalar(self.value, dtype)
-
-
-class _NAType(pd_NAType):
-    # Pandas NAType enforces a single instance exists at a time
-    # instantiating this class will yield the existing instance
-    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
-    pass
-
-
-NA = _NAType()

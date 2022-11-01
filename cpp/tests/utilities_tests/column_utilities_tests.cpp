@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <type_traits>
 
@@ -50,10 +51,10 @@ template <typename T>
 struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
@@ -133,7 +134,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 
   auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, size));
 }
 
 struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {
@@ -361,6 +362,51 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
     EXPECT_EQ(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET), false);
   }
+}
+
+TEST_F(ColumnUtilitiesListsTest, DifferingRowCounts)
+{
+  cudf::test::fixed_width_column_wrapper<int> a{1, 1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<int> b{1, 1, 1, 1, 1};
+
+  EXPECT_FALSE(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(
+    cudf::test::expect_column_properties_equal(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(cudf::test::expect_columns_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(
+    cudf::test::expect_column_properties_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+}
+
+TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
+{
+  // unsanitary
+  //
+  // List<int32_t>:
+  //  Length : 1
+  //  Offsets : 0, 3
+  //  Null count: 1
+  //  0
+  //    0, 1, 2
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 3};
+  cudf::test::fixed_width_column_wrapper<int> values{0, 1, 2};
+  auto l0 = cudf::make_lists_column(1,
+                                    offsets.release(),
+                                    values.release(),
+                                    1,
+                                    cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+
+  // sanitary
+  //
+  // List<int32_t>:
+  //  Length : 1
+  //  Offsets : 0, 0
+  //  Null count: 1
+  //    0
+  auto l1 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column(false);
+
+  // equivalent, but not equal
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*l0, l1);
+  EXPECT_FALSE(cudf::test::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
 }
 
 TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)

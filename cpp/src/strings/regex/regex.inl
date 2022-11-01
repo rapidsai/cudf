@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
-
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <memory.h>
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/logical.h>
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace strings {
@@ -38,95 +34,101 @@ namespace detail {
  * reflected here. The regexec function updates and manages this state data.
  */
 struct alignas(8) relist {
-  int16_t size{};
-  int16_t listsize{};
-  int32_t reserved;
-  int2* ranges{};       // pair per instruction
-  int16_t* inst_ids{};  // one per instruction
-  u_char* mask{};       // bit per instruction
-
-  __host__ __device__ inline static int32_t data_size_for(int32_t insts)
+  /**
+   * @brief Compute the memory size for the state data.
+   */
+  constexpr inline static std::size_t data_size_for(int32_t insts)
   {
-    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) + ((insts + 7) / 8);
+    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
+           cudf::util::div_rounding_up_unsafe(insts, 8);
   }
 
-  __host__ __device__ inline static int32_t alloc_size(int32_t insts)
+  /**
+   * @brief Compute the aligned memory allocation size.
+   */
+  constexpr inline static std::size_t alloc_size(int32_t insts, int32_t num_threads)
   {
-    int32_t size = sizeof(relist);
-    size += data_size_for(insts);
-    size = ((size + 7) / 8) * 8;  // align it too
-    return size;
+    return cudf::util::round_up_unsafe<size_t>(data_size_for(insts) * num_threads, sizeof(restate));
   }
 
-  __host__ __device__ inline relist() {}
+  struct alignas(16) restate {
+    int2 range;
+    int32_t inst_id;
+    int32_t reserved;
+  };
 
-  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
+  __device__ __forceinline__
+  relist(int16_t insts, int32_t num_threads, u_char* gp_ptr, int32_t index)
+    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8)), stride(num_threads)
   {
-    auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
-    ranges   = reinterpret_cast<int2*>(ptr);
-    ptr += listsize * sizeof(ranges[0]);
-    inst_ids = reinterpret_cast<int16_t*>(ptr);
-    ptr += listsize * sizeof(inst_ids[0]);
-    mask = ptr;
-    reset();
+    auto const rdata_size = sizeof(ranges[0]);
+    auto const idata_size = sizeof(inst_ids[0]);
+    ranges                = reinterpret_cast<decltype(ranges)>(gp_ptr + (index * rdata_size));
+    inst_ids =
+      reinterpret_cast<int16_t*>(gp_ptr + (rdata_size * stride * insts) + (index * idata_size));
+    mask = gp_ptr + ((rdata_size + idata_size) * stride * insts) + (index * masksize);
   }
 
-  __host__ __device__ inline void reset()
+  __device__ __forceinline__ void reset()
   {
-    memset(mask, 0, (listsize + 7) / 8);
+    memset(mask, 0, masksize);
     size = 0;
   }
 
-  __device__ inline bool activate(int32_t i, int32_t begin, int32_t end)
+  __device__ __forceinline__ bool activate(int32_t id, int32_t begin, int32_t end)
   {
-    if (readMask(i)) return false;
-    writeMask(true, i);
-    inst_ids[size] = static_cast<int16_t>(i);
-    ranges[size]   = int2{begin, end};
+    if (readMask(id)) { return false; }
+    writeMask(id);
+    inst_ids[size * stride] = static_cast<int16_t>(id);
+    ranges[size * stride]   = int2{begin, end};
     ++size;
     return true;
   }
 
-  __device__ inline void writeMask(bool v, int32_t pos)
+  __device__ __forceinline__ restate get_state(int16_t idx) const
   {
-    u_char uc = 1 << (pos & 7);
-    if (v)
-      mask[pos >> 3] |= uc;
-    else
-      mask[pos >> 3] &= ~uc;
+    return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
 
-  __device__ inline bool readMask(int32_t pos)
+  __device__ __forceinline__ int16_t get_size() const { return size; }
+
+ private:
+  int16_t size{};
+  int16_t const masksize;
+  int32_t const stride;
+  int2* __restrict__ ranges;       // pair per instruction
+  int16_t* __restrict__ inst_ids;  // one per instruction
+  u_char* __restrict__ mask;       // bit per instruction
+
+  __device__ __forceinline__ void writeMask(int32_t pos) const
   {
-    u_char uc = mask[pos >> 3];
+    u_char const uc = 1 << (pos & 7);
+    mask[pos >> 3] |= uc;
+  }
+
+  __device__ __forceinline__ bool readMask(int32_t pos) const
+  {
+    u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
   }
 };
 
-/**
- * @brief This manages the two relist instances required by the regexec function.
- */
-struct reljunk {
-  relist* list1;
-  relist* list2;
-  int32_t starttype{};
-  char32_t startchar{};
-
-  __host__ __device__ reljunk(relist* list1, relist* list2, int32_t stype, char32_t schar)
-    : list1(list1), list2(list2)
-  {
-    if (starttype == CHAR || starttype == BOL) {
-      starttype = stype;
-      startchar = schar;
-    }
-  }
-};
-
-__device__ inline void swaplist(relist*& l1, relist*& l2)
+__device__ __forceinline__ reprog_device::reljunk::reljunk(relist* list1,
+                                                           relist* list2,
+                                                           reinst const inst)
+  : list1(list1), list2(list2)
 {
-  relist* tmp = l1;
-  l1          = l2;
-  l2          = tmp;
+  if (inst.type == CHAR || inst.type == BOL) {
+    starttype = inst.type;
+    startchar = inst.u1.c;
+  }
+}
+
+__device__ __forceinline__ void reprog_device::reljunk::swaplist()
+{
+  auto tmp = list1;
+  list1    = list2;
+  list2    = tmp;
 }
 
 /**
@@ -136,48 +138,88 @@ __device__ inline void swaplist(relist*& l1, relist*& l2)
  * @param codepoint_flags Used for mapping a character to type for builtin classes.
  * @return true if the character matches
  */
-__device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* codepoint_flags)
+__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
+                                                         uint8_t const* codepoint_flags) const
 {
-  if (thrust::any_of(thrust::seq,
-                     thrust::make_counting_iterator<int>(0),
-                     thrust::make_counting_iterator<int>(count),
-                     [ch, this] __device__(int i) {
-                       return ((ch >= literals[i * 2]) && (ch <= literals[(i * 2) + 1]));
-                     }))
-    return true;
+  for (int i = 0; i < count; ++i) {
+    auto const literal = literals[i];
+    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
+  }
+
   if (!builtins) return false;
   uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00FFFF) return false;
+  if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
-  if ((builtins & 1) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
     return true;
-  if ((builtins & 2) && IS_SPACE(fl))  // \s
+  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
     return true;
-  if ((builtins & 4) && IS_DIGIT(fl))  // \d
+  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
     return true;
-  if ((builtins & 8) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
+  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
     return true;
-  if ((builtins & 16) && !IS_SPACE(fl))  // \S
+  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
     return true;
-  if ((builtins & 32) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
+  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
     return true;
   //
   return false;
 }
 
-__device__ inline reinst* reprog_device::get_inst(int32_t idx) const
+__device__ __forceinline__ reinst reprog_device::get_inst(int32_t id) const { return _insts[id]; }
+
+__device__ __forceinline__ reclass_device reprog_device::get_class(int32_t id) const
 {
-  assert((idx >= 0) && (idx < _insts_count));
-  return _insts + idx;
+  return _classes[id];
 }
 
-__device__ inline reclass_device reprog_device::get_class(int32_t idx) const
+__device__ __forceinline__ bool reprog_device::is_empty() const
 {
-  assert((idx >= 0) && (idx < _classes_count));
-  return _classes[idx];
+  return insts_counts() == 0 || get_inst(0).type == END;
 }
 
-__device__ inline int32_t* reprog_device::startinst_ids() const { return _startinst_ids; }
+__device__ __forceinline__ void reprog_device::store(void* buffer) const
+{
+  if (_prog_size > MAX_SHARED_MEM) { return; }
+
+  auto ptr = static_cast<u_char*>(buffer);
+
+  // create instance inside the given buffer
+  auto result = new (ptr) reprog_device(*this);
+
+  // add the insts array
+  ptr += sizeof(reprog_device);
+  auto insts     = reinterpret_cast<reinst*>(ptr);
+  result->_insts = insts;
+  for (int idx = 0; idx < _insts_count; ++idx)
+    *insts++ = _insts[idx];
+
+  // add the startinst_ids array
+  ptr += cudf::util::round_up_unsafe(_insts_count * sizeof(_insts[0]), sizeof(_startinst_ids[0]));
+  auto ids               = reinterpret_cast<int32_t*>(ptr);
+  result->_startinst_ids = ids;
+  for (int idx = 0; idx < _starts_count; ++idx)
+    *ids++ = _startinst_ids[idx];
+
+  // add the classes array
+  ptr += cudf::util::round_up_unsafe(_starts_count * sizeof(int32_t), sizeof(_classes[0]));
+  auto classes     = reinterpret_cast<reclass_device*>(ptr);
+  result->_classes = classes;
+  // fill in each class
+  auto d_ptr = reinterpret_cast<reclass_range*>(classes + _classes_count);
+  for (int idx = 0; idx < _classes_count; ++idx) {
+    classes[idx]          = _classes[idx];
+    classes[idx].literals = d_ptr;
+    for (int jdx = 0; jdx < _classes[idx].count; ++jdx)
+      *d_ptr++ = _classes[idx].literals[jdx];
+  }
+}
+
+__device__ __forceinline__ reprog_device reprog_device::load(reprog_device const prog, void* buffer)
+{
+  return (prog._prog_size > MAX_SHARED_MEM) ? reprog_device(prog)
+                                            : reinterpret_cast<reprog_device*>(buffer)[0];
+}
 
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
@@ -193,35 +235,36 @@ __device__ inline int32_t* reprog_device::startinst_ids() const { return _starti
  * @param group_id Index of the group to match in a multi-group regex pattern.
  * @return >0 if match found
  */
-__device__ inline int32_t reprog_device::regexec(
-  string_view const& dstr, reljunk& jnk, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr,
+                                                          reljunk jnk,
+                                                          cudf::size_type& begin,
+                                                          cudf::size_type& end,
+                                                          cudf::size_type const group_id) const
 {
-  int32_t match                   = 0;
-  auto checkstart                 = jnk.starttype;
-  auto txtlen                     = dstr.length();
-  auto pos                        = begin;
-  auto eos                        = end;
-  char32_t c                      = 0;
+  int32_t match       = 0;
+  auto pos            = begin;
+  auto eos            = end;
+  char_utf8 c         = 0;
+  auto checkstart     = jnk.starttype != 0;
+  auto last_character = false;
+
   string_view::const_iterator itr = string_view::const_iterator(dstr, pos);
 
   jnk.list1->reset();
   do {
-    /* fast check for first char */
+    // fast check for first CHAR or BOL
     if (checkstart) {
+      auto startchar = static_cast<char_utf8>(jnk.startchar);
       switch (jnk.starttype) {
-        case CHAR: {
-          auto fidx = dstr.find(static_cast<char_utf8>(jnk.startchar), pos);
-          if (fidx < 0) return match;
-          pos = fidx;
-          break;
-        }
-        case BOL: {
+        case BOL:
           if (pos == 0) break;
-          if (jnk.startchar != '^') return match;
+          if (jnk.startchar != '^') { return match; }
           --pos;
-          int fidx = dstr.find(static_cast<char_utf8>('\n'), pos);
-          if (fidx < 0) return match;  // update begin/end values?
-          pos = fidx + 1;
+          startchar = static_cast<char_utf8>('\n');
+        case CHAR: {
+          auto const fidx = dstr.find(startchar, pos);
+          if (fidx == string_view::npos) { return match; }
+          pos = fidx + (jnk.starttype == BOL);
           break;
         }
       }
@@ -229,126 +272,110 @@ __device__ inline int32_t reprog_device::regexec(
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
-      int32_t i = 0;
-      auto ids  = startinst_ids();
-      while (ids[i] >= 0)
-        jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
+      auto ids = _startinst_ids;
+      while (*ids >= 0)
+        jnk.list1->activate(*ids++, (group_id == 0 ? pos : -1), -1);
     }
 
-    c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
+    last_character = itr.byte_offset() >= dstr.size_bytes();
 
-    // expand LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
+    c = last_character ? 0 : *itr;
+
+    // expand the non-character types like: LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
     bool expanded = false;
     do {
       jnk.list2->reset();
       expanded = false;
 
-      for (int16_t i = 0; i < jnk.list1->size; i++) {
-        int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
-        int2& range         = jnk.list1->ranges[i];
-        const reinst* inst  = get_inst(inst_id);
+      for (int16_t i = 0; i < jnk.list1->get_size(); i++) {
+        auto state          = jnk.list1->get_state(i);
+        auto range          = state.range;
+        auto const inst     = get_inst(state.inst_id);
         int32_t id_activate = -1;
 
-        switch (inst->type) {
+        switch (inst.type) {
           case CHAR:
           case ANY:
           case ANYNL:
           case CCLASS:
           case NCCLASS:
-          case END: id_activate = inst_id; break;
+          case END: id_activate = state.inst_id; break;
           case LBRA:
-            if (inst->u1.subid == group_id) range.x = pos;
-            id_activate = inst->u2.next_id;
+            if (inst.u1.subid == group_id) range.x = pos;
+            id_activate = inst.u2.next_id;
             expanded    = true;
             break;
           case RBRA:
-            if (inst->u1.subid == group_id) range.y = pos;
-            id_activate = inst->u2.next_id;
+            if (inst.u1.subid == group_id) range.y = pos;
+            id_activate = inst.u2.next_id;
             expanded    = true;
             break;
           case BOL:
-            if ((pos == 0) ||
-                ((inst->u1.c == '^') && (dstr[pos - 1] == static_cast<char_utf8>('\n')))) {
-              id_activate = inst->u2.next_id;
+            if ((pos == 0) || ((inst.u1.c == '^') && (dstr[pos - 1] == '\n'))) {
+              id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
           case EOL:
-            if ((c == 0) || (inst->u1.c == '$' && c == '\n')) {
-              id_activate = inst->u2.next_id;
+            if (last_character || (c == '\n' && inst.u1.c == '$')) {
+              id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
-          case BOW: {
-            auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
-            auto last_codept      = utf8_to_codepoint(last_c);
-            bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if (cur_alphaNumeric != last_alphaNumeric) {
-              id_activate = inst->u2.next_id;
-              expanded    = true;
-            }
-            break;
-          }
+          case BOW:
           case NBOW: {
-            auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
-            auto last_codept      = utf8_to_codepoint(last_c);
-            bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if (cur_alphaNumeric == last_alphaNumeric) {
-              id_activate = inst->u2.next_id;
+            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto const word_class   = reclass_device{CCLASS_W};
+            bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
+            bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
+            if ((curr_is_word == prev_is_word) != (inst.type == BOW)) {
+              id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
           }
           case OR:
-            jnk.list2->activate(inst->u1.right_id, range.x, range.y);
-            id_activate = inst->u2.left_id;
+            jnk.list2->activate(inst.u1.right_id, range.x, range.y);
+            id_activate = inst.u2.left_id;
             expanded    = true;
             break;
         }
         if (id_activate >= 0) jnk.list2->activate(id_activate, range.x, range.y);
       }
-      swaplist(jnk.list1, jnk.list2);
+      jnk.swaplist();
 
     } while (expanded);
 
-    // execute
+    // execute instructions
     bool continue_execute = true;
     jnk.list2->reset();
-    for (int16_t i = 0; continue_execute && i < jnk.list1->size; i++) {
-      int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
-      int2& range         = jnk.list1->ranges[i];
-      const reinst* inst  = get_inst(inst_id);
+    for (int16_t i = 0; continue_execute && i < jnk.list1->get_size(); i++) {
+      auto const state    = jnk.list1->get_state(i);
+      auto const range    = state.range;
+      auto const inst     = get_inst(state.inst_id);
       int32_t id_activate = -1;
 
-      switch (inst->type) {
+      switch (inst.type) {
         case CHAR:
-          if (inst->u1.c == c) id_activate = inst->u2.next_id;
+          if (inst.u1.c == c) id_activate = inst.u2.next_id;
           break;
         case ANY:
-          if (c != '\n') id_activate = inst->u2.next_id;
+          if (c != '\n') id_activate = inst.u2.next_id;
           break;
-        case ANYNL: id_activate = inst->u2.next_id; break;
+        case ANYNL: id_activate = inst.u2.next_id; break;
+        case NCCLASS:
         case CCLASS: {
-          reclass_device cls = get_class(inst->u1.cls_id);
-          if (cls.is_match(c, _codepoint_flags)) id_activate = inst->u2.next_id;
-          break;
-        }
-        case NCCLASS: {
-          reclass_device cls = get_class(inst->u1.cls_id);
-          if (!cls.is_match(c, _codepoint_flags)) id_activate = inst->u2.next_id;
+          auto const cls = get_class(inst.u1.cls_id);
+          if (cls.is_match(static_cast<char32_t>(c), _codepoint_flags) == (inst.type == CCLASS)) {
+            id_activate = inst.u2.next_id;
+          }
           break;
         }
         case END:
           match = 1;
           begin = range.x;
           end   = group_id == 0 ? pos : range.y;
-
+          // done with execute
           continue_execute = false;
           break;
       }
@@ -358,68 +385,47 @@ __device__ inline int32_t reprog_device::regexec(
 
     ++pos;
     ++itr;
-    swaplist(jnk.list1, jnk.list2);
-    checkstart = jnk.list1->size > 0 ? 0 : 1;
-  } while (c && (jnk.list1->size > 0 || match == 0));
+    jnk.swaplist();
+    checkstart = jnk.list1->get_size() == 0;
+  } while (!last_character && (!checkstart || !match));
 
   return match;
 }
 
-template <int stack_size>
-__device__ inline int32_t reprog_device::find(int32_t idx,
-                                              string_view const& dstr,
-                                              int32_t& begin,
-                                              int32_t& end)
+__device__ __forceinline__ int32_t reprog_device::find(int32_t const thread_idx,
+                                                       string_view const dstr,
+                                                       cudf::size_type& begin,
+                                                       cudf::size_type& end) const
 {
-  int32_t rtn = call_regexec<stack_size>(idx, dstr, begin, end);
+  auto const rtn = call_regexec(thread_idx, dstr, begin, end);
   if (rtn <= 0) begin = end = -1;
   return rtn;
 }
 
-template <int stack_size>
-__device__ inline match_result reprog_device::extract(cudf::size_type idx,
-                                                      string_view const& dstr,
-                                                      cudf::size_type begin,
-                                                      cudf::size_type end,
-                                                      cudf::size_type group_id)
+__device__ __forceinline__ match_result reprog_device::extract(int32_t const thread_idx,
+                                                               string_view const dstr,
+                                                               cudf::size_type begin,
+                                                               cudf::size_type end,
+                                                               cudf::size_type const group_id) const
 {
   end = begin + 1;
-  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1) > 0
-           ? match_result({begin, end})
-           : thrust::nullopt;
+  return call_regexec(thread_idx, dstr, begin, end, group_id + 1) > 0 ? match_result({begin, end})
+                                                                      : thrust::nullopt;
 }
 
-template <int stack_size>
-__device__ inline int32_t reprog_device::call_regexec(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t const thread_idx,
+                                                               string_view const dstr,
+                                                               cudf::size_type& begin,
+                                                               cudf::size_type& end,
+                                                               cudf::size_type const group_id) const
 {
-  u_char data1[stack_size], data2[stack_size];
+  auto gp_ptr = reinterpret_cast<u_char*>(_buffer);
+  relist list1(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);
 
-  auto const stype = get_inst(_startinst_id)->type;
-  auto const schar = get_inst(_startinst_id)->u1.c;
+  gp_ptr += relist::alloc_size(_max_insts, _thread_count);
+  relist list2(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);
 
-  relist list1(static_cast<int16_t>(_insts_count), data1);
-  relist list2(static_cast<int16_t>(_insts_count), data2);
-
-  reljunk jnk(&list1, &list2, stype, schar);
-  return regexec(dstr, jnk, begin, end, group_id);
-}
-
-template <>
-__device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
-  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
-{
-  auto const stype = get_inst(_startinst_id)->type;
-  auto const schar = get_inst(_startinst_id)->u1.c;
-
-  auto const relists_size = relist::alloc_size(_insts_count);
-  u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
-  listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
-
-  relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
-  relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
-
-  reljunk jnk(list1, list2, stype, schar);
+  reljunk jnk(&list1, &list2, get_inst(_startinst_id));
   return regexec(dstr, jnk, begin, end, group_id);
 }
 

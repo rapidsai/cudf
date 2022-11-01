@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,33 +19,49 @@
  * @brief cuDF-IO CSV writer class implementation
  */
 
-#include "writer_impl.hpp"
+#include "durations.hpp"
+
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/io/data_sink.hpp>
+#include <cudf/io/detail/csv.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
+#include <thrust/tabulate.h>
 
 #include <algorithm>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
+
+using namespace cudf::io::csv;
+using namespace cudf::io;
 
 namespace {
 
@@ -112,21 +128,20 @@ struct column_to_strings_fn {
   // fails to compile var-templs);
   //
   template <typename column_type>
-  constexpr static bool is_not_handled(void)
+  constexpr static bool is_not_handled()
   {
     // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not(
-      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
-      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
-      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+    return not((std::is_same_v<column_type, cudf::string_view>) ||
+               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
+               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
+               (cudf::is_duration<column_type>()));
   }
 
-  explicit column_to_strings_fn(
-    csv_writer_options const& options,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  explicit column_to_strings_fn(csv_writer_options const& options,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
     : options_(options), stream_(stream), mr_(mr)
   {
   }
@@ -135,9 +150,9 @@ struct column_to_strings_fn {
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr,
-  // stream) is declared and defined in combine.cu); Possible solution: declare `extern`, or just
-  // declare a prototype inside `namespace cudf::strings::detail`;
+  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
+  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
+  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //
@@ -166,15 +181,13 @@ struct column_to_strings_fn {
                                std::move(children.first),
                                std::move(children.second),
                                column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream_, mr_),
-                               stream_,
-                               mr_);
+                               cudf::detail::copy_bitmask(column_v, stream_, mr_));
   }
 
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
+  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -184,7 +197,7 @@ struct column_to_strings_fn {
   // floats:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point<column_type>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
@@ -231,7 +244,12 @@ struct column_to_strings_fn {
       format = "\"" + format + "\"";
     }
 
-    return cudf::strings::detail::from_timestamps(column, format, stream_, mr_);
+    return cudf::strings::detail::from_timestamps(
+      column,
+      format,
+      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr}),
+      stream_,
+      mr_);
   }
 
   template <typename column_type>
@@ -257,38 +275,30 @@ struct column_to_strings_fn {
 };
 }  // unnamed namespace
 
-// Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
-               csv_writer_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
-{
-}
-
-// Destructor within this translation unit
-writer::~writer() = default;
-
-writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   csv_writer_options const& options,
-                   rmm::mr::device_memory_resource* mr)
-  : out_sink_(std::move(sink)), mr_(mr), options_(options)
-{
-}
-
 // write the header: column names:
 //
-void writer::impl::write_chunked_begin(table_view const& table,
-                                       const table_metadata* metadata,
-                                       rmm::cuda_stream_view stream)
+void write_chunked_begin(data_sink* out_sink,
+                         table_view const& table,
+                         host_span<std::string const> user_column_names,
+                         csv_writer_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
 {
-  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    auto const& column_names = metadata->column_names;
+  if (options.is_enabled_include_header()) {
+    // need to generate column names if names are not provided
+    std::vector<std::string> generated_col_names;
+    if (user_column_names.empty()) {
+      generated_col_names.resize(table.num_columns());
+      thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
+        return std::to_string(idx);
+      });
+    }
+    auto const& column_names = user_column_names.empty() ? generated_col_names : user_column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
-    auto const delimiter  = options_.get_inter_column_delimiter();
-    auto const terminator = options_.get_line_terminator();
+    auto const delimiter  = options.get_inter_column_delimiter();
+    auto const terminator = options.get_line_terminator();
 
     // process header names:
     // - if the header name includes the delimiter or terminator character,
@@ -330,18 +340,20 @@ void writer::impl::write_chunked_begin(table_view const& table,
     }
     header.append(terminator);
 
-    out_sink_->host_write(header.data(), header.size());
+    out_sink->host_write(header.data(), header.size());
   }
 }
 
-void writer::impl::write_chunked(strings_column_view const& str_column_view,
-                                 const table_metadata* metadata,
-                                 rmm::cuda_stream_view stream)
+void write_chunked(data_sink* out_sink,
+                   strings_column_view const& str_column_view,
+                   csv_writer_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
 {
   // algorithm outline:
   //
   //  for_each(strings_column.begin(), strings_column.end(),
-  //           [sink = out_sink_](auto str_row) mutable {
+  //           [sink = out_sink](auto str_row) mutable {
   //               auto host_buffer = str_row.host_buffer();
   //               sink->host_write(host_buffer_.data(), host_buffer_.size());
   //           });//or...sink->device_write(device_buffer,...);
@@ -351,51 +363,54 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options_.get_line_terminator()};
+  cudf::string_scalar newline{options.get_line_terminator()};
   auto p_str_col_w_nl =
     cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars().data<char>();
+  char const* ptr_all_bytes = strings_column.chars_begin();
 
-  if (out_sink_->is_device_write_preferred(total_num_bytes)) {
+  if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory
-    out_sink_->device_write(ptr_all_bytes, total_num_bytes, stream);
+    out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
     thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                             ptr_all_bytes,
-                             total_num_bytes * sizeof(char),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
+                                  ptr_all_bytes,
+                                  total_num_bytes * sizeof(char),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
-    out_sink_->host_write(h_bytes.data(), total_num_bytes);
+    out_sink->host_write(h_bytes.data(), total_num_bytes);
   }
 
   // Needs newline at the end, to separate from next chunk
-  if (out_sink_->is_device_write_preferred(newline.size())) {
-    out_sink_->device_write(newline.data(), newline.size(), stream);
+  if (out_sink->is_device_write_preferred(newline.size())) {
+    out_sink->device_write(newline.data(), newline.size(), stream);
   } else {
-    out_sink_->host_write(options_.get_line_terminator().data(),
-                          options_.get_line_terminator().size());
+    out_sink->host_write(options.get_line_terminator().data(),
+                         options.get_line_terminator().size());
   }
 }
 
-void writer::impl::write(table_view const& table,
-                         const table_metadata* metadata,
-                         rmm::cuda_stream_view stream)
+void write_csv(data_sink* out_sink,
+               table_view const& table,
+               host_span<std::string const> user_column_names,
+               csv_writer_options const& options,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr)
 {
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(table, metadata, stream);
+  write_chunked_begin(out_sink, table, user_column_names, options, stream, mr);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
-    auto n_rows_per_chunk = options_.get_rows_per_chunk();
+    auto n_rows_per_chunk = options.get_rows_per_chunk();
     //
     // This outputs the CSV in row chunks to save memory.
     // Maybe we can use the total_rows*count calculation and a memory threshold
@@ -420,12 +435,12 @@ void writer::impl::write(table_view const& table,
       });
 
       // split table_view into chunks:
-      vector_views = cudf::split(table, splits);
+      vector_views = cudf::detail::split(table, splits, stream);
     }
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options_, stream, rmm::mr::get_current_device_resource()};
+    column_to_strings_fn converter{options, stream, rmm::mr::get_current_device_resource()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -448,32 +463,21 @@ void writer::impl::write(table_view const& table,
       // concatenate columns in each row into one big string column
       // (using null representation and delimiter):
       //
-      std::string delimiter_str{options_.get_inter_column_delimiter()};
+      std::string delimiter_str{options.get_inter_column_delimiter()};
       auto str_concat_col = [&] {
         if (str_table_view.num_columns() > 1)
           return cudf::strings::detail::concatenate(str_table_view,
                                                     delimiter_str,
-                                                    options_.get_na_rep(),
+                                                    options.get_na_rep(),
                                                     strings::separator_on_nulls::YES,
                                                     stream);
-        cudf::string_scalar narep{options_.get_na_rep()};
+        cudf::string_scalar narep{options.get_na_rep()};
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(str_concat_col->view(), metadata, stream);
+      write_chunked(out_sink, str_concat_col->view(), options, stream, mr);
     }
   }
-
-  // finalize (no-op, for now, but offers a hook for future extensions):
-  //
-  write_chunked_end(table, metadata, stream);
-}
-
-void writer::write(table_view const& table,
-                   const table_metadata* metadata,
-                   rmm::cuda_stream_view stream)
-{
-  _impl->write(table, metadata, stream);
 }
 
 }  // namespace csv

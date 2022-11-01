@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <limits>
-
-#include <cuda/std/chrono>
+#include <cudf/wrappers/durations.hpp>
 
 /**
  * @file timestamps.hpp
@@ -29,8 +27,13 @@ namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
-using time_point = cuda::std::chrono::sys_time<Duration>;
+using time_point = cuda::std::chrono::sys_time<Duration>;  ///< Time point type
 
+/**
+ * @brief A wrapper around a column of time_point in varying resolutions
+ *
+ * @tparam Duration The underlying duration type
+ */
 template <class Duration>
 using timestamp = time_point<Duration>;
 }  // namespace detail
@@ -42,33 +45,37 @@ using timestamp = time_point<Duration>;
  */
 
 /**
- * @brief Type alias representing an int32_t duration of days since the unix
- * epoch.
+ * @brief Type alias representing a cudf::duration_D (int32_t) since the unix epoch.
  */
-using timestamp_D =
-  detail::timestamp<cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>>;
+using timestamp_D = detail::timestamp<cudf::duration_D>;
 /**
- * @brief Type alias representing an int64_t duration of seconds since the
- * unix epoch.
+ * @brief Type alias representing a cudf::duration_h (int32_t) since the unix epoch.
  */
-using timestamp_s = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::ratio<1>>>;
+using timestamp_h = detail::timestamp<cudf::duration_h>;
 /**
- * @brief Type alias representing an int64_t duration of milliseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_m (int32_t) since the unix epoch.
  */
-using timestamp_ms = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::milli>>;
+using timestamp_m = detail::timestamp<cudf::duration_m>;
 /**
- * @brief Type alias representing an int64_t duration of microseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_s (int64_t) since the unix epoch.
  */
-using timestamp_us = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::micro>>;
+using timestamp_s = detail::timestamp<cudf::duration_s>;
 /**
- * @brief Type alias representing an int64_t duration of nanoseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_ms (int64_t) since the unix epoch.
  */
-using timestamp_ns = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::nano>>;
+using timestamp_ms = detail::timestamp<cudf::duration_ms>;
+/**
+ * @brief Type alias representing a cudf::duration_us (int64_t) since the unix epoch.
+ */
+using timestamp_us = detail::timestamp<cudf::duration_us>;
+/**
+ * @brief Type alias representing a cudf::duration_ns (int64_t) since the unix epoch.
+ */
+using timestamp_ns = detail::timestamp<cudf::duration_ns>;
 
 static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
+static_assert(sizeof(timestamp_h) == sizeof(typename timestamp_h::rep), "");
+static_assert(sizeof(timestamp_m) == sizeof(typename timestamp_m::rep), "");
 static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep), "");
 static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep), "");
 static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep), "");
@@ -76,30 +83,3 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 
 /** @} */  // end of group
 }  // namespace cudf
-
-namespace std {
-/**
- * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
- *
- * Pass through to return the limits of the underlying numeric representation.
- */
-#define TIMESTAMP_LIMITS(TypeName)                                                                \
-  template <>                                                                                     \
-  struct numeric_limits<TypeName> {                                                               \
-    static constexpr TypeName max() noexcept { return TypeName::max(); }                          \
-    static constexpr TypeName lowest() noexcept                                                   \
-    {                                                                                             \
-      return TypeName{TypeName::duration{std::numeric_limits<typename TypeName::rep>::lowest()}}; \
-    }                                                                                             \
-    static constexpr TypeName min() noexcept { return TypeName::min(); }                          \
-  }
-
-TIMESTAMP_LIMITS(cudf::timestamp_D);
-TIMESTAMP_LIMITS(cudf::timestamp_s);
-TIMESTAMP_LIMITS(cudf::timestamp_ms);
-TIMESTAMP_LIMITS(cudf::timestamp_us);
-TIMESTAMP_LIMITS(cudf::timestamp_ns);
-
-#undef TIMESTAMP_LIMITS
-
-}  // namespace std

@@ -21,7 +21,7 @@ cuDF provides a pandas-like API that will be familiar to data engineers & data s
 
 For example, the following snippet downloads a CSV, then uses the GPU to parse it into rows and columns and run calculations:
 ```python
-import cudf, io, requests
+import cudf, requests
 from io import StringIO
 
 url = "https://github.com/plotly/datasets/raw/master/tips.csv"
@@ -65,32 +65,21 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-For `cudf version == 21.06` :
 ```bash
-# for CUDA 11.0
-conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.06 python=3.7 cudatoolkit=11.0
-
-# or, for CUDA 11.2
-conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.06 python=3.7 cudatoolkit=11.2
-
+# for CUDA 11.5
+conda install -c rapidsai -c conda-forge -c nvidia \
+    cudf=22.10 python=3.9 cudatoolkit=11.5
+# for CUDA 11.2
+conda install -c rapidsai -c conda-forge -c nvidia \
+    cudf=22.10 python=3.9 cudatoolkit=11.2
 ```
 
-For the nightly version of `cudf` :
-```bash
-# for CUDA 11.0
-conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.7 cudatoolkit=11.0
+We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
+of our latest development branch.
 
-# or, for CUDA 11.2
-conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.7 cudatoolkit=11.2
-```
+Note: cuDF is supported only on Linux, and with Python versions 3.8 and later.
 
-Note: cuDF is supported only on Linux, and with Python versions 3.7 and later.
-
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
 
 ## Build/Install from Source
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).

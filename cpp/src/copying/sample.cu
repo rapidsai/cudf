@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,11 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/shuffle.h>
@@ -70,8 +72,9 @@ std::unique_ptr<table> sample(table_view const& input,
                          gather_map_mutable_view.begin<size_type>(),
                          thrust::default_random_engine(seed));
 
-    auto gather_map_view =
-      (n == num_rows) ? gather_map->view() : cudf::slice(gather_map->view(), {0, n})[0];
+    auto gather_map_view = (n == num_rows)
+                             ? gather_map->view()
+                             : cudf::detail::slice(gather_map->view(), {0, n}, stream)[0];
     return detail::gather(input,
                           gather_map_view.begin<size_type>(),
                           gather_map_view.end<size_type>(),
@@ -90,7 +93,6 @@ std::unique_ptr<table> sample(table_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
-  return detail::sample(input, n, replacement, seed, rmm::cuda_stream_default, mr);
+  return detail::sample(input, n, replacement, seed, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

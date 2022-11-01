@@ -1,10 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
 *** Borrowed from streamz.dataframe.tests | License at thirdparty/LICENSE ***
 """
-from __future__ import division, print_function
 
 import json
 import operator
@@ -503,6 +502,10 @@ def test_cumulative_aggregations(op, getter, stream):
     assert_eq(cudf.concat(L), expected)
 
 
+@pytest.mark.xfail(
+    reason="IPyWidgets 8.0 broke streamz 0.6.4. "
+    "We should remove this xfail when this is fixed in streamz."
+)
 def test_display(stream):
     pytest.importorskip("ipywidgets")
     pytest.importorskip("IPython")

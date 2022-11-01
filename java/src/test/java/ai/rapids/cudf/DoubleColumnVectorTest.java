@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,34 +41,51 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testArrayAllocation() {
-    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
-      assertFalse(doubleColumnVector.hasNulls());
-      assertEqualsWithinPercentage(doubleColumnVector.getDouble(0), 2.1, 0.01);
-      assertEqualsWithinPercentage(doubleColumnVector.getDouble(1), 3.02, 0.01);
-      assertEqualsWithinPercentage(doubleColumnVector.getDouble(2), 5.003, 0.001);
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEqualsWithinPercentage(cv.getDouble(0), 2.1, 0.01);
+      assertEqualsWithinPercentage(cv.getDouble(1), 3.02, 0.01);
+      assertEqualsWithinPercentage(cv.getDouble(2), 5.003, 0.001);
+    };
+    try (HostColumnVector dcv = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
+    }
+    try (HostColumnVector dcv = ColumnBuilderHelper.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
     }
   }
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
-      assertThrows(AssertionError.class, () -> doubleColumnVector.getDouble(3));
-      assertFalse(doubleColumnVector.hasNulls());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertThrows(AssertionError.class, () -> cv.getDouble(3));
+      assertFalse(cv.hasNulls());
+    };
+    try (HostColumnVector dcv = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
+    }
+    try (HostColumnVector dcv = ColumnBuilderHelper.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
     }
   }
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
-      assertFalse(doubleColumnVector.hasNulls());
-      assertThrows(AssertionError.class, () -> doubleColumnVector.getDouble(-1));
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertThrows(AssertionError.class, () -> cv.getDouble(-1));
+    };
+    try (HostColumnVector dcv = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
+    }
+    try (HostColumnVector dcv = ColumnBuilderHelper.fromDoubles(2.1, 3.02, 5.003)) {
+      verify.accept(dcv);
     }
   }
 
   @Test
   public void testAddingNullValues() {
-    try (HostColumnVector cv =
-             HostColumnVector.fromBoxedDoubles(2.0, 3.0, 4.0, 5.0, 6.0, 7.0, null, null)) {
+    Consumer<HostColumnVector> verify = (cv) -> {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -75,6 +93,14 @@ public class DoubleColumnVectorTest extends CudfTestBase {
       }
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector dcv =
+             HostColumnVector.fromBoxedDoubles(2.0, 3.0, 4.0, 5.0, 6.0, 7.0, null, null)) {
+      verify.accept(dcv);
+    }
+    try (HostColumnVector dcv = ColumnBuilderHelper.fromBoxedDoubles(
+        2.0, 3.0, 4.0, 5.0, 6.0, 7.0, null, null)) {
+      verify.accept(dcv);
     }
   }
 

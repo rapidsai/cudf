@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from pickle import dumps
 
 import cachetools
@@ -11,27 +12,6 @@ import cudf
 #
 # Misc kernels
 #
-
-
-@cuda.jit
-def gpu_diff(in_col, out_col, out_mask, N):
-    """Calculate the difference between values at positions i and i - N in an
-    array and store the output in a new array.
-    """
-    i = cuda.grid(1)
-
-    if N > 0:
-        if i < in_col.size:
-            out_col[i] = in_col[i] - in_col[i - N]
-            out_mask[i] = True
-        if i < N:
-            out_mask[i] = False
-    else:
-        if i <= (in_col.size + N):
-            out_col[i] = in_col[i] - in_col[i - N]
-            out_mask[i] = True
-        if i >= (in_col.size + N) and i < in_col.size:
-            out_mask[i] = False
 
 
 # Find segments
@@ -210,6 +190,24 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
+def make_cache_key(udf, sig):
+    """
+    Build a cache key for a user defined function. Used to avoid
+    recompiling the same function for the same set of types
+    """
+    codebytes = udf.__code__.co_code
+    constants = udf.__code__.co_consts
+    names = udf.__code__.co_names
+
+    if udf.__closure__ is not None:
+        cvars = tuple(x.cell_contents for x in udf.__closure__)
+        cvarbytes = dumps(cvars)
+    else:
+        cvarbytes = b""
+
+    return names, constants, codebytes, cvarbytes, sig
+
+
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`
 
@@ -222,7 +220,7 @@ def compile_udf(udf, type_signature):
     compiled at runtime and launched.
 
     Parameters
-    --------
+    ----------
     udf:
       a python callable function
 
@@ -232,7 +230,7 @@ def compile_udf(udf, type_signature):
       numpy types with `numba.numpy_support.from_dtype(...)`.
 
     Returns
-    --------
+    -------
     ptx_code:
       The compiled CUDA PTX
 
@@ -240,17 +238,9 @@ def compile_udf(udf, type_signature):
       An numpy type
 
     """
+    import cudf.core.udf
 
-    # Check if we've already compiled a similar (but possibly distinct)
-    # function before
-    codebytes = udf.__code__.co_code
-    if udf.__closure__ is not None:
-        cvars = tuple([x.cell_contents for x in udf.__closure__])
-        cvarbytes = dumps(cvars)
-    else:
-        cvarbytes = b""
-
-    key = (type_signature, codebytes, cvarbytes)
+    key = make_cache_key(udf, type_signature)
     res = _udf_code_cache.get(key)
     if res:
         return res
@@ -260,7 +250,7 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    if not isinstance(return_type, cudf.core.udf.typing.MaskedType):
+    if not isinstance(return_type, cudf.core.udf.masked_typing.MaskedType):
         output_type = numpy_support.as_dtype(return_type).type
     else:
         output_type = return_type

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -26,10 +26,15 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace {
@@ -258,7 +263,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
     reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
   auto partition_offset_global = partition_offset_shared + num_partitions + 1;
 
-  typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
+  using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
@@ -432,15 +437,13 @@ struct copy_block_partitions_dispatcher {
                                          grid_size,
                                          stream);
 
-    // Use gather instead for non-fixed width types
-    return type_dispatcher(input.type(),
-                           detail::column_gatherer{},
-                           input,
-                           gather_map.begin(),
-                           gather_map.end(),
-                           false,
-                           stream,
-                           mr);
+    auto gather_table = cudf::detail::gather(cudf::table_view({input}),
+                                             gather_map,
+                                             out_of_bounds_policy::DONT_CHECK,
+                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             stream,
+                                             mr);
+    return std::move(gather_table->release().front());
   }
 };
 
@@ -487,7 +490,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows, stream);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input, seed);
+  auto const hasher       = row_hasher<hash_function, nullate::DYNAMIC>(
+    nullate::DYNAMIC{hash_has_nulls}, *device_input, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -591,8 +595,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::make_pair(std::make_unique<table>(std::move(output_cols)),
-                          std::move(partition_offsets));
+    return std::pair(std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets));
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number
@@ -606,10 +609,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Use the resulting scatter map to materialize the output
     auto output = detail::scatter(
-      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
+      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::make_pair(std::move(output), std::move(partition_offsets));
+    return std::pair(std::move(output), std::move(partition_offsets));
   }
 }
 
@@ -694,9 +697,9 @@ struct dispatch_map_type {
 
     // Scatter the rows into their partitions
     auto scattered =
-      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, stream, mr);
+      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, stream, mr);
 
-    return std::make_pair(std::move(scattered), std::move(partition_offsets));
+    return std::pair(std::move(scattered), std::move(partition_offsets));
   }
 
   template <typename MapType, typename... Args>
@@ -724,7 +727,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::make_pair(empty_like(input), std::vector<size_type>{});
+    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
   if (has_nulls(table_to_hash)) {
@@ -749,7 +752,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
-    return std::make_pair(empty_like(t), std::vector<size_type>{});
+    // The output offsets vector must have size `num_partitions + 1` as per documentation.
+    return std::pair(empty_like(t), std::vector<size_type>(num_partitions + 1, 0));
   }
 
   return cudf::type_dispatcher(
@@ -775,10 +779,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      return detail::local::hash_partition<IdentityHash>(
+      return detail::local::hash_partition<detail::IdentityHash>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      return detail::local::hash_partition<MurmurHash3_32>(
+      return detail::local::hash_partition<detail::MurmurHash3_32>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
@@ -792,7 +796,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, rmm::cuda_stream_default, mr);
+  return detail::partition(t, partition_map, num_partitions, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

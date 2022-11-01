@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,19 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/default_stream.hpp>
+
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
+
+/**
+ * @brief Get the current default stream
+ *
+ * @return The current default stream.
+ */
+rmm::cuda_stream_view const get_default_stream();
 
 /**
  * @brief Check if per-thread default stream is enabled.

@@ -44,7 +44,7 @@ namespace detail {
  * and/or obtain its eventual return value.
  */
 class thread_pool {
-  typedef std::uint_fast32_t ui32;
+  using ui32 = int;
 
  public:
   /**
@@ -79,7 +79,7 @@ class thread_pool {
    *
    * @return The number of queued tasks.
    */
-  size_t get_tasks_queued() const
+  [[nodiscard]] size_t get_tasks_queued() const
   {
     const std::scoped_lock lock(queue_mutex);
     return tasks.size();
@@ -90,7 +90,7 @@ class thread_pool {
    *
    * @return The number of running tasks.
    */
-  ui32 get_tasks_running() const { return tasks_total - (ui32)get_tasks_queued(); }
+  [[nodiscard]] ui32 get_tasks_running() const { return tasks_total - (ui32)get_tasks_queued(); }
 
   /**
    * @brief Get the total number of unfinished tasks - either still in the queue, or running in a
@@ -98,14 +98,14 @@ class thread_pool {
    *
    * @return The total number of tasks.
    */
-  ui32 get_tasks_total() const { return tasks_total; }
+  [[nodiscard]] ui32 get_tasks_total() const { return tasks_total; }
 
   /**
    * @brief Get the number of threads in the pool.
    *
    * @return The number of threads.
    */
-  ui32 get_thread_count() const { return thread_count; }
+  [[nodiscard]] ui32 get_thread_count() const { return thread_count; }
 
   /**
    * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the
@@ -208,35 +208,6 @@ class thread_pool {
   }
 
   /**
-   * @brief Submit a function with zero or more arguments and no return value into the task queue,
-   * and get an std::future<bool> that will be set to true upon completion of the task.
-   *
-   * @tparam F The type of the function.
-   * @tparam A The types of the zero or more arguments to pass to the function.
-   * @param task The function to submit.
-   * @param args The zero or more arguments to pass to the function.
-   * @return A future to be used later to check if the function has finished its execution.
-   */
-  template <typename F,
-            typename... A,
-            typename = std::enable_if_t<
-              std::is_void_v<std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>>>
-  std::future<bool> submit(const F& task, const A&... args)
-  {
-    std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
-    std::future<bool> future = promise->get_future();
-    push_task([task, args..., promise] {
-      try {
-        task(args...);
-        promise->set_value(true);
-      } catch (...) {
-        promise->set_exception(std::current_exception());
-      };
-    });
-    return future;
-  }
-
-  /**
    * @brief Submit a function with zero or more arguments and a return value into the task queue,
    * and get a future for its eventual returned value.
    *
@@ -250,15 +221,19 @@ class thread_pool {
    */
   template <typename F,
             typename... A,
-            typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>,
-            typename   = std::enable_if_t<!std::is_void_v<R>>>
+            typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
   std::future<R> submit(const F& task, const A&... args)
   {
     std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
     std::future<R> future = promise->get_future();
     push_task([task, args..., promise] {
       try {
-        promise->set_value(task(args...));
+        if constexpr (std::is_void_v<R>) {
+          task(args...);
+          promise->set_value();
+        } else {
+          promise->set_value(task(args...));
+        }
       } catch (...) {
         promise->set_exception(std::current_exception());
       };

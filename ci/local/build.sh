@@ -1,9 +1,10 @@
 #!/bin/bash
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 GIT_DESCRIBE_TAG=`git describe --tags`
 MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
-DOCKER_IMAGE="gpuci/rapidsai:${MINOR_VERSION}-cuda11.0-devel-ubuntu18.04-py3.7"
+DOCKER_IMAGE="gpuci/rapidsai:${MINOR_VERSION}-cuda11.5-devel-ubuntu20.04-py3.8"
 REPO_PATH=${PWD}
 RAPIDS_DIR_IN_CONTAINER="/rapids"
 CPP_BUILD_DIR="cpp/build"

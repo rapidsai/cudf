@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,21 +31,20 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   cudf::data_type type;
-  template <typename T, typename std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
   constexpr int operator()() const
   {
     CUDF_FAIL("Invalid, non fixed-width element type.");
     return 0;
   }
 
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && not is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_fixed_width<T>() && not is_fixed_point<T>()>* = nullptr>
   constexpr int operator()() const noexcept
   {
     return sizeof(T);
   }
 
-  template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   constexpr int operator()() const noexcept
   {
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
@@ -67,6 +66,9 @@ std::unique_ptr<column> make_empty_column(data_type type)
                "make_empty_column is invalid to call on nested types");
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
+
+// Empty column of specified type id
+std::unique_ptr<column> make_empty_column(type_id id) { return make_empty_column(data_type{id}); }
 
 // Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(data_type type,
@@ -155,7 +157,7 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
   else if (is_duration   (type)) return make_duration_column   (type, size, state, stream, mr);
   else if (is_fixed_point(type)) return make_fixed_point_column(type, size, state, stream, mr);
   else                           return make_numeric_column    (type, size, state, stream, mr);
-  /// clang-format on
+  // clang-format on
 }
 
 std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
@@ -163,8 +165,8 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  if (size == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
-  CUDF_EXPECTS(s.is_valid(), "cannot create a dictionary with a null key");
+  if (size == 0) return make_empty_column(type_id::DICTIONARY32);
+  CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
     make_column_from_scalar(s, 1, stream, mr),
     make_column_from_scalar(numeric_scalar<uint32_t>(0), size, stream, mr),

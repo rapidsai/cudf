@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 import cudf
 
-ParentType = Union["cudf.Series", "cudf.BaseIndex"]
+ParentType = Union["cudf.Series", "cudf.core.index.GenericIndex"]
 
 
 class ColumnMethods:
@@ -40,7 +40,10 @@ class ColumnMethods:
 
     @overload
     def _return_or_inplace(
-        self, new_col, expand: bool = False, retain_index: bool = True,
+        self,
+        new_col,
+        expand: bool = False,
+        retain_index: bool = True,
     ) -> ParentType:
         ...
 
@@ -63,29 +66,25 @@ class ColumnMethods:
         """
         if inplace:
             self._parent._mimic_inplace(
-                self._parent.__class__._from_table(
-                    cudf._lib.table.Table({self._parent.name: new_col})
+                self._parent.__class__._from_data(
+                    {self._parent.name: new_col}
                 ),
                 inplace=True,
             )
             return None
         else:
-            if expand or isinstance(
-                self._parent, (cudf.DataFrame, cudf.MultiIndex)
-            ):
+            if expand:
                 # This branch indicates the passed as new_col
                 # is a Table
                 table = new_col
 
                 if isinstance(self._parent, cudf.BaseIndex):
-                    idx = self._parent._constructor_expanddim._from_table(
-                        table=table
-                    )
+                    idx = self._parent._constructor_expanddim._from_data(table)
                     idx.names = None
                     return idx
                 else:
-                    return self._parent._constructor_expanddim(
-                        data=table._data, index=self._parent.index
+                    return self._parent._constructor_expanddim._from_data(
+                        data=table, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
                 if retain_index:

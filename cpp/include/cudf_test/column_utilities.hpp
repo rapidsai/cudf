@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -37,6 +39,8 @@ enum class debug_output_level {
   ALL_ERRORS,       // print all errors
   QUIET             // no debug output
 };
+
+constexpr size_type default_ulp = 4;
 
 /**
  * @brief Verifies the property equality of two columns.
@@ -93,12 +97,22 @@ bool expect_columns_equal(cudf::column_view const& lhs,
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
+ * @param fp_ulps # of ulps of tolerance to allow when comparing
+ * floating point values
  *
  * @returns True if the columns (and their properties) are equivalent, false otherwise
  */
 bool expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               debug_output_level verbosity = debug_output_level::FIRST_ERROR);
+                               debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+                               size_type fp_ulps            = cudf::test::default_ulp);
+
+/**
+ * @brief Verifies the given column is empty
+ *
+ * @param col The column to check
+ */
+void expect_column_empty(cudf::column_view const& col);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -173,11 +187,12 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return {host_data, bitmask_to_host(c)};
 }
 
@@ -192,7 +207,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   using namespace numeric;
@@ -200,7 +215,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
-  CUDA_TRY(cudaMemcpy(
+  CUDF_CUDA_TRY(cudaMemcpy(
     host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
@@ -226,11 +241,11 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   auto const scv     = strings_column_view(c);
   auto const h_chars = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
   auto const h_offsets = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;

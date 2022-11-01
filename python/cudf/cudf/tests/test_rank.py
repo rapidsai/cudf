@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -58,19 +58,14 @@ def test_rank_all_arguments(
         expect = pdf["str"].rank(**kwargs)
         got = gdf["str"].rank(**kwargs)
         assert expect.empty == got.empty
-
-    # TODO: https://github.com/pandas-dev/pandas/issues/32593
-    # Dataframe (bug in pandas)
-    if (
-        na_option == "top"
-        and method == "first"
-        and not dtype == "O"
-        and ascending
-    ):
-        assert_eq(gdf.rank(**kwargs), pdf.rank(**kwargs))
+        expected = pdf.select_dtypes(include=np.number)
     else:
-        with pytest.raises(AssertionError, match="values are different"):
-            assert_eq(gdf.rank(**kwargs), pdf.rank(**kwargs))
+        expected = pdf.copy(deep=True)
+
+    actual = gdf.rank(**kwargs)
+    expected = pdf.rank(**kwargs)
+
+    assert_eq(expected, actual)
 
 
 def test_rank_error_arguments(pdf):
@@ -129,16 +124,15 @@ sort_group_args = [
     np.full((3,), np.inf),
     np.full((3,), -np.inf),
 ]
-sort_dtype_args = [np.int32, np.float32, np.float64]
-# TODO: np.int64, disabled because of bug
-# https://github.com/pandas-dev/pandas/issues/32859
+sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
 
 
 @pytest.mark.parametrize(
     "elem,dtype",
     list(
         product(
-            combinations_with_replacement(sort_group_args, 4), sort_dtype_args,
+            combinations_with_replacement(sort_group_args, 4),
+            sort_dtype_args,
         )
     ),
 )

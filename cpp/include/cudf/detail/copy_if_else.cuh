@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/copy_if_else.cuh>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_scalar.hpp>
 
-#include <cub/cub.cuh>
+#include <thrust/iterator/iterator_traits.h>
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {
@@ -40,7 +36,7 @@ template <size_type block_size,
           typename LeftIter,
           typename RightIter,
           typename Filter,
-          bool has_validity>
+          bool has_nulls>
 __launch_bounds__(block_size) __global__
   void copy_if_else_kernel(LeftIter lhs,
                            RightIter rhs,
@@ -55,7 +51,7 @@ __launch_bounds__(block_size) __global__
   // begin/end indices for the column data
   size_type begin = 0;
   size_type end   = out.size();
-  // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
+  // warp indices.  since 1 warp == 32 threads == sizeof(bitmask_type) * 8,
   // each warp will process one (32 bit) of the validity mask via
   // __ballot_sync()
   size_type warp_begin = cudf::word_index(begin);
@@ -71,23 +67,14 @@ __launch_bounds__(block_size) __global__
   size_type warp_cur = warp_begin + warp_id;
   size_type index    = tid;
   while (warp_cur <= warp_end) {
-    bool in_range = (index >= begin && index < end);
-
-    bool valid = true;
-    if (has_validity) {
-      valid = in_range && (filter(index) ? thrust::get<1>(lhs[index]) : thrust::get<1>(rhs[index]));
-    }
-
-    // do the copy if-else
-    if (in_range) {
-      out.element<T>(index) = filter(index) ? static_cast<T>(thrust::get<0>(lhs[index]))
-                                            : static_cast<T>(thrust::get<0>(rhs[index]));
-    }
+    auto const opt_value =
+      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
+    if (opt_value) { out.element<T>(index) = static_cast<T>(*opt_value); }
 
     // update validity
-    if (has_validity) {
+    if (has_nulls) {
       // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
+      int warp_mask = __ballot_sync(0xFFFF'FFFFu, opt_value.has_value());
       // only one guy in the warp needs to update the mask and count
       if (lane_id == 0) {
         out.set_mask_word(warp_cur, warp_mask);
@@ -100,7 +87,7 @@ __launch_bounds__(block_size) __global__
     index += block_size * gridDim.x;
   }
 
-  if (has_validity) {
+  if (has_nulls) {
     // sum all null counts across all warps
     size_type block_valid_count =
       single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
@@ -152,8 +139,8 @@ __launch_bounds__(block_size) __global__
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
  * @param out_type    `cudf::data_type` of the returned column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
  *                    by `filter[i]`
  */
@@ -168,8 +155,8 @@ std::unique_ptr<column> copy_if_else(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  using Element =
-    typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
+  // This is the type of the thrust::optional element in the passed iterators
+  using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
@@ -179,7 +166,7 @@ std::unique_ptr<column> copy_if_else(
   std::unique_ptr<column> out = make_fixed_width_column(
     output_type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
 
-  auto out_v = mutable_column_device_view::create(*out);
+  auto out_v = mutable_column_device_view::create(*out, stream);
 
   // if we have validity in the output
   if (nullable) {

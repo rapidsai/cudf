@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -20,6 +20,7 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         MOD "cudf::binary_operator::MOD"
         PYMOD "cudf::binary_operator::PYMOD"
         POW "cudf::binary_operator::POW"
+        INT_POW "cudf::binary_operator::INT_POW"
         EQUAL "cudf::binary_operator::EQUAL"
         NOT_EQUAL "cudf::binary_operator::NOT_EQUAL"
         LESS "cudf::binary_operator::LESS"
@@ -59,5 +60,29 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& lhs,
         const column_view& rhs,
         const string& op,
+        data_type output_type
+    ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const column_view& lhs,
+        const column_view& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const column_view& lhs,
+        const scalar& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const scalar& lhs,
+        const column_view& rhs,
+        binary_operator op,
         data_type output_type
     ) except +

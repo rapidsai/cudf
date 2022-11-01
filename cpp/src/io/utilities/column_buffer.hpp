@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/pair.h>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -40,22 +42,20 @@ namespace detail {
  *
  * @param type The intended data type to populate
  * @param size The number of elements to be represented by the mask
- * @param state The desired state of the mask
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */
-inline rmm::device_buffer create_data(
-  data_type type,
-  size_type size,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+inline rmm::device_buffer create_data(data_type type,
+                                      size_type size,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
 
   return data;
 }
@@ -76,9 +76,9 @@ struct column_buffer {
   // construct with a known size. allocates memory
   column_buffer(data_type _type,
                 size_type _size,
-                bool _is_nullable                   = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                bool _is_nullable,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr)
     : type(_type), is_nullable(_is_nullable)
   {
     create(_size, stream, mr);
@@ -94,9 +94,7 @@ struct column_buffer {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size,
-              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 
   auto data() { return _strings ? _strings->data() : _data.data(); }
   auto data_size() const { return _strings ? _strings->size() : _data.size(); }
@@ -129,16 +127,17 @@ struct column_buffer {
  * @throws std::bad_alloc if device memory allocation fails
  *
  * @param buffer Column buffer descriptors
+ * @param schema_info Schema information for the column to write optionally.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-std::unique_ptr<column> make_column(
-  column_buffer& buffer,
-  column_name_info* schema_info       = nullptr,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> make_column(column_buffer& buffer,
+                                    column_name_info* schema_info,
+                                    std::optional<reader_column_schema> const& schema,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Creates an equivalent empty column from an existing set of device memory buffers.
@@ -149,16 +148,16 @@ std::unique_ptr<column> make_column(
  * @throws std::bad_alloc if device memory allocation fails
  *
  * @param buffer Column buffer descriptors
+ * @param schema_info Schema information for the column to write optionally.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
-std::unique_ptr<column> empty_like(
-  column_buffer& buffer,
-  column_name_info* schema_info       = nullptr,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> empty_like(column_buffer& buffer,
+                                   column_name_info* schema_info,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace io

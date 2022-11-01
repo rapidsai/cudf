@@ -19,7 +19,7 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /** A reference to a column in an input table. */
-public final class ColumnReference extends AstNode {
+public final class ColumnReference extends AstExpression {
   private final int columnIndex;
   private final TableReference tableSource;
 
@@ -37,14 +37,14 @@ public final class ColumnReference extends AstNode {
   @Override
   int getSerializedSize() {
     // node type + table ref + column index
-    return NodeType.COLUMN_REFERENCE.getSerializedSize() +
+    return ExpressionType.COLUMN_REFERENCE.getSerializedSize() +
         tableSource.getSerializedSize() +
         Integer.BYTES;
   }
 
   @Override
   void serialize(ByteBuffer bb) {
-    NodeType.COLUMN_REFERENCE.serialize(bb);
+    ExpressionType.COLUMN_REFERENCE.serialize(bb);
     tableSource.serialize(bb);
     bb.putInt(columnIndex);
   }

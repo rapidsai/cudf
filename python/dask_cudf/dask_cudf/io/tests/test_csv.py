@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import gzip
 import os
 import warnings
@@ -12,6 +14,22 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+
+
+@pytest.mark.skipif(
+    not dask_cudf.core.DASK_BACKEND_SUPPORT,
+    reason="No backend-dispatch support",
+)
+def test_csv_roundtrip_backend_dispatch(tmp_path):
+    # Test ddf.read_csv cudf-backend dispatch
+    df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    csv_path = str(tmp_path / "data-*.csv")
+    ddf.to_csv(csv_path, index=False)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf2 = dd.read_csv(csv_path)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
 def test_csv_roundtrip(tmp_path):
@@ -134,3 +152,20 @@ def test_read_csv_chunksize_none(tmp_path, compression, size):
     df.to_csv(path, index=False, compression=compression)
     df2 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
     dd.assert_eq(df, df2)
+
+
+@pytest.mark.parametrize("dtype", [{"b": str, "c": int}, None])
+def test_csv_reader_usecols(tmp_path, dtype):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4] * 100,
+            "b": ["a", "b", "c", "d"] * 100,
+            "c": [10, 11, 12, 13] * 100,
+        }
+    )
+    csv_path = str(tmp_path / "usecols_data.csv")
+    df.to_csv(csv_path, index=False)
+    ddf = dask_cudf.from_cudf(df[["b", "c"]], npartitions=5)
+    ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"], dtype=dtype)
+
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)

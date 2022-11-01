@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
 #include <jni.h>
 
 #include <cudf/utilities/error.hpp>
+#include <rmm/detail/error.hpp>
 
 namespace cudf {
 namespace jni {
@@ -28,6 +30,7 @@ namespace jni {
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const *CUDA_FATAL_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
@@ -65,6 +68,32 @@ inline void check_java_exception(JNIEnv *const env) {
     // might fail.
     throw jni_exception("JNI Exception...");
   }
+}
+
+/**
+ * @brief Helper to convert a pointer to a jlong.
+ *
+ * This is useful when, for instance, converting a cudf::column pointer
+ * to a jlong, for use in JNI.
+ */
+template <typename T> jlong ptr_as_jlong(T *ptr) {
+  return reinterpret_cast<jlong>(ptr);
+}
+
+/**
+ * @brief Helper to release the data held by a unique_ptr, and return
+ * the pointer as a jlong.
+ */
+template <typename T> jlong release_as_jlong(std::unique_ptr<T> &&ptr) {
+  return ptr_as_jlong(ptr.release());
+}
+
+/**
+ * @brief Helper to release the data held by a unique_ptr, and return
+ * the pointer as a jlong.
+ */
+template <typename T> jlong release_as_jlong(std::unique_ptr<T> &ptr) {
+  return release_as_jlong(std::move(ptr));
 }
 
 class native_jdoubleArray_accessor {
@@ -256,6 +285,19 @@ public:
   J_ARRAY_TYPE get_jArray() { return orig; }
 
   /**
+   * @brief Conversion to std::vector
+   *
+   * @tparam target_t Target data type
+   * @return std::vector<target_t> Vector with the copied contents
+   */
+  template <typename target_t = N_TYPE> std::vector<target_t> to_vector() const {
+    std::vector<target_t> ret;
+    ret.reserve(size());
+    std::copy(begin(), end(), std::back_inserter(ret));
+    return ret;
+  }
+
+  /**
    * @brief if data has been written back into this array, don't commit
    * it.
    */
@@ -276,11 +318,34 @@ public:
   ~native_jArray() { commit(); }
 };
 
-typedef native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor> native_jdoubleArray;
-typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
-typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
-typedef native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor> native_jbyteArray;
-typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> native_jbooleanArray;
+using native_jdoubleArray = native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor>;
+using native_jlongArray = native_jArray<jlong, jlongArray, native_jlongArray_accessor>;
+using native_jintArray = native_jArray<jint, jintArray, native_jintArray_accessor>;
+using native_jbyteArray = native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor>;
+
+/**
+ * @brief Specialization of native_jArray for jboolean
+ *
+ * This class adds special support for conversion to std::vector<X>, where the element
+ * value is chosen depending on the jboolean value.
+ */
+struct native_jbooleanArray
+    : native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> {
+  native_jbooleanArray(JNIEnv *const env, jbooleanArray orig)
+      : native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor>(env, orig) {}
+
+  native_jbooleanArray(native_jbooleanArray const &) = delete;
+  native_jbooleanArray &operator=(native_jbooleanArray const &) = delete;
+
+  template <typename target_t>
+  std::vector<target_t> transform_if_else(target_t const &if_true, target_t const &if_false) const {
+    std::vector<target_t> ret;
+    ret.reserve(size());
+    std::transform(begin(), end(), std::back_inserter(ret),
+                   [&](jboolean const &b) { return b ? if_true : if_false; });
+    return ret;
+  }
+};
 
 /**
  * @brief wrapper around native_jlongArray to make it take pointers instead.
@@ -327,13 +392,34 @@ public:
     return data()[index];
   }
 
-  T *const *data() const { return reinterpret_cast<T **>(wrapped.data()); }
+  T *const *data() const { return reinterpret_cast<T *const *>(wrapped.data()); }
 
   T **data() { return reinterpret_cast<T **>(wrapped.data()); }
+
+  T *const *begin() const { return data(); }
+  T *const *end() const { return data() + size(); }
 
   const jlongArray get_jArray() const { return wrapped.get_jArray(); }
 
   jlongArray get_jArray() { return wrapped.get_jArray(); }
+
+  void assert_no_nulls() const {
+    if (std::any_of(data(), data() + size(), [](T *const ptr) { return ptr == nullptr; })) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+  }
+
+  /**
+   * @brief Convert from `T*[]` to `vector<T>`.
+   */
+  std::vector<T> get_dereferenced() const {
+    assert_no_nulls();
+    auto ret = std::vector<T>{};
+    ret.reserve(size());
+    std::transform(data(), data() + size(), std::back_inserter(ret),
+                   [](T *const &p) { return *p; });
+    return ret;
+  }
 
   /**
    * @brief if data has been written back into this array, don't commit
@@ -652,12 +738,26 @@ public:
  * @brief create a cuda exception from a given cudaError_t
  */
 inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);
+  const char *ex_class_name;
+
+  // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
+  // call doesn't return with cudaSuccess.
+  cudaGetLastError();
+  auto const last = cudaGetLastError();
+  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
+  // between two calls.
+  if (status == last && last == cudaDeviceSynchronize()) {
+    ex_class_name = cudf::jni::CUDA_FATAL_ERROR_CLASS;
+  } else {
+    ex_class_name = cudf::jni::CUDA_ERROR_CLASS;
+  }
+
+  jclass ex_class = env->FindClass(ex_class_name);
   if (ex_class == NULL) {
     return NULL;
   }
   jmethodID ctor_id =
-      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V");
+      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;ILjava/lang/Throwable;)V");
   if (ctor_id == NULL) {
     return NULL;
   }
@@ -667,19 +767,20 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
     return NULL;
   }
 
-  jobject ret = env->NewObject(ex_class, ctor_id, msg, cause);
+  jint err_code = static_cast<jint>(status);
+
+  jobject ret = env->NewObject(ex_class, ctor_id, msg, err_code, cause);
   return (jthrowable)ret;
 }
 
 inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   if (cudaSuccess != cuda_status) {
-    // Clear the last error so it does not propagate.
-    cudaGetLastError();
     jthrowable jt = cuda_exception(env, cuda_status);
     if (jt != NULL) {
       env->Throw(jt);
-      throw jni_exception("CUDA ERROR");
     }
+    throw jni_exception(std::string("CUDA ERROR: code ") +
+                        std::to_string(static_cast<int>(cuda_status)));
   }
 }
 
@@ -705,18 +806,26 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
   }
 
-#define JNI_CUDA_TRY(env, ret_val, call)                                                           \
+// Throw a new exception only if one is not pending then always return with the specified value
+#define JNI_CHECK_CUDA_ERROR(env, class_name, e, ret_val)                                          \
   {                                                                                                \
-    cudaError_t internal_cuda_status = (call);                                                     \
-    if (cudaSuccess != internal_cuda_status) {                                                     \
-      /* Clear the last error so it does not propagate.*/                                          \
-      cudaGetLastError();                                                                          \
-      jthrowable jt = cudf::jni::cuda_exception(env, internal_cuda_status);                        \
-      if (jt != NULL) {                                                                            \
-        env->Throw(jt);                                                                            \
-      }                                                                                            \
+    if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
+    std::string n_msg = e.what() == nullptr ? "" : e.what();                                       \
+    jstring j_msg = env->NewStringUTF(n_msg.c_str());                                              \
+    jint e_code = static_cast<jint>(e.error_code());                                               \
+    jclass ex_class = env->FindClass(class_name);                                                  \
+    if (ex_class != NULL) {                                                                        \
+      jmethodID ctor_id = env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;I)V");          \
+      if (ctor_id != NULL) {                                                                       \
+        jobject cuda_error = env->NewObject(ex_class, ctor_id, j_msg, e_code);                     \
+        if (cuda_error != NULL) {                                                                  \
+          env->Throw((jthrowable)cuda_error);                                                      \
+        }                                                                                          \
+      }                                                                                            \
+    }                                                                                              \
+    return ret_val;                                                                                \
   }
 
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
@@ -741,16 +850,28 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
-  catch (const std::bad_alloc &e) {                                                                \
-    /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
-    if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
-      cudaGetLastError();                                                                          \
-    }                                                                                              \
+  catch (const rmm::out_of_memory &e) {                                                            \
     auto what =                                                                                    \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
+  catch (const cudf::fatal_cuda_error &e) {                                                        \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
+  }                                                                                                \
+  catch (const cudf::cuda_error &e) {                                                              \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
+  }                                                                                                \
   catch (const std::exception &e) {                                                                \
+    /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
+    /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */            \
+    /* occurred if the second call doesn't return with cudaSuccess. */                             \
+    cudaGetLastError();                                                                            \
+    auto const last = cudaFree(0);                                                                 \
+    if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
+      auto msg = e.what() == nullptr ? std::string{""} : e.what();                                 \
+      auto cuda_error = cudf::fatal_cuda_error{msg, last};                                         \
+      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, cuda_error, ret_val);           \
+    }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }

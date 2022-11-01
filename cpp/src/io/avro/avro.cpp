@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "avro.h"
-#include <string.h>
+#include "avro.hpp"
+
+#include <cstring>
 #include <unordered_map>
 
 namespace cudf {
@@ -55,11 +56,11 @@ std::string container::get_encoded()
 }
 
 /**
- * @Brief AVRO file metadata parser
+ * @brief AVRO file metadata parser
  *
- * @param md[out] parsed avro file metadata
- * @param max_num_rows[in] maximum number of rows
- * @param first_row[in] drop blocks below first_row
+ * @param[out] md parsed avro file metadata
+ * @param[in] max_num_rows maximum number of rows
+ * @param[in] first_row drop blocks below first_row
  *
  * @returns true if successful, false if error
  */
@@ -75,7 +76,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   sig4 |= get_raw<uint8_t>() << 24;
   if (sig4 != avro_magic) { return false; }
   for (;;) {
-    uint32_t num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
+    auto num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
     if (num_md_items == 0) { break; }
     for (uint32_t i = 0; i < num_md_items; i++) {
       auto const key   = get_encoded<std::string>();
@@ -103,8 +104,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
     if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
     if (object_count > first_row) {
-      uint32_t block_row = static_cast<uint32_t>(total_object_count);
-      max_block_size     = std::max(max_block_size, block_size);
+      auto block_row = static_cast<uint32_t>(total_object_count);
+      max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
         md->skip_rows = static_cast<uint32_t>(first_row);
@@ -188,10 +189,10 @@ enum {
 };
 
 /**
- * @Brief AVRO JSON schema parser
+ * @brief AVRO JSON schema parser
  *
- * @param schema[out] parsed avro schema
- * @param str[in] avro schema (JSON string)
+ * @param[out] schema parsed avro schema
+ * @param[in] json_str avro schema (JSON string)
  *
  * @returns true if successful, false if error
  */
@@ -354,7 +355,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 }
 
 /**
- * @Brief Parse a string
+ * @brief Parse a string
  *
  * @returns parsed string, consuming the terminating quote
  */

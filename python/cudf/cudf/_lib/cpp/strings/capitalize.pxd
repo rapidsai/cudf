@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
@@ -10,4 +10,7 @@ cdef extern from "cudf/strings/capitalize.hpp" namespace "cudf::strings" nogil:
         const column_view & strings) except +
 
     cdef unique_ptr[column] title(
+        const column_view & strings) except +
+
+    cdef unique_ptr[column] is_title(
         const column_view & strings) except +

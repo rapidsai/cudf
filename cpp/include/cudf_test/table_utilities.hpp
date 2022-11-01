@@ -39,7 +39,7 @@ void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
  */
 void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
 
-/*
+/**
  * @brief Verifies the equivalency of two tables.
  *
  * Treats null elements as equivalent.  Columns that have nullability but no nulls,

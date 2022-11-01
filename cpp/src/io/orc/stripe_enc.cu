@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,27 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_gpu.hpp"
+
+#include <cudf/io/orc_types.hpp>
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/config_utils.hpp>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <io/utilities/block_utils.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -107,6 +118,12 @@ static inline __device__ uint32_t zigzag(int32_t v)
 }
 static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint64_t zigzag(int64_t v)
+{
+  int64_t s = (v < 0) ? 1 : 0;
+  return ((v ^ -s) * 2) + s;
+}
+
+static inline __device__ __uint128_t zigzag(__int128_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
@@ -262,7 +279,6 @@ static __device__ uint32_t ByteRLE(
     }
   }
   if (!t) { s->strm_pos[cid] = static_cast<uint32_t>(dst - s->stream.data_ptrs[cid]); }
-  __syncthreads();
   return out_cnt;
 }
 
@@ -275,11 +291,11 @@ static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
 /**
  * @brief Encode a varint value, return the number of bytes written
  */
-static inline __device__ uint32_t StoreVarint(uint8_t* dst, uint64_t v)
+static inline __device__ uint32_t StoreVarint(uint8_t* dst, __uint128_t v)
 {
   uint32_t bytecnt = 0;
   for (;;) {
-    uint32_t c = (uint32_t)(v & 0x7f);
+    auto c = static_cast<uint32_t>(v & 0x7f);
     v >>= 7u;
     if (v == 0) {
       dst[bytecnt++] = c;
@@ -346,13 +362,8 @@ template <StreamIndexType cid,
           uint32_t inmask,
           int block_size,
           typename Storage>
-static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
-                                      const T* inbuf,
-                                      uint32_t inpos,
-                                      uint32_t numvals,
-                                      uint32_t flush,
-                                      int t,
-                                      Storage& temp_storage)
+static __device__ uint32_t IntegerRLE(
+  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -409,7 +420,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
         block_vmin = static_cast<uint64_t>(vmin);
-        if (sizeof(T) > 4) {
+        if constexpr (sizeof(T) > 4) {
           vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
           vrange_mode2 = vmax - vmin;
           mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
@@ -433,7 +444,9 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
           s->u.intrle.literal_w    = bytecnt;
         } else {
           uint32_t range, w;
-          if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4) {
+          // Mode 2 base value cannot be bigger than max int64_t, i.e. the first bit has to be 0
+          if (vmin <= std::numeric_limits<int64_t>::max() and mode1_w > mode2_w and
+              (literal_run - 1) * (mode1_w - mode2_w) > 4) {
             s->u.intrle.literal_mode = 2;
             w                        = mode2_w;
             range                    = (uint32_t)vrange_mode2;
@@ -612,11 +625,96 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
   }
 }
 
-/**
- * @brief Timestamp scale table (powers of 10)
- */
-static const __device__ __constant__ int32_t kTimeScale[10] = {
-  1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+template <int block_size, typename Storage>
+static __device__ void encode_null_mask(orcenc_state_s* s,
+                                        bitmask_type const* pushdown_mask,
+                                        Storage& scan_storage,
+                                        int t)
+{
+  if (s->stream.ids[CI_PRESENT] < 0) return;
+
+  auto const column = *s->chunk.column;
+  while (s->present_rows < s->chunk.null_mask_num_rows or s->numvals > 0) {
+    // Number of rows read so far
+    auto present_rows = s->present_rows;
+    // valid_buf capacity is byte per thread in block
+    auto const buf_available_bits = encode_block_size * 8 - s->numvals;
+    // Number of rows for the block to process in this iteration
+    auto const nrows = min(s->chunk.null_mask_num_rows - present_rows, buf_available_bits);
+    // Number of rows for this thread to process in this iteration
+    auto const t_nrows = min(max(static_cast<int32_t>(nrows) - t * 8, 0), 8);
+    auto const row     = s->chunk.null_mask_start_row + present_rows + t * 8;
+
+    auto get_mask_byte = [&](bitmask_type const* mask, size_type offset) -> uint8_t {
+      if (t_nrows == 0) return 0;
+      if (mask == nullptr) return 0xff;
+
+      auto const begin_offset = row + offset;
+      auto const end_offset   = min(begin_offset + 8, offset + column.size());
+      auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
+      return mask_word & 0xff;
+    };
+
+    uint8_t pd_byte     = (1 << t_nrows) - 1;
+    uint32_t pd_set_cnt = t_nrows;
+    uint32_t offset     = t_nrows != 0 ? t * 8 : nrows;
+    if (pushdown_mask != nullptr) {
+      pd_byte    = get_mask_byte(pushdown_mask, 0) & ((1 << t_nrows) - 1);
+      pd_set_cnt = __popc(pd_byte);
+      // Scan the number of valid bits to get dst offset for each thread
+      cub::BlockScan<uint32_t, block_size>(scan_storage).ExclusiveSum(pd_set_cnt, offset);
+    }
+
+    auto const mask_byte = get_mask_byte(column.null_mask(), column.offset());
+    auto dst_offset      = offset + s->nnz;
+    auto vbuf_bit_idx    = [](int row) {
+      // valid_buf is a circular buffer with validity of 8 rows in each element
+      return row % (encode_block_size * 8);
+    };
+    if (dst_offset % 8 == 0 and pd_set_cnt == 8) {
+      s->valid_buf[vbuf_bit_idx(dst_offset) / 8] = mask_byte;
+    } else {
+      for (auto bit_idx = 0; bit_idx < t_nrows; ++bit_idx) {
+        // skip bits where pushdown mask is not set
+        if (not(pd_byte & (1 << bit_idx))) continue;
+        if (mask_byte & (1 << bit_idx)) {
+          set_bit(reinterpret_cast<uint32_t*>(s->valid_buf), vbuf_bit_idx(dst_offset++));
+        } else {
+          clear_bit(reinterpret_cast<uint32_t*>(s->valid_buf), vbuf_bit_idx(dst_offset++));
+        }
+      }
+    }
+
+    __syncthreads();
+    if (t == block_size - 1) {
+      // Number of loaded rows, available for encode
+      s->numvals += offset + pd_set_cnt;
+      // Number of loaded rows (different from present_rows because of pushdown masks)
+      s->nnz += offset + pd_set_cnt;
+    }
+    present_rows += nrows;
+    if (!t) { s->present_rows = present_rows; }
+    __syncthreads();
+
+    // RLE encode the present stream
+    if (s->numvals > ((present_rows < s->chunk.null_mask_num_rows) ? 130 * 8 : 0)) {
+      auto const flush      = (present_rows < s->chunk.null_mask_num_rows) ? 0 : 7;
+      auto const nbytes_out = (s->numvals + flush) / 8;
+      auto const nrows_encoded =
+        ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
+
+      if (!t) {
+        // Number of rows encoded so far
+        s->present_out += nrows_encoded;
+        s->numvals -= min(s->numvals, nrows_encoded);
+      }
+      __syncthreads();
+    }
+  }
+
+  // reset shared state
+  if (t == 0) { s->nnz = 0; }
+}
 
 /**
  * @brief Encode column data
@@ -632,6 +730,7 @@ __global__ void __launch_bounds__(block_size)
 {
   __shared__ __align__(16) orcenc_state_s state_g;
   __shared__ union {
+    typename cub::BlockScan<uint32_t, block_size>::TempStorage scan_u32;
     typename cub::BlockReduce<int32_t, block_size>::TempStorage i32;
     typename cub::BlockReduce<int64_t, block_size>::TempStorage i64;
     typename cub::BlockReduce<uint32_t, block_size>::TempStorage u32;
@@ -643,135 +742,83 @@ __global__ void __launch_bounds__(block_size)
   uint32_t group_id       = blockIdx.y;
   int t                   = threadIdx.x;
   if (t == 0) {
-    s->chunk  = chunks[col_id][group_id];
-    s->stream = streams[col_id][group_id];
-  }
-  if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
-  __syncthreads();
-  if (!t) {
-    s->cur_row      = 0;
-    s->present_rows = 0;
-    s->present_out  = 0;
-    s->numvals      = 0;
-    s->numlengths   = 0;
-    s->nnz          = 0;
+    s->chunk                = chunks[col_id][group_id];
+    s->stream               = streams[col_id][group_id];
+    s->cur_row              = 0;
+    s->present_rows         = 0;
+    s->present_out          = 0;
+    s->numvals              = 0;
+    s->numlengths           = 0;
+    s->nnz                  = 0;
+    s->strm_pos[CI_DATA]    = 0;
+    s->strm_pos[CI_PRESENT] = 0;
+    s->strm_pos[CI_INDEX]   = 0;
     // Dictionary data is encoded in a separate kernel
-    if (s->chunk.encoding_kind == DICTIONARY_V2) {
-      s->strm_pos[CI_DATA2]      = s->stream.lengths[CI_DATA2];
-      s->strm_pos[CI_DICTIONARY] = s->stream.lengths[CI_DICTIONARY];
-    }
+    s->strm_pos[CI_DATA2] =
+      s->chunk.encoding_kind == DICTIONARY_V2 ? s->stream.lengths[CI_DATA2] : 0;
+    s->strm_pos[CI_DICTIONARY] =
+      s->chunk.encoding_kind == DICTIONARY_V2 ? s->stream.lengths[CI_DICTIONARY] : 0;
   }
-
-  auto validity_byte = [&] __device__(int row) -> uint8_t& {
-    // valid_buf is a circular buffer where validitiy of 8 rows is stored in each element
-    return s->valid_buf[(row / 8) % encode_block_size];
-  };
-
-  auto validity = [&] __device__(int row) -> uint32_t {
-    // Check if the specific bit is set in the validity buffer
-    return (validity_byte(row) >> (row % 8)) & 1;
-  };
-
   __syncthreads();
-  while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
-    // Encode valid map
-    if (s->present_rows < s->chunk.num_rows) {
-      uint32_t present_rows = s->present_rows;
-      uint32_t nrows =
-        min(s->chunk.num_rows - present_rows,
-            encode_block_size * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
-      uint32_t nrows_out;
-      if (t * 8 < nrows) {
-        auto const row_in_group = present_rows + t * 8;
-        auto const row          = s->chunk.start_row + row_in_group;
-        uint8_t valid           = 0;
-        if (row < s->chunk.leaf_column->size()) {
-          if (s->chunk.leaf_column->nullable()) {
-            size_type current_valid_offset = row + s->chunk.leaf_column->offset();
-            size_type next_valid_offset =
-              current_valid_offset + min(32, s->chunk.leaf_column->size());
 
-            bitmask_type mask = cudf::detail::get_mask_offset_word(
-              s->chunk.leaf_column->null_mask(), 0, current_valid_offset, next_valid_offset);
-            valid = 0xff & mask;
-          } else {
-            valid = 0xff;
-          }
-          if (row + 7 > s->chunk.leaf_column->size()) {
-            valid = valid & ((1 << (s->chunk.leaf_column->size() - row)) - 1);
-          }
-        }
-        validity_byte(row_in_group) = valid;
-      }
-      __syncthreads();
-      present_rows += nrows;
-      if (!t) { s->present_rows = present_rows; }
-      // RLE encode the present stream
-      nrows_out = present_rows - s->present_out;  // Should always be a multiple of 8 except at
-                                                  // the end of the last row group
-      if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0)) {
-        uint32_t present_out = s->present_out;
-        if (s->stream.ids[CI_PRESENT] >= 0) {
-          uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
-          nrows_out      = (nrows_out + flush) >> 3;
-          nrows_out =
-            ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out >> 3, nrows_out, flush, t) * 8;
-        }
-        __syncthreads();
-        if (!t) { s->present_out = min(present_out + nrows_out, present_rows); }
-      }
-      __syncthreads();
-    }
+  auto const pushdown_mask = [&]() -> cudf::bitmask_type const* {
+    auto const parent_index = s->chunk.column->parent_index;
+    if (!parent_index.has_value()) return nullptr;
+    return chunks[parent_index.value()][0].column->pushdown_mask;
+  }();
+
+  encode_null_mask<block_size>(s, pushdown_mask, temp_storage.scan_u32, t);
+  __syncthreads();
+
+  auto const column = *s->chunk.column;
+  while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
+    auto const length_stream_only = s->chunk.type_kind == LIST or s->chunk.type_kind == MAP;
+    if (not length_stream_only && s->stream.data_ptrs[CI_DATA] == nullptr) {
       // Pass-through
       __syncthreads();
       if (!t) {
-        s->cur_row           = s->present_rows;
-        s->strm_pos[CI_DATA] = s->cur_row * s->chunk.dtype_len;
+        s->cur_row           = s->chunk.num_rows;
+        s->strm_pos[CI_DATA] = s->chunk.num_rows * s->chunk.dtype_len;
       }
-      __syncthreads();
-    } else if (s->cur_row < s->present_rows) {
+    } else if (s->cur_row < s->chunk.num_rows) {
       uint32_t maxnumvals = (s->chunk.type_kind == BOOLEAN) ? 2048 : 1024;
       uint32_t nrows =
-        min(min(s->present_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
+        min(min(s->chunk.num_rows - s->cur_row, maxnumvals - max(s->numvals, s->numlengths)),
             encode_block_size);
-      auto const row_in_group = s->cur_row + t;
-      uint32_t const valid    = (t < nrows) ? validity(row_in_group) : 0;
-      s->buf.u32[t]           = valid;
+      auto const row = s->chunk.start_row + s->cur_row + t;
+
+      auto const is_value_valid = [&]() {
+        if (t >= nrows) return false;
+        return bit_value_or(pushdown_mask, column.offset() + row, true) and
+               bit_value_or(column.null_mask(), column.offset() + row, true);
+      }();
+      s->buf.u32[t] = is_value_valid ? 1u : 0u;
 
       // TODO: Could use a faster reduction relying on _popc() for the initial phase
       lengths_to_positions(s->buf.u32, encode_block_size, t);
       __syncthreads();
-      auto const row = s->chunk.start_row + row_in_group;
-      if (valid) {
+      if (is_value_valid) {
         int nz_idx = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
         switch (s->chunk.type_kind) {
           case INT:
           case DATE:
-          case FLOAT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint32_t>(row); break;
+          case FLOAT: s->vals.u32[nz_idx] = column.element<uint32_t>(row); break;
           case DOUBLE:
-          case LONG: s->vals.u64[nz_idx] = s->chunk.leaf_column->element<uint64_t>(row); break;
-          case SHORT: s->vals.u32[nz_idx] = s->chunk.leaf_column->element<uint16_t>(row); break;
+          case LONG: s->vals.u64[nz_idx] = column.element<uint64_t>(row); break;
+          case SHORT: s->vals.u32[nz_idx] = column.element<uint16_t>(row); break;
           case BOOLEAN:
-          case BYTE: s->vals.u8[nz_idx] = s->chunk.leaf_column->element<uint8_t>(row); break;
+          case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
-            int64_t ts       = s->chunk.leaf_column->element<int64_t>(row);
-            int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
-            int64_t seconds  = ts / ts_scale;
-            int64_t nanos    = (ts - seconds * ts_scale);
-            // There is a bug in the ORC spec such that for negative timestamps, it is understood
-            // between the writer and reader that nanos will be adjusted to their positive component
-            // but the negative seconds will be left alone. This means that -2.6 is encoded as
-            // seconds = -2 and nanos = 1+(-0.6) = 0.4
-            // This leads to an error in decoding time where -1 < time (s) < 0
-            // Details: https://github.com/rapidsai/cudf/pull/5529#issuecomment-648768925
-            if (nanos < 0) { nanos += ts_scale; }
+            int64_t ts          = column.element<int64_t>(row);
+            int32_t ts_scale    = powers_of_ten[9 - min(s->chunk.scale, 9)];
+            int64_t seconds     = ts / ts_scale;
+            int64_t nanos       = (ts - seconds * ts_scale);
             s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
-              nanos *= kTimeScale[9 - min(s->chunk.scale, 9)];
+              nanos *= powers_of_ten[min(s->chunk.scale, 9)];
               if (!(nanos % 100)) {
                 nanos /= 100;
                 zeroes = 1;
@@ -788,12 +835,12 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               uint32_t dict_idx = s->chunk.dict_index[row];
-              if (dict_idx > 0x7fffffffu) {
-                dict_idx = s->chunk.dict_index[dict_idx & 0x7fffffffu];
+              if (dict_idx > 0x7fff'ffffu) {
+                dict_idx = s->chunk.dict_index[dict_idx & 0x7fff'ffffu];
               }
               s->vals.u32[nz_idx] = dict_idx;
             } else {
-              string_view value = s->chunk.leaf_column->element<string_view>(row);
+              string_view value                       = column.element<string_view>(row);
               s->u.strenc.str_data[s->buf.u32[t] - 1] = value.data();
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
@@ -801,12 +848,12 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST: {
-            auto const& offsets =
-              s->chunk.leaf_column->child(lists_column_view::offsets_column_index);
+          case LIST:
+          case MAP: {
+            auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
-            s->lengths.u32[nz_idx] =
-              offsets.element<size_type>(row + 1) - offsets.element<size_type>(row);
+            s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
+                                     offsets.element<size_type>(row + column.offset());
           } break;
           default: break;
         }
@@ -842,7 +889,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
-                          s->chunk.type_kind == LIST ||
+                          s->chunk.type_kind == LIST || s->chunk.type_kind == MAP ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -857,12 +904,12 @@ __global__ void __launch_bounds__(block_size)
           case INT:
           case DATE:
             n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
-              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
-              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -888,16 +935,18 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
-                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
             break;
           case DECIMAL: {
-            if (valid) {
-              uint64_t const zz_val = (s->chunk.leaf_column->type().id() == type_id::DECIMAL32)
-                                        ? zigzag(s->chunk.leaf_column->element<int32_t>(row))
-                                        : zigzag(s->chunk.leaf_column->element<int64_t>(row));
+            if (is_value_valid) {
+              auto const id = column.type().id();
+              __uint128_t const zz_val =
+                id == type_id::DECIMAL32   ? zigzag(column.element<int32_t>(row))
+                : id == type_id::DECIMAL64 ? zigzag(column.element<int64_t>(row))
+                                           : zigzag(column.element<__int128_t>(row));
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
@@ -911,17 +960,18 @@ __global__ void __launch_bounds__(block_size)
       }
       // Encode secondary stream values
       if (s->numlengths > 0) {
-        uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
+        uint32_t n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
-              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u64);
             break;
           case DECIMAL:
           case LIST:
+          case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -939,8 +989,8 @@ __global__ void __launch_bounds__(block_size)
       streams[col_id][group_id].lengths[t] = s->strm_pos[t];
     if (!s->stream.data_ptrs[t]) {
       streams[col_id][group_id].data_ptrs[t] =
-        static_cast<uint8_t*>(const_cast<void*>(s->chunk.leaf_column->head())) +
-        (s->chunk.leaf_column->offset() + s->chunk.start_row) * s->chunk.dtype_len;
+        static_cast<uint8_t*>(const_cast<void*>(column.head())) +
+        (column.offset() + s->chunk.start_row) * s->chunk.dtype_len;
     }
   }
 }
@@ -991,7 +1041,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = 0;
+      const char* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);
@@ -1014,9 +1064,8 @@ __global__ void __launch_bounds__(block_size)
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
       if (s->numlengths + numvals > 0) {
-        uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
+        uint32_t n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
@@ -1028,16 +1077,6 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (t == 0) { strm_ptr->lengths[cid] = s->strm_pos[cid]; }
-}
-
-__global__ void __launch_bounds__(512)
-  gpu_set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                        device_2dspan<EncChunk> chunks)
-{
-  // Set leaf_column member of EncChunk
-  for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
-    chunks[blockIdx.x][i].leaf_column = &orc_columns[blockIdx.x].cudf_column;
-  }
 }
 
 /**
@@ -1098,22 +1137,31 @@ __global__ void __launch_bounds__(1024)
  *
  * @param[in] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[out] comp_in Per-block compression input parameters
- * @param[out] comp_out Per-block compression status
+ * @param[out] inputs Per-block compression input buffers
+ * @param[out] outputs Per-block compression output buffers
+ * @param[out] results Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
+ * @param[in] max_comp_blk_size Max size of any block after compression
+ * @param[in] comp_block_align Required alignment for compressed blocks
  */
 // blockDim {256,1,1}
 __global__ void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,  // const?
-                           gpu_inflate_input_s* comp_in,
-                           gpu_inflate_status_s* comp_out,
+                           device_span<device_span<uint8_t const>> inputs,
+                           device_span<device_span<uint8_t>> outputs,
+                           device_span<compression_result> results,
                            uint8_t* compressed_bfr,
-                           uint32_t comp_blk_size)
+                           uint32_t comp_blk_size,
+                           uint32_t max_comp_blk_size,
+                           uint32_t comp_block_align)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ uint8_t* volatile uncomp_base_g;
+
+  auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
+  auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
 
   auto const stripe_id = blockIdx.x;
   auto const stream_id = blockIdx.y;
@@ -1130,16 +1178,11 @@ __global__ void __launch_bounds__(256)
   dst        = compressed_bfr + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
-    gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-    gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    blk_in->srcDevice = src + b * comp_blk_size;
-    blk_in->srcSize   = blk_size;
-    blk_in->dstDevice = dst + b * (3 + comp_blk_size) + 3;  // reserve 3 bytes for block header
-    blk_in->dstSize   = blk_size;
-    blk_out->bytes_written = blk_size;
-    blk_out->status        = 1;
-    blk_out->reserved      = 0;
+    inputs[ss.first_block + b]  = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset       = b * (padded_block_header_size + padded_comp_block_size);
+    outputs[ss.first_block + b] = {dst + dst_offset, max_comp_blk_size};
+    results[ss.first_block + b] = {0, compression_status::FAILURE};
   }
 }
 
@@ -1149,18 +1192,22 @@ __global__ void __launch_bounds__(256)
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
- * @param[in] comp_in Per-block compression input parameters
- * @param[in] comp_out Per-block compression status
+ * @param[in] inputs Per-block compression input buffers
+ * @param[out] outputs Per-block compression output buffers
+ * @param[out] results Per-block compression status
  * @param[in] compressed_bfr Compression output buffer
  * @param[in] comp_blk_size Compression block size
+ * @param[in] max_comp_blk_size Max size of any block after compression
  */
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
-                             gpu_inflate_input_s* comp_in,
-                             gpu_inflate_status_s* comp_out,
+                             device_span<device_span<uint8_t const> const> inputs,
+                             device_span<device_span<uint8_t> const> outputs,
+                             device_span<compression_result> results,
                              uint8_t* compressed_bfr,
-                             uint32_t comp_blk_size)
+                             uint32_t comp_blk_size,
+                             uint32_t max_comp_blk_size)
 {
   __shared__ __align__(16) StripeStream ss;
   __shared__ const uint8_t* volatile comp_src_g;
@@ -1181,21 +1228,21 @@ __global__ void __launch_bounds__(1024)
   b          = 0;
   do {
     if (t == 0) {
-      gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-      gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
-      uint32_t src_len =
+      auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      uint32_t dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
-      uint32_t blk_size24;
-      if (dst_len >= src_len) {
+      auto dst_len = (results[ss.first_block + b].status == compression_status::SUCCESS)
+                       ? results[ss.first_block + b].bytes_written
+                       : src_len;
+      uint32_t blk_size24{};
+      if (results[ss.first_block + b].status == compression_status::SUCCESS) {
         // Copy from uncompressed source
-        src                    = static_cast<const uint8_t*>(blk_in->srcDevice);
-        blk_out->bytes_written = src_len;
-        dst_len                = src_len;
-        blk_size24             = dst_len * 2 + 1;
+        src                                       = inputs[ss.first_block + b].data();
+        results[ss.first_block + b].bytes_written = src_len;
+        dst_len                                   = src_len;
+        blk_size24                                = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = static_cast<const uint8_t*>(blk_in->dstDevice);
+        src        = outputs[ss.first_block + b].data();
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);
@@ -1248,16 +1295,6 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, enc_streams);
 }
 
-void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                       device_2dspan<EncChunk> chunks,
-                       rmm::cuda_stream_view stream)
-{
-  dim3 dim_block(512, 1);
-  dim3 dim_grid(chunks.size().first, 1);
-
-  gpu_set_chunk_columns<<<dim_grid, dim_block, 0, stream.value()>>>(orc_columns, chunks);
-}
-
 void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream)
@@ -1271,20 +1308,60 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
+                            uint32_t max_comp_blk_size,
+                            uint32_t comp_block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            gpu_inflate_input_s* comp_in,
-                            gpu_inflate_status_s* comp_out,
+                            device_span<compression_result> comp_res,
                             rmm::cuda_stream_view stream)
 {
+  rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
+  rmm::device_uvector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
+
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
-    strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size);
-  if (compression == SNAPPY) { gpu_snap(comp_in, comp_out, num_compressed_blocks, stream); }
+  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(strm_desc,
+                                                                            enc_streams,
+                                                                            comp_in,
+                                                                            comp_out,
+                                                                            comp_res,
+                                                                            compressed_data,
+                                                                            comp_blk_size,
+                                                                            max_comp_blk_size,
+                                                                            comp_block_align);
+
+  if (compression == SNAPPY) {
+    try {
+      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+        nvcomp::batched_compress(
+          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
+      } else {
+        gpu_snap(comp_in, comp_out, comp_res, stream);
+      }
+    } catch (...) {
+      // There was an error in compressing so set an error status for each block
+      thrust::for_each(
+        rmm::exec_policy(stream),
+        comp_res.begin(),
+        comp_res.end(),
+        [] __device__(compression_result & stat) { stat.status = compression_status::FAILURE; });
+      // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
+      // writing without compression
+    }
+  } else if (compression == ZLIB and
+             nvcomp::is_compression_enabled(nvcomp::compression_type::DEFLATE)) {
+    nvcomp::batched_compress(
+      nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_res, stream);
+  } else if (compression == ZSTD and
+             nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
+    nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+  } else if (compression != NONE) {
+    CUDF_FAIL("Unsupported compression type");
+  }
+
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
-    strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
+    strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 }
 
 }  // namespace gpu

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 #include <vector>
@@ -58,7 +60,7 @@ namespace cudf {
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
  * there is no error, and an empty `table` is returned
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
@@ -92,7 +94,7 @@ std::unique_ptr<table> drop_nulls(
  * Same as drop_nulls but defaults keep_threshold to the number of columns in
  * @p keys.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without nulls in the columns
@@ -132,7 +134,7 @@ std::unique_ptr<table> drop_nulls(
  *
  * @throws cudf::logic_error if The `keys` columns are not floating-point type.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-NAN elements in a row
  *                           required to keep the row.
@@ -167,7 +169,7 @@ std::unique_ptr<table> drop_nans(
  * Same as drop_nans but defaults keep_threshold to the number of columns in
  * @p keys.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without NANs in the columns
@@ -189,7 +191,7 @@ std::unique_ptr<table> drop_nans(
  * @note if @p input.num_rows() is zero, there is no error, and an empty table
  * is returned.
  *
- * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
+ * @throws cudf::logic_error if `input.num_rows() != boolean_mask.size()`.
  * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
  *
  * @param[in] input The input table_view to filter
@@ -208,70 +210,139 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,  ///< Keeps first duplicate row and unique rows
-  KEEP_LAST,       ///< Keeps last  duplicate row and unique rows
-  KEEP_NONE        ///< Keeps only unique rows are kept
+  KEEP_ANY = 0,  ///< Keep an unspecified occurrence
+  KEEP_FIRST,    ///< Keep first occurrence
+  KEEP_LAST,     ///< Keep last occurrence
+  KEEP_NONE      ///< Keep no (remove all) occurrences of duplicates
 };
 
 /**
- * @brief Create a new table without duplicate rows
+ * @brief Create a new table with consecutive duplicate rows removed.
  *
- * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row is copied depends on the `keep` parameter.
  *
- * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
+ * The order of rows in the output table remains the same as in the input.
+ *
+ * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
+ * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
+ * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
+ *
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
+ *
+ * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
- * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
- * memory
+ *                            memory
  *
- * @return Table with unique rows as per specified `keep`.
+ * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`
  */
-std::unique_ptr<table> drop_duplicates(
+std::unique_ptr<table> unique(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  null_order null_precedence          = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Count the unique elements in the column_view
+ * @brief Create a new table without duplicate rows.
  *
- * Given an input column_view, number of unique elements in this column_view is returned
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row to be copied depends on the specified value of
+ * the `keep` parameter.
+ *
+ * The order of rows in the output table is not specified.
+ *
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
+ *
+ * @param[in] input           input table_view to copy only distinct rows
+ * @param[in] keys            vector of indices representing key columns from `input`
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
+ * @param[in] nulls_equal     flag to control if nulls are compared equal or not
+ * @param[in] nans_equal      flag to control if floating-point NaN values are compared equal or not
+ * @param[in] mr              Device memory resource used to allocate the returned table's device
+ *                            memory
+ *
+ * @return Table with distinct rows in an unspecified order
+ */
+std::unique_ptr<table> distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Count the number of consecutive groups of equivalent rows in a column.
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
  * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in unique
- * count.
+ * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in count.
  *
- * @param[in] input The column_view whose unique elements will be counted.
+ * `null`s are handled as equal.
+ *
+ * @param[in] input The column_view whose consecutive groups of equivalent rows will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not.
+ * @param[in] nan_handling flag to consider `NaN==null` or not
  *
- * @return number of unique elements
+ * @return number of consecutive groups of equivalent rows in the column
+ */
+cudf::size_type unique_count(column_view const& input,
+                             null_policy null_handling,
+                             nan_policy nan_handling);
+
+/**
+ * @brief Count the number of consecutive groups of equivalent rows in a table.
+ *
+ * @param[in] input Table whose consecutive groups of equivalent rows will be counted
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal
+ *            nulls are not equal if null_equality::UNEQUAL.
+ *
+ * @return number of consecutive groups of equivalent rows in the column
+ */
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal = null_equality::EQUAL);
+
+/**
+ * @brief Count the distinct elements in the column_view.
+ *
+ * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are distinct.
+ *
+ * Given an input column_view, number of distinct elements in this column_view is returned.
+ *
+ * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
+ * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
+ * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in
+ * distinct count.
+ *
+ * `null`s are handled as equal.
+ *
+ * @param[in] input The column_view whose distinct elements will be counted
+ * @param[in] null_handling flag to include or ignore `null` while counting
+ * @param[in] nan_handling flag to consider `NaN==null` or not
+ *
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
                                nan_policy nan_handling);
 
 /**
- * @brief Count the unique rows in a table.
+ * @brief Count the distinct rows in a table.
  *
+ * @param[in] input Table whose distinct rows will be counted
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal.
+ *            nulls are not equal if null_equality::UNEQUAL.
  *
- * @param[in] input Table whose unique rows will be counted.
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
- * nulls are not equal if null_equality::UNEQUAL
- *
- * @return number of unique rows in the table
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);

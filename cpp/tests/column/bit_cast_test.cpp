@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ template <typename T>
 struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType, typename Iterator>
 void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
@@ -69,8 +69,8 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
     auto output1 = cudf::bit_cast(mutable_column_view, mutable_column_view.type());
     cudf::test::expect_columns_equal(output, column_view);
     cudf::test::expect_columns_equal(output1, mutable_column_view);
-  } else if (std::is_same<rep_type_t<FromType>, ToType>::value ||
-             std::is_same<FromType, rep_type_t<ToType>>::value) {
+  } else if (std::is_same_v<rep_type_t<FromType>, ToType> ||
+             std::is_same_v<FromType, rep_type_t<ToType>>) {
     // Cast integer to timestamp or vice versa
     auto output  = cudf::bit_cast(column_view, to_type);
     auto output1 = cudf::bit_cast(mutable_column_view, to_type);

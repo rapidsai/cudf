@@ -23,6 +23,8 @@
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
 
+#include <tests/binaryop/util/runtime_support.h>
+
 namespace cudf {
 namespace test {
 namespace binop {
@@ -51,6 +53,12 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
       }
       default: CUDF_FAIL("Unknown mask state " + std::to_string(static_cast<int64_t>(state)));
     }
+  }
+
+ protected:
+  void SetUp() override
+  {
+    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
   }
 };  // namespace binop
 

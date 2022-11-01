@@ -43,7 +43,7 @@ public class CudfTestBase {
   void beforeEach() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     if (!Rmm.isInitialized()) {
-      Rmm.initialize(rmmAllocationMode, false, rmmPoolSize);
+      Rmm.initialize(rmmAllocationMode, Rmm.logToStderr(), rmmPoolSize);
     }
   }
 

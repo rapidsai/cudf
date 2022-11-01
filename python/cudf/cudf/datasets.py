@@ -1,7 +1,11 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.transform import bools_to_mask
+from cudf.core.column_accessor import ColumnAccessor
 
 __all__ = ["timeseries", "randomdata"]
 
@@ -9,9 +13,14 @@ __all__ = ["timeseries", "randomdata"]
 # TODO:
 # change default of name from category to str type when nvstring are merged
 def timeseries(
-    start="2000-01-01", end="2000-01-31", freq="1s", dtypes=None, seed=None,
+    start="2000-01-01",
+    end="2000-01-31",
+    freq="1s",
+    dtypes=None,
+    nulls_frequency=0,
+    seed=None,
 ):
-    """ Create timeseries dataframe with random data
+    """Create timeseries dataframe with random data
 
     Parameters
     ----------
@@ -26,6 +35,8 @@ def timeseries(
         ``{"name": "category", "id": int, "x": float, "y": float}``
     freq : string
         String like '2s' or '1H' or '12W' for the time series frequency
+    nulls_frequency : float
+        Fill the series with the specified proportion of nulls. Default is 0.
     seed : int (optional)
         Randomstate seed
 
@@ -48,17 +59,29 @@ def timeseries(
         pd.date_range(start, end, freq=freq, name="timestamp")
     )
     state = np.random.RandomState(seed)
-    columns = dict(
-        (k, make[dt](len(index), state)) for k, dt in dtypes.items()
-    )
+    columns = {k: make[dt](len(index), state) for k, dt in dtypes.items()}
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
-    return cudf.from_pandas(df)
+
+    gdf = cudf.from_pandas(df)
+    for col in gdf:
+        mask = state.choice(
+            [True, False],
+            size=len(index),
+            p=[1 - nulls_frequency, nulls_frequency],
+        )
+        mask_buf = bools_to_mask(cudf.core.column.as_column(mask))
+        masked_col = gdf[col]._column.set_mask(mask_buf)
+        gdf[col] = cudf.Series._from_data(
+            ColumnAccessor({None: masked_col}), index=gdf.index
+        )
+
+    return gdf
 
 
 def randomdata(nrows=10, dtypes=None, seed=None):
-    """ Create a dataframe with random data
+    """Create a dataframe with random data
 
     Parameters
     ----------
@@ -87,7 +110,7 @@ def randomdata(nrows=10, dtypes=None, seed=None):
     if dtypes is None:
         dtypes = {"id": int, "x": float, "y": float}
     state = np.random.RandomState(seed)
-    columns = dict((k, make[dt](nrows, state)) for k, dt in dtypes.items())
+    columns = {k: make[dt](nrows, state) for k, dt in dtypes.items()}
     df = pd.DataFrame(columns, columns=sorted(columns))
     return cudf.from_pandas(df)
 

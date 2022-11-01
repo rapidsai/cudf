@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import sys
 
@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame, GenericIndex, Series
-from cudf.core.buffer import Buffer
+from cudf import DataFrame, GenericIndex, RangeIndex, Series
+from cudf.core.buffer import as_device_buffer_like
 from cudf.testing._utils import assert_eq
 
 if sys.version_info < (3, 8):
@@ -28,7 +28,7 @@ def check_serialization(df):
     assert_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
     if pickle.HIGHEST_PROTOCOL >= 5:
@@ -62,13 +62,15 @@ def test_pickle_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical("aaabababac")
+    df["keys"] = pd.Categorical(
+        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
+    )
     df["vals"] = np.random.random(len(df))
 
     check_serialization(df)
 
 
-def test_sizeof_dataframe():
+def test_memory_usage_dataframe():
     np.random.seed(0)
     df = DataFrame()
     nelem = 1000
@@ -76,7 +78,7 @@ def test_sizeof_dataframe():
     df["vals"] = hvals = np.random.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
-    sizeof = sys.getsizeof(df)
+    sizeof = df.memory_usage().sum()
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))
@@ -90,14 +92,12 @@ def test_pickle_index():
     idx = GenericIndex(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
-    # TODO: Once operations like `all` are supported on Index objects, we can
-    # just use that without calling values first.
-    assert (idx == out).values.all()
+    assert (idx == out).all()
 
 
 def test_pickle_buffer():
     arr = np.arange(10).view("|u1")
-    buf = Buffer(arr)
+    buf = as_device_buffer_like(arr)
     assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)

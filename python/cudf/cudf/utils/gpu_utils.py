@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 
 def validate_setup():
@@ -15,10 +15,10 @@ def validate_setup():
 
     import warnings
 
+    from cuda.cudart import cudaDeviceAttr, cudaError_t
+
     from rmm._cuda.gpu import (
         CUDARuntimeError,
-        cudaDeviceAttr,
-        cudaError,
         deviceGetName,
         driverGetVersion,
         getDeviceAttribute,
@@ -26,34 +26,26 @@ def validate_setup():
         runtimeGetVersion,
     )
 
-    def _try_get_old_or_new_symbols():
-        try:
-            # CUDA 10.2+ symbols
-            return [
-                cudaError.cudaErrorDeviceUninitialized,
-                cudaError.cudaErrorTimeout,
-            ]
-        except AttributeError:
-            # CUDA 10.1 symbols
-            return [cudaError.cudaErrorDeviceUninitilialized]
+    from cudf.errors import UnsupportedCUDAError
 
     notify_caller_errors = {
-        cudaError.cudaErrorInitializationError,
-        cudaError.cudaErrorInsufficientDriver,
-        cudaError.cudaErrorInvalidDeviceFunction,
-        cudaError.cudaErrorInvalidDevice,
-        cudaError.cudaErrorStartupFailure,
-        cudaError.cudaErrorInvalidKernelImage,
-        cudaError.cudaErrorAlreadyAcquired,
-        cudaError.cudaErrorOperatingSystem,
-        cudaError.cudaErrorNotPermitted,
-        cudaError.cudaErrorNotSupported,
-        cudaError.cudaErrorSystemNotReady,
-        cudaError.cudaErrorSystemDriverMismatch,
-        cudaError.cudaErrorCompatNotSupportedOnDevice,
-        *_try_get_old_or_new_symbols(),
-        cudaError.cudaErrorUnknown,
-        cudaError.cudaErrorApiFailureBase,
+        cudaError_t.cudaErrorInitializationError,
+        cudaError_t.cudaErrorInsufficientDriver,
+        cudaError_t.cudaErrorInvalidDeviceFunction,
+        cudaError_t.cudaErrorInvalidDevice,
+        cudaError_t.cudaErrorStartupFailure,
+        cudaError_t.cudaErrorInvalidKernelImage,
+        cudaError_t.cudaErrorAlreadyAcquired,
+        cudaError_t.cudaErrorOperatingSystem,
+        cudaError_t.cudaErrorNotPermitted,
+        cudaError_t.cudaErrorNotSupported,
+        cudaError_t.cudaErrorSystemNotReady,
+        cudaError_t.cudaErrorSystemDriverMismatch,
+        cudaError_t.cudaErrorCompatNotSupportedOnDevice,
+        cudaError_t.cudaErrorDeviceUninitialized,
+        cudaError_t.cudaErrorTimeout,
+        cudaError_t.cudaErrorUnknown,
+        cudaError_t.cudaErrorApiFailureBase,
     }
 
     try:
@@ -63,54 +55,53 @@ def validate_setup():
             raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
+    except RuntimeError as e:
+        # getDeviceCount() can raise a RuntimeError
+        # when ``libcuda.so`` is missing.
+        # We don't want this to propagate up to the user.
+        warnings.warn(str(e))
+        return
 
     if gpus_count > 0:
         # Cupy throws RunTimeException to get GPU count,
         # hence obtaining GPU count by in-house cpp api above
 
-        # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
-        # 0 - Get GPU 0
         major_version = getDeviceAttribute(
             cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
 
-        if major_version >= 6:
-            # You have a GPU with NVIDIA Pascal™ architecture or better
+        if major_version < 6:
+            # A GPU with NVIDIA Pascal™ architecture or newer is required.
+            # Reference: https://developer.nvidia.com/cuda-gpus
             # Hardware Generation	Compute Capability
+            #    Ampere	                8.x
             #    Turing	                7.5
-            #    Volta	                7.x
+            #    Volta	                7.0, 7.2
             #    Pascal	                6.x
-            #    Maxwell	              5.x
+            #    Maxwell                5.x
             #    Kepler	                3.x
             #    Fermi	                2.x
-            pass
-        else:
             device_name = deviceGetName(0)
             minor_version = getDeviceAttribute(
                 cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
-                f"You will need a GPU with NVIDIA Pascal™ or "
-                f"newer architecture"
-                f"\nDetected GPU 0: {device_name} \n"
-                f"Detected Compute Capability: "
-                f"{major_version}.{minor_version}"
+                "A GPU with NVIDIA Pascal™ (Compute Capability 6.0) "
+                "or newer architecture is required.\n"
+                f"Detected GPU 0: {device_name}\n"
+                f"Detected Compute Capability: {major_version}.{minor_version}"
             )
 
         cuda_runtime_version = runtimeGetVersion()
 
-        if cuda_runtime_version >= 10000:
-            # CUDA Runtime Version Check: Runtime version is greater than 10000
-            pass
-        else:
-            from cudf.errors import UnSupportedCUDAError
-
-            minor_version = cuda_runtime_version % 100
-            major_version = (cuda_runtime_version - minor_version) // 1000
-            raise UnSupportedCUDAError(
-                f"Detected CUDA Runtime version is "
-                f"{major_version}.{str(minor_version)[0]}"
-                f"Please update your CUDA Runtime to 10.0 or above"
+        if cuda_runtime_version < 11000:
+            # Require CUDA Runtime version 11.0 or greater.
+            major_version = cuda_runtime_version // 1000
+            minor_version = (cuda_runtime_version % 1000) // 10
+            raise UnsupportedCUDAError(
+                "Detected CUDA Runtime version is "
+                f"{major_version}.{minor_version}. "
+                "Please update your CUDA Runtime to 11.0 or above."
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
@@ -126,31 +117,32 @@ def validate_setup():
         # https://docs.nvidia.com/deploy/cuda-compatibility/index.html
 
         if cuda_driver_supported_rt_version == 0:
-            from cudf.errors import UnSupportedCUDAError
-
-            raise UnSupportedCUDAError(
-                "We couldn't detect the GPU driver "
-                "properly. Please follow the linux installation guide to "
-                "ensure your driver is properly installed "
-                ": https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
+            raise UnsupportedCUDAError(
+                "We couldn't detect the GPU driver properly. Please follow "
+                "the installation guide to ensure your driver is properly "
+                "installed: "
+                "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
             )
-
         elif cuda_driver_supported_rt_version >= cuda_runtime_version:
             # CUDA Driver Version Check:
             # Driver Runtime version is >= Runtime version
             pass
+        elif (
+            cuda_driver_supported_rt_version >= 11000
+            and cuda_runtime_version >= 11000
+        ):
+            # With cuda enhanced compatibility any code compiled
+            # with 11.x version of cuda can now run on any
+            # driver >= 450.80.02. 11000 is the minimum cuda
+            # version 450.80.02 supports.
+            pass
         else:
-            from cudf.errors import UnSupportedCUDAError
-
-            raise UnSupportedCUDAError(
-                f"Please update your NVIDIA GPU Driver to support CUDA "
-                f"Runtime.\n"
-                f"Detected CUDA Runtime version : {cuda_runtime_version}"
-                f"\n"
-                f"Latest version of CUDA supported by current "
+            raise UnsupportedCUDAError(
+                "Please update your NVIDIA GPU Driver to support CUDA "
+                "Runtime.\n"
+                f"Detected CUDA Runtime version : {cuda_runtime_version}\n"
+                "Latest version of CUDA supported by current "
                 f"NVIDIA GPU Driver : {cuda_driver_supported_rt_version}"
             )
-
     else:
-
         warnings.warn("No NVIDIA GPU detected")

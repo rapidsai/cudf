@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -6,30 +6,16 @@ import numpy as np
 
 from libcpp.memory cimport make_shared, shared_ptr
 
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_null_order,
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
 
-from cudf.core.dtypes import (
-    Decimal32Dtype,
-    Decimal64Dtype,
-    ListDtype,
-    StructDtype,
-)
-from cudf.utils.dtypes import (
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
-
-cimport cudf._lib.cpp.types as libcudf_types
+import cudf
 
 
 class TypeId(IntEnum):
@@ -44,6 +30,7 @@ class TypeId(IntEnum):
     UINT64 = <underlying_type_t_type_id> libcudf_types.type_id.UINT64
     FLOAT32 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT32
     FLOAT64 = <underlying_type_t_type_id> libcudf_types.type_id.FLOAT64
+    BOOL8 = <underlying_type_t_type_id> libcudf_types.type_id.BOOL8
     TIMESTAMP_DAYS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_DAYS
     )
@@ -63,8 +50,6 @@ class TypeId(IntEnum):
     TIMESTAMP_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.TIMESTAMP_NANOSECONDS
     )
-    STRING = <underlying_type_t_type_id> libcudf_types.type_id.STRING
-    BOOL8 = <underlying_type_t_type_id> libcudf_types.type_id.BOOL8
     DURATION_SECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_SECONDS
     )
@@ -77,11 +62,14 @@ class TypeId(IntEnum):
     DURATION_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
     )
+    STRING = <underlying_type_t_type_id> libcudf_types.type_id.STRING
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
+    DECIMAL128 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL128
+    STRUCT = <underlying_type_t_type_id> libcudf_types.type_id.STRUCT
 
 
-np_to_cudf_types = {
+SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
     np.dtype("int8"): TypeId.INT8,
     np.dtype("int16"): TypeId.INT16,
     np.dtype("int32"): TypeId.INT32,
@@ -104,7 +92,11 @@ np_to_cudf_types = {
     np.dtype("timedelta64[ns]"): TypeId.DURATION_NANOSECONDS,
 }
 
-cudf_to_np_types = {
+LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    # There's no equivalent to EMPTY in cudf.  We translate EMPTY
+    # columns from libcudf to ``int8`` columns of all nulls in Python.
+    # ``int8`` is chosen because it uses the least amount of memory.
+    TypeId.EMPTY: np.dtype("int8"),
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),
@@ -115,16 +107,17 @@ cudf_to_np_types = {
     TypeId.UINT64: np.dtype("uint64"),
     TypeId.FLOAT32: np.dtype("float32"),
     TypeId.FLOAT64: np.dtype("float64"),
+    TypeId.BOOL8: np.dtype("bool"),
     TypeId.TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
     TypeId.TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
     TypeId.TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
     TypeId.TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-    TypeId.STRING: np.dtype("object"),
-    TypeId.BOOL8: np.dtype("bool"),
     TypeId.DURATION_SECONDS: np.dtype("timedelta64[s]"),
     TypeId.DURATION_MILLISECONDS: np.dtype("timedelta64[ms]"),
     TypeId.DURATION_MICROSECONDS: np.dtype("timedelta64[us]"),
     TypeId.DURATION_NANOSECONDS: np.dtype("timedelta64[ns]"),
+    TypeId.STRING: np.dtype("object"),
+    TypeId.STRUCT: np.dtype("object"),
 }
 
 duration_unit_map = {
@@ -188,11 +181,11 @@ cdef dtype_from_lists_column_view(column_view cv):
     cdef column_view child = lv.get()[0].child()
 
     if child.type().id() == libcudf_types.type_id.LIST:
-        return ListDtype(dtype_from_lists_column_view(child))
+        return cudf.ListDtype(dtype_from_lists_column_view(child))
     elif child.type().id() == libcudf_types.type_id.EMPTY:
-        return ListDtype(np.dtype("int8"))
+        return cudf.ListDtype("int8")
     else:
-        return ListDtype(
+        return cudf.ListDtype(
             dtype_from_column_view(child)
         )
 
@@ -201,7 +194,7 @@ cdef dtype_from_structs_column_view(column_view cv):
         str(i): dtype_from_column_view(cv.child(i))
         for i in range(cv.num_children())
     }
-    return StructDtype(fields)
+    return cudf.StructDtype(fields)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
@@ -210,36 +203,49 @@ cdef dtype_from_column_view(column_view cv):
     elif tid == libcudf_types.type_id.STRUCT:
         return dtype_from_structs_column_view(cv)
     elif tid == libcudf_types.type_id.DECIMAL64:
-        return Decimal64Dtype(
-            precision=Decimal64Dtype.MAX_PRECISION,
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
             scale=-cv.type().scale()
         )
     elif tid == libcudf_types.type_id.DECIMAL32:
-        return Decimal32Dtype(
-            precision=Decimal32Dtype.MAX_PRECISION,
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
             scale=-cv.type().scale()
         )
     else:
-        return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
+        return LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+            <underlying_type_t_type_id>(tid)
+        ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
-    if is_list_dtype(dtype):
+    if cudf.api.types.is_list_dtype(dtype):
         tid = libcudf_types.type_id.LIST
-    elif is_struct_dtype(dtype):
+    elif cudf.api.types.is_struct_dtype(dtype):
         tid = libcudf_types.type_id.STRUCT
-    elif is_decimal64_dtype(dtype):
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        tid = libcudf_types.type_id.DECIMAL128
+    elif cudf.api.types.is_decimal64_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
-    elif is_decimal32_dtype(dtype):
+    elif cudf.api.types.is_decimal32_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL32
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]))
+                SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[np.dtype(dtype)]))
 
-    if tid in (
-        libcudf_types.type_id.DECIMAL64,
-        libcudf_types.type_id.DECIMAL32
-    ):
+    if is_decimal_type_id(tid):
         return libcudf_types.data_type(tid, -dtype.scale)
     else:
         return libcudf_types.data_type(tid)
+
+cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
+    return tid in (
+        libcudf_types.type_id.DECIMAL128,
+        libcudf_types.type_id.DECIMAL64,
+        libcudf_types.type_id.DECIMAL32,
+    )

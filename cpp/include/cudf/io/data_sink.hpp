@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -37,6 +38,7 @@ class data_sink {
    * @brief Create a sink from a file path
    *
    * @param[in] filepath Path to the file to use
+   * @return Constructed data_sink object
    */
   static std::unique_ptr<data_sink> create(const std::string& filepath);
 
@@ -44,6 +46,7 @@ class data_sink {
    * @brief Create a sink from a std::vector
    *
    * @param[in,out] buffer Pointer to the output vector
+   * @return Constructed data_sink object
    */
   static std::unique_ptr<data_sink> create(std::vector<char>* buffer);
 
@@ -53,20 +56,39 @@ class data_sink {
    * A useful code path for benchmarking, to eliminate physical
    * hardware randomness from profiling.
    *
+   * @return Constructed data_sink object
    */
   static std::unique_ptr<data_sink> create();
 
   /**
    * @brief Create a wrapped custom user data sink
    *
-   * @param[in] User-provided data sink (typically custom class)
+   * @param[in] user_sink User-provided data sink (typically custom class)
    *
    * The data sink returned here is not the one passed by the user. It is an internal
    * class that wraps the user pointer.  The principle is to allow the user to declare
    * a custom sink instance and use it across multiple write() calls.
    *
+   * @return Constructed data_sink object
    */
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
+
+  /**
+   * @brief Creates a vector of data sinks, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   * @return Constructed vector of data sinks
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<data_sink>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<data_sink>> sinks;
+    sinks.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sinks), [](auto const& arg) {
+      return data_sink::create(arg);
+    });
+    return sinks;
+  }
 
   /**
    * @brief Base class destructor
@@ -74,12 +96,10 @@ class data_sink {
   virtual ~data_sink(){};
 
   /**
-   * @brief Append the buffer content to the sink
+   * @pure @brief Append the buffer content to the sink
    *
    * @param[in] data Pointer to the buffer to be written into the sink object
    * @param[in] size Number of bytes to write
-   *
-   * @return void
    */
   virtual void host_write(void const* data, size_t size) = 0;
 
@@ -103,9 +123,9 @@ class data_sink {
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
-   * @return bool If this writer supports device_write() calls.
+   * @return bool If this writer supports device_write() calls
    */
-  virtual bool supports_device_write() const { return false; }
+  [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
   /**
    * @brief Estimates whether a direct device write would be more optimal for the given size.
@@ -113,7 +133,10 @@ class data_sink {
    * @param size Number of bytes to write
    * @return whether the device write is expected to be more performant for the given size
    */
-  virtual bool is_device_write_preferred(size_t size) const { return supports_device_write(); }
+  [[nodiscard]] virtual bool is_device_write_preferred(size_t size) const
+  {
+    return supports_device_write();
+  }
 
   /**
    * @brief Append the buffer content to the sink from a gpu address
@@ -135,12 +158,41 @@ class data_sink {
   }
 
   /**
-   * @brief Flush the data written into the sink
+   * @brief Asynchronously append the buffer content to the sink from a gpu address
+   *
+   * For optimal performance, should only be called when `is_device_write_preferred` returns `true`.
+   * Data sink implementations that don't support direct device writes don't need to override
+   * this function.
+   *
+   * `gpu_data` must not be freed until this call is synchronized.
+   * @code{.pseudo}
+   * auto result = device_write_async(gpu_data, size, stream);
+   * result.wait(); // OR result.get()
+   * @endcode
+   *
+   * @throws cudf::logic_error the object does not support direct device writes, i.e.
+   * `supports_device_write` returns `false`.
+   * @throws cudf::logic_error
+   *
+   * @param gpu_data Pointer to the buffer to be written into the sink object
+   * @param size Number of bytes to write
+   * @param stream CUDA stream to use
+   * @return a future that can be used to synchronize the call
+   */
+  virtual std::future<void> device_write_async(void const* gpu_data,
+                                               size_t size,
+                                               rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("data_sink classes that support device_write_async must override it.");
+  }
+
+  /**
+   * @pure @brief Flush the data written into the sink
    */
   virtual void flush() = 0;
 
   /**
-   * @brief Returns the total number of bytes written into this sink
+   * @pure @brief Returns the total number of bytes written into this sink
    *
    * @return size_t Total number of bytes written into this sink
    */

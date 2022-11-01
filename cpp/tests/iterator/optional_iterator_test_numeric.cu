@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,21 @@
  */
 #include <tests/iterator/optional_iterator_test.cuh>
 
+#include <cudf/utilities/default_stream.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
+
 using TestingTypes = cudf::test::NumericTypes;
 
 template <typename T>
 struct NumericOptionalIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(NumericOptionalIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(NumericOptionalIteratorTest, TestingTypes);
 TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
 {
   nonull_optional_iterator(*this);
@@ -39,8 +47,7 @@ template <typename ElementType>
 struct transformer_optional_meanvar {
   using ResultType = thrust::optional<cudf::meanvar<ElementType>>;
 
-  CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::optional<ElementType> const& optional)
+  CUDF_HOST_DEVICE inline ResultType operator()(thrust::optional<ElementType> const& optional)
   {
     if (optional.has_value()) {
       auto v = *optional;
@@ -50,21 +57,15 @@ struct transformer_optional_meanvar {
   }
 };
 
-struct sum_if_not_null {
-  template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE thrust::optional<T> operator()(const thrust::optional<T>& lhs,
-                                                           const thrust::optional<T>& rhs)
-  {
-    return lhs.value_or(T{0}) + rhs.value_or(T{0});
-  }
+template <typename T>
+struct optional_to_meanvar {
+  CUDF_HOST_DEVICE inline T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
 // Workaround: exclude this test only at device debug mode.
 #if !defined(__CUDACC_DEBUG__)
-// This test computes `count`, `sum`, `sum_of_squares` at a single reduction call.
-// It would be useful for `var`, `std` operation
 TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
 {
   using T        = TypeParam;
@@ -104,22 +105,28 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   expected_value.value_squared = std::accumulate(
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
-  // std::cout << "expected <mixed_output> = " << expected_value << std::endl;
-
   // GPU test
-  auto it_dev         = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+  auto it_dev         = d_col->optional_begin<T>(cudf::nullate::YES{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(it_dev_squared,
-                               it_dev_squared + d_col->size(),
-                               thrust::optional<T_output>{T_output{}},
-                               sum_if_not_null{});
+
+  // this can be computed with a single reduce and without a temporary output vector
+  // but the approach increases the compile time by ~2x
+  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::get_default_stream());
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+                    it_dev_squared,
+                    it_dev_squared + d_col->size(),
+                    results.begin(),
+                    optional_to_meanvar<T_output>{});
+  auto result = thrust::reduce(
+    rmm::exec_policy(cudf::get_default_stream()), results.begin(), results.end(), T_output{});
+
   if (not std::is_floating_point<T>()) {
-    EXPECT_EQ(expected_value, *result) << "optional iterator reduction sum";
+    EXPECT_EQ(expected_value, result) << "optional iterator reduction sum";
   } else {
-    EXPECT_NEAR(expected_value.value, result->value, 1e-3) << "optional iterator reduction sum";
-    EXPECT_NEAR(expected_value.value_squared, result->value_squared, 1e-3)
+    EXPECT_NEAR(expected_value.value, result.value, 1e-3) << "optional iterator reduction sum";
+    EXPECT_NEAR(expected_value.value_squared, result.value_squared, 1e-3)
       << "optional iterator reduction sum squared";
-    EXPECT_EQ(expected_value.count, result->count) << "optional iterator reduction count";
+    EXPECT_EQ(expected_value.count, result.count) << "optional iterator reduction count";
   }
 }
 #endif

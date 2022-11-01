@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,23 +24,26 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>
 class NumericFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericFactoryTest, EmptyNoMask)
 {
@@ -203,7 +206,7 @@ template <typename T>
 class FixedWidthFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 {
@@ -219,7 +222,7 @@ template <typename T>
 class EmptyFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(EmptyFactoryTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(EmptyFactoryTest, cudf::test::AllTypes);
 
 TYPED_TEST(EmptyFactoryTest, Empty)
 {
@@ -420,6 +423,7 @@ TEST_F(ColumnFactoryTest, FromStringScalar)
   EXPECT_EQ(0, column->null_count());
   EXPECT_FALSE(column->nullable());
   EXPECT_FALSE(column->has_nulls());
+  EXPECT_TRUE(column->num_children() > 0);
 }
 
 TEST_F(ColumnFactoryTest, FromNullStringScalar)
@@ -431,6 +435,7 @@ TEST_F(ColumnFactoryTest, FromNullStringScalar)
   EXPECT_EQ(2, column->null_count());
   EXPECT_TRUE(column->nullable());
   EXPECT_TRUE(column->has_nulls());
+  EXPECT_TRUE(column->num_children() > 0);
 }
 
 TEST_F(ColumnFactoryTest, FromStringScalarWithZeroSize)
@@ -466,7 +471,7 @@ template <typename T>
 class ListsFixedWidthLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsFixedWidthLeafTest, FromNonNested)
 {
@@ -504,7 +509,7 @@ template <typename T>
 class ListsDictionaryLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 {
@@ -613,7 +618,7 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
   }
 };
 
-TYPED_TEST_CASE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {
@@ -643,7 +648,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
                                           0,
                                           cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *expected);
 }
 
 TYPED_TEST(ListsStructsLeafTest, FromNested)

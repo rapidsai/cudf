@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,20 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
+#include <thrust/pair.h>
 #include <thrust/sort.h>
 
 #include <algorithm>
@@ -87,7 +92,7 @@ std::unique_ptr<column> translate(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
@@ -101,12 +106,8 @@ std::unique_ptr<column> translate(
     return lhs.first < rhs.first;
   });
   // copy translate table to device memory
-  rmm::device_uvector<translate_table> table(htable.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(table.data(),
-                           htable.data(),
-                           sizeof(translate_table) * htable.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<translate_table> table =
+    cudf::detail::make_device_uvector_async(htable, stream);
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
@@ -117,9 +118,7 @@ std::unique_ptr<column> translate(
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -131,7 +130,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table, rmm::cuda_stream_default, mr);
+  return detail::translate(strings, chars_table, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

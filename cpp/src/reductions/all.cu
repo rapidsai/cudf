@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,11 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace reduction {
@@ -43,7 +48,7 @@ struct all_fn {
     bool* d_result;
   };
 
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -63,7 +68,7 @@ struct all_fn {
                        all_true_fn<decltype(iter)>{iter, result->data()});
     return result;
   }
-  template <typename T, std::enable_if_t<!std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
@@ -77,6 +82,7 @@ struct all_fn {
 
 std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
+                                  std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
@@ -88,11 +94,13 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
       dictionary_column_view(col).keys().type(), detail::all_fn{}, col, stream, mr);
   }
   // dispatch for non-dictionary types
-  return cudf::type_dispatcher(col.type(),
-                               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
-                               col,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(),
+    simple::detail::bool_result_element_dispatcher<cudf::reduction::op::min>{},
+    col,
+    init,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

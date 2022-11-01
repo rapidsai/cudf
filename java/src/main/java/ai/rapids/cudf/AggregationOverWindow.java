@@ -22,12 +22,12 @@ package ai.rapids.cudf;
  * An Aggregation instance that also holds a column number and window metadata so the aggregation
  * can be done over a specific window.
  */
-public class AggregationOverWindow<T extends Aggregation & RollingAggregation<T>>
-    extends AggregationOnColumn<T> {
+public final class AggregationOverWindow {
+    private final RollingAggregationOnColumn wrapped;
     protected final WindowOptions windowOptions;
 
-    AggregationOverWindow(T wrapped, int columnIndex, WindowOptions windowOptions) {
-        super(wrapped, columnIndex);
+    AggregationOverWindow(RollingAggregationOnColumn wrapped, WindowOptions windowOptions) {
+        this.wrapped = wrapped;
         this.windowOptions = windowOptions;
 
         if (windowOptions == null) {
@@ -44,23 +44,6 @@ public class AggregationOverWindow<T extends Aggregation & RollingAggregation<T>
     }
 
     @Override
-    public AggregationOnColumn<T> onColumn(int columnIndex) {
-        if (columnIndex == getColumnIndex()) {
-            return this; // NOOP
-        } else {
-            return new AggregationOverWindow(this.wrapped, columnIndex, windowOptions);
-        }
-    }
-
-    @Override
-    public AggregationOverWindow<T> overWindow(WindowOptions windowOptions) {
-        if (this.windowOptions.equals(windowOptions)) {
-            return this;
-        }
-        return new AggregationOverWindow(wrapped, columnIndex, windowOptions);
-    }
-
-    @Override
     public int hashCode() {
         return 31 * super.hashCode() + windowOptions.hashCode();
     }
@@ -69,10 +52,22 @@ public class AggregationOverWindow<T extends Aggregation & RollingAggregation<T>
     public boolean equals(Object other) {
         if (other == this) {
             return true;
-        } else if (other instanceof AggregationOnColumn) {
-            AggregationOnColumn o = (AggregationOnColumn) other;
-            return wrapped.equals(o.wrapped) && columnIndex == o.columnIndex;
+        } else if (other instanceof AggregationOverWindow) {
+            AggregationOverWindow o = (AggregationOverWindow) other;
+            return wrapped.equals(o.wrapped) && windowOptions.equals(o.windowOptions);
         }
         return false;
+    }
+
+    int getColumnIndex() {
+        return wrapped.getColumnIndex();
+    }
+
+    long createNativeInstance() {
+        return wrapped.createNativeInstance();
+    }
+
+    long getDefaultOutput() {
+        return wrapped.getDefaultOutput();
     }
 }

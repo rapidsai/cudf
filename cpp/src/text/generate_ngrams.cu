@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvtext/generate_ngrams.hpp>
@@ -33,6 +34,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -79,14 +84,13 @@ struct ngram_generator_fn {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> generate_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
+                                              cudf::size_type ngrams,
+                                              cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
   CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
 
@@ -100,7 +104,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
     cudf::column_view offsets_view(
-      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
+      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets_begin());
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
@@ -134,13 +138,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(ngrams_count,
-                                   std::move(children.first),
-                                   std::move(children.second),
-                                   0,
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    ngrams_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -151,7 +150,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_ngrams(strings, ngrams, separator, rmm::cuda_stream_default, mr);
+  return detail::generate_ngrams(strings, ngrams, separator, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -250,13 +249,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                      strings_count,
                      generator);
 
-  return cudf::make_strings_column(total_ngrams,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,  // no nulls in the result
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -266,7 +260,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::generate_character_ngrams(strings, ngrams, rmm::cuda_stream_default, mr);
+  return detail::generate_character_ngrams(strings, ngrams, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

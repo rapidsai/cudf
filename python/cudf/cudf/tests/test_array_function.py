@@ -1,17 +1,36 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
-from cudf.utils.utils import IS_NEP18_ACTIVE
 
-missing_arrfunc_cond = not IS_NEP18_ACTIVE
+
+# To determine if NEP18 is available in the current version of NumPy we simply
+# attempt to concatenate an object with `__array_function__` defined and see if
+# NumPy invokes the protocol or not. Taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+# TODO: Unclear if this is still necessary. NEP 18 was introduced as the
+# default in 1.17 (https://github.com/numpy/numpy/releases/tag/v1.17.0) almost
+# 3 years ago, and it was originally introduced one version before in 1.16
+# (although not enabled by default then). Can we safely assume that testers
+# will have a sufficiently new version of numpy to run these tests?
+class _Test:
+    def __array_function__(self, *args, **kwargs):
+        return True
+
+
+try:
+    np.concatenate([_Test()])
+except ValueError:
+    missing_arrfunc_cond = True
+else:
+    missing_arrfunc_cond = False
+
+del _Test
+
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
-
-# Test implementation based on dask array test
-# https://github.com/dask/dask/blob/master/dask/array/tests/test_array_function.py
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -34,7 +53,7 @@ def test_array_func_cudf_series(np_ar, func):
     if np.isscalar(expect):
         assert_eq(expect, got)
     else:
-        assert_eq(expect, got.to_array())
+        assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -43,7 +62,12 @@ def test_array_func_cudf_series(np_ar, func):
 )
 @pytest.mark.parametrize(
     "func",
-    [lambda x: np.mean(x), lambda x: np.sum(x), lambda x: np.var(x, ddof=1)],
+    [
+        lambda x: np.mean(x),
+        lambda x: np.sum(x),
+        lambda x: np.var(x, ddof=1),
+        lambda x: np.dot(x, x.transpose()),
+    ],
 )
 def test_array_func_cudf_dataframe(pd_df, func):
     cudf_df = cudf.from_pandas(pd_df)
@@ -60,7 +84,6 @@ def test_array_func_cudf_dataframe(pd_df, func):
     "func",
     [
         lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
         lambda x: np.linalg.norm(x),
         lambda x: np.linalg.det(x),
     ],
@@ -74,7 +97,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
 # we only implement sum among all numpy non-ufuncs
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
-@pytest.mark.parametrize("func", [lambda x: np.sum(x)])
+@pytest.mark.parametrize("func", [lambda x: np.sum(x), lambda x: np.dot(x, x)])
 def test_array_func_cudf_index(np_ar, func):
     cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     expect = func(np_ar)
@@ -88,7 +111,6 @@ def test_array_func_cudf_index(np_ar, func):
     "func",
     [
         lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
         lambda x: np.linalg.norm(x),
         lambda x: np.linalg.det(x),
     ],

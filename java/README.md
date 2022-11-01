@@ -75,36 +75,20 @@ If you decide to build without Docker and the build script, examining the cmake 
 settings in the [Java CI build script](ci/build-in-docker.sh) can be helpful if you are
 encountering difficulties during the build.
 
-## Dynamically Linking Arrow
-
-Since libcudf builds by default with a dynamically linked Arrow dependency, it may be
-desirable to build the Java bindings without requiring a statically-linked Arrow to avoid
-rebuilding an already built libcudf.so. To do so, specify the additional command-line flag
-`-DCUDF_JNI_ARROW_STATIC=OFF` when building the Java bindings with Maven.  However this will
-result in a jar that requires the correct Arrow version to be available in the runtime
-environment, and therefore is not recommended unless you are only performing local testing
-within the libcudf build environment.
-
 ## Statically Linking the CUDA Runtime
 
-If you use the default cmake options libcudart will be dynamically linked to libcudf
-which is included.  If you do this the resulting jar will have a classifier associated with it
-because that jar can only be used with a single version of the CUDA runtime.  
+If you use the default cmake options libcudart will be dynamically linked to libcudf and libcudfjni.
+To build with a static CUDA runtime, build libcudf with the `-DCUDA_STATIC_RUNTIME=ON` as a cmake
+parameter, and similarly build with `-DCUDA_STATIC_RUNTIME=ON` when building the Java bindings
+with Maven.
 
-There is experimental work to try and remove that requirement but it is not fully functional
-you can build cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
-`-DCUDA_STATIC_RUNTIME=ON` when running Maven.  This will statically link in the CUDA runtime
-and result in a jar with no classifier that should run on any host that has a version of the
-driver new enough to support the runtime that this was built with.
+### Building with a libcudf Archive
 
-To build the Java bindings with a statically-linked CUDA runtime, use a build command like:
-```
-mvn clean install -DCUDA_STATIC_RUNTIME=ON
-```
-
-You will get errors if the CUDA runtime linking is not consistent.  We tried to detect these
-up front and stop the build early if there is a mismatch, but there may be some cases we missed
-and this can result in some very hard to debug errors.
+When statically linking the CUDA runtime, it is recommended to build cuDF as an archive rather than
+a shared library, as this allows the Java bindings to only have a single shared library that uses
+the CUDA runtime. To build libcudf as an archive, specify `-DBUILD_SHARED_LIBS=OFF` as a cmake
+parameter when building libcudf, then specify `-DCUDF_JNI_LIBCUDF_STATIC=ON` when building the Java
+bindings with Maven.
 
 ## Per-thread Default Stream
 
@@ -117,7 +101,7 @@ Since the PTDS option is for each compilation unit, it should be done at the sam
 whole codebase. To enable PTDS, first build cuDF:
 ```shell script
 cd src/cudf/cpp/build
-cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DPER_THREAD_DEFAULT_STREAM=ON
+cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 make -j`nproc`
 make install
 ```
@@ -125,7 +109,7 @@ make install
 then build the jar:
 ```shell script
 cd src/cudf/java
-mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
+mvn clean install -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 ```
 
 ## GPUDirect Storage (GDS)

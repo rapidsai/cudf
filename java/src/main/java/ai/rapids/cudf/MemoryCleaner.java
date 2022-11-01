@@ -19,8 +19,6 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.ast.CompiledExpression;
-import ai.rapids.cudf.nvcomp.BatchedLZ4Decompressor;
-import ai.rapids.cudf.nvcomp.Decompressor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +59,15 @@ public final class MemoryCleaner {
   private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
+
+  /**
+   * Check if configured the shutdown hook which checks leaks at shutdown time.
+   *
+   * @return true if configured, false otherwise.
+   */
+  public static boolean configuredDefaultShutdownHook() {
+    return REF_COUNT_DEBUG;
+  }
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
@@ -199,28 +206,51 @@ public final class MemoryCleaner {
     }
   }, "Cleaner Thread");
 
+  /**
+   * Default shutdown runnable used to be added to Java default shutdown hook.
+   * It checks the leaks at shutdown time.
+   */
+  private static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
+    // If we are debugging things do a best effort to check for leaks at the end
+
+    System.gc();
+    // Avoid issues on shutdown with the cleaner thread.
+    t.interrupt();
+    try {
+      t.join(1000);
+    } catch (InterruptedException e) {
+      // Ignored
+    }
+    if (defaultGpu >= 0) {
+      Cuda.setDevice(defaultGpu);
+    }
+
+    for (CleanerWeakReference cwr : all) {
+      cwr.clean();
+    }
+  };
+
+  private static final Thread DEFAULT_SHUTDOWN_THREAD = new Thread(DEFAULT_SHUTDOWN_RUNNABLE);
+
   static {
     t.setDaemon(true);
     t.start();
     if (REF_COUNT_DEBUG) {
-      // If we are debugging things do a best effort to check for leaks at the end
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-        System.gc();
-        // Avoid issues on shutdown with the cleaner thread.
-        t.interrupt();
-        try {
-          t.join(1000);
-        } catch (InterruptedException e) {
-          // Ignored
-        }
-        if (defaultGpu >= 0) {
-          Cuda.setDevice(defaultGpu);
-        }
-        for (CleanerWeakReference cwr : all) {
-          cwr.clean();
-        }
-      }));
+      Runtime.getRuntime().addShutdownHook(DEFAULT_SHUTDOWN_THREAD);
     }
+  }
+
+  /**
+   * De-register the default shutdown hook from Java default Runtime, then return the corresponding
+   * shutdown runnable.
+   * If you want to register the default shutdown runnable in a custom shutdown hook manager
+   * instead of Java default Runtime, should first remove it using this method and then add it
+   *
+   * @return the default shutdown runnable
+   */
+  public static Runnable removeDefaultShutdownHook() {
+    Runtime.getRuntime().removeShutdownHook(DEFAULT_SHUTDOWN_THREAD);
+    return DEFAULT_SHUTDOWN_RUNNABLE;
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {
@@ -248,16 +278,6 @@ public final class MemoryCleaner {
     all.add(new CleanerWeakReference(event, cleaner, collected, false));
   }
 
-  public static void register(Decompressor.Metadata metadata, Cleaner cleaner) {
-    // It is now registered...
-    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
-  }
-
-  public static void register(BatchedLZ4Decompressor.BatchedMetadata metadata, Cleaner cleaner) {
-    // It is now registered...
-    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
-  }
-
   static void register(CuFileDriver driver, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(driver, cleaner, collected, false));
@@ -275,6 +295,10 @@ public final class MemoryCleaner {
 
   public static void register(CompiledExpression expr, Cleaner cleaner) {
     all.add(new CleanerWeakReference(expr, cleaner, collected, false));
+  }
+
+  static void register(HashJoin hashJoin, Cleaner cleaner) {
+    all.add(new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
 
   /**

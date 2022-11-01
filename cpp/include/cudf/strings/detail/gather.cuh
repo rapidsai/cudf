@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
 
 namespace cudf {
 namespace strings {
@@ -213,8 +218,8 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
  * @param map_end End of index iterator.
  * @param offsets The offset values to be associated with the output chars column.
  * @param chars_bytes The total number of bytes for the output chars column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New chars column fit for a strings column.
  */
 template <typename StringIterator, typename MapIterator>
@@ -227,7 +232,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
                                            rmm::mr::device_memory_resource* mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) return make_empty_column(data_type{type_id::INT8});
+  if (output_count == 0) return make_empty_column(type_id::INT8);
 
   auto chars_column  = create_chars_child_column(chars_bytes, stream, mr);
   auto const d_chars = chars_column->mutable_view().template data<char>();
@@ -278,8 +283,8 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
  * @param strings Strings instance for this operation.
  * @param begin Start of index iterator.
  * @param end End of index iterator.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column containing the gathered strings.
  */
 template <bool NullifyOutOfBounds, typename MapIterator>
@@ -292,22 +297,24 @@ std::unique_ptr<cudf::column> gather(
 {
   auto const output_count  = std::distance(begin, end);
   auto const strings_count = strings.size();
-  if (output_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (output_count == 0) return make_empty_column(type_id::STRING);
 
   // allocate offsets column and use memory to compute string size in each output row
   auto out_offsets_column = make_numeric_column(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
-  auto const d_in_offsets =
-    (strings_count > 0) ? strings.offsets().data<int32_t>() + strings.offset() : nullptr;
-  thrust::transform(rmm::exec_policy(stream),
-                    begin,
-                    end,
-                    d_out_offsets,
-                    [d_in_offsets, strings_count] __device__(size_type in_idx) {
-                      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
-                      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
-                    });
+  auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
+  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  thrust::transform(
+    rmm::exec_policy(stream),
+    begin,
+    end,
+    d_out_offsets,
+    [d_strings = *d_strings, d_in_offsets, strings_count] __device__(size_type in_idx) {
+      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
+      if (not d_strings.is_valid(in_idx)) return 0;
+      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
+    });
 
   // check total size is not too large
   size_t const total_bytes = thrust::transform_reduce(
@@ -316,7 +323,7 @@ std::unique_ptr<cudf::column> gather(
     d_out_offsets + output_count,
     [] __device__(auto size) { return static_cast<size_t>(size); },
     size_t{0},
-    thrust::plus<size_t>{});
+    thrust::plus{});
   CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of output strings is too large for a cudf column");
 
@@ -326,7 +333,6 @@ std::unique_ptr<cudf::column> gather(
 
   // build chars column
   cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
-  auto const d_strings  = column_device_view::create(strings.parent(), stream);
   auto out_chars_column = gather_chars(d_strings->begin<string_view>(),
                                        begin,
                                        end,
@@ -339,9 +345,7 @@ std::unique_ptr<cudf::column> gather(
                              std::move(out_offsets_column),
                              std::move(out_chars_column),
                              0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+                             rmm::device_buffer{});
 }
 
 /**
@@ -363,8 +367,8 @@ std::unique_ptr<cudf::column> gather(
  * @param begin Start of index iterator.
  * @param end End of index iterator.
  * @param nullify_out_of_bounds If true, indices outside the column's range are nullified.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column containing the gathered strings.
  */
 template <typename MapIterator>

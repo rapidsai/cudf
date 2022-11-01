@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,22 +21,26 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/count.h>
+#include <thrust/execution_policy.h>
 
 namespace {
 
 struct dispatch_is_not_nan {
   template <typename T>
-  std::enable_if_t<std::is_floating_point<T>::value, bool> __device__
+  std::enable_if_t<std::is_floating_point_v<T>, bool> __device__
   operator()(cudf::column_device_view col_device_view, cudf::size_type i)
   {
     return col_device_view.is_valid(i) ? not std::isnan(col_device_view.element<T>(i)) : true;
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_floating_point<T>::value, bool> __device__
+  std::enable_if_t<not std::is_floating_point_v<T>, bool> __device__
   operator()(cudf::column_device_view, cudf::size_type)
   {
     return true;
@@ -115,17 +119,17 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nans(input, keys, keep_threshold, rmm::cuda_stream_default, mr);
+  return detail::drop_nans(input, keys, keep_threshold, cudf::get_default_stream(), mr);
 }
 /*
- * Filters a table to remove nan null elements.
+ * Filters a table to remove nan elements.
  */
 std::unique_ptr<table> drop_nans(table_view const& input,
                                  std::vector<size_type> const& keys,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nans(input, keys, keys.size(), rmm::cuda_stream_default, mr);
+  return detail::drop_nans(input, keys, keys.size(), cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

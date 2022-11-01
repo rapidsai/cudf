@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import numpy as np
 
 import cudf as gd
@@ -6,10 +8,10 @@ from cudf.testing._utils import assert_eq
 
 def test_dataset_timeseries():
     gdf1 = gd.datasets.timeseries(
-        dtypes={"x": int, "y": float}, freq="120s", seed=1
+        dtypes={"x": int, "y": float}, freq="120s", nulls_frequency=0.3, seed=1
     )
     gdf2 = gd.datasets.timeseries(
-        dtypes={"x": int, "y": float}, freq="120s", seed=1
+        dtypes={"x": int, "y": float}, freq="120s", nulls_frequency=0.3, seed=1
     )
 
     assert_eq(gdf1, gdf2)
@@ -23,6 +25,7 @@ def test_dataset_timeseries():
         "2010",
         freq="2H",
         dtypes={"value": float, "name": "category", "id": int},
+        nulls_frequency=0.7,
         seed=1,
     )
 

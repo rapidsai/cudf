@@ -27,9 +27,8 @@ void initialize_with_identity(mutable_table_view& table,
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (size_type i = 0; i < table.num_columns(); ++i) {
-    auto col        = table.column(i);
-    auto const type = data_type{device_storage_type_id(col.type().id())};
-    dispatch_type_and_aggregation(type, aggs[i], identity_initializer{}, col, stream);
+    auto col = table.column(i);
+    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, col, stream);
   }
 }
 

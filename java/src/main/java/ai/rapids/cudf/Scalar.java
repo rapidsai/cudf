@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -86,6 +88,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
+    case DECIMAL128:
+      return new Scalar(type, makeDecimal128Scalar(BigInteger.ZERO.toByteArray(), type.getScale(), false));
     case LIST:
       throw new IllegalArgumentException("Please call 'listFromNull' to create a null list scalar.");
     default:
@@ -227,6 +231,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
   }
 
+  public static Scalar fromDecimal(int scale, BigInteger unscaledValue) {
+    byte[] unscaledValueBytes = unscaledValue.toByteArray();
+    byte[] finalBytes =  convertDecimal128FromJavaToCudf(unscaledValueBytes);
+    long handle = makeDecimal128Scalar(finalBytes, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL128, scale), handle);
+  }
+
   public static Scalar fromFloat(Float value) {
     if (value == null) {
       return Scalar.fromNull(DType.FLOAT32);
@@ -250,11 +261,22 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
     }
     DType dt = DType.fromJavaBigDecimal(value);
+    return fromDecimal(value.unscaledValue(), dt);
+  }
+
+  public static Scalar fromDecimal(BigInteger unscaledValue, DType dt) {
+    if (unscaledValue == null) {
+      return Scalar.fromNull(dt);
+    }
     long handle;
     if (dt.typeId == DType.DTypeEnum.DECIMAL32) {
-      handle = makeDecimal32Scalar(value.unscaledValue().intValueExact(), -value.scale(), true);
+      handle = makeDecimal32Scalar(unscaledValue.intValueExact(), dt.getScale(), true);
+    } else if (dt.typeId == DType.DTypeEnum.DECIMAL64) {
+      handle = makeDecimal64Scalar(unscaledValue.longValueExact(), dt.getScale(), true);
     } else {
-      handle = makeDecimal64Scalar(value.unscaledValue().longValueExact(), -value.scale(), true);
+      byte[] unscaledValueBytes = unscaledValue.toByteArray();
+      byte[] finalBytes =  convertDecimal128FromJavaToCudf(unscaledValueBytes);
+      handle = makeDecimal128Scalar(finalBytes, dt.getScale(), true);
     }
     return new Scalar(dt, handle);
   }
@@ -470,6 +492,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native short getShort(long scalarHandle);
   private static native int getInt(long scalarHandle);
   private static native long getLong(long scalarHandle);
+  private static native byte[] getBigIntegerBytes(long scalarHandle);
   private static native float getFloat(long scalarHandle);
   private static native double getDouble(long scalarHandle);
   private static native byte[] getUTF8(long scalarHandle);
@@ -493,6 +516,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
   private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
+  private static native long makeDecimal128Scalar(byte[] value, int scale, boolean isValid);
   private static native long makeListScalar(long viewHandle, boolean isValid);
   private static native long makeStructScalar(long[] viewHandles, boolean isValid);
   private static native long repeatString(long scalarHandle, int repeatTimes);
@@ -580,6 +604,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the BigDecimal unscaled scalar value as a byte array.
+   */
+  public byte[] getBigInteger() {
+    byte[] res = getBigIntegerBytes(getScalarHandle());
+    convertInPlaceToBigEndian(res);
+    return res;
+  }
+
+  /**
    * Returns the scalar value as a float.
    */
   public float getFloat() {
@@ -601,6 +634,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return BigDecimal.valueOf(getInt(), -type.getScale());
     } else if (this.type.typeId == DType.DTypeEnum.DECIMAL64) {
       return BigDecimal.valueOf(getLong(), -type.getScale());
+    } else if (this.type.typeId == DType.DTypeEnum.DECIMAL128) {
+      return new BigDecimal(new BigInteger(getBigInteger()), -type.getScale());
     }
     throw new IllegalArgumentException("Couldn't getBigDecimal from nonDecimal scalar");
   }
@@ -719,6 +754,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_NANOSECONDS:
     case DECIMAL64:
       return getLong() == other.getLong();
+    case DECIMAL128:
+      return getBigDecimal().equals(other.getBigDecimal());
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
     case LIST:
@@ -784,6 +821,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
           valueHash = v.hashCode();
         }
         break;
+      case DECIMAL128:
+        valueHash = getBigDecimal().hashCode();
+        break;
       default:
         throw new IllegalStateException("Unknown scalar type: " + type);
       }
@@ -844,6 +884,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case DECIMAL32:
         // FALL THROUGH
       case DECIMAL64:
+        // FALL THROUGH
+      case DECIMAL128:
         sb.append(getBigDecimal());
         break;
       case LIST:
@@ -877,6 +919,35 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public Scalar repeatString(int repeatTimes) {
     return new Scalar(DType.STRING, repeatString(getScalarHandle(), repeatTimes));
+  }
+
+  private static byte[] convertDecimal128FromJavaToCudf(byte[] bytes) {
+    byte[] finalBytes = new byte[DType.DTypeEnum.DECIMAL128.sizeInBytes];
+    byte lastByte = bytes[0];
+    //Convert to 2's complement representation and make sure the sign bit is extended correctly
+    byte setByte = (lastByte & 0x80) > 0 ? (byte)0xff : (byte)0x00;
+    for(int i = bytes.length; i < finalBytes.length; i++) {
+      finalBytes[i] = setByte;
+    }
+    // After setting the sign bits, reverse the rest of the bytes for endianness
+    for(int k = 0; k < bytes.length; k++) {
+      finalBytes[k] = bytes[bytes.length - k - 1];
+    }
+    return finalBytes;
+  }
+
+  private void convertInPlaceToBigEndian(byte[] res) {
+    assert ByteOrder.nativeOrder().equals(ByteOrder.LITTLE_ENDIAN);
+    int i =0;
+    int j = res.length -1;
+    while (j > i) {
+      byte tmp;
+      tmp = res[j];
+      res[j] = res[i];
+      res[i] = tmp;
+      j--;
+      i++;
+    }
   }
 
   /**

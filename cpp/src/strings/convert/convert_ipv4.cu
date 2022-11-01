@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,14 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -106,7 +110,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ipv4_to_integers(strings, rmm::cuda_stream_default, mr);
+  return detail::ipv4_to_integers(strings, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -164,7 +168,7 @@ std::unique_ptr<column> integers_to_ipv4(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
@@ -204,9 +208,7 @@ std::unique_ptr<column> integers_to_ipv4(
                              std::move(offsets_column),
                              std::move(chars_column),
                              integers.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
@@ -262,14 +264,14 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_ipv4(integers, rmm::cuda_stream_default, mr);
+  return detail::integers_to_ipv4(integers, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_ipv4(strings, rmm::cuda_stream_default, mr);
+  return detail::is_ipv4(strings, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

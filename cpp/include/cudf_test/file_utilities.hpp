@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,36 +18,54 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 #include <ftw.h>
 
 #include <cudf/utilities/error.hpp>
 
+/**
+ * @brief RAII class for creating a temporary directory.
+ *
+ */
 class temp_directory {
   std::string _path;
 
  public:
+  /**
+   * @brief Construct a new temp directory object
+   *
+   * @param base_name The base name of the temporary directory
+   */
   temp_directory(const std::string& base_name)
   {
-    std::string dir_template("/tmp");
-    if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+    std::string dir_template{std::filesystem::temp_directory_path().string()};
+    if (auto env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+
     dir_template += "/" + base_name + ".XXXXXX";
     auto const tmpdirptr = mkdtemp(const_cast<char*>(dir_template.data()));
-    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + dir_template);
+    CUDF_EXPECTS(tmpdirptr != nullptr, "Temporary directory creation failure: " + dir_template);
+
     _path = dir_template + "/";
   }
 
-  static int rm_files(const char* pathname, const struct stat* sbuf, int type, struct FTW* ftwb)
-  {
-    return std::remove(pathname);
-  }
+  temp_directory& operator=(temp_directory const&) = delete;
+  temp_directory(temp_directory const&)            = delete;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object
+   */
+  temp_directory& operator=(temp_directory&&) = default;
+  temp_directory(temp_directory&&)            = default;  ///< Move constructor
 
-  ~temp_directory()
-  {
-    // TODO: should use std::filesystem instead, once C++17 support added
-    nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-  }
+  ~temp_directory() { std::filesystem::remove_all(std::filesystem::path{_path}); }
 
-  const std::string& path() const { return _path; }
+  /**
+   * @brief Returns the path of the temporary directory
+   *
+   * @return string path of the temporary directory
+   */
+  [[nodiscard]] const std::string& path() const { return _path; }
 };

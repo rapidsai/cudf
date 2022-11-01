@@ -9,11 +9,11 @@ import pytest
 
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
-    NUMERIC_TYPES,
+    SIGNED_TYPES,
     _decimal_series,
     assert_eq,
 )
@@ -24,7 +24,7 @@ data_ = [
     [1],
     [-1],
     [1, 2, 3, 4],
-    [42, 1729, 4104],
+    [42, 17, 41],
     [1, 2, None, 4],
     [None, None, None],
     [],
@@ -164,21 +164,43 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
 )
 @pytest.mark.parametrize(
     "from_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 10)],
+    [
+        Decimal64Dtype(7, 2),
+        Decimal64Dtype(11, 4),
+        Decimal64Dtype(18, 10),
+        Decimal32Dtype(7, 2),
+        Decimal32Dtype(5, 3),
+        Decimal32Dtype(9, 5),
+    ],
 )
 @pytest.mark.parametrize(
     "to_dtype",
-    [Decimal64Dtype(7, 2), Decimal64Dtype(18, 10), Decimal64Dtype(11, 4)],
+    [
+        Decimal64Dtype(7, 2),
+        Decimal64Dtype(18, 10),
+        Decimal64Dtype(11, 4),
+        Decimal32Dtype(7, 2),
+        Decimal32Dtype(9, 5),
+        Decimal32Dtype(5, 3),
+    ],
 )
 def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
-    got = data.astype(from_dtype)
+    if from_dtype.scale > to_dtype.MAX_PRECISION:
+        pytest.skip(
+            "This is supposed to overflow because the representation value in "
+            "the source exceeds the max representable in destination dtype."
+        )
+    s = data.astype(from_dtype)
 
-    pa_arr = got.to_arrow().cast(
+    pa_arr = s.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
     )
-    expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+    if isinstance(to_dtype, Decimal32Dtype):
+        expected = cudf.Series(Decimal32Column.from_arrow(pa_arr))
+    elif isinstance(to_dtype, Decimal64Dtype):
+        expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
 
-    got = got.astype(to_dtype)
+    got = s.astype(to_dtype)
 
     assert_eq(got, expected)
 
@@ -206,7 +228,7 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     "from_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(17, 10)],
 )
-@pytest.mark.parametrize("to_dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("to_dtype", SIGNED_TYPES)
 def test_typecast_from_decimal(data, from_dtype, to_dtype):
     got = data.astype(from_dtype)
     pa_arr = got.to_arrow().cast(to_dtype, safe=False)
@@ -347,3 +369,11 @@ def test_serialize_decimal_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_decimal_invalid_precision():
+    with pytest.raises(pa.ArrowInvalid):
+        _ = cudf.Series([10, 20, 30], dtype=cudf.Decimal64Dtype(2, 2))
+
+    with pytest.raises(pa.ArrowInvalid):
+        _ = cudf.Series([Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))

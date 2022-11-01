@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,14 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -46,7 +48,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{type_id::BOOL8}, 0);
 
-  CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
+  CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
   auto d_true = string_view(true_string.data(), true_string.size());
 
@@ -84,7 +86,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(strings, true_string, rmm::cuda_stream_default, mr);
+  return detail::to_booleans(strings, true_string, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -96,13 +98,13 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = booleans.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(booleans.type().id() == type_id::BOOL8, "Input column must be boolean type");
-  CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
+  CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
   auto d_true = string_view(true_string.data(), true_string.size());
-  CUDF_EXPECTS(false_string.is_valid() && false_string.size() > 0,
+  CUDF_EXPECTS(false_string.is_valid(stream) && false_string.size() > 0,
                "Parameter false_string must not be empty.");
   auto d_false = string_view(false_string.data(), false_string.size());
 
@@ -140,9 +142,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                              std::move(offsets_column),
                              std::move(chars_column),
                              booleans.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
@@ -155,7 +155,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, rmm::cuda_stream_default, mr);
+  return detail::from_booleans(booleans, true_string, false_string, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

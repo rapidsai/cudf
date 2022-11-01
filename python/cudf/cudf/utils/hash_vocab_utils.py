@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -10,16 +10,16 @@ PRIME = np.uint64(281474976710677)
 A_SECOND_LEVEL_POW = np.uint8(48)
 B_SECOND_LEVEL_POW = np.uint8(7)
 
-A_LBOUND_SECOND_LEVEL_HASH = 2 ** 16
-A_HBOUND_SECOND_LEVEL_HASH = 2 ** A_SECOND_LEVEL_POW
+A_LBOUND_SECOND_LEVEL_HASH = 2**16
+A_HBOUND_SECOND_LEVEL_HASH = 2**A_SECOND_LEVEL_POW
 
 B_LBOUND_SECOND_LEVEL_HASH = 0
-B_HBOUND_SECOND_LEVEL_HASH = 2 ** B_SECOND_LEVEL_POW
+B_HBOUND_SECOND_LEVEL_HASH = 2**B_SECOND_LEVEL_POW
 
 # Extremely generous and should not ever happen. This limit is imposed
 # To ensure we can bit pack all the information needed for the bin hash
 # functions - a, b and table size
-MAX_SIZE_FOR_INITIAL_BIN = 2 ** 8 - 1
+MAX_SIZE_FOR_INITIAL_BIN = 2**8 - 1
 
 
 # Shifts for bit packing
@@ -71,18 +71,16 @@ def _get_space_util(bins, init_bins):
 
 def _pick_initial_a_b(data, max_constant, init_bins):
     while True:
-        a = np.random.randint(2 ** 12, 2 ** 15)
-        b = np.random.randint(2 ** 12, 2 ** 15)
+        a = np.random.randint(2**12, 2**15)
+        b = np.random.randint(2**12, 2**15)
         bins = _make_bins(data, init_bins, a, b)
         score = _get_space_util(bins, init_bins) / len(data)
 
         longest = _new_bin_length(_longest_bin_length(bins))
 
         if score <= max_constant and longest <= MAX_SIZE_FOR_INITIAL_BIN:
-            print(
-                "Attempting to build table using {:.6f}n space".format(score)
-            )
-            print("Longest bin was {}".format(longest))
+            print(f"Attempting to build table using {score:.6f}n space")
+            print(f"Longest bin was {longest}")
             break
 
     return bins, a, b
@@ -170,7 +168,7 @@ def _pack_keys_and_values(flattened_hash_table, original_dict):
 
 def _load_vocab_dict(path):
     vocab = {}
-    with open(path, mode="r") as f:
+    with open(path, encoding="utf-8") as f:
         counter = 0
         for line in f:
             vocab[line.strip()] = counter
@@ -193,17 +191,17 @@ def _store_func(
 ):
 
     with open(out_name, mode="w+") as f:
-        f.write("{}\n".format(outer_a))
-        f.write("{}\n".format(outer_b))
-        f.write("{}\n".format(num_outer_bins))
+        f.write(f"{outer_a}\n")
+        f.write(f"{outer_b}\n")
+        f.write(f"{num_outer_bins}\n")
         f.writelines(
-            "{} {}\n".format(coeff, offset)
+            f"{coeff} {offset}\n"
             for coeff, offset in zip(inner_table_coeffs, offsets_into_ht)
         )
-        f.write("{}\n".format(len(hash_table)))
-        f.writelines("{}\n".format(kv) for kv in hash_table)
+        f.write(f"{len(hash_table)}\n")
+        f.writelines(f"{kv}\n" for kv in hash_table)
         f.writelines(
-            "{}\n".format(tok_id)
+            f"{tok_id}\n"
             for tok_id in [unk_tok_id, first_token_id, sep_token_id]
         )
 
@@ -247,7 +245,7 @@ def hash_vocab(
     sep_token="[SEP]",
 ):
     """
-      Write the vocab vocabulary hashtable to the output_path
+    Write the vocab vocabulary hashtable to the output_path
     """
     np.random.seed(1243342)
     vocab = _load_vocab_dict(vocab_path)
@@ -255,9 +253,10 @@ def hash_vocab(
 
     hashed_vocab = {_sdbm_hash(key): value for key, value in vocab.items()}
 
-    error_message = """Collision occurred and only sdbm token hash current supported :(
-      Can be extended to use random hashes if needed"""
-
+    error_message = (
+        "A collision occurred and only sdbm token hash is currently "
+        "supported. This can be extended to use random hashes if needed."
+    )
     assert len(hashed_vocab) == len(vocab), error_message
 
     (
@@ -295,6 +294,6 @@ def hash_vocab(
         )
         assert (
             val == value
-        ), "Incorrect value found. Got {} expected {}".format(val, value)
+        ), f"Incorrect value found. Got {val} expected {value}"
 
     print("All present tokens return correct value.")

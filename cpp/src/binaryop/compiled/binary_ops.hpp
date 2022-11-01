@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -29,26 +30,6 @@ class column_device_view;
 class mutable_column_device_view;
 
 namespace binops {
-namespace detail {
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- */
-rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
-                                             scalar const& s,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
-}  // namespace detail
-
-/**
- * @brief Does the binop need to know if an operand is null/invalid to perform special
- * processing?
- */
-inline bool is_null_dependent(binary_operator op)
-{
-  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
-         op == binary_operator::NULL_MAX;
-}
-
 namespace compiled {
 
 std::unique_ptr<column> string_null_min_max(
@@ -56,7 +37,7 @@ std::unique_ptr<column> string_null_min_max(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> string_null_min_max(
@@ -64,7 +45,7 @@ std::unique_ptr<column> string_null_min_max(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> string_null_min_max(
@@ -72,7 +53,7 @@ std::unique_ptr<column> string_null_min_max(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -88,9 +69,10 @@ std::unique_ptr<column> string_null_min_max(
  *
  * @param lhs         The left operand string scalar
  * @param rhs         The right operand string column
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -98,7 +80,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -114,9 +96,10 @@ std::unique_ptr<column> binary_operation(
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string scalar
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -124,7 +107,7 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -132,17 +115,17 @@ std::unique_ptr<column> binary_operation(
  *
  * @note The sizes of @p lhs and @p rhs should be the same
  *
- * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i <
- * lhs.size()
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
  * Regardless of the operator, the validity of the output value is the logical
  * AND of the validity of the two operands
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string column
+ * @param op          The binary operator enum
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -150,7 +133,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 void binary_operation(mutable_column_view& out,
@@ -193,45 +176,45 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
 // Defined in individual .cu files.
 /**
  * @brief Deploys single type or double type dispatcher that runs binary operation on each element
- * of @p lhsd and @p rhsd columns.
+ * of @p lhs and @p rhs columns.
  *
  * This template is instantiated for each binary operator.
  *
  * @tparam BinaryOperator Binary operator functor
- * @param outd mutable device view of output column
- * @param lhsd device view of left operand column
- * @param rhsd device view of right operand column
- * @param is_lhs_scalar true if @p lhsd is a single element column representing a scalar
- * @param is_rhs_scalar true if @p rhsd is a single element column representing a scalar
+ * @param out mutable view of output column
+ * @param lhs view of left operand column
+ * @param rhs view of right operand column
+ * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
+ * @param is_rhs_scalar true if @p rhs is a single element column representing a scalar
  * @param stream CUDA stream used for device memory operations
  */
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_device_view&,
-                     column_device_view const&,
-                     column_device_view const&,
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream);
 /**
  * @brief Deploys single type or double type dispatcher that runs equality operation on each element
- * of @p lhsd and @p rhsd columns.
+ * of @p lhs and @p rhs columns.
  *
  * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS.
- * @p outd type is boolean.
+ * @p out type is boolean.
  *
  * This template is instantiated for each binary operator.
  *
- * @param outd mutable device view of output column
- * @param lhsd device view of left operand column
- * @param rhsd device view of right operand column
- * @param is_lhs_scalar true if @p lhsd is a single element column representing a scalar
- * @param is_rhs_scalar true if @p rhsd is a single element column representing a scalar
+ * @param out mutable view of output column
+ * @param lhs view of left operand column
+ * @param rhs view of right operand column
+ * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
+ * @param is_rhs_scalar true if @p rhs is a single element column representing a scalar
  * @param op comparison binary operator
  * @param stream CUDA stream used for device memory operations
  */
-void dispatch_equality_op(mutable_column_device_view& outd,
-                          column_device_view const& lhsd,
-                          column_device_view const& rhsd,
+void dispatch_equality_op(mutable_column_view& out,
+                          column_view const& lhs,
+                          column_view const& rhs,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
                           binary_operator op,

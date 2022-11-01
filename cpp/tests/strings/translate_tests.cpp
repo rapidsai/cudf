@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <tests/strings/utilities.h>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -36,7 +37,7 @@ std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const c
   cudf::char_utf8 out = 0;
   cudf::strings::detail::to_char_utf8(from, in);
   if (to) cudf::strings::detail::to_char_utf8(to, out);
-  return std::make_pair(in, out);
+  return std::pair(in, out);
 }
 
 TEST_F(StringsTranslateTest, Translate)
@@ -67,9 +68,9 @@ TEST_F(StringsTranslateTest, ZeroSizeStringsColumn)
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table;
   auto results = cudf::strings::translate(strings_view, translate_table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
   results = cudf::strings::filter_characters(strings_view, translate_table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsTranslateTest, FilterCharacters)

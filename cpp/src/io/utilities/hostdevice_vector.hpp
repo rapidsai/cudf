@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/system/cuda/experimental/pinned_allocator.h>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -36,101 +40,94 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() {}
+  hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
-  hostdevice_vector(hostdevice_vector&& v) { move(std::move(v)); }
-  hostdevice_vector& operator=(hostdevice_vector&& v)
-  {
-    move(std::move(v));
-    return *this;
-  }
-
-  explicit hostdevice_vector(size_t max_size,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-    : hostdevice_vector(max_size, max_size, stream)
+  explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
+    : hostdevice_vector(size, size, stream)
   {
   }
 
-  explicit hostdevice_vector(size_t initial_size,
-                             size_t max_size,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-    : num_elements(initial_size), max_elements(max_size)
+  explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
+    : d_data(0, stream)
   {
-    if (max_elements != 0) {
-      CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
-      d_data.resize(sizeof(T) * max_elements, stream);
-    }
+    CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
+    h_data.reserve(max_size);
+    h_data.resize(initial_size);
+    d_data.resize(max_size, stream);
   }
 
-  ~hostdevice_vector()
+  void push_back(const T& data)
   {
-    if (max_elements != 0) {
-      auto const free_result = cudaFreeHost(h_data);
-      assert(free_result == cudaSuccess);
-    }
+    CUDF_EXPECTS(size() < capacity(),
+                 "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
+    h_data.push_back(data);
   }
 
-  bool insert(const T& data)
+  [[nodiscard]] size_t capacity() const noexcept { return h_data.capacity(); }
+  [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
+  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }
+
+  [[nodiscard]] T& operator[](size_t i) { return h_data[i]; }
+  [[nodiscard]] T const& operator[](size_t i) const { return h_data[i]; }
+
+  [[nodiscard]] T* host_ptr(size_t offset = 0) { return h_data.data() + offset; }
+  [[nodiscard]] T const* host_ptr(size_t offset = 0) const { return h_data.data() + offset; }
+
+  [[nodiscard]] T* begin() { return host_ptr(); }
+  [[nodiscard]] T const* begin() const { return host_ptr(); }
+
+  [[nodiscard]] T* end() { return host_ptr(size()); }
+  [[nodiscard]] T const* end() const { return host_ptr(size()); }
+
+  [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
+  [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
+
+  [[nodiscard]] T* d_begin() { return device_ptr(); }
+  [[nodiscard]] T const* d_begin() const { return device_ptr(); }
+
+  [[nodiscard]] T* d_end() { return device_ptr(size()); }
+  [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
+
+  /**
+   * @brief Returns the specified element from device memory
+   *
+   * @note This function incurs a device to host memcpy and should be used sparingly.
+   * @note This function synchronizes `stream`.
+   *
+   * @throws rmm::out_of_range exception if `element_index >= size()`
+   *
+   * @param element_index Index of the desired element
+   * @param stream The stream on which to perform the copy
+   * @return The value of the specified element
+   */
+  [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
   {
-    if (num_elements < max_elements) {
-      h_data[num_elements] = data;
-      num_elements++;
-      return true;
-    }
-    return false;
+    return d_data.element(element_index, stream);
   }
 
-  size_t max_size() const noexcept { return max_elements; }
-  size_t size() const noexcept { return num_elements; }
-  size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
+  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
+  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
 
-  T& operator[](size_t i) const { return h_data[i]; }
-  T* host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T* device_ptr(size_t offset = 0) { return reinterpret_cast<T*>(d_data.data()) + offset; }
-  T const* device_ptr(size_t offset = 0) const
-  {
-    return reinterpret_cast<T const*>(d_data.data()) + offset;
-  }
-
-  operator cudf::device_span<T>() { return {device_ptr(), max_elements}; }
-  operator cudf::device_span<T const>() const { return {device_ptr(), max_elements}; }
-
-  operator cudf::host_span<T>() { return {h_data, max_elements}; }
-  operator cudf::host_span<T const>() const { return {h_data, max_elements}; }
+  operator cudf::device_span<T>() { return {device_ptr(), size()}; }
+  operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
-      d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      device_ptr(), host_ptr(), memory_size(), cudaMemcpyHostToDevice, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
-      h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      host_ptr(), device_ptr(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
  private:
-  void move(hostdevice_vector&& v)
-  {
-    stream       = v.stream;
-    max_elements = v.max_elements;
-    num_elements = v.num_elements;
-    h_data       = v.h_data;
-    d_data       = std::move(v.d_data);
-
-    v.max_elements = 0;
-    v.num_elements = 0;
-    v.h_data       = nullptr;
-  }
-
-  rmm::cuda_stream_view stream{};
-  size_t max_elements{};
-  size_t num_elements{};
-  T* h_data{};
-  rmm::device_buffer d_data{};
+  thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>> h_data;
+  rmm::device_uvector<T> d_data;
 };
 
 namespace cudf {
@@ -144,9 +141,7 @@ namespace detail {
 template <typename T>
 class hostdevice_2dvector {
  public:
-  hostdevice_2dvector(size_t rows,
-                      size_t columns,
-                      rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  hostdevice_2dvector(size_t rows, size_t columns, rmm::cuda_stream_view stream)
     : _size{rows, columns}, _data{rows * columns, stream}
   {
   }
@@ -175,6 +170,7 @@ class hostdevice_2dvector {
 
   auto size() const noexcept { return _size; }
   auto count() const noexcept { return _size.first * _size.second; }
+  auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }

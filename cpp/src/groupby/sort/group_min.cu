@@ -27,8 +27,11 @@ std::unique_ptr<column> group_min(column_view const& values,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(values.type(),
-                         reduce_functor<aggregation::MIN>{},
+  auto values_type = cudf::is_dictionary(values.type())
+                       ? dictionary_column_view(values).keys().type()
+                       : values.type();
+  return type_dispatcher(values_type,
+                         group_reduction_dispatcher<aggregation::MIN>{},
                          values,
                          num_groups,
                          group_labels,

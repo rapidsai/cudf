@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@
 #include <algorithm>
 #include <limits>
 #include <random>
+#include <string>
 
 namespace {
-using cudf::test::fixed_width_column_wrapper;
 
 template <typename T, typename F>
 auto generate_vectors(size_t ncols, size_t nrows, F generator)
@@ -59,10 +59,10 @@ auto transpose_vectors(std::vector<std::vector<T>> const& input)
   return transposed;
 }
 
-template <typename T>
+template <typename T, typename ColumnWrapper>
 auto make_columns(std::vector<std::vector<T>> const& values)
 {
-  std::vector<fixed_width_column_wrapper<T>> columns;
+  std::vector<ColumnWrapper> columns;
   columns.reserve(values.size());
 
   for (auto const& value_col : values) {
@@ -72,11 +72,11 @@ auto make_columns(std::vector<std::vector<T>> const& values)
   return columns;
 }
 
-template <typename T>
+template <typename T, typename ColumnWrapper>
 auto make_columns(std::vector<std::vector<T>> const& values,
                   std::vector<std::vector<cudf::size_type>> const& valids)
 {
-  std::vector<fixed_width_column_wrapper<T>> columns;
+  std::vector<ColumnWrapper> columns;
   columns.reserve(values.size());
 
   for (size_t col = 0; col < values.size(); ++col) {
@@ -86,15 +86,14 @@ auto make_columns(std::vector<std::vector<T>> const& values,
   return columns;
 }
 
-template <typename T>
-auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols)
+template <typename ColumnWrapper>
+auto make_table_view(std::vector<ColumnWrapper> const& cols)
 {
   std::vector<cudf::column_view> views(cols.size());
 
-  std::transform(
-    cols.begin(), cols.end(), views.begin(), [](fixed_width_column_wrapper<T> const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
+  std::transform(cols.begin(), cols.end(), views.begin(), [](auto const& col) {
+    return static_cast<cudf::column_view>(col);
+  });
 
   return cudf::table_view(views);
 }
@@ -102,6 +101,10 @@ auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols)
 template <typename T>
 void run_test(size_t ncols, size_t nrows, bool add_nulls)
 {
+  using ColumnWrapper = std::conditional_t<std::is_same_v<T, std::string>,
+                                           cudf::test::strings_column_wrapper,
+                                           cudf::test::fixed_width_column_wrapper<T>>;
+
   std::mt19937 rng(1);
 
   // Generate values as vector of vectors
@@ -109,8 +112,8 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
     ncols, nrows, [&rng]() { return cudf::test::make_type_param_scalar<T>(rng()); });
   auto const valuesT = transpose_vectors(values);
 
-  std::vector<fixed_width_column_wrapper<T>> input_cols;
-  std::vector<fixed_width_column_wrapper<T>> expected_cols;
+  std::vector<ColumnWrapper> input_cols;
+  std::vector<ColumnWrapper> expected_cols;
   std::vector<cudf::size_type> expected_nulls(nrows);
 
   if (add_nulls) {
@@ -129,11 +132,11 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
                    });
 
     // Create column wrappers from vector of vectors
-    input_cols    = make_columns(values, valids);
-    expected_cols = make_columns(valuesT, validsT);
+    input_cols    = make_columns<T, ColumnWrapper>(values, valids);
+    expected_cols = make_columns<T, ColumnWrapper>(valuesT, validsT);
   } else {
-    input_cols    = make_columns(values);
-    expected_cols = make_columns(valuesT);
+    input_cols    = make_columns<T, ColumnWrapper>(values);
+    expected_cols = make_columns<T, ColumnWrapper>(valuesT);
   }
 
   // Create table views from column wrappers
@@ -158,7 +161,13 @@ template <typename T>
 class TransposeTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
+// Using std::string here instead of cudf::test::StringTypes allows us to
+// use std::vector<T> utilities in this file just like the fixed-width types.
+// Should consider changing cudf::test::StringTypes to std::string instead of cudf::string_view.
+using StdStringType  = cudf::test::Types<std::string>;
+using TransposeTypes = cudf::test::Concat<cudf::test::FixedWidthTypes, StdStringType>;
+
+TYPED_TEST_SUITE(TransposeTest, TransposeTypes);  // cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TransposeTest, SingleValue) { run_test<TypeParam>(1, 1, false); }
 
@@ -182,11 +191,14 @@ TYPED_TEST(TransposeTest, EmptyTable) { run_test<TypeParam>(0, 0, false); }
 
 TYPED_TEST(TransposeTest, EmptyColumns) { run_test<TypeParam>(10, 0, false); }
 
-TYPED_TEST(TransposeTest, MismatchedColumns)
+class TransposeTestError : public cudf::test::BaseFixture {
+};
+
+TEST_F(TransposeTestError, MismatchedColumns)
 {
-  fixed_width_column_wrapper<TypeParam, int32_t> col1({1, 2, 3});
-  fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
-  fixed_width_column_wrapper<float> col3{{7, 8, 9}};
+  cudf::test::fixed_width_column_wrapper<uint32_t, int32_t> col1({1, 2, 3});
+  cudf::test::fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
+  cudf::test::fixed_width_column_wrapper<float> col3{{7, 8, 9}};
   cudf::table_view input{{col1, col2, col3}};
   EXPECT_THROW(cudf::transpose(input), cudf::logic_error);
 }

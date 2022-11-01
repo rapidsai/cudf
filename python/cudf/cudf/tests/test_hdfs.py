@@ -1,14 +1,14 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
 
-import fastavro as fa
+import fastavro
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pyarrow import orc as orc
+from pyarrow import orc
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -62,7 +62,7 @@ def test_read_csv(tmpdir, pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_csv_reader.csv".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_csv_reader.csv"
 
     got = cudf.read_csv(hd_fpath)
 
@@ -81,7 +81,7 @@ def test_write_csv(pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_csv_writer.csv".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_csv_writer.csv"
 
     gdf.to_csv(hd_fpath, index=False)
 
@@ -107,7 +107,7 @@ def test_read_parquet(tmpdir, pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_parquet_reader.parquet".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_parquet_reader.parquet"
 
     got = cudf.read_parquet(hd_fpath)
 
@@ -126,7 +126,7 @@ def test_write_parquet(pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_parquet_writer.parquet".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_parquet_writer.parquet"
 
     gdf.to_parquet(hd_fpath)
 
@@ -153,7 +153,7 @@ def test_write_parquet_partitioned(tmpdir, pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_parquet_partitioned.parquet".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_parquet_partitioned.parquet"
     # Clear data written from previous runs
     hdfs.rm(f"{basedir}/test_parquet_partitioned.parquet", recursive=True)
     gdf.to_parquet(
@@ -186,7 +186,7 @@ def test_read_json(tmpdir, pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_json_reader.json".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_json_reader.json"
 
     got = cudf.read_json(hd_fpath, engine="cudf", orient="records", lines=True)
 
@@ -207,9 +207,9 @@ def test_read_orc(datadir, hdfs, test_url):
     hdfs.upload(basedir + "/file.orc", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.orc".format(host, port, basedir)
+        hd_fpath = f"hdfs://{host}:{port}{basedir}/file.orc"
     else:
-        hd_fpath = "hdfs://{}/file.orc".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/file.orc"
 
     got = cudf.read_orc(hd_fpath)
     expect = orc.ORCFile(buffer).read().to_pandas()
@@ -226,7 +226,7 @@ def test_write_orc(pdf, hdfs, test_url):
             host, port, basedir
         )
     else:
-        hd_fpath = "hdfs://{}/test_orc_writer.orc".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/test_orc_writer.orc"
 
     gdf.to_orc(hd_fpath)
 
@@ -247,13 +247,13 @@ def test_read_avro(datadir, hdfs, test_url):
     hdfs.upload(basedir + "/file.avro", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/file.avro".format(host, port, basedir)
+        hd_fpath = f"hdfs://{host}:{port}{basedir}/file.avro"
     else:
-        hd_fpath = "hdfs://{}/file.avro".format(basedir)
+        hd_fpath = f"hdfs://{basedir}/file.avro"
 
     got = cudf.read_avro(hd_fpath)
     with open(fname, mode="rb") as f:
-        expect = pd.DataFrame.from_records(fa.reader(f))
+        expect = pd.DataFrame.from_records(fastavro.reader(f))
 
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)
@@ -270,7 +270,7 @@ def test_storage_options(tmpdir, pdf, hdfs):
     # Write to hdfs
     hdfs.upload(basedir + "/file.csv", buffer)
 
-    hd_fpath = "hdfs://{}/file.csv".format(basedir)
+    hd_fpath = f"hdfs://{basedir}/file.csv"
 
     storage_options = {"host": host, "port": port}
 
@@ -293,7 +293,7 @@ def test_storage_options_error(tmpdir, pdf, hdfs):
     # Write to hdfs
     hdfs.upload(basedir + "/file.csv", buffer)
 
-    hd_fpath = "hdfs://{}:{}{}/file.avro".format(host, port, basedir)
+    hd_fpath = f"hdfs://{host}:{port}{basedir}/file.avro"
 
     storage_options = {"host": host, "port": port}
 

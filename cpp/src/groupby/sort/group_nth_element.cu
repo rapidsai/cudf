@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,27 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/discard_iterator.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
+#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf {
@@ -71,7 +78,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))
     // Returns index of nth value.
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
@@ -113,10 +120,11 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
+
   auto output_table = cudf::detail::gather(table_view{{values}},
-                                           nth_index.begin(),
-                                           nth_index.end(),
+                                           nth_index,
                                            out_of_bounds_policy::NULLIFY,
+                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);

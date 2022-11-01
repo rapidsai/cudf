@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
@@ -27,6 +29,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -153,7 +157,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(
-    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case, stream);
+    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components
@@ -172,8 +176,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
-    [device_offsets, do_truncate, max_sequence_length, stride] __device__(cudf::size_type idx) {
-      uint32_t num_tokens = device_offsets[idx + 1] - device_offsets[idx];
+    [device_offsets, do_truncate, max_sequence_length, stride, strings_count] __device__(
+      cudf::size_type idx) {
+      uint32_t const num_tokens =
+        idx < strings_count ? device_offsets[idx + 1] - device_offsets[idx] : 0;
       if (do_truncate || num_tokens <= max_sequence_length) return uint32_t{1};
       return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
     },
@@ -248,28 +254,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 }  // namespace detail
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  std::string const& filename_hashed_vocabulary,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  uint32_t max_rows_tensor,
-                                  rmm::mr::device_memory_resource* mr)
-{
-  auto vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
-  CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(strings,
-                                  *vocab_table,
-                                  max_sequence_length,
-                                  stride,
-                                  do_lower_case,
-                                  do_truncate,
-                                  max_rows_tensor,
-                                  rmm::cuda_stream_default,
-                                  mr);
-}
-
-tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   hashed_vocabulary const& vocabulary_table,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,
@@ -286,7 +270,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  rmm::cuda_stream_default,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,12 @@
  */
 #include <tests/iterator/iterator_tests.cuh>
 
-using TestingTypes = cudf::test::AllTypes;
+#include <thrust/host_vector.h>
+#include <thrust/pair.h>
 
-TYPED_TEST_CASE(IteratorTest, TestingTypes);
+using TestingTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
+
+TYPED_TEST_SUITE(IteratorTest, TestingTypes);
 
 TYPED_TEST(IteratorTest, scalar_iterator)
 {

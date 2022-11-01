@@ -1,11 +1,10 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import division
 
 import decimal
 import operator
 import random
-from itertools import product
+from itertools import combinations_with_replacement, product
 
 import cupy as cp
 import numpy as np
@@ -13,7 +12,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
+from cudf import Series
+from cudf.core._compat import PANDAS_GE_150
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
@@ -26,6 +26,7 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
+
 
 _binops = [
     operator.add,
@@ -80,7 +81,7 @@ def test_series_binop_concurrent(binop):
         result = binop(sr.astype("int32"), sr)
         expect = binop(arr.astype("int32"), arr)
 
-        np.testing.assert_almost_equal(result.to_array(), expect, decimal=5)
+        np.testing.assert_almost_equal(result.to_numpy(), expect, decimal=5)
 
     from concurrent.futures import ThreadPoolExecutor
 
@@ -108,7 +109,7 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(arr, rhs))
+    np.testing.assert_almost_equal(result.to_numpy(), binop(arr, rhs))
 
 
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
@@ -146,35 +147,7 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(arr1, arr2))
-
-
-_logical_binops = [
-    (operator.and_, operator.and_),
-    (operator.or_, operator.or_),
-    (np.logical_and, cudf.logical_and),
-    (np.logical_or, cudf.logical_or),
-]
-
-
-@pytest.mark.parametrize("lhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("rhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("binop,cubinop", _logical_binops)
-def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
-    arr1 = pd.Series(np.random.choice([True, False], 10))
-    if lhstype is not np.bool_:
-        arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
-    sr1 = Series(arr1)
-
-    arr2 = pd.Series(np.random.choice([True, False], 10))
-    if rhstype is not np.bool_:
-        arr2 = arr2 * (np.random.random(10) * 100).astype(rhstype)
-    sr2 = Series(arr2)
-
-    result = cubinop(sr1, sr2)
-    expect = binop(arr1, arr2)
-
-    utils.assert_eq(result, expect)
+    np.testing.assert_almost_equal(result.to_numpy(), binop(arr1, arr2))
 
 
 _cmpops = [
@@ -211,19 +184,18 @@ def test_series_compare(cmpop, obj_class, dtype):
         result2 = Series(result2)
         result3 = Series(result3)
 
-    np.testing.assert_equal(result1.to_array(), cmpop(arr1, arr1))
-    np.testing.assert_equal(result2.to_array(), cmpop(arr2, arr2))
-    np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
+    np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, arr1))
+    np.testing.assert_equal(result2.to_numpy(), cmpop(arr2, arr2))
+    np.testing.assert_equal(result3.to_numpy(), cmpop(arr1, arr2))
 
 
 def _series_compare_nulls_typegen():
-    tests = []
-    tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
-    tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-    tests += list(product(NUMERIC_TYPES, NUMERIC_TYPES))
-    tests += list(product(STRING_TYPES, STRING_TYPES))
-
-    return tests
+    return [
+        *combinations_with_replacement(DATETIME_TYPES, 2),
+        *combinations_with_replacement(TIMEDELTA_TYPES, 2),
+        *combinations_with_replacement(NUMERIC_TYPES, 2),
+        *combinations_with_replacement(STRING_TYPES, 2),
+    ]
 
 
 @pytest.mark.parametrize("cmpop", _cmpops)
@@ -298,8 +270,8 @@ def test_series_compare_scalar(
         result1 = Series(result1)
         result2 = Series(result2)
 
-    np.testing.assert_equal(result1.to_array(), cmpop(arr1, rhs))
-    np.testing.assert_equal(result2.to_array(), cmpop(rhs, arr1))
+    np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, rhs))
+    np.testing.assert_equal(result2.to_numpy(), cmpop(rhs, arr1))
 
 
 _nulls = ["none", "some"]
@@ -347,7 +319,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
         )[:nelem]
     # Fill NA values
     na_value = -10000
-    got = res.fillna(na_value).to_array()
+    got = res.fillna(na_value).to_numpy()
     expect = lhs_data + rhs_data
     if lhs_nulls == "some" or rhs_nulls == "some":
         expect[~res_mask] = na_value
@@ -383,7 +355,7 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_almost_equal(result.to_array(), binop(lhs, rhs))
+    np.testing.assert_almost_equal(result.to_numpy(), binop(lhs, rhs))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -408,7 +380,7 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     if obj_class == "Index":
         result = Series(result)
 
-    np.testing.assert_array_equal(result.to_array(), cmpop(lhs, rhs))
+    np.testing.assert_array_equal(result.to_numpy(), cmpop(lhs, rhs))
 
 
 _reflected_ops = [
@@ -446,7 +418,7 @@ _reflected_ops = [
 @pytest.mark.parametrize(
     "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
 )
-def test_reflected_ops_scalar(func, dtype, obj_class):
+def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
@@ -468,7 +440,20 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
     ps_result = func(random_series)
 
     # verify
-    np.testing.assert_allclose(ps_result, gs_result.to_array())
+    np.testing.assert_allclose(ps_result, gs_result.to_numpy())
+
+
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
+def test_cudf_scalar_reflected_ops_scalar(func, dtype):
+    value = 42
+    scalar = cudf.Scalar(42)
+
+    expected = func(value)
+    actual = func(scalar).value
+
+    assert np.isclose(expected, actual)
 
 
 _cudf_scalar_reflected_ops = [
@@ -512,7 +497,7 @@ _cudf_scalar_reflected_ops = [
         )
     ),
 )
-def test_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
+def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
@@ -536,7 +521,7 @@ def test_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     ps_result = cpu_func(random_series)
 
     # verify
-    np.testing.assert_allclose(ps_result, gs_result.to_array())
+    np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
 @pytest.mark.parametrize("binop", _binops)
@@ -622,6 +607,14 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
 
+    pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+    pd_frame = binop(pdf1, pdf2)
+    cd_frame = binop(gdf1, gdf2)
+    utils.assert_eq(pd_frame, cd_frame)
+
 
 @pytest.mark.parametrize(
     "df2",
@@ -668,6 +661,8 @@ _operators_arithmetic = [
     "rmod",
     "pow",
     "rpow",
+    "div",
+    "divide",
     "floordiv",
     "rfloordiv",
     "truediv",
@@ -774,7 +769,7 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
-@pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
+@pytest.mark.parametrize("fill_value", [None, 1.0])
 @pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
     dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
@@ -833,6 +828,42 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     utils.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("func", _operators_comparison)
+@pytest.mark.parametrize("nulls", _nulls)
+@pytest.mark.parametrize("other", ["df", "scalar"])
+def test_logical_operator_func_dataframe(func, nulls, other):
+    np.random.seed(0)
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        pdf = pd.DataFrame()
+        from string import ascii_lowercase
+
+        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+
+        for i in range(num_cols):
+            colname = ascii_lowercase[cols[i]]
+            data = utils.gen_rand("float64", num_rows) * 10000
+            if nulls == "some":
+                idx = np.random.choice(
+                    num_rows, size=int(num_rows / 2), replace=False
+                )
+                data[idx] = np.nan
+            pdf[colname] = data
+        return pdf
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == "df" else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+
+    got = getattr(gdf1, func)(gdf2)
+    expect = getattr(pdf1, func)(pdf2)[list(got._data)]
+
+    utils.assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("func", _operators_arithmetic + _operators_comparison)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
@@ -882,56 +913,10 @@ def test_vector_to_none_binops(dtype):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "lhs",
-    [
-        1,
-        3,
-        4,
-        pd.Series([5, 6, 2]),
-        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
-        6,
-    ],
-)
-@pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
-@pytest.mark.parametrize(
-    "ops",
-    [
-        (np.remainder, cudf.remainder),
-        (np.floor_divide, cudf.floor_divide),
-        (np.subtract, cudf.subtract),
-        (np.add, cudf.add),
-        (np.true_divide, cudf.true_divide),
-        (np.multiply, cudf.multiply),
-    ],
-)
-def test_ufunc_ops(lhs, rhs, ops):
-    np_op, cu_op = ops
-
-    if isinstance(lhs, pd.Series):
-        culhs = cudf.from_pandas(lhs)
-    else:
-        culhs = lhs
-
-    if isinstance(rhs, pd.Series):
-        curhs = cudf.from_pandas(rhs)
-    else:
-        curhs = rhs
-
-    expect = np_op(lhs, rhs)
-    got = cu_op(culhs, curhs)
-    if np.isscalar(expect):
-        assert got == expect
-    else:
-        utils.assert_eq(
-            expect, got,
-        )
-
-
 def dtype_scalar(val, dtype):
     if dtype == "str":
         return str(val)
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.type in {np.datetime64, np.timedelta64}:
         res, _ = np.datetime_data(dtype)
         return dtype.type(val, res)
@@ -939,7 +924,7 @@ def dtype_scalar(val, dtype):
         return dtype.type(val)
 
 
-def make_valid_scalar_add_data():
+def make_scalar_add_data():
     valid = set()
 
     # to any int, we may add any kind of
@@ -1005,7 +990,7 @@ def make_invalid_scalar_add_data():
     return sorted(list(invalid))
 
 
-@pytest.mark.parametrize("dtype_l,dtype_r", make_valid_scalar_add_data())
+@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_add_data())
 def test_scalar_add(dtype_l, dtype_r):
     test_value = 1
 
@@ -1135,7 +1120,7 @@ def make_scalar_product_data():
         )
     )
 
-    # we can muliply any timedelta by any int, or bool
+    # we can multiply any timedelta by any int, or bool
     valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | BOOL_TYPES))
 
     # we can multiply a float by any int, float, or bool
@@ -1500,8 +1485,8 @@ def test_scalar_power(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = lval_host ** rval_host
-    got = lval_gpu ** rval_gpu
+    expect = lval_host**rval_host
+    got = lval_gpu**rval_gpu
 
     assert expect == got.value
     assert expect.dtype == got.dtype
@@ -1515,7 +1500,42 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
     with pytest.raises(TypeError):
-        lval_gpu ** rval_gpu
+        lval_gpu**rval_gpu
+
+
+def make_scalar_null_binops_data():
+    return (
+        [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
+        + [(operator.sub, *dtypes) for dtypes in make_scalar_difference_data()]
+        + [(operator.mul, *dtypes) for dtypes in make_scalar_product_data()]
+        + [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
+        + [
+            (operator.floordiv, *dtypes)
+            for dtypes in make_scalar_floordiv_data()
+        ]
+        + [
+            (operator.truediv, *dtypes)
+            for dtypes in make_scalar_truediv_data()
+        ]
+        + [(operator.mod, *dtypes) for dtypes in make_scalar_remainder_data()]
+        + [(operator.pow, *dtypes) for dtypes in make_scalar_power_data()]
+    )
+
+
+@pytest.mark.parametrize("op,dtype_l,dtype_r", make_scalar_null_binops_data())
+def test_scalar_null_binops(op, dtype_l, dtype_r):
+    lhs = cudf.Scalar(cudf.NA, dtype=dtype_l)
+    rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
+
+    result = op(lhs, rhs)
+    assert result.value is cudf.NA
+
+    # make sure dtype is the same as had there been a valid scalar
+    valid_lhs = cudf.Scalar(0, dtype=dtype_l)
+    valid_rhs = cudf.Scalar(0, dtype=dtype_r)
+
+    valid_result = op(valid_lhs, valid_rhs)
+    assert result.dtype == valid_result.dtype
 
 
 @pytest.mark.parametrize(
@@ -1542,7 +1562,8 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
         pytest.param(
             "nanoseconds",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36589"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
         ),
     ],
@@ -1649,7 +1670,8 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         pytest.param(
             "nanoseconds",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/36589"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
         ),
     ],
@@ -1695,20 +1717,20 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     )
 
     if dtype == "datetime64[s]":
-        val = np.dtype(dtype).type(4, "s")
+        val = cudf.dtype(dtype).type(4, "s")
     elif dtype == "timedelta64[s]":
-        val = np.dtype(dtype).type(4, "s")
+        val = cudf.dtype(dtype).type(4, "s")
     elif dtype == "category":
         val = np.int64(4)
+    elif dtype == "str":
+        val = str(4)
     else:
-        val = np.dtype(dtype).type(4)
+        val = cudf.dtype(dtype).type(4)
 
-    expected = val == data.to_pandas()
-    got = val == data
-
-    # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.BaseIndex):
-        expected = pd.Index(expected)
+    # Compare equality with series on left side to dispatch to the pandas/cudf
+    # __eq__ operator and avoid a DeprecationWarning from numpy.
+    expected = data.to_pandas() == val
+    got = data == val
 
     utils.assert_eq(expected, got)
 
@@ -1758,16 +1780,16 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.add,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
-            ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
-            ["3.0", "4.0"],
             cudf.Decimal64Dtype(scale=2, precision=3),
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["3.0", "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=4),
         ),
         (
             operator.add,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["3.75", "3.005"],
@@ -1780,12 +1802,12 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.1", "0.2"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["100.1", "200.2"],
-            cudf.Decimal64Dtype(scale=3, precision=18),
+            cudf.Decimal128Dtype(scale=3, precision=23),
         ),
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", "0.995"],
@@ -1794,7 +1816,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", "0.995"],
@@ -1807,16 +1829,16 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.1", "0.2"],
             cudf.Decimal64Dtype(scale=6, precision=10),
             ["99.9", "199.8"],
-            cudf.Decimal64Dtype(scale=6, precision=18),
+            cudf.Decimal128Dtype(scale=6, precision=19),
         ),
         (
             operator.mul,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["1.5", "3.0"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["2.25", "6.0"],
-            cudf.Decimal64Dtype(scale=5, precision=7),
+            cudf.Decimal64Dtype(scale=5, precision=8),
         ),
         (
             operator.mul,
@@ -1843,7 +1865,7 @@ def test_binops_with_NA_consistent(dtype, op):
             ["1.5", "3.0"],
             cudf.Decimal64Dtype(scale=1, precision=4),
             ["1.0", "0.6"],
-            cudf.Decimal64Dtype(scale=1, precision=9),
+            cudf.Decimal64Dtype(scale=7, precision=10),
         ),
         (
             operator.truediv,
@@ -1852,7 +1874,7 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.1", "0.2"],
             cudf.Decimal64Dtype(scale=2, precision=4),
             ["1000.0", "1000.0"],
-            cudf.Decimal64Dtype(scale=-3, precision=8),
+            cudf.Decimal64Dtype(scale=6, precision=12),
         ),
         (
             operator.truediv,
@@ -1861,21 +1883,21 @@ def test_binops_with_NA_consistent(dtype, op):
             ["2.34", "8.50"],
             cudf.Decimal64Dtype(scale=2, precision=8),
             ["56.77", "1.79"],
-            cudf.Decimal64Dtype(scale=2, precision=18),
+            cudf.Decimal128Dtype(scale=13, precision=25),
         ),
         (
             operator.add,
             ["1.5", None, "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["1.5", None, "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=1, precision=2),
             ["3.0", None, "4.0"],
-            cudf.Decimal64Dtype(scale=2, precision=3),
+            cudf.Decimal64Dtype(scale=1, precision=3),
         ),
         (
             operator.add,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["3.75", None],
@@ -1884,7 +1906,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", None],
@@ -1893,7 +1915,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             ["1.5", "2.0"],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["2.25", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.75", None],
@@ -1902,11 +1924,11 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.mul,
             ["1.5", None],
-            cudf.Decimal64Dtype(scale=2, precision=2),
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["1.5", None],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["2.25", None],
-            cudf.Decimal64Dtype(scale=5, precision=7),
+            cudf.Decimal64Dtype(scale=5, precision=8),
         ),
         (
             operator.mul,
@@ -1915,7 +1937,7 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.1", None],
             cudf.Decimal64Dtype(scale=3, precision=12),
             ["10.0", None],
-            cudf.Decimal64Dtype(scale=1, precision=18),
+            cudf.Decimal128Dtype(scale=1, precision=23),
         ),
         (
             operator.eq,
@@ -2088,7 +2110,10 @@ def test_binops_decimal(args):
     b = utils._decimal_series(rhs, r_dtype)
     expect = (
         utils._decimal_series(expect, expect_dtype)
-        if isinstance(expect_dtype, cudf.Decimal64Dtype)
+        if isinstance(
+            expect_dtype,
+            (cudf.Decimal64Dtype, cudf.Decimal32Dtype, cudf.Decimal128Dtype),
+        )
         else cudf.Series(expect, dtype=expect_dtype)
     )
 
@@ -2282,7 +2307,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(1),
             ["101", "201"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2291,7 +2316,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["101", "201"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2300,7 +2325,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["101.5", "201.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2309,7 +2334,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("1.5")),
             ["101.5", "201.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2318,7 +2343,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(1),
             ["101", "201"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2327,7 +2352,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["101", "201"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2336,7 +2361,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["101.5", "201.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             True,
         ),
         (
@@ -2345,7 +2370,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("1.5")),
             ["101.5", "201.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             True,
         ),
         (
@@ -2354,7 +2379,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal32Dtype(scale=-2, precision=5),
             False,
         ),
         (
@@ -2363,7 +2388,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["200", "400"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal32Dtype(scale=-2, precision=5),
             False,
         ),
         (
@@ -2372,7 +2397,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["150", "300"],
-            cudf.Decimal64Dtype(scale=-1, precision=6),
+            cudf.Decimal32Dtype(scale=-1, precision=6),
             False,
         ),
         (
@@ -2381,7 +2406,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("1.5")),
             ["150", "300"],
-            cudf.Decimal64Dtype(scale=-1, precision=6),
+            cudf.Decimal32Dtype(scale=-1, precision=6),
             False,
         ),
         (
@@ -2390,7 +2415,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             1,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal32Dtype(scale=-2, precision=5),
             True,
         ),
         (
@@ -2399,7 +2424,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["200", "400"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal32Dtype(scale=-2, precision=5),
             True,
         ),
         (
@@ -2408,7 +2433,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("1.5"),
             ["150", "300"],
-            cudf.Decimal64Dtype(scale=-1, precision=6),
+            cudf.Decimal32Dtype(scale=-1, precision=6),
             True,
         ),
         (
@@ -2417,7 +2442,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("1.5")),
             ["150", "300"],
-            cudf.Decimal64Dtype(scale=-1, precision=6),
+            cudf.Decimal32Dtype(scale=-1, precision=6),
             True,
         ),
         (
@@ -2426,16 +2451,16 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=4),
             1,
             ["1000", "2000"],
-            cudf.Decimal64Dtype(scale=-2, precision=6),
+            cudf.Decimal64Dtype(scale=6, precision=12),
             False,
         ),
         (
             operator.truediv,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=2, precision=4),
+            cudf.Decimal64Dtype(scale=2, precision=5),
             decimal.Decimal(2),
             ["50", "100"],
-            cudf.Decimal64Dtype(scale=2, precision=6),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             False,
         ),
         (
@@ -2444,7 +2469,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=4),
             decimal.Decimal("1.5"),
             ["23.4", "36.6"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             False,
         ),
         (
@@ -2453,16 +2478,16 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=1, precision=3),
             cudf.Scalar(decimal.Decimal("1.5")),
             ["14", "62"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             False,
         ),
         (
             operator.truediv,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=2, precision=3),
+            cudf.Decimal64Dtype(scale=2, precision=5),
             1,
             ["0", "0"],
-            cudf.Decimal64Dtype(scale=-2, precision=5),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             True,
         ),
         (
@@ -2471,7 +2496,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=1, precision=6),
             decimal.Decimal(20),
             ["10", "40"],
-            cudf.Decimal64Dtype(scale=-1, precision=9),
+            cudf.Decimal64Dtype(scale=7, precision=10),
             True,
         ),
         (
@@ -2480,7 +2505,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=2, precision=3),
             decimal.Decimal("8.55"),
             ["7", "1"],
-            cudf.Decimal64Dtype(scale=0, precision=7),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             True,
         ),
         (
@@ -2489,7 +2514,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=1, precision=3),
             cudf.Scalar(decimal.Decimal("90.84")),
             ["82.5", "2.1"],
-            cudf.Decimal64Dtype(scale=1, precision=8),
+            cudf.Decimal32Dtype(scale=6, precision=9),
             True,
         ),
         (
@@ -2498,7 +2523,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["98", "198"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2507,7 +2532,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("2.5"),
             ["97.5", "197.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2516,7 +2541,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             4,
             ["96", "196"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             False,
         ),
         (
@@ -2525,7 +2550,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("2.5")),
             ["97.5", "197.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             False,
         ),
         (
@@ -2534,7 +2559,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal(2),
             ["-98", "-198"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2543,7 +2568,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             4,
             ["-96", "-196"],
-            cudf.Decimal64Dtype(scale=0, precision=6),
+            cudf.Decimal32Dtype(scale=0, precision=6),
             True,
         ),
         (
@@ -2552,7 +2577,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             decimal.Decimal("2.5"),
             ["-97.5", "-197.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             True,
         ),
         (
@@ -2561,10 +2586,14 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
             cudf.Decimal64Dtype(scale=-2, precision=3),
             cudf.Scalar(decimal.Decimal("2.5")),
             ["-97.5", "-197.5"],
-            cudf.Decimal64Dtype(scale=1, precision=7),
+            cudf.Decimal32Dtype(scale=1, precision=7),
             True,
         ),
     ],
+)
+@pytest.mark.xfail(
+    reason="binop operations not supported for different "
+    "bit-width decimal types"
 )
 def test_binops_decimal_scalar(args):
     op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
@@ -2736,6 +2765,10 @@ def test_binops_decimal_scalar(args):
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
+@pytest.mark.xfail(
+    reason="binop operations not supported for different bit-width "
+    "decimal types"
+)
 def test_binops_decimal_scalar_compare(args, reflected):
     """
     Tested compare operations:
@@ -2793,11 +2826,11 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
     # a new series where all the elements are <NA>.
 
     if isinstance(null_scalar, np.datetime64):
-        if np.dtype(dtype).kind not in "mM":
+        if cudf.dtype(dtype).kind not in "mM":
             pytest.skip()
         null_scalar = null_scalar.astype(dtype)
 
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
 
     data = [1, 2, 3, 4, 5]
     sr = cudf.Series(data, dtype=dtype)
@@ -2873,7 +2906,7 @@ def generate_test_null_equals_columnops_data():
     "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
-    assert lcol._null_equals(rcol).all() == ans
+    assert lcol.equals(rcol).all() == ans
 
 
 def test_add_series_to_dataframe():
@@ -2896,7 +2929,7 @@ def test_binops_non_cudf_types(obj_class, binop, other_type):
     data = range(1, 100)
     lhs = obj_class(data)
     rhs = other_type(data)
-    assert cp.all((binop(lhs, rhs) == binop(lhs, lhs)).values)
+    assert (binop(lhs, rhs) == binop(lhs, lhs)).all()
 
 
 @pytest.mark.parametrize("binop", _binops + _binops_compare)
@@ -2912,4 +2945,133 @@ def test_empty_column(binop, data, scalar):
     got = binop(gdf, scalar)
     expected = binop(pdf, scalar)
 
+    utils.assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        pytest.param(
+            cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
+            marks=pytest.mark.xfail(
+                reason="Cannot access Frame.values if frame contains nulls"
+            ),
+        ),
+        cudf.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        cudf.Series([14, 15, 16, 17]),
+        cudf.Series([14.15, 15.16, 16.17, 17.18]),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        cudf.DataFrame(
+            [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
+        ),
+        cudf.Series([5, 6, 7, 8]),
+        cudf.Series([5.6, 6.7, 7.8, 8.9]),
+        pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
+        pd.Series([5, 6, 7, 8]),
+        np.array([5, 6, 7, 8]),
+        [25.5, 26.6, 27.7, 28.8],
+    ],
+)
+def test_binops_dot(df, other):
+    pdf = df.to_pandas()
+    host_other = other.to_pandas() if hasattr(other, "to_pandas") else other
+
+    expected = pdf @ host_other
+    got = df @ other
+
+    utils.assert_eq(expected, got)
+
+
+def test_binop_series_with_repeated_index():
+    # GH: #11094
+    psr1 = pd.Series([1, 1], index=["a", "a"])
+    psr2 = pd.Series([1], index=["a"])
+    gsr1 = cudf.from_pandas(psr1)
+    gsr2 = cudf.from_pandas(psr2)
+    expected = psr1 - psr2
+    got = gsr1 - gsr2
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_series():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_base = gs_base.to_pandas()
+    ps_exponent = gs_exponent.to_pandas()
+    expected = ps_base**ps_exponent
+    got = gs_base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_scalar():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = cudf.Scalar(1)
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent.value
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_series_int():
+    # GH: #10178
+    gs_base = cudf.Series([3, -3, 8, -8])
+    exponent = 1
+    ps_base = gs_base.to_pandas()
+    expected = ps_base**exponent
+    got = gs_base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_series():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base.value**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_scalar():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = cudf.Scalar(1)
+    expected = base.value**exponent.value
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_scalar_int():
+    # GH: #10178
+    base = cudf.Scalar(3)
+    exponent = 1
+    expected = base.value**exponent
+    got = base**exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_series():
+    # GH: #10178
+    base = 3
+    gs_exponent = cudf.Series([1, 1, 7, 7])
+    ps_exponent = gs_exponent.to_pandas()
+    expected = base**ps_exponent
+    got = base**gs_exponent
+    utils.assert_eq(expected, got)
+
+
+def test_binop_integer_power_int_scalar():
+    # GH: #10178
+    base = 3
+    exponent = cudf.Scalar(1)
+    expected = base**exponent.value
+    got = base**exponent
     utils.assert_eq(expected, got)

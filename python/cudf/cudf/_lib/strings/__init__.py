@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
@@ -12,7 +13,6 @@ from cudf._lib.nvtext.stemmer import (
     is_letter_multi,
     porter_stemmer_measure,
 )
-from cudf._lib.nvtext.subword_tokenize import subword_tokenize_vocab_file
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column,
     _count_tokens_scalar,
@@ -26,7 +26,7 @@ from cudf._lib.strings.attributes import (
     count_bytes,
     count_characters,
 )
-from cudf._lib.strings.capitalize import capitalize, title
+from cudf._lib.strings.capitalize import capitalize, is_title, title
 from cudf._lib.strings.case import swapcase, to_lower, to_upper
 from cudf._lib.strings.char_types import (
     filter_alphanum,
@@ -45,7 +45,7 @@ from cudf._lib.strings.combine import (
     join_lists_with_column,
     join_lists_with_scalar,
 )
-from cudf._lib.strings.contains import contains_re, count_re, match_re
+from cudf._lib.strings.contains import contains_re, count_re, like, match_re
 from cudf._lib.strings.convert.convert_fixed_point import to_decimal
 from cudf._lib.strings.convert.convert_floats import is_float
 from cudf._lib.strings.convert.convert_integers import is_integer
@@ -61,9 +61,18 @@ from cudf._lib.strings.find import (
     startswith,
     startswith_multiple,
 )
+from cudf._lib.strings.find_multiple import find_multiple
 from cudf._lib.strings.findall import findall
-from cudf._lib.strings.json import get_json_object
-from cudf._lib.strings.padding import PadSide, center, ljust, pad, rjust, zfill
+from cudf._lib.strings.json import GetJsonObjectOptions, get_json_object
+from cudf._lib.strings.padding import (
+    SideType,
+    center,
+    ljust,
+    pad,
+    rjust,
+    zfill,
+)
+from cudf._lib.strings.repeat import repeat_scalar, repeat_sequence
 from cudf._lib.strings.replace import (
     insert,
     replace,
@@ -78,9 +87,13 @@ from cudf._lib.strings.replace_re import (
 from cudf._lib.strings.split.partition import partition, rpartition
 from cudf._lib.strings.split.split import (
     rsplit,
+    rsplit_re,
     rsplit_record,
+    rsplit_record_re,
     split,
+    split_re,
     split_record,
+    split_record_re,
 )
 from cudf._lib.strings.strip import lstrip, rstrip, strip
 from cudf._lib.strings.substring import get, slice_from, slice_strings

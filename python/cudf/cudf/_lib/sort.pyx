@@ -1,41 +1,38 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-import pandas as pd
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from enum import IntEnum
-
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.aggregation cimport (
+    rank_method,
+    underlying_type_t_rank_method,
+)
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.search cimport lower_bound, upper_bound
 from cudf._lib.cpp.sorting cimport (
     is_sorted as cpp_is_sorted,
     rank,
-    rank_method,
     sorted_order,
 )
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
-from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport table_view_from_columns
 
 
 def is_sorted(
-    Table source_table, object ascending=None, object null_position=None
+    list source_columns, object ascending=None, object null_position=None
 ):
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
 
     Parameters
     ----------
-    source_table : Table
-        Table whose columns are to be checked for sort order
+    source_columns : list of columns
+        columns to be checked for sort order
     ascending : None or list-like of booleans
         None or list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
@@ -58,51 +55,39 @@ def is_sorted(
     cdef vector[null_order] null_precedence
 
     if ascending is None:
-        column_order = vector[order](
-            source_table._num_columns, order.ASCENDING
-        )
-    elif pd.api.types.is_list_like(ascending):
-        if len(ascending) != source_table._num_columns:
+        column_order = vector[order](len(source_columns), order.ASCENDING)
+    else:
+        if len(ascending) != len(source_columns):
             raise ValueError(
-                f"Expected a list-like of length {source_table._num_columns}, "
+                f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(ascending)} for `ascending`"
             )
         column_order = vector[order](
-            source_table._num_columns, order.DESCENDING
+            len(source_columns), order.DESCENDING
         )
         for idx, val in enumerate(ascending):
             if val:
                 column_order[idx] = order.ASCENDING
-    else:
-        raise TypeError(
-            f"Expected a list-like or None for `ascending`, got "
-            f"{type(ascending)}"
-        )
 
     if null_position is None:
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.AFTER
+            len(source_columns), null_order.AFTER
         )
-    elif pd.api.types.is_list_like(null_position):
-        if len(null_position) != source_table._num_columns:
+    else:
+        if len(null_position) != len(source_columns):
             raise ValueError(
-                f"Expected a list-like of length {source_table._num_columns}, "
+                f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(null_position)} for `null_position`"
             )
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.AFTER
+            len(source_columns), null_order.AFTER
         )
         for idx, val in enumerate(null_position):
             if val:
                 null_precedence[idx] = null_order.BEFORE
-    else:
-        raise TypeError(
-            f"Expected a list-like or None for `null_position`, got "
-            f"{type(null_position)}"
-        )
 
     cdef bool c_result
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_columns(source_columns)
     with nogil:
         c_result = cpp_is_sorted(
             source_table_view,
@@ -113,41 +98,37 @@ def is_sorted(
     return c_result
 
 
-def order_by(Table source_table, object ascending, bool na_position):
+def order_by(list columns_from_table, object ascending, str na_position):
     """
-    Sorting the table ascending/descending
+    Get index to sort the table in ascending/descending order.
 
     Parameters
     ----------
-    source_table : table which will be sorted
-    ascending : list of boolean values which correspond to each column
+    columns_from_table : columns from the table which will be sorted
+    ascending : sequence of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
-    na_position : whether null should be considered larget or smallest value
-                  0 - largest and 1 - smallest
-
+    na_position : whether null value should show up at the "first" or "last"
+                position of **all** sorted column.
     """
-
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_columns(
+        columns_from_table
+    )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef null_order pred = (
-        null_order.BEFORE
-        if na_position == 1
-        else null_order.AFTER
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            source_table._num_columns,
-            pred
-        )
-    )
+    cdef vector[null_order] null_precedence
+    null_precedence.reserve(len(ascending))
 
-    for i in ascending:
-        if i is True:
+    for asc in ascending:
+        if asc:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
+
+        if asc ^ (na_position == "first"):
+            null_precedence.push_back(null_order.AFTER)
+        else:
+            null_precedence.push_back(null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -158,20 +139,22 @@ def order_by(Table source_table, object ascending, bool na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def digitize(Table source_values_table, Table bins, bool right=False):
+def digitize(list source_columns, list bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
 
     Parameters
     ----------
-    source_table : Input table to be binned.
-    bins : Table containing columns of bins
+    source_columns : Input columns to be binned.
+    bins : List containing columns of bins
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
 
-    cdef table_view bins_view = bins.view()
-    cdef table_view source_values_table_view = source_values_table.view()
+    cdef table_view bins_view = table_view_from_columns(bins)
+    cdef table_view source_table_view = table_view_from_columns(
+        source_columns
+    )
     cdef vector[order] column_order = (
         vector[order](
             bins_view.num_columns(),
@@ -186,11 +169,11 @@ def digitize(Table source_values_table, Table bins, bool right=False):
     )
 
     cdef unique_ptr[column] c_result
-    if right is True:
+    if right:
         with nogil:
             c_result = move(lower_bound(
                 bins_view,
-                source_values_table_view,
+                source_table_view,
                 column_order,
                 null_precedence)
             )
@@ -198,7 +181,7 @@ def digitize(Table source_values_table, Table bins, bool right=False):
         with nogil:
             c_result = move(upper_bound(
                 bins_view,
-                source_values_table_view,
+                source_table_view,
                 column_order,
                 null_precedence)
             )
@@ -206,22 +189,12 @@ def digitize(Table source_values_table, Table bins, bool right=False):
     return Column.from_unique_ptr(move(c_result))
 
 
-class RankMethod(IntEnum):
-    FIRST = < underlying_type_t_rank_method > rank_method.FIRST
-    AVERAGE = < underlying_type_t_rank_method > rank_method.AVERAGE
-    MIN = < underlying_type_t_rank_method > rank_method.MIN
-    MAX = < underlying_type_t_rank_method > rank_method.MAX
-    DENSE = < underlying_type_t_rank_method > rank_method.DENSE
-
-
-def rank_columns(Table source_table, object method, str na_option,
+def rank_columns(list source_columns, object method, str na_option,
                  bool ascending, bool pct
                  ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = source_table.data_view()
-
     cdef rank_method c_rank_method = < rank_method > (
         < underlying_type_t_rank_method > method
     )
@@ -255,12 +228,12 @@ def rank_columns(Table source_table, object method, str na_option,
         if na_option == 'keep'
         else null_policy.INCLUDE
     )
-    cdef bool percentage = True if pct else False
+    cdef bool percentage = pct
 
     cdef vector[unique_ptr[column]] c_results
     cdef column_view c_view
     cdef Column col
-    for col in source_table._columns:
+    for col in source_columns:
         c_view = col.view()
         with nogil:
             c_results.push_back(move(
@@ -274,11 +247,6 @@ def rank_columns(Table source_table, object method, str na_option,
                 )
             ))
 
-    cdef unique_ptr[table] c_result
-    c_result.reset(new table(move(c_results)))
-    out_table = Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names
-    )
-    out_table._index = source_table._index
-    return out_table
+    return [Column.from_unique_ptr(
+        move(c_results[i])
+    ) for i in range(c_results.size())]

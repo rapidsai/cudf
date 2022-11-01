@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -29,9 +29,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>
@@ -62,14 +64,14 @@ struct orc_table_view {
   rmm::device_uvector<uint32_t> d_string_column_indices;
 
   auto num_columns() const noexcept { return columns.size(); }
-  size_type num_rows() const noexcept;
+  [[nodiscard]] size_type num_rows() const noexcept;
   auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
   auto& column(uint32_t idx) { return columns.at(idx); }
-  auto const& column(uint32_t idx) const { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
 
   auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  auto const& string_column(uint32_t idx) const
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
   {
     return columns.at(string_column_indices.at(idx));
   }
@@ -85,8 +87,8 @@ struct stripe_rowgroups {
   uint32_t first;  // first rowgroup in the stripe
   uint32_t size;   // number of rowgroups in the stripe
   stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
-  auto cbegin() const { return thrust::make_counting_iterator(first); }
-  auto cend() const { return thrust::make_counting_iterator(first + size); }
+  [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
+  [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 
 /**
@@ -123,10 +125,10 @@ class orc_streams {
     std::vector<size_t> offsets;
     size_t non_rle_data_size = 0;
     size_t rle_data_size     = 0;
-    auto data_size() const { return non_rle_data_size + rle_data_size; }
+    [[nodiscard]] auto data_size() const { return non_rle_data_size + rle_data_size; }
   };
-  orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
-                                     size_t num_rowgroups) const;
+  [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
+                                                   size_t num_rowgroups) const;
 
   operator std::vector<Stream> const &() const { return streams; }
 
@@ -167,17 +169,19 @@ struct string_dictionaries {
 };
 
 /**
+ * @brief Maximum size of stripes in the output file.
+ */
+struct stripe_size_limits {
+  size_t bytes;
+  size_type rows;
+};
+
+/**
  * @brief Implementation for ORC writer
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
-
-  // ORC datasets are divided into fixed-size, independent stripes
-  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
-
-  // ORC compresses streams into independent chunks
-  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
 
  public:
   /**
@@ -263,23 +267,6 @@ class writer::impl {
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
-   * @brief Encodes the input columns into streams.
-   *
-   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
-   * @param dict_data Dictionary data memory
-   * @param dict_index Dictionary index memory
-   * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation stripe and rowgroup ranges
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Encoded data and per-chunk stream descriptors
-   */
-  encoded_data encode_columns(orc_table_view const& orc_table,
-                              string_dictionaries&& dictionaries,
-                              encoder_decimal_info&& dec_chunk_sizes,
-                              file_segmentation const& segmentation,
-                              orc_streams const& streams);
-
-  /**
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *
@@ -297,16 +284,90 @@ class writer::impl {
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
   /**
-   * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format.
+   * @brief Statistics data stored between calls to write for chunked writes
    *
-   * @param orc_table Table information to be written
-   * @param columns List of columns
-   * @param segmentation stripe and rowgroup ranges
-   * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
-                                                           file_segmentation const& segmentation);
+  struct intermediate_statistics {
+    explicit intermediate_statistics(rmm::cuda_stream_view stream)
+      : stripe_stat_chunks(0, stream){};
+    intermediate_statistics(std::vector<ColStatsBlob> rb,
+                            rmm::device_uvector<statistics_chunk> sc,
+                            hostdevice_vector<statistics_merge_group> smg,
+                            std::vector<statistics_dtype> sdt,
+                            std::vector<data_type> sct)
+      : rowgroup_blobs(std::move(rb)),
+        stripe_stat_chunks(std::move(sc)),
+        stripe_stat_merge(std::move(smg)),
+        stats_dtypes(std::move(sdt)),
+        col_types(std::move(sct)){};
+
+    // blobs for the rowgroups. Not persisted
+    std::vector<ColStatsBlob> rowgroup_blobs;
+
+    rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
+    hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+    std::vector<statistics_dtype> stats_dtypes;
+    std::vector<data_type> col_types;
+  };
+
+  /**
+   * @brief used for chunked writes to persist data between calls to write.
+   *
+   */
+  struct persisted_statistics {
+    void clear()
+    {
+      stripe_stat_chunks.clear();
+      stripe_stat_merge.clear();
+      string_pools.clear();
+      stats_dtypes.clear();
+      col_types.clear();
+      num_rows = 0;
+    }
+
+    void persist(int num_table_rows,
+                 bool single_write_mode,
+                 intermediate_statistics& intermediate_stats,
+                 rmm::cuda_stream_view stream);
+
+    std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
+    std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+    std::vector<rmm::device_uvector<char>> string_pools;
+    std::vector<statistics_dtype> stats_dtypes;
+    std::vector<data_type> col_types;
+    int num_rows = 0;
+  };
+
+  /**
+   * @brief Protobuf encoded statistics created at file close
+   *
+   */
+  struct encoded_footer_statistics {
+    std::vector<ColStatsBlob> stripe_level;
+    std::vector<ColStatsBlob> file_level;
+  };
+
+  /**
+   * @brief Returns column statistics in an intermediate format.
+   *
+   * @param statistics_freq Frequency of statistics to be included in the output file
+   * @param orc_table Table information to be written
+   * @param segmentation stripe and rowgroup ranges
+   * @return The statistic information
+   */
+  intermediate_statistics gather_statistic_blobs(statistics_freq const statistics_freq,
+                                                 orc_table_view const& orc_table,
+                                                 file_segmentation const& segmentation);
+
+  /**
+   * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
+   *
+   * @param num_stripes number of stripes in the data
+   * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+   * @return The encoded statistic blobs
+   */
+  encoded_footer_statistics finish_statistic_blobs(
+    int num_stripes, writer::impl::persisted_statistics& incoming_stats);
 
   /**
    * @brief Writes the specified column's row index stream.
@@ -314,10 +375,11 @@ class writer::impl {
    * @param[in] stripe_id Stripe's identifier
    * @param[in] stream_id Stream identifier (column id + 1)
    * @param[in] columns List of columns
-   * @param[in] rowgroups_range Indexes of rowgroups in the stripe
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in] strm_desc List of stream descriptors
    * @param[in] comp_out Output status for compressed streams
+   * @param[in] rg_stats row group level statistics
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
    * @param[in,out] pbw Protobuf writer
@@ -325,10 +387,11 @@ class writer::impl {
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
                           host_span<orc_column_view const> columns,
-                          stripe_rowgroups const& rowgroups_range,
+                          file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
-                          host_span<gpu_inflate_status_s const> comp_out,
+                          host_span<compression_result const> comp_out,
+                          std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
                           ProtobufWriter* pbw);
@@ -342,13 +405,14 @@ class writer::impl {
    * @param[in,out] stream_out Temporary host output buffer
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
+   * @return An std::future that should be synchronized to ensure the writing is complete
    */
-  void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::encoder_chunk_streams const& enc_stream,
-                         uint8_t const* compressed_data,
-                         uint8_t* stream_out,
-                         StripeInformation* stripe,
-                         orc_streams* streams);
+  std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
+                                      gpu::encoder_chunk_streams const& enc_stream,
+                                      uint8_t const* compressed_data,
+                                      uint8_t* stream_out,
+                                      StripeInformation* stripe,
+                                      orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -360,31 +424,32 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
-  size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_          = default_row_index_stride;
-  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
-  CompressionKind compression_kind_ = CompressionKind::NONE;
+  stripe_size_limits max_stripe_size;
+  size_type row_index_stride;
+  CompressionKind compression_kind_;
+  size_t compression_blocksize_;
 
-  bool enable_dictionary_ = true;
-  bool enable_statistics_ = true;
+  bool enable_dictionary_     = true;
+  statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
 
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;
   cudf::io::orc::Metadata md;
   // current write position for rowgroups/chunks
   size_t current_chunk_offset;
-  // optional user metadata
-  table_metadata const* user_metadata = nullptr;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write_chunked_begin()
-  table_metadata_with_nullability user_metadata_with_nullability;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
+  // optional user metadata
+  std::unique_ptr<table_input_metadata> table_meta;
+  // optional user metadata
+  std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
+  // statistics data saved between calls to write before a close writes out the statistics
+  persisted_statistics persisted_stripe_statistics;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

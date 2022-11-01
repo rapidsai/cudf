@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import random
 
@@ -15,6 +15,23 @@ from dask.utils import M
 import cudf
 
 import dask_cudf as dgd
+
+
+@pytest.mark.skipif(
+    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
+)
+def test_from_dict_backend_dispatch():
+    # Test ddf.from_dict cudf-backend dispatch
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    expect = cudf.DataFrame(data)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict(data, npartitions=2)
+    assert isinstance(ddf, dgd.DataFrame)
+    dd.assert_eq(expect, ddf)
 
 
 def test_from_cudf():
@@ -59,7 +76,7 @@ def test_from_cudf_with_generic_idx():
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.core.index.GenericIndex)
+    assert isinstance(ddf.index.compute(), cudf.RangeIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -284,7 +301,7 @@ def test_assign():
     got = dgf.assign(z=newcol)
 
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
+    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -471,6 +488,15 @@ def test_repartition_hash(by, npartitions, max_branch):
         ignore_index=True,
     ).sort_values(by)
     dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
+def test_repartition_no_extra_row():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    gdf = cudf.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    ddf = dgd.from_cudf(gdf, npartitions=1)
+    ddf_new = ddf.repartition([0, 5, 10, 30], force=True)
+    dd.assert_eq(ddf, ddf_new)
+    dd.assert_eq(gdf, ddf_new)
 
 
 @pytest.fixture
@@ -720,7 +746,9 @@ def test_series_describe():
     pdsr = dd.from_pandas(psr, npartitions=4)
 
     dd.assert_eq(
-        dsr.describe(), pdsr.describe(), check_less_precise=3,
+        dsr.describe(),
+        pdsr.describe(),
+        check_less_precise=3,
     )
 
 
@@ -839,3 +867,19 @@ def test_correct_meta():
 
     assert isinstance(emb, dd.DataFrame)
     assert isinstance(emb._meta, pd.DataFrame)
+
+
+def test_categorical_dtype_round_trip():
+    s = cudf.Series(4 * ["foo"], dtype="category")
+    assert s.dtype.ordered is False
+
+    ds = dgd.from_cudf(s, npartitions=2)
+    pds = dd.from_pandas(s.to_pandas(), npartitions=2)
+    dd.assert_eq(ds, pds)
+    assert ds.dtype.ordered is False
+
+    # Below validations are required, see:
+    # https://github.com/rapidsai/cudf/issues/11487#issuecomment-1208912383
+    actual = ds.compute()
+    expected = pds.compute()
+    assert actual.dtype.ordered == expected.dtype.ordered

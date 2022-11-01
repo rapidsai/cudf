@@ -1,8 +1,8 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import logging
 import random
-from collections import abc as abc
+from collections import abc
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from cudf._fuzz_testing.utils import (
     pyarrow_to_pandas,
 )
 from cudf.testing import dataset_generator as dg
-from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
+from cudf.utils.dtypes import pandas_dtypes_to_np_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -31,7 +31,7 @@ def _get_dtype_param_value(dtype_val):
                 processed_dtypes[col_name] = "category"
             else:
                 processed_dtypes[col_name] = str(
-                    pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+                    pandas_dtypes_to_np_dtypes.get(dtype, dtype)
                 )
         return processed_dtypes
     return dtype_val
@@ -65,7 +65,7 @@ class JSONReader(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
@@ -140,7 +140,7 @@ class JSONWriter(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES

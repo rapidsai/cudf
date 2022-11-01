@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -35,6 +36,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 
@@ -43,6 +46,17 @@ namespace lists {
 namespace detail {
 
 struct SegmentedSortColumn {
+  /**
+   * @brief Compile time check for allowing radix sort for column type.
+   *
+   * Floating point is not included here because of the special handling of NaNs.
+   */
+  template <typename T>
+  static constexpr bool is_radix_sort_supported()
+  {
+    return std::is_integral<T>();
+  }
+
   template <typename KeyT, typename ValueT, typename OffsetIteratorT>
   void SortPairsAscending(KeyT const* keys_in,
                           KeyT* keys_out,
@@ -130,7 +144,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<not is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<not is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& segment_offsets,
     order column_order,
@@ -149,7 +163,7 @@ struct SegmentedSortColumn {
   }
 
   template <typename T>
-  std::enable_if_t<is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_radix_sort_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& child,
     column_view const& offsets,
     order column_order,
@@ -250,14 +264,14 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                     });
   // for numeric columns, calls Faster segmented radix sort path
   // for non-numeric columns, calls segmented_sort_by_key.
-  auto output_child = type_dispatcher(input.child().type(),
-                                      SegmentedSortColumn{},
-                                      input.get_sliced_child(stream),
-                                      output_offset->view(),
-                                      column_order,
-                                      null_precedence,
-                                      stream,
-                                      mr);
+  auto output_child = type_dispatcher<dispatch_storage_type>(input.child().type(),
+                                                             SegmentedSortColumn{},
+                                                             input.get_sliced_child(stream),
+                                                             output_offset->view(),
+                                                             column_order,
+                                                             null_precedence,
+                                                             stream,
+                                                             mr);
 
   auto null_mask = cudf::detail::copy_bitmask(input.parent(), stream, mr);
 
@@ -266,7 +280,45 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                            std::move(output_offset),
                            std::move(output_child),
                            input.null_count(),
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
+}
+
+std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
+                                          order column_order,
+                                          null_order null_precedence,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) { return empty_like(input.parent()); }
+
+  auto output_offset = make_numeric_column(
+    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    input.offsets_begin(),
+                    input.offsets_end(),
+                    output_offset->mutable_view().template begin<size_type>(),
+                    [first = input.offsets_begin()] __device__(auto offset_index) {
+                      return offset_index - *first;
+                    });
+
+  auto const child              = input.get_sliced_child(stream);
+  auto const sorted_child_table = stable_segmented_sort_by_key(table_view{{child}},
+                                                               table_view{{child}},
+                                                               output_offset->view(),
+                                                               {column_order},
+                                                               {null_precedence},
+                                                               stream,
+                                                               mr);
+
+  return make_lists_column(input.size(),
+                           std::move(output_offset),
+                           std::move(sorted_child_table->release().front()),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                           stream,
+                           mr);
 }
 }  // namespace detail
 
@@ -276,7 +328,17 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_lists(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+  return detail::sort_lists(input, column_order, null_precedence, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
+                                          order column_order,
+                                          null_order null_precedence,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::stable_sort_lists(
+    input, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 }  // namespace lists

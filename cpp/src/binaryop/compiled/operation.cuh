@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ namespace ops {
 
 struct Add {
   template <typename T1, typename T2>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs + rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs + rhs)
   {
     return lhs + rhs;
   }
@@ -37,7 +37,7 @@ struct Add {
 
 struct Sub {
   template <typename T1, typename T2>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs - rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs - rhs)
   {
     return lhs - rhs;
   }
@@ -58,7 +58,7 @@ struct Mul {
            (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
   {
     return lhs * rhs;
   }
@@ -75,7 +75,7 @@ struct Div {
            (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
   {
     return lhs / rhs;
   }
@@ -83,7 +83,7 @@ struct Div {
 
 struct TrueDiv {
   template <typename T1, typename T2>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs)
     -> decltype((static_cast<double>(lhs) / static_cast<double>(rhs)))
   {
     return (static_cast<double>(lhs) / static_cast<double>(rhs));
@@ -92,7 +92,7 @@ struct TrueDiv {
 
 struct FloorDiv {
   template <typename T1, typename T2>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs)
     -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
   {
     return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
@@ -110,21 +110,21 @@ struct Mod {
            (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>()));
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
   {
     return lhs % rhs;
   }
   template <typename T1,
             typename T2,
             std::enable_if_t<(std::is_same_v<float, std::common_type_t<T1, T2>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> float
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> float
   {
     return fmodf(static_cast<float>(lhs), static_cast<float>(rhs));
   }
   template <typename T1,
             typename T2,
             std::enable_if_t<(std::is_same_v<double, std::common_type_t<T1, T2>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> double
+  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> double
   {
     return fmod(static_cast<double>(lhs), static_cast<double>(rhs));
   }
@@ -138,7 +138,7 @@ struct PMod {
   template <typename TypeLhs,
             typename TypeRhs,
             std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
     common_t xconv = static_cast<common_t>(x);
@@ -153,7 +153,7 @@ struct PMod {
     typename TypeLhs,
     typename TypeRhs,
     std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
     common_t xconv = static_cast<common_t>(x);
@@ -162,13 +162,25 @@ struct PMod {
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return rem;
   }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<cudf::is_fixed_point<TypeLhs>() and
+                             std::is_same_v<TypeLhs, TypeRhs>>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
+  {
+    auto const remainder = x % y;
+    return remainder.value() < 0 ? (remainder + y) % y : remainder;
+  }
 };
 
 struct PyMod {
   template <typename TypeLhs,
             typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
+                              (cudf::is_fixed_point<TypeLhs>() and
+                               std::is_same_v<TypeLhs, TypeRhs>))>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;
   }
@@ -177,17 +189,17 @@ struct PyMod {
     typename TypeLhs,
     typename TypeRhs,
     std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
   {
-    double x1 = static_cast<double>(x);
-    double y1 = static_cast<double>(y);
+    auto x1 = static_cast<double>(x);
+    auto y1 = static_cast<double>(y);
     return fmod(fmod(x1, y1) + y1, y1);
   }
 
   template <typename TypeLhs,
             typename TypeRhs,
             std::enable_if_t<(is_duration<TypeLhs>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;
   }
@@ -198,9 +210,39 @@ struct Pow {
             typename TypeRhs,
             std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
                               std::is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return pow(static_cast<double>(x), static_cast<double>(y));
+  }
+};
+
+struct IntPow {
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
+  {
+    if constexpr (std::is_signed_v<TypeRhs>) {
+      if (y < 0) {
+        // Integer exponentiation with negative exponent is not possible.
+        return 0;
+      }
+    }
+    if (y == 0) { return 1; }
+    if (x == 0) { return 0; }
+    TypeLhs extra = 1;
+    while (y > 1) {
+      if (y & 1) {
+        // The exponent is odd, so multiply by one factor of x.
+        extra *= x;
+        y -= 1;
+      }
+      // The exponent is even, so square x and divide the exponent y by 2.
+      y /= 2;
+      x *= x;
+    }
+    return x * extra;
   }
 };
 
@@ -209,7 +251,7 @@ struct LogBase {
             typename TypeRhs,
             std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
                               std::is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
   }
@@ -220,7 +262,7 @@ struct ATan2 {
             typename TypeRhs,
             std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
                               std::is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return std::atan2(static_cast<double>(x), static_cast<double>(y));
   }
@@ -228,7 +270,7 @@ struct ATan2 {
 
 struct ShiftLeft {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
   {
     return (x << y);
   }
@@ -236,7 +278,7 @@ struct ShiftLeft {
 
 struct ShiftRight {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
   {
     return (x >> y);
   }
@@ -247,7 +289,7 @@ struct ShiftRightUnsigned {
     typename TypeLhs,
     typename TypeRhs,
     std::enable_if_t<(std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y)
   {
     return (static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y);
@@ -256,7 +298,7 @@ struct ShiftRightUnsigned {
 
 struct BitwiseAnd {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
   {
     return (x & y);
   }
@@ -264,7 +306,7 @@ struct BitwiseAnd {
 
 struct BitwiseOr {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
   {
     return (x | y);
   }
@@ -272,7 +314,7 @@ struct BitwiseOr {
 
 struct BitwiseXor {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
   {
     return (x ^ y);
   }
@@ -280,7 +322,7 @@ struct BitwiseXor {
 
 struct LogicalAnd {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
   {
     return (x && y);
   }
@@ -288,7 +330,7 @@ struct LogicalAnd {
 
 struct LogicalOr {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
   {
     return (x || y);
   }
@@ -296,7 +338,7 @@ struct LogicalOr {
 
 struct Equal {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y)
   {
     return (x == y);
   }
@@ -304,7 +346,7 @@ struct Equal {
 
 struct NotEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y)
   {
     return (x != y);
   }
@@ -312,7 +354,7 @@ struct NotEqual {
 
 struct Less {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x < y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x < y)
   {
     return (x < y);
   }
@@ -320,7 +362,7 @@ struct Less {
 
 struct Greater {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x > y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x > y)
   {
     return (x > y);
   }
@@ -328,7 +370,7 @@ struct Greater {
 
 struct LessEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x <= y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x <= y)
   {
     return (x <= y);
   }
@@ -336,7 +378,7 @@ struct LessEqual {
 
 struct GreaterEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >= y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >= y)
   {
     return (x >= y);
   }
@@ -344,7 +386,7 @@ struct GreaterEqual {
 
 struct NullEquals {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(
+  __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
     output_valid = true;
@@ -354,14 +396,14 @@ struct NullEquals {
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
 };
 
 struct NullMax {
   template <typename TypeLhs,
             typename TypeRhs,
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
-  CUDA_DEVICE_CALLABLE auto operator()(
+  __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y))
   {
@@ -382,7 +424,7 @@ struct NullMax {
   template <typename TypeLhs,
             typename TypeRhs,
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y));
 };
 
@@ -390,7 +432,7 @@ struct NullMin {
   template <typename TypeLhs,
             typename TypeRhs,
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
-  CUDA_DEVICE_CALLABLE auto operator()(
+  __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y))
   {
@@ -411,8 +453,40 @@ struct NullMin {
   template <typename TypeLhs,
             typename TypeRhs,
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y));
+};
+
+struct NullLogicalAnd {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x && y)
+  {
+    bool lhs_false  = lhs_valid && !x;
+    bool rhs_false  = rhs_valid && !y;
+    bool both_valid = lhs_valid && rhs_valid;
+    output_valid    = lhs_false || rhs_false || both_valid;
+    return both_valid && !lhs_false && !rhs_false;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y);
+};
+
+struct NullLogicalOr {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x || y)
+  {
+    bool lhs_true   = lhs_valid && x;
+    bool rhs_true   = rhs_valid && y;
+    bool both_valid = lhs_valid && rhs_valid;
+    output_valid    = lhs_true || rhs_true || both_valid;
+    return lhs_true || rhs_true;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y);
 };
 
 }  // namespace ops

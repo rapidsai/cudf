@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
@@ -57,6 +57,9 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass fixed_point_scalar[T](scalar):
         fixed_point_scalar() except +
         fixed_point_scalar(int64_t value,
+                           scale_type scale,
+                           bool is_valid) except +
+        fixed_point_scalar(data_type value,
                            scale_type scale,
                            bool is_valid) except +
         int64_t value() except +

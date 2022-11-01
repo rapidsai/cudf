@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <tests/interop/arrow_utils.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
@@ -146,7 +148,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
 
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-  return std::make_pair(
+  return std::pair(
     std::make_unique<cudf::table>(std::move(columns)),
     arrow::Table::Make(
       schema, {int64array, string_array, dict_array, boolarray, list_array, struct_array}));
@@ -159,7 +161,7 @@ template <typename T>
 struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
+TYPED_TEST_SUITE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowTest, EmptyTable)
 {
@@ -356,21 +358,16 @@ TEST_F(ToArrowTest, StructColumn)
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
-TEST_F(ToArrowTest, FixedPointTable)
+TEST_F(ToArrowTest, FixedPoint64Table)
 {
   using namespace numeric;
-  auto constexpr const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
-  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const col   = fp_wrapper<int64_t>({-1, 2, 3, 4, 5, 6}, scale_type{i});
-    auto const input = cudf::table_view({col});
-
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col         = fp_wrapper<int64_t>({-1, 2, 3, 4, 5, 6}, scale_type{scale});
+    auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<int64_t>{-1, -1, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
-    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(expect_data.data()),
-                                 expect_data.size() / BIT_WIDTH_RATIO);
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -383,29 +380,45 @@ TEST_F(ToArrowTest, FixedPointTable)
   }
 }
 
-TEST_F(ToArrowTest, FixedPointTableLarge)
+TEST_F(ToArrowTest, FixedPoint128Table)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col         = fp_wrapper<__int128_t>({-1, 2, 3, 4, 5, 6}, scale_type{scale});
+    auto const input       = cudf::table_view({col});
+    auto const expect_data = std::vector<__int128_t>{-1, 2, 3, 4, 5, 6};
+
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+
+    auto const field                = arrow::field("a", arr->type());
+    auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
+    auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
+
+    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
+TEST_F(ToArrowTest, FixedPoint64TableLarge)
 {
   using namespace numeric;
   auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
   auto constexpr NUM_ELEMENTS    = 1000;
 
-  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
-    auto iota        = thrust::make_counting_iterator(1);
-    auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{i});
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const iota  = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    auto every_other = [](auto i) { return i % 2 == 0 ? i / 2 : 0; };
-    auto transform   = cudf::detail::make_counting_transform_iterator(2, every_other);
+    auto const every_other = [](auto i) { return i % 2 == 0 ? i / 2 : 0; };
+    auto const transform   = cudf::detail::make_counting_transform_iterator(2, every_other);
     auto const expect_data =
       std::vector<int64_t>{transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO};
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
 
-    // Note: For some reason, decimal_builder.AppendValues with NUM_ELEMENTS >= 1000 doesn't work
-    for (int i = 0; i < NUM_ELEMENTS; ++i)
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + 2 * i));
-
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -418,25 +431,42 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
   }
 }
 
-TEST_F(ToArrowTest, FixedPointTableNullsSimple)
+TEST_F(ToArrowTest, FixedPoint128TableLarge)
 {
   using namespace numeric;
-  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS = 1000;
 
-  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const iota        = thrust::make_counting_iterator(1);
+    auto const col         = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const input       = cudf::table_view({col});
+    auto const expect_data = std::vector<__int128_t>{iota, iota + NUM_ELEMENTS};
+
+    auto const arr = make_decimal128_arrow_array(expect_data, std::nullopt, scale);
+
+    auto const field                = arrow::field("a", arr->type());
+    auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
+    auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
+
+    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
+TEST_F(ToArrowTest, FixedPoint64TableNullsSimple)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 0, 0, 0, 0};
+    auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col =
-      fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{i});
+      fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
-    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
-                                 data.size() / BIT_WIDTH_RATIO);
-    decimal_builder.AppendNull();
-    decimal_builder.AppendNull();
-
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    auto const arr = make_decimal128_arrow_array(data, validity, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -449,26 +479,44 @@ TEST_F(ToArrowTest, FixedPointTableNullsSimple)
   }
 }
 
-TEST_F(ToArrowTest, FixedPointTableNulls)
+TEST_F(ToArrowTest, FixedPoint128TableNullsSimple)
 {
   using namespace numeric;
-  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
 
-  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const col =
+      fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto const arr = make_decimal128_arrow_array(data, validity, scale);
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    ASSERT_TRUE(arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
+TEST_F(ToArrowTest, FixedPoint64TableNulls)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const col = fp_wrapper<int64_t>(
-      {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, scale_type{i});
+      {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
     auto const expect_data =
       std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10, 0};
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
-    for (int64_t i = 0; i < input.column(0).size() / BIT_WIDTH_RATIO; ++i) {
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + 4 * i));
-      decimal_builder.AppendNull();
-    }
+    auto const validity = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
 
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -481,6 +529,31 @@ TEST_F(ToArrowTest, FixedPointTableNulls)
   }
 }
 
+TEST_F(ToArrowTest, FixedPoint128TableNulls)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const col = fp_wrapper<__int128_t>(
+      {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, scale_type{scale});
+    auto const input = cudf::table_view({col});
+
+    auto const expect_data = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    auto const validity    = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
+
+    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
+
+    auto const field                = arrow::field("a", arr->type());
+    auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
+    auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
+
+    auto const got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
 struct ToArrowTestSlice
   : public ToArrowTest,
     public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
@@ -488,11 +561,10 @@ struct ToArrowTestSlice
 
 TEST_P(ToArrowTestSlice, SliceTest)
 {
-  auto tables          = get_tables(10000);
-  auto cudf_table_view = tables.first->view();
-  auto arrow_table     = tables.second;
-  auto start           = std::get<0>(GetParam());
-  auto end             = std::get<1>(GetParam());
+  auto tables             = get_tables(10000);
+  auto cudf_table_view    = tables.first->view();
+  auto arrow_table        = tables.second;
+  auto const [start, end] = GetParam();
 
   auto sliced_cudf_table    = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);

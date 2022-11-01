@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.NullSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,23 +36,21 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 
 public class CompiledExpressionTest extends CudfTestBase {
   @Test
   public void testColumnReferenceTransform() {
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build()) {
       // use an implicit table reference
-      UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY,
-          new ColumnReference(1));
+      ColumnReference expr = new ColumnReference(1);
       try (CompiledExpression compiledExpr = expr.compile();
            ColumnVector actual = compiledExpr.computeColumn(t)) {
         assertColumnsAreEqual(t.getColumn(1), actual);
       }
 
       // use an explicit table reference
-      expr = new UnaryExpression(UnaryOperator.IDENTITY,
-          new ColumnReference(1, TableReference.LEFT));
+      expr = new ColumnReference(1, TableReference.LEFT);
       try (CompiledExpression compiledExpr = expr.compile();
            ColumnVector actual = compiledExpr.computeColumn(t)) {
         assertColumnsAreEqual(t.getColumn(1), actual);
@@ -61,45 +60,39 @@ public class CompiledExpressionTest extends CudfTestBase {
 
   @Test
   public void testInvalidColumnReferenceTransform() {
-    // verify attempting to reference an invalid table remaps to the only valid table
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY,
-        new ColumnReference(1, TableReference.RIGHT));
+    // Verify that computeColumn throws when passed an expression operating on TableReference.RIGHT.
+    ColumnReference expr = new ColumnReference(1, TableReference.RIGHT);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
-         CompiledExpression compiledExpr = expr.compile();
-         ColumnVector actual = compiledExpr.computeColumn(t)) {
-      assertColumnsAreEqual(t.getColumn(1), actual);
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
     }
   }
 
   @Test
   public void testBooleanLiteralTransform() {
     try (Table t = new Table.TestBuilder().column(true, false, null).build()) {
-      Literal trueLiteral = Literal.ofBoolean(true);
-      UnaryExpression trueExpr = new UnaryExpression(UnaryOperator.IDENTITY, trueLiteral);
-      try (CompiledExpression trueCompiledExpr = trueExpr.compile();
+      Literal expr = Literal.ofBoolean(true);
+      try (CompiledExpression trueCompiledExpr = expr.compile();
            ColumnVector trueExprActual = trueCompiledExpr.computeColumn(t);
            ColumnVector trueExprExpected = ColumnVector.fromBoxedBooleans(true, true, true)) {
         assertColumnsAreEqual(trueExprExpected, trueExprActual);
       }
 
-      // Uncomment the following after https://github.com/rapidsai/cudf/issues/8831 is fixed
-      // Literal nullLiteral = Literal.ofBoolean(null);
-      // UnaryExpression nullExpr = new UnaryExpression(AstOperator.IDENTITY, nullLiteral);
-      // try (CompiledExpression nullCompiledExpr = nullExpr.compile();
-      //      ColumnVector nullExprActual = nullCompiledExpr.computeColumn(t);
-      //      ColumnVector nullExprExpected = ColumnVector.fromBoxedBooleans(null, null, null)) {
-      //   assertColumnsAreEqual(nullExprExpected, nullExprActual);
-      // }
+      Literal nullLiteral = Literal.ofBoolean(null);
+      UnaryOperation nullExpr = new UnaryOperation(UnaryOperator.IDENTITY, nullLiteral);
+      try (CompiledExpression nullCompiledExpr = nullExpr.compile();
+           ColumnVector nullExprActual = nullCompiledExpr.computeColumn(t);
+           ColumnVector nullExprExpected = ColumnVector.fromBoxedBooleans(null, null, null)) {
+        assertColumnsAreEqual(nullExprExpected, nullExprActual);
+      }
     }
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(bytes = 0x12)
   public void testByteLiteralTransform(Byte value) {
-    Literal literal = Literal.ofByte(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofByte(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -109,12 +102,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(shorts = 0x1234)
   public void testShortLiteralTransform(Short value) {
-    Literal literal = Literal.ofShort(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofShort(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -124,12 +115,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testIntLiteralTransform(Integer value) {
-    Literal literal = Literal.ofInt(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofInt(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -139,12 +128,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testLongLiteralTransform(Long value) {
-    Literal literal = Literal.ofLong(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofLong(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -154,12 +141,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(floats = { 123456.789f, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY} )
   public void testFloatLiteralTransform(Float value) {
-    Literal literal = Literal.ofFloat(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofFloat(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -169,12 +154,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(doubles = { 123456.789f, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY} )
   public void testDoubleLiteralTransform(Double value) {
-    Literal literal = Literal.ofDouble(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDouble(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -184,12 +167,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testTimestampDaysLiteralTransform(Integer value) {
-    Literal literal = Literal.ofTimestampDaysFromInt(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofTimestampDaysFromInt(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -200,12 +181,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofTimestampFromLong(DType.TIMESTAMP_SECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_SECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -216,12 +195,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampMilliSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofTimestampFromLong(DType.TIMESTAMP_MILLISECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_MILLISECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -232,12 +209,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampMicroSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofTimestampFromLong(DType.TIMESTAMP_MICROSECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_MICROSECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -248,12 +223,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampNanoSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofTimestampFromLong(DType.TIMESTAMP_NANOSECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_NANOSECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -264,12 +237,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testDurationDaysLiteralTransform(Integer value) {
-    Literal literal = Literal.ofDurationDaysFromInt(value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDurationDaysFromInt(value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -280,12 +251,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofDurationFromLong(DType.DURATION_SECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDurationFromLong(DType.DURATION_SECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -296,12 +265,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationMilliSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofDurationFromLong(DType.DURATION_MILLISECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDurationFromLong(DType.DURATION_MILLISECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -312,12 +279,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationMicroSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofDurationFromLong(DType.DURATION_MICROSECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDurationFromLong(DType.DURATION_MICROSECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -328,12 +293,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationNanoSecondsLiteralTransform(Long value) {
-    Literal literal = Literal.ofDurationFromLong(DType.DURATION_NANOSECONDS, value);
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, literal);
+    Literal expr = Literal.ofDurationFromLong(DType.DURATION_NANOSECONDS, value);
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -360,7 +323,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     return result;
   }
 
-  private static Stream<Arguments> createUnaryDoubleExpressionParams() {
+  private static Stream<Arguments> createUnaryDoubleOperationParams() {
     Double[] input = new Double[] { -5., 4.5, null, 2.7, 1.5 };
     return Stream.of(
         Arguments.of(UnaryOperator.IDENTITY, input, Arrays.asList(input)),
@@ -384,10 +347,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("createUnaryDoubleExpressionParams")
-  void testUnaryDoubleExpressionTransform(UnaryOperator op, Double[] input,
+  @MethodSource("createUnaryDoubleOperationParams")
+  void testUnaryDoubleOperationTransform(UnaryOperator op, Double[] input,
                                           List<Double> expectedValues) {
-    UnaryExpression expr = new UnaryExpression(op, new ColumnReference(0));
+    UnaryOperation expr = new UnaryOperation(op, new ColumnReference(0));
     try (Table t = new Table.TestBuilder().column(input).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -398,17 +361,17 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
-  void testUnaryShortExpressionTransform() {
+  void testUnaryShortOperationTransform() {
     Short[] input = new Short[] { -5, 4, null, 2, 1 };
     try (Table t = new Table.TestBuilder().column(input).build()) {
-      UnaryExpression expr = new UnaryExpression(UnaryOperator.IDENTITY, new ColumnReference(0));
+      ColumnReference expr = new ColumnReference(0);
       try (CompiledExpression compiledExpr = expr.compile();
            ColumnVector actual = compiledExpr.computeColumn(t)) {
         assertColumnsAreEqual(t.getColumn(0), actual);
       }
 
-      expr = new UnaryExpression(UnaryOperator.BIT_INVERT, new ColumnReference(0));
-      try (CompiledExpression compiledExpr = expr.compile();
+      UnaryOperation expr2 = new UnaryOperation(UnaryOperator.BIT_INVERT, new ColumnReference(0));
+      try (CompiledExpression compiledExpr = expr2.compile();
            ColumnVector actual = compiledExpr.computeColumn(t);
            ColumnVector expected = ColumnVector.fromBoxedInts(4, -5, null, -3, -2)) {
         assertColumnsAreEqual(expected, actual);
@@ -417,8 +380,8 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
-  void testUnaryLogicalExpressionTransform() {
-    UnaryExpression expr = new UnaryExpression(UnaryOperator.NOT, new ColumnReference(0));
+  void testUnaryLogicalOperationTransform() {
+    UnaryOperation expr = new UnaryOperation(UnaryOperator.NOT, new ColumnReference(0));
     try (Table t = new Table.TestBuilder().column(-5L, 0L, null, 2L, 1L).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumn(t);
@@ -427,7 +390,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createBinaryFloatExpressionParams() {
+  private static Stream<Arguments> createBinaryFloatOperationParams() {
     Float[] in1 = new Float[] { -5f, 4.5f, null, 2.7f };
     Float[] in2 = new Float[] { 123f, -456f, null, 0f };
     return Stream.of(
@@ -443,10 +406,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("createBinaryFloatExpressionParams")
-  void testBinaryFloatExpressionTransform(BinaryOperator op, Float[] in1, Float[] in2,
+  @MethodSource("createBinaryFloatOperationParams")
+  void testBinaryFloatOperationTransform(BinaryOperator op, Float[] in1, Float[] in2,
                                           List<Float> expectedValues) {
-    BinaryExpression expr = new BinaryExpression(op,
+    BinaryOperation expr = new BinaryOperation(op,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
@@ -458,7 +421,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createBinaryDoublePromotedExpressionParams() {
+  private static Stream<Arguments> createBinaryDoublePromotedOperationParams() {
     Float[] in1 = new Float[] { -5f, 4.5f, null, 2.7f };
     Float[] in2 = new Float[] { 123f, -456f, null, 0f };
     return Stream.of(
@@ -469,10 +432,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("createBinaryDoublePromotedExpressionParams")
-  void testBinaryDoublePromotedExpressionTransform(BinaryOperator op, Float[] in1, Float[] in2,
+  @MethodSource("createBinaryDoublePromotedOperationParams")
+  void testBinaryDoublePromotedOperationTransform(BinaryOperator op, Float[] in1, Float[] in2,
                                                    List<Double> expectedValues) {
-    BinaryExpression expr = new BinaryExpression(op,
+    BinaryOperation expr = new BinaryOperation(op,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
@@ -484,12 +447,12 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createBinaryComparisonExpressionParams() {
+  private static Stream<Arguments> createBinaryComparisonOperationParams() {
     Integer[] in1 = new Integer[] { -5, 4, null, 2, -3 };
     Integer[] in2 = new Integer[] { 123, -456, null, 0, -3 };
     return Stream.of(
         // nulls compare as equal by default
-        Arguments.of(BinaryOperator.EQUAL, in1, in2, Arrays.asList(false, false, true, false, true)),
+        Arguments.of(BinaryOperator.NULL_EQUAL, in1, in2, Arrays.asList(false, false, true, false, true)),
         Arguments.of(BinaryOperator.NOT_EQUAL, in1, in2, mapArray(in1, in2, (a, b) -> !a.equals(b))),
         Arguments.of(BinaryOperator.LESS, in1, in2, mapArray(in1, in2, (a, b) -> a < b)),
         Arguments.of(BinaryOperator.GREATER, in1, in2, mapArray(in1, in2, (a, b) -> a > b)),
@@ -498,10 +461,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("createBinaryComparisonExpressionParams")
-  void testBinaryComparisonExpressionTransform(BinaryOperator op, Integer[] in1, Integer[] in2,
+  @MethodSource("createBinaryComparisonOperationParams")
+  void testBinaryComparisonOperationTransform(BinaryOperator op, Integer[] in1, Integer[] in2,
                                                List<Boolean> expectedValues) {
-    BinaryExpression expr = new BinaryExpression(op,
+    BinaryOperation expr = new BinaryOperation(op,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
@@ -513,7 +476,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createBinaryBitwiseExpressionParams() {
+  private static Stream<Arguments> createBinaryBitwiseOperationParams() {
     Integer[] in1 = new Integer[] { -5, 4, null, 2, -3 };
     Integer[] in2 = new Integer[] { 123, -456, null, 0, -3 };
     return Stream.of(
@@ -523,10 +486,10 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("createBinaryBitwiseExpressionParams")
-  void testBinaryBitwiseExpressionTransform(BinaryOperator op, Integer[] in1, Integer[] in2,
+  @MethodSource("createBinaryBitwiseOperationParams")
+  void testBinaryBitwiseOperationTransform(BinaryOperator op, Integer[] in1, Integer[] in2,
                                             List<Integer> expectedValues) {
-    BinaryExpression expr = new BinaryExpression(op,
+    BinaryOperation expr = new BinaryOperation(op,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
@@ -538,19 +501,21 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createBinaryBooleanExpressionParams() {
-    Boolean[] in1 = new Boolean[] { false, true, null, true, false };
-    Boolean[] in2 = new Boolean[] { true, null, null, true, false };
+  private static Stream<Arguments> createBinaryBooleanOperationParams() {
+    Boolean[] in1 = new Boolean[] { false, true, false, null, true, false };
+    Boolean[] in2 = new Boolean[] { true, null, null, null, true, false };
     return Stream.of(
         Arguments.of(BinaryOperator.LOGICAL_AND, in1, in2, mapArray(in1, in2, (a, b) -> a && b)),
-        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)));
+        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_AND, in1, in2, Arrays.asList(false, null, false, null, true, false)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_OR, in1, in2, Arrays.asList(true, true, null, null, true, false)));
   }
 
   @ParameterizedTest
-  @MethodSource("createBinaryBooleanExpressionParams")
-  void testBinaryBooleanExpressionTransform(BinaryOperator op, Boolean[] in1, Boolean[] in2,
+  @MethodSource("createBinaryBooleanOperationParams")
+  void testBinaryBooleanOperationTransform(BinaryOperator op, Boolean[] in1, Boolean[] in2,
                                             List<Boolean> expectedValues) {
-    BinaryExpression expr = new BinaryExpression(op,
+    BinaryOperation expr = new BinaryOperation(op,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(in1).column(in2).build();
@@ -563,9 +528,9 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
-  void testMismatchedBinaryExpressionTypes() {
+  void testMismatchedBinaryOperationTypes() {
     // verify expression fails to transform if operands are not the same type
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.ADD,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.ADD,
         new ColumnReference(0),
         new ColumnReference(1));
     try (Table t = new Table.TestBuilder().column(1, 2, 3).column(1L, 2L, 3L).build();

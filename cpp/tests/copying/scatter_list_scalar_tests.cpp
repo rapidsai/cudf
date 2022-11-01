@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ std::unique_ptr<column> single_scalar_scatter(column_view const& target,
 {
   std::vector<std::reference_wrapper<const scalar>> slrs{slr};
   table_view targets{{target}};
-  auto result = scatter(slrs, scatter_map, targets, true);
+  auto result = scatter(slrs, scatter_map, targets);
   return std::move(result->release()[0]);
 }
 
@@ -46,7 +46,7 @@ template <typename T>
 class ScatterListOfFixedWidthScalarTest : public ScatterListScalarTests {
 };
 
-TYPED_TEST_CASE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 // Test grid
 // Dim1 : {Fixed width, strings, lists, structs}
@@ -211,7 +211,7 @@ template <typename T>
 class ScatterListOfListScalarTest : public ScatterListScalarTests {
 };
 
-TYPED_TEST_CASE(ScatterListOfListScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfListScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(ScatterListOfListScalarTest, Basic)
 {
@@ -308,7 +308,7 @@ class ScatterListOfStructScalarTest : public ScatterListScalarTests {
   }
 };
 
-TYPED_TEST_CASE(ScatterListOfStructScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfStructScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(ScatterListOfStructScalarTest, Basic)
 {

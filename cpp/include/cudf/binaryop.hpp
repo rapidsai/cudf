@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -34,23 +36,25 @@ namespace cudf {
  * @brief Types of binary operations that can be performed on data.
  */
 enum class binary_operator : int32_t {
-  ADD,                   ///< operator +
-  SUB,                   ///< operator -
-  MUL,                   ///< operator *
-  DIV,                   ///< operator / using common type of lhs and rhs
-  TRUE_DIV,              ///< operator / after promoting type to floating point
-  FLOOR_DIV,             ///< operator / after promoting to 64 bit floating point and then
-                         ///< flooring the result
-  MOD,                   ///< operator %
-  PMOD,                  ///< positive modulo operator
-                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
-                         ///< else, it returns (dividend % divisor)
-  PYMOD,                 ///< operator % but following python's sign rules for negatives
-  POW,                   ///< lhs ^ rhs
-  LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< 2-argument arctangent
-  SHIFT_LEFT,            ///< operator <<
-  SHIFT_RIGHT,           ///< operator >>
+  ADD,          ///< operator +
+  SUB,          ///< operator -
+  MUL,          ///< operator *
+  DIV,          ///< operator / using common type of lhs and rhs
+  TRUE_DIV,     ///< operator / after promoting type to floating point
+  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
+                ///< flooring the result
+  MOD,          ///< operator %
+  PMOD,         ///< positive modulo operator
+                ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                ///< else, it returns (dividend % divisor)
+  PYMOD,        ///< operator % but following Python's sign rules for negatives
+  POW,          ///< lhs ^ rhs
+  INT_POW,      ///< int ^ int, used to avoid floating point precision loss. Returns 0 for negative
+                ///< exponents.
+  LOG_BASE,     ///< logarithm to the base
+  ATAN2,        ///< 2-argument arctangent
+  SHIFT_LEFT,   ///< operator <<
+  SHIFT_RIGHT,  ///< operator >>
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
                          ///< Logical right shift. Casts to an unsigned value before shifting.
   BITWISE_AND,           ///< operator &
@@ -72,7 +76,11 @@ enum class binary_operator : int32_t {
                          ///< operand when one is null; or invalid when both are null
   GENERIC_BINARY,        ///< generic binary operator to be generated with input
                          ///< ptx code
-  INVALID_BINARY         ///< invalid operation
+  NULL_LOGICAL_AND,  ///< operator && with Spark rules: (null, null) is null, (null, true) is null,
+                     ///< (null, false) is false, and (valid, valid) == LOGICAL_AND(valid, valid)
+  NULL_LOGICAL_OR,   ///< operator || with Spark rules: (null, null) is null, (null, true) is true,
+                     ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
+  INVALID_BINARY     ///< invalid operation
 };
 /**
  * @brief Performs a binary operation between a scalar and a column.
@@ -82,7 +90,7 @@ enum class binary_operator : int32_t {
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
@@ -92,6 +100,8 @@ enum class binary_operator : int32_t {
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -108,7 +118,7 @@ std::unique_ptr<column> binary_operation(
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
@@ -118,6 +128,8 @@ std::unique_ptr<column> binary_operation(
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -132,7 +144,7 @@ std::unique_ptr<column> binary_operation(
  * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
@@ -142,6 +154,8 @@ std::unique_ptr<column> binary_operation(
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  */
 std::unique_ptr<column> binary_operation(
@@ -204,89 +218,47 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
-namespace experimental {
-/**
- * @brief Performs a binary operation between a scalar and a column.
- *
- * The output contains the result of `op(lhs, rhs[i])` for all `0 <= i < rhs.size()`
- * The scalar is the left operand and the column elements are the right operand.
- * This distinction is significant in case of non-commutative binary operations
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand scalar
- * @param rhs         The right operand column
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
- */
-std::unique_ptr<column> binary_operation(
-  scalar const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+namespace binops {
 
 /**
- * @brief Performs a binary operation between a column and a scalar.
+ * @brief Computes output valid mask for op between a column and a scalar
  *
- * The output contains the result of `op(lhs[i], rhs)` for all `0 <= i < lhs.size()`
- * The column elements are the left operand and the scalar is the right operand.
- * This distinction is significant in case of non-commutative binary operations
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand scalar
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
+ * @param col     Column to compute the valid mask from
+ * @param s       Scalar to compute the valid mask from
+ * @param stream  CUDA stream used for device memory operations and kernel launches
+ * @param mr      Device memory resource used to allocate the returned valid mask
+ * @return        Computed validity mask
  */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  scalar const& rhs,
-  binary_operator op,
-  data_type output_type,
+std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+  column_view const& col,
+  scalar const& s,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+namespace compiled {
+namespace detail {
+
 /**
- * @brief Performs a binary operation between two columns.
+ * @brief struct binary operation using `NaN` aware sorting physical element comparators
  *
- * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand column
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @param out mutable view of output column
+ * @param lhs view of left operand column
+ * @param rhs view of right operand column
+ * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
+ * @param is_rhs_scalar true if @p rhs is a single element column representing a scalar
+ * @param op binary operator identifier
+ * @param stream CUDA stream used for device memory operations
  */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-}  // namespace experimental
+void apply_sorting_struct_binary_op(mutable_column_view& out,
+                                    column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_lhs_scalar,
+                                    bool is_rhs_scalar,
+                                    binary_operator op,
+                                    rmm::cuda_stream_view stream);
+}  // namespace detail
+}  // namespace compiled
+}  // namespace binops
+
 /** @} */  // end of group
 }  // namespace cudf

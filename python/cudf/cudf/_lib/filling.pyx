@@ -1,8 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import numpy as np
-
-from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -15,7 +12,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
@@ -50,35 +47,29 @@ def fill(Column destination, int begin, int end, DeviceScalar value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def repeat(Table inp, object count, bool check_count=False):
+def repeat(list inp, object count):
     if isinstance(count, Column):
-        return _repeat_via_column(inp, count, check_count)
+        return _repeat_via_column(inp, count)
     else:
         return _repeat_via_size_type(inp, count)
 
 
-def _repeat_via_column(Table inp, Column count, bool check_count):
-    cdef table_view c_inp = inp.view()
+def _repeat_via_column(list inp, Column count):
+    cdef table_view c_inp = table_view_from_columns(inp)
     cdef column_view c_count = count.view()
-    cdef bool c_check_count = check_count
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_filling.repeat(
             c_inp,
             c_count,
-            c_check_count
         ))
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=inp._column_names,
-        index_names=inp._index_names
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
-def _repeat_via_size_type(Table inp, size_type count):
-    cdef table_view c_inp = inp.view()
+def _repeat_via_size_type(list inp, size_type count):
+    cdef table_view c_inp = table_view_from_columns(inp)
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -87,11 +78,7 @@ def _repeat_via_size_type(Table inp, size_type count):
             count
         ))
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=inp._column_names,
-        index_names=inp._index_names
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def sequence(int size, DeviceScalar init, DeviceScalar step):

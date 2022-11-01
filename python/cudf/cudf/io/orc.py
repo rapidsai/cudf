@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -9,8 +9,8 @@ from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.metadata import (  # type: ignore
     orc_column_statistics_pb2 as cs_pb2,
 )
@@ -20,8 +20,8 @@ def _make_empty_df(filepath_or_buffer, columns):
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
-    return cudf.DataFrame(
-        {
+    return cudf.DataFrame._from_data(
+        data={
             col_name: cudf.core.column.column_empty(
                 row_count=0,
                 dtype=schema.field(col_name).type.to_pandas_dtype(),
@@ -41,37 +41,90 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["number_of_values"] = cs.numberOfValues
     if cs.HasField("hasNull"):
         column_statistics["has_null"] = cs.hasNull
+
     if cs.HasField("intStatistics"):
-        column_statistics["minimum"] = cs.intStatistics.minimum
-        column_statistics["maximum"] = cs.intStatistics.maximum
-        column_statistics["sum"] = cs.intStatistics.sum
+        column_statistics["minimum"] = (
+            cs.intStatistics.minimum
+            if cs.intStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.intStatistics.maximum
+            if cs.intStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
+        )
+
     elif cs.HasField("doubleStatistics"):
-        column_statistics["minimum"] = cs.doubleStatistics.minimum
-        column_statistics["maximum"] = cs.doubleStatistics.maximum
-        column_statistics["sum"] = cs.doubleStatistics.sum
+        column_statistics["minimum"] = (
+            cs.doubleStatistics.minimum
+            if cs.doubleStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.doubleStatistics.maximum
+            if cs.doubleStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
+        )
+
     elif cs.HasField("stringStatistics"):
-        column_statistics["minimum"] = cs.stringStatistics.minimum
-        column_statistics["maximum"] = cs.stringStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.stringStatistics.minimum
+            if cs.stringStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.stringStatistics.maximum
+            if cs.stringStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.stringStatistics.sum
+
     elif cs.HasField("bucketStatistics"):
         column_statistics["true_count"] = cs.bucketStatistics.count[0]
         column_statistics["false_count"] = (
             column_statistics["number_of_values"]
             - column_statistics["true_count"]
         )
+
     elif cs.HasField("decimalStatistics"):
-        column_statistics["minimum"] = cs.decimalStatistics.minimum
-        column_statistics["maximum"] = cs.decimalStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.decimalStatistics.minimum
+            if cs.decimalStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.decimalStatistics.maximum
+            if cs.decimalStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.decimalStatistics.sum
+
     elif cs.HasField("dateStatistics"):
-        column_statistics["minimum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["minimum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("minimum")
+            else None
         )
-        column_statistics["maximum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["maximum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("maximum")
+            else None
         )
+
     elif cs.HasField("timestampStatistics"):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
@@ -87,6 +140,7 @@ def _parse_column_statistics(cs, column_statistics_blob):
             column_statistics["maximum"] = datetime.datetime.fromtimestamp(
                 cs.timestampStatistics.maximumUtc / 1000, datetime.timezone.utc
             )
+
     elif cs.HasField("binaryStatistics"):
         column_statistics["sum"] = cs.binaryStatistics.sum
 
@@ -108,14 +162,16 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers, columns=None, **kwargs,
+    filepaths_or_buffers,
+    columns=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
         if compression is not None:
@@ -126,7 +182,7 @@ def read_orc_statistics(
             column_names,
             raw_file_statistics,
             raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
+        ) = liborc.read_raw_orc_statistics(path_or_buf)
 
         # Parse column names
         column_names = [
@@ -231,13 +287,25 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimal_cols_as_float=None,
     timestamp_type=None,
-    **kwargs,
+    use_python_file_object=True,
+    storage_options=None,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
-
     from cudf import DataFrame
+
+    if skiprows is not None:
+        warnings.warn(
+            "skiprows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -259,15 +327,23 @@ def read_orc(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
-        if ioutils.is_directory(source, **kwargs):
+        if ioutils.is_directory(
+            path_or_data=source, storage_options=storage_options
+        ):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source
+                passed_filesystem=None,
+                path=source,
+                storage_options=storage_options,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
 
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs,
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source,
+            compression=None,
+            use_python_file_object=use_python_file_object,
+            storage_options=storage_options,
+            bytes_per_thread=bytes_per_thread,
         )
         if compression is not None:
             raise ValueError(
@@ -290,15 +366,14 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        df = DataFrame._from_table(
-            liborc.read_orc(
+        return DataFrame._from_data(
+            *liborc.read_orc(
                 filepaths_or_buffers,
                 columns,
                 stripes,
                 skiprows,
                 num_rows,
                 use_index,
-                decimal_cols_as_float,
                 timestamp_type,
             )
         )
@@ -333,16 +408,22 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
+def to_orc(
+    df,
+    fname,
+    compression="snappy",
+    statistics="ROWGROUP",
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
+    cols_as_map_type=None,
+    storage_options=None,
+    index=None,
+):
     """{docstring}"""
 
     for col in df._data.columns:
-        if isinstance(col, cudf.core.column.StructColumn):
-            raise NotImplementedError(
-                "Writing to ORC format is not yet supported with "
-                "Struct columns."
-            )
-        elif isinstance(col, cudf.core.column.CategoricalColumn):
+        if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
@@ -354,15 +435,38 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
             "Categorical columns."
         )
 
+    if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
+        raise TypeError("cols_as_map_type must be a list of column names.")
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=fname, mode="wb", **kwargs
+        path_or_data=fname, mode="wb", storage_options=storage_options
     )
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            liborc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(
+                df,
+                file_obj,
+                compression,
+                statistics,
+                stripe_size_bytes,
+                stripe_size_rows,
+                row_index_stride,
+                cols_as_map_type,
+                index,
+            )
     else:
-        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(
+            df,
+            path_or_buf,
+            compression,
+            statistics,
+            stripe_size_bytes,
+            stripe_size_rows,
+            row_index_stride,
+            cols_as_map_type,
+            index,
+        )
 
 
 ORCWriter = liborc.ORCWriter

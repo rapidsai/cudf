@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,15 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -130,17 +134,16 @@ struct ngram_builder_fn {
 
 // detail APIs
 
-std::unique_ptr<cudf::column> ngrams_tokenize(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& delimiter = cudf::string_scalar(""),
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& strings,
+                                              cudf::size_type ngrams,
+                                              cudf::string_scalar const& delimiter,
+                                              cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view d_separator(separator.data(), separator.size());
 
   CUDF_EXPECTS(ngrams >= 1, "Parameter ngrams should be an integer value of 1 or greater");
@@ -243,13 +246,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
-  return make_strings_column(total_ngrams,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+  return make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -264,7 +262,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
 {
   CUDF_FUNC_RANGE();
   return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, rmm::cuda_stream_default, mr);
+    strings, ngrams, delimiter, separator, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

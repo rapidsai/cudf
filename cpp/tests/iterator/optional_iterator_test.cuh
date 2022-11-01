@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,8 +12,12 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+#pragma once
 
 #include <tests/iterator/iterator_tests.cuh>
+
+#include <thrust/host_vector.h>
+#include <thrust/optional.h>
 
 template <typename T>
 void nonull_optional_iterator(IteratorTest<T>& testFixture)
@@ -36,11 +40,11 @@ void nonull_optional_iterator(IteratorTest<T>& testFixture)
   // GPU test
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T>(*d_col, cudf::contains_nulls::DYNAMIC{}, false),
+    cudf::detail::make_optional_iterator<T>(*d_col, cudf::nullate::DYNAMIC{false}),
     host_values.size());
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T>(*d_col, cudf::contains_nulls::NO{}),
+    cudf::detail::make_optional_iterator<T>(*d_col, cudf::nullate::NO{}),
     host_values.size());
 }
 
@@ -72,22 +76,20 @@ void null_optional_iterator(IteratorTest<T>& testFixture)
                  [](auto s, bool b) { return thrust::optional<T>{s}; });
 
   // GPU test for correct null mapping
-  testFixture.iterator_test_thrust(optional_values,
-                                   d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, true),
-                                   host_values.size());
+  testFixture.iterator_test_thrust(
+    optional_values, d_col->optional_begin<T>(cudf::nullate::DYNAMIC{true}), host_values.size());
 
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
+    optional_values, d_col->optional_begin<T>(cudf::nullate::YES{}), host_values.size());
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
+    optional_values, d_col->optional_begin<T>(cudf::nullate::YES{}), host_values.size());
 
   // GPU test for ignoring null mapping
-  testFixture.iterator_test_thrust(value_all_valid,
-                                   d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, false),
-                                   host_values.size());
+  testFixture.iterator_test_thrust(
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::DYNAMIC{false}), host_values.size());
 
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::NO{}), host_values.size());
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::NO{}), host_values.size());
 }

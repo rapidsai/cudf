@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,28 +33,14 @@ rmm::device_buffer mask_scan(column_view const& input_view,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
-
-std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
-
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
-                                          std::unique_ptr<aggregation> const& agg,
+                                          scan_aggregation const& agg,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  if (agg->kind != aggregation::RANK && agg->kind != aggregation::DENSE_RANK) {
-    CUDF_EXPECTS(
-      is_numeric(input.type()) || is_compound(input.type()) || is_fixed_point(input.type()),
-      "Unexpected non-numeric or non-string type.");
-  }
-
-  switch (agg->kind) {
+  switch (agg.kind) {
     case aggregation::SUM:
       return type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<DeviceSum>(), input, null_handling, stream, mr);
@@ -67,11 +53,9 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
     case aggregation::PRODUCT:
       // a product scan on a decimal type with non-zero scale would result in each element having
       // a different scale, and because scale is stored once per column, this is not possible
-      if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64 cannot support product scan");
+      if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64/128 cannot support product scan");
       return type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<DeviceProduct>(), input, null_handling, stream, mr);
-    case aggregation::RANK: return inclusive_rank_scan(input, stream, mr);
-    case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(input, stream, mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }

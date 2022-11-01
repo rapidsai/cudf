@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -6,8 +6,6 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_order,
@@ -21,17 +19,12 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.quantiles cimport (
     quantile as cpp_quantile,
-    quantiles as cpp_quantiles,
+    quantiles as cpp_quantile_table,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
-    interpolation,
-    null_order,
-    order,
-    order_info,
-    sorted,
-)
+from cudf._lib.cpp.types cimport interpolation, null_order, order, sorted
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def quantile(
@@ -74,13 +67,15 @@ def quantile(
     return Column.from_unique_ptr(move(c_result))
 
 
-def quantiles(Table source_table,
-              vector[double] q,
-              object interp,
-              object is_input_sorted,
-              list column_order,
-              list null_precedence):
-    cdef table_view c_input = source_table.data_view()
+def quantile_table(
+    list source_columns,
+    vector[double] q,
+    object interp,
+    object is_input_sorted,
+    list column_order,
+    list null_precedence,
+):
+    cdef table_view c_input = table_view_from_columns(source_columns)
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(
         <underlying_type_t_interpolation> interp
@@ -108,17 +103,14 @@ def quantiles(Table source_table,
 
     with nogil:
         c_result = move(
-            cpp_quantiles(
+            cpp_quantile_table(
                 c_input,
                 c_q,
                 c_interp,
                 c_is_input_sorted,
                 c_column_order,
-                c_null_precedence
+                c_null_precedence,
             )
         )
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names
-    )
+    return columns_from_unique_ptr(move(c_result))

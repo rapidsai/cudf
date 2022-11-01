@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -8,9 +8,11 @@ from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
@@ -179,6 +181,16 @@ def make_all_numeric_extremes_dataframe():
 
 
 @pytest.fixture
+def pandas_extreme_numeric_dataframe():
+    return make_all_numeric_extremes_dataframe()[0]
+
+
+@pytest.fixture
+def cudf_extreme_numeric_dataframe(pandas_extreme_numeric_dataframe):
+    return cudf.from_pandas(pandas_extreme_numeric_dataframe)
+
+
+@pytest.fixture
 def path_or_buf(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
     df = make_numeric_dataframe(10, np.int32)
@@ -320,7 +332,6 @@ def test_csv_reader_dtype_dict(use_names):
     dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
-
     gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
     pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 
@@ -394,9 +405,9 @@ def test_csv_reader_negative_vals(tmpdir):
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
-    np.testing.assert_allclose(zero, df["0"].to_array())
-    np.testing.assert_allclose(one, df["1"].to_array())
-    np.testing.assert_allclose(two, df["2"].to_array())
+    np.testing.assert_allclose(zero, df["0"].to_numpy())
+    np.testing.assert_allclose(one, df["1"].to_numpy())
+    np.testing.assert_allclose(two, df["2"].to_numpy())
 
 
 def test_csv_reader_strings(tmpdir):
@@ -472,19 +483,26 @@ def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     assert_eq(df_out, out, check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols(tmpdir):
-    buffer = "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n"
-
+@pytest.mark.parametrize(
+    "buffer",
+    [
+        "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n",
+        "A,A,A.1,A,A.2,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+        "A,A,A.1,,Unnamed: 4,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+    ],
+)
+@pytest.mark.parametrize("mangle_dupe_cols", [True, False])
+def test_csv_reader_mangle_dupe_cols(tmpdir, buffer, mangle_dupe_cols):
     # Default: mangle_dupe_cols=True
-    pd_df = pd.read_csv(StringIO(buffer))
-    cu_df = read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=mangle_dupe_cols)
+    if mangle_dupe_cols:
+        pd_df = pd.read_csv(StringIO(buffer))
+    else:
+        # Pandas does not support mangle_dupe_cols=False
+        head = buffer.split("\n")[0].split(",")
+        first_cols = np.unique(head, return_index=True)[1]
+        pd_df = pd.read_csv(StringIO(buffer), usecols=first_cols)
     assert_eq(cu_df, pd_df)
-
-    # Pandas does not support mangle_dupe_cols=False
-    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
-    # check that the dupe columns were removed
-    assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"].to_array(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -517,11 +535,11 @@ def test_csv_reader_float_decimal(tmpdir):
         decimal=",",
     )
 
-    np.testing.assert_allclose(basic_32_ref, df["basic_32"].to_array())
-    np.testing.assert_allclose(basic_64_ref, df["basic_64"].to_array())
-    np.testing.assert_allclose(round_ref, df["round"].to_array())
-    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"].to_array())
-    np.testing.assert_allclose(precision_ref, df["precision"].to_array())
+    np.testing.assert_allclose(basic_32_ref, df["basic_32"].to_numpy())
+    np.testing.assert_allclose(basic_64_ref, df["basic_64"].to_numpy())
+    np.testing.assert_allclose(round_ref, df["round"].to_numpy())
+    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"].to_numpy())
+    np.testing.assert_allclose(precision_ref, df["precision"].to_numpy())
 
 
 def test_csv_reader_NaN_values():
@@ -579,7 +597,9 @@ def test_csv_reader_NaN_values():
 
     # data type detection should evaluate the column to int8 (all nulls)
     gdf = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values,
+        StringIO(all_cells),
+        header=None,
+        na_values=custom_na_values,
     )
     assert gdf.dtypes[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
@@ -621,12 +641,12 @@ def test_csv_reader_thousands(tmpdir):
         str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'"
     )
 
-    np.testing.assert_allclose(f32_ref, df["float32"].to_array())
-    np.testing.assert_allclose(f64_ref, df["float64"].to_array())
-    np.testing.assert_allclose(int32_ref, df["int32"].to_array())
-    np.testing.assert_allclose(int64_ref, df["int64"].to_array())
-    np.testing.assert_allclose(uint32_ref, df["uint32"].to_array())
-    np.testing.assert_allclose(uint64_ref, df["uint64"].to_array())
+    np.testing.assert_allclose(f32_ref, df["float32"].to_numpy())
+    np.testing.assert_allclose(f64_ref, df["float64"].to_numpy())
+    np.testing.assert_allclose(int32_ref, df["int32"].to_numpy())
+    np.testing.assert_allclose(int64_ref, df["int64"].to_numpy())
+    np.testing.assert_allclose(uint32_ref, df["uint32"].to_numpy())
+    np.testing.assert_allclose(uint64_ref, df["uint64"].to_numpy())
 
 
 def test_csv_reader_buffer_strings():
@@ -769,10 +789,10 @@ def test_csv_quotednumbers(tmpdir):
     df2 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
     assert len(df2.columns) == 2
-    np.testing.assert_allclose(integer_ref, df1["integer"].to_array())
-    np.testing.assert_allclose(decimal_ref, df1["decimal"].to_array())
-    np.testing.assert_allclose(integer_ref, df2["integer"].to_array())
-    np.testing.assert_allclose(decimal_ref, df2["decimal"].to_array())
+    np.testing.assert_allclose(integer_ref, df1["integer"].to_numpy())
+    np.testing.assert_allclose(decimal_ref, df1["decimal"].to_numpy())
+    np.testing.assert_allclose(integer_ref, df2["integer"].to_numpy())
+    np.testing.assert_allclose(decimal_ref, df2["decimal"].to_numpy())
 
 
 def test_csv_reader_nrows(tmpdir):
@@ -979,6 +999,17 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     assert_eq(expect, got)
 
 
+def test_csv_reader_arrow_nativefile(path_or_buf):
+    # Check that we can read a file opened with the
+    # Arrow FileSystem inferface
+    expect = cudf.read_csv(path_or_buf("filepath"))
+    fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
+    with fs.open_input_file(path) as fil:
+        got = cudf.read_csv(fil)
+
+    assert_eq(expect, got)
+
+
 def test_small_zip(tmpdir):
     df = pd.DataFrame(
         {
@@ -998,17 +1029,17 @@ def test_small_zip(tmpdir):
 def test_csv_reader_carriage_return(tmpdir):
     rows = 1000
     names = ["int_row", "int_double_row"]
-
     buffer = ",".join(names) + "\r\n"
     for row in range(rows):
         buffer += str(row) + ", " + str(2 * row) + "\r\n"
 
     df = read_csv(StringIO(buffer))
+    expect = cudf.DataFrame(
+        {"int_row": cp.arange(rows), "int_double_row": cp.arange(rows) * 2}
+    )
 
     assert len(df) == rows
-    for row in range(0, rows):
-        assert df[names[0]][row] == row
-        assert df[names[1]][row] == 2 * row
+    assert_eq(expect, df)
 
 
 def test_csv_reader_tabs():
@@ -1034,8 +1065,8 @@ def test_csv_reader_tabs():
         "1970-12-12T00:00:00.000000000",
         "2018-06-15T00:00:00.000000000",
     ]
-    np.testing.assert_allclose(floats, df["float_point"].to_array())
-    np.testing.assert_allclose(ints, df["integer"].to_array())
+    np.testing.assert_allclose(floats, df["float_point"].to_numpy())
+    np.testing.assert_allclose(ints, df["integer"].to_numpy())
     for row in range(4):
         assert str(df["date"][row]) == dates[row]
 
@@ -1261,6 +1292,7 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1281,7 +1313,7 @@ def test_csv_reader_bools_false_positives(tmpdir):
 
     df = read_csv(StringIO(buffer), header=None, dtype=["int32"])
 
-    np.testing.assert_array_equal(items, df["0"].to_array())
+    np.testing.assert_array_equal(items, df["0"].to_numpy())
 
 
 def test_csv_reader_aligned_byte_range(tmpdir):
@@ -1303,7 +1335,7 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
 )
 def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
-    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
+    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF"]
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = "\n".join(lines)
@@ -1313,13 +1345,42 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
         np.testing.assert_array_equal(
-            pdf["hex_int"], gdf["hex_int"].to_array()
+            pdf["hex_int"], gdf["hex_int"].to_numpy()
         )
     else:
         # otherwise, dtype inference returns as object (string)
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
         gdf = read_csv(StringIO(buffer), names=["hex_int"])
         assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "np_dtype, gdf_dtype",
+    [("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+)
+def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
+    # This tests values which cause an overflow warning that will become an
+    # error in pandas. NumPy wraps the overflow silently up to the bounds of a
+    # signed int64.
+    lines = [
+        "0x0",
+        "-0x1000",
+        "0xfedcba",
+        "0xABCDEF",
+        "0xaBcDeF",
+        "0x9512c20b",
+        "0x7fffffff",
+        "0x7fffffffffffffff",
+        "-0x8000000000000000",
+    ]
+    values = [int(hex_int, 16) for hex_int in lines]
+    buffer = "\n".join(lines)
+
+    gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
+
+    expected = np.array(values, dtype=np_dtype)
+    actual = gdf["hex_int"].to_numpy()
+    np.testing.assert_array_equal(expected, actual)
 
 
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
@@ -1488,7 +1549,7 @@ def test_csv_writer_file_append(tmpdir):
 
     result = cudf.read_csv(gdf_df_fname)
     expected = cudf.concat([gdf1, gdf2], ignore_index=True)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_index_type=True)
 
 
 def test_csv_writer_buffer(tmpdir):
@@ -1763,18 +1824,7 @@ def test_csv_write_empty_column_name(df, index, columns):
         cudf.DataFrame(index=cudf.Index([], name="index name")),
     ],
 )
-@pytest.mark.parametrize(
-    "index",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6691"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("index", [True, False])
 def test_csv_write_empty_dataframe(df, index):
     pdf = df.to_pandas()
 
@@ -2014,3 +2064,69 @@ def test_empty_df_no_index():
     result = cudf.read_csv(buffer)
 
     assert_eq(actual, result)
+
+
+def test_default_integer_bitwidth(
+    cudf_mixed_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+    assert read["Integer"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
+
+
+def test_default_integer_bitwidth_partial(
+    cudf_mixed_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf, dtype={"Integer": "int64"})
+    assert read["Integer"].dtype == np.dtype("i8")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
+
+
+def test_default_integer_bitwidth_extremes(
+    cudf_extreme_numeric_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_extreme_numeric_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+
+    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["uint64"].dtype == np.dtype(f"u{default_integer_bitwidth//8}")
+
+
+def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
+    # Test that float columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_default_float_bitwidth_partial(default_float_bitwidth):
+    # Test that float columns in csv are _inferred_ as user specified
+    # bitwidth
+    read = cudf.read_csv(
+        StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
+        dtype={"float2": "float64"},
+    )
+    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["float2"].dtype == np.dtype("f8")

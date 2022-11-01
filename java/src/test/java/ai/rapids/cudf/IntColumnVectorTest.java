@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,47 +35,75 @@ public class IntColumnVectorTest extends CudfTestBase {
     try (ColumnVector intColumnVector = ColumnVector.build(DType.INT32, 3, (b) -> b.append(1))) {
       assertFalse(intColumnVector.hasNulls());
     }
+    try (ColumnVector intColumnVector = ColumnBuilderHelper.buildOnDevice(
+        new HostColumnVector.BasicType(true, DType.INT32), 3, (b) -> b.append(1))) {
+      assertFalse(intColumnVector.hasNulls());
+    }
   }
 
   @Test
   public void testArrayAllocation() {
-    try (HostColumnVector intColumnVector = HostColumnVector.fromInts(2, 3, 5)) {
-      assertFalse(intColumnVector.hasNulls());
-      assertEquals(intColumnVector.getInt(0), 2);
-      assertEquals(intColumnVector.getInt(1), 3);
-      assertEquals(intColumnVector.getInt(2), 5);
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEquals(cv.getInt(0), 2);
+      assertEquals(cv.getInt(1), 3);
+      assertEquals(cv.getInt(2), 5);
+    };
+    try (HostColumnVector cv = HostColumnVector.fromInts(2, 3, 5)) {
+      verify.accept(cv);
+    }
+    try (HostColumnVector cv = ColumnBuilderHelper.fromInts(true, 2, 3, 5)) {
+      verify.accept(cv);
     }
   }
 
   @Test
   public void testUnsignedArrayAllocation() {
-    try (HostColumnVector v = HostColumnVector.fromUnsignedInts(0xfedcba98, 0x80000000, 5)) {
-      assertFalse(v.hasNulls());
-      assertEquals(0xfedcba98L, Integer.toUnsignedLong(v.getInt(0)));
-      assertEquals(0x80000000L, Integer.toUnsignedLong(v.getInt(1)));
-      assertEquals(5, Integer.toUnsignedLong(v.getInt(2)));
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEquals(0xfedcba98L, Integer.toUnsignedLong(cv.getInt(0)));
+      assertEquals(0x80000000L, Integer.toUnsignedLong(cv.getInt(1)));
+      assertEquals(5, Integer.toUnsignedLong(cv.getInt(2)));
+    };
+    try (HostColumnVector cv = HostColumnVector.fromUnsignedInts(0xfedcba98, 0x80000000, 5)) {
+      verify.accept(cv);
+    }
+    try (HostColumnVector cv = ColumnBuilderHelper.fromInts(false, 0xfedcba98, 0x80000000, 5)) {
+      verify.accept(cv);
     }
   }
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (HostColumnVector intColumnVector = HostColumnVector.fromInts(2, 3, 5)) {
-      assertThrows(AssertionError.class, () -> intColumnVector.getInt(3));
-      assertFalse(intColumnVector.hasNulls());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertThrows(AssertionError.class, () -> cv.getInt(3));
+      assertFalse(cv.hasNulls());
+    };
+    try (HostColumnVector icv = HostColumnVector.fromInts(2, 3, 5)) {
+      verify.accept(icv);
+    }
+    try (HostColumnVector icv = ColumnBuilderHelper.fromInts(true, 2, 3, 5)) {
+      verify.accept(icv);
     }
   }
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (HostColumnVector intColumnVector = HostColumnVector.fromInts(2, 3, 5)) {
-      assertFalse(intColumnVector.hasNulls());
-      assertThrows(AssertionError.class, () -> intColumnVector.getInt(-1));
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertThrows(AssertionError.class, () -> cv.getInt(-1));
+    };
+    try (HostColumnVector icv = HostColumnVector.fromInts(2, 3, 5)) {
+      verify.accept(icv);
+    }
+    try (HostColumnVector icv = ColumnBuilderHelper.fromInts(true, 2, 3, 5)) {
+      verify.accept(icv);
     }
   }
 
   @Test
   public void testAddingNullValues() {
-    try (HostColumnVector cv = HostColumnVector.fromBoxedInts(2, 3, 4, 5, 6, 7, null, null)) {
+    Consumer<HostColumnVector> verify = (cv) -> {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -82,13 +111,18 @@ public class IntColumnVectorTest extends CudfTestBase {
       }
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector cv = HostColumnVector.fromBoxedInts(2, 3, 4, 5, 6, 7, null, null)) {
+      verify.accept(cv);
+    }
+    try (HostColumnVector cv = ColumnBuilderHelper.fromBoxedInts(true, 2, 3, 4, 5, 6, 7, null, null)) {
+      verify.accept(cv);
     }
   }
 
   @Test
   public void testAddingUnsignedNullValues() {
-    try (HostColumnVector cv = HostColumnVector.fromBoxedUnsignedInts(
-            2, 3, 4, 5, 0xfedbca98, 0x80000000, null, null)) {
+    Consumer<HostColumnVector> verify = (cv) -> {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -98,6 +132,14 @@ public class IntColumnVectorTest extends CudfTestBase {
       assertEquals(0x80000000L, Integer.toUnsignedLong(cv.getInt(5)));
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector cv = HostColumnVector.fromBoxedUnsignedInts(
+            2, 3, 4, 5, 0xfedbca98, 0x80000000, null, null)) {
+      verify.accept(cv);
+    }
+    try (HostColumnVector cv = ColumnBuilderHelper.fromBoxedInts(false,
+        2, 3, 4, 5, 0xfedbca98, 0x80000000, null, null)) {
+      verify.accept(cv);
     }
   }
 
@@ -117,8 +159,8 @@ public class IntColumnVectorTest extends CudfTestBase {
          ColumnVector expected1 = ColumnVector.fromInts(4, 3, 8);
          ColumnVector intColumnVector2 = shortColumnVector.asInts();
          ColumnVector expected2 = ColumnVector.fromInts(100)) {
-      TableTest.assertColumnsAreEqual(expected1, intColumnVector1);
-      TableTest.assertColumnsAreEqual(expected2, intColumnVector2);
+      AssertUtils.assertColumnsAreEqual(expected1, intColumnVector1);
+      AssertUtils.assertColumnsAreEqual(expected2, intColumnVector2);
     }
   }
 

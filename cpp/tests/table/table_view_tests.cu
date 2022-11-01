@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,13 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <vector>
 
@@ -39,14 +43,15 @@ void row_comparison(cudf::table_view input1,
                     cudf::mutable_column_view output,
                     std::vector<cudf::order> const& column_order)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
-  auto d_column_order = cudf::detail::make_device_uvector_sync(column_order);
+  auto d_column_order =
+    cudf::detail::make_device_uvector_sync(column_order, cudf::get_default_stream());
 
-  auto comparator = cudf::row_lexicographic_comparator<false>(
-    *device_table_1, *device_table_2, d_column_order.data());
+  auto comparator = cudf::row_lexicographic_comparator(
+    cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
 
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
@@ -123,7 +128,7 @@ TEST_F(TableViewTest, SelectOutOfBounds)
   fixed_width_column_wrapper<int64_t> col4{{4, 5, 6, 7}};
   cudf::table_view t{{col1, col2}};
 
-  EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
+  EXPECT_THROW((void)t.select({2, 3, 4}), std::out_of_range);
 }
 
 TEST_F(TableViewTest, SelectNoColumns)

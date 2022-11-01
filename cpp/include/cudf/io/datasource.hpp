@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ namespace io {
  */
 class datasource {
  public:
+  template <typename Container>
+  class owning_buffer;  // forward declaration
   /**
    * @brief Interface class for buffers that the datasource returns to the caller.
    *
@@ -50,22 +52,36 @@ class datasource {
   class buffer {
    public:
     /**
-     * @brief Returns the buffer size in bytes.
+     * @pure @brief Returns the buffer size in bytes.
+     *
+     * @return Buffer size in bytes
      */
-    virtual size_t size() const = 0;
+    [[nodiscard]] virtual size_t size() const = 0;
 
     /**
-     * @brief Returns the address of the data in the buffer.
+     * @pure @brief Returns the address of the data in the buffer.
+     *
+     * @return Address of the data in the buffer
      */
-    virtual uint8_t const* data() const = 0;
+    [[nodiscard]] virtual uint8_t const* data() const = 0;
 
     /**
      * @brief Base class destructor
      */
     virtual ~buffer() {}
 
+    /**
+     * @brief Factory to construct a datasource buffer object from a container.
+     *
+     * @tparam Container Type of the container to construct the buffer from
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @return Constructed buffer object
+     */
     template <typename Container>
-    static std::unique_ptr<buffer> create(Container&& data_owner);
+    static std::unique_ptr<buffer> create(Container&& data_owner)
+    {
+      return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+    }
   };
 
   /**
@@ -74,6 +90,7 @@ class datasource {
    * @param[in] filepath Path to the file to use
    * @param[in] offset Bytes from the start of the file (the default is zero)
    * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
+   * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(const std::string& filepath,
                                             size_t offset = 0,
@@ -83,6 +100,7 @@ class datasource {
    * @brief Creates a source from a memory buffer.
    *
    * @param[in] buffer Host buffer object
+   * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
@@ -90,6 +108,7 @@ class datasource {
    * @brief Creates a source from a from an Arrow file.
    *
    * @param[in] arrow_file RandomAccessFile to which the API calls are forwarded
+   * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(
     std::shared_ptr<arrow::io::RandomAccessFile> arrow_file);
@@ -98,6 +117,7 @@ class datasource {
    * @brief Creates a source from an user implemented datasource object.
    *
    * @param[in] source Non-owning pointer to the datasource object
+   * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(datasource* source);
 
@@ -105,6 +125,7 @@ class datasource {
    * @brief Creates a vector of datasources, one per element in the input vector.
    *
    * @param[in] args vector of parameters
+   * @return Constructed vector of datasource objects
    */
   template <typename T>
   static std::vector<std::unique_ptr<datasource>> create(std::vector<T> const& args)
@@ -155,7 +176,7 @@ class datasource {
    *
    * @return bool Whether this source supports device_read() calls
    */
-  virtual bool supports_device_read() const { return false; }
+  [[nodiscard]] virtual bool supports_device_read() const { return false; }
 
   /**
    * @brief Estimates whether a direct device read would be more optimal for the given size.
@@ -163,7 +184,10 @@ class datasource {
    * @param size Number of bytes to read
    * @return whether the device read is expected to be more performant for the given size
    */
-  virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
+  [[nodiscard]] virtual bool is_device_read_preferred(size_t size) const
+  {
+    return supports_device_read();
+  }
 
   /**
    * @brief Returns a device buffer with a subset of data from the source.
@@ -243,31 +267,47 @@ class datasource {
    *
    * @return size_t The size of the source data in bytes
    */
-  virtual size_t size() const = 0;
+  [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
    * @return bool True if there is data, False otherwise
    */
-  virtual bool is_empty() const { return size() == 0; }
+  [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 
   /**
    * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
    */
   class non_owning_buffer : public buffer {
    public:
-    non_owning_buffer() : _data(0), _size(0) {}
+    non_owning_buffer() {}
 
+    /**
+     * @brief Construct a new non owning buffer object
+     *
+     * @param data The data buffer
+     * @param size The size of the data buffer
+     */
     non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
 
-    size_t size() const override { return _size; }
+    /**
+     * @brief Returns the size of the buffer.
+     *
+     * @return The size of the buffer in bytes
+     */
+    [[nodiscard]] size_t size() const override { return _size; }
 
-    uint8_t const* data() const override { return _data; }
+    /**
+     * @brief Returns the pointer to the buffer.
+     *
+     * @return Pointer to the buffer
+     */
+    [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data;
-    size_t const _size;
+    uint8_t* const _data{nullptr};
+    size_t const _size{0};
   };
 
   /**
@@ -282,6 +322,8 @@ class datasource {
    public:
     /**
      * @brief Moves the input container into the newly created object.
+     *
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
      */
     owning_buffer(Container&& data_owner)
       : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
@@ -291,15 +333,32 @@ class datasource {
     /**
      * @brief Moves the input container into the newly created object, and exposes a subspan of the
      * buffer.
+     *
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param data_ptr Pointer to the start of the subspan
+     * @param size The size of the subspan
      */
     owning_buffer(Container&& data_owner, uint8_t const* data_ptr, size_t size)
       : _data(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 
-    size_t size() const override { return _size; }
+    /**
+     * @brief Returns the size of the buffer.
+     *
+     * @return The size of the buffer in bytes
+     */
+    [[nodiscard]] size_t size() const override { return _size; }
 
-    uint8_t const* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
+    /**
+     * @brief Returns the pointer to the data in the buffer.
+     *
+     * @return Pointer to the data in the buffer
+     */
+    [[nodiscard]] uint8_t const* data() const override
+    {
+      return static_cast<uint8_t const*>(_data_ptr);
+    }
 
    private:
     Container _data;
@@ -307,12 +366,6 @@ class datasource {
     size_t _size;
   };
 };
-
-template <typename Container>
-std::unique_ptr<datasource::buffer> datasource::buffer::create(Container&& data_owner)
-{
-  return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
-}
 
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
@@ -330,15 +383,15 @@ class arrow_io_source : public datasource {
       : arrow_buffer(arrow_buffer)
     {
     }
-    size_t size() const override { return arrow_buffer->size(); }
-    uint8_t const* data() const override { return arrow_buffer->data(); }
+    [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
+    [[nodiscard]] uint8_t const* data() const override { return arrow_buffer->data(); }
   };
 
  public:
   /**
    * @brief Constructs an object from an Apache Arrow Filesystem URI
    *
-   * @param Apache Arrow Filesystem URI
+   * @param arrow_uri Apache Arrow Filesystem URI
    */
   explicit arrow_io_source(std::string_view arrow_uri)
   {
@@ -372,6 +425,10 @@ class arrow_io_source : public datasource {
 
   /**
    * @brief Returns a buffer with a subset of data from the `arrow` source.
+   *
+   * @param offset The offset in bytes from which to read
+   * @param size The number of bytes to read
+   * @return A buffer with the read data
    */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
@@ -382,6 +439,11 @@ class arrow_io_source : public datasource {
 
   /**
    * @brief Reads a selected range from the `arrow` source into a preallocated buffer.
+   *
+   * @param[in] offset The offset in bytes from which to read
+   * @param[in] size The number of bytes to read
+   * @param[out] dst The preallocated buffer to read into
+   * @return The number of bytes read
    */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
@@ -392,8 +454,10 @@ class arrow_io_source : public datasource {
 
   /**
    * @brief Returns the size of the data in the `arrow` source.
+   *
+   * @return The size of the data in the `arrow` source
    */
-  size_t size() const override
+  [[nodiscard]] size_t size() const override
   {
     auto result = arrow_file->GetSize();
     CUDF_EXPECTS(result.ok(), "Cannot get file size");

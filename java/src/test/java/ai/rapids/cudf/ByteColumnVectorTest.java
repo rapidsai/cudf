@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,21 +40,34 @@ public class ByteColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testArrayAllocation() {
-    try (HostColumnVector byteColumnVector = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
-      assertFalse(byteColumnVector.hasNulls());
-      assertEquals(byteColumnVector.getByte(0), 2);
-      assertEquals(byteColumnVector.getByte(1), 3);
-      assertEquals(byteColumnVector.getByte(2), 5);
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEquals(cv.getByte(0), 2);
+      assertEquals(cv.getByte(1), 3);
+      assertEquals(cv.getByte(2), 5);
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBytes(true, new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
     }
   }
 
   @Test
   public void testUnsignedArrayAllocation() {
-    try (HostColumnVector v = HostColumnVector.fromUnsignedBytes(new byte[]{(byte)0xff, (byte)128, 5})) {
-      assertFalse(v.hasNulls());
-      assertEquals(0xff, Byte.toUnsignedInt(v.getByte(0)), 0xff);
-      assertEquals(128, Byte.toUnsignedInt(v.getByte(1)), 128);
-      assertEquals(5, Byte.toUnsignedInt(v.getByte(2)), 5);
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEquals(0xff, Byte.toUnsignedInt(cv.getByte(0)), 0xff);
+      assertEquals(128, Byte.toUnsignedInt(cv.getByte(1)), 128);
+      assertEquals(5, Byte.toUnsignedInt(cv.getByte(2)), 5);
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromUnsignedBytes(new byte[]{(byte)0xff, (byte)128, 5})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBytes(false,
+        new byte[]{(byte)0xff, (byte)128, 5})) {
+      verify.accept(bcv);
     }
   }
 
@@ -70,47 +84,73 @@ public class ByteColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (HostColumnVector byteColumnVector = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
-      assertThrows(AssertionError.class, () -> byteColumnVector.getByte(3));
-      assertFalse(byteColumnVector.hasNulls());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertThrows(AssertionError.class, () -> cv.getByte(3));
+      assertFalse(cv.hasNulls());
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBytes(true, new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
     }
   }
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (HostColumnVector byteColumnVector = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
-      assertFalse(byteColumnVector.hasNulls());
-      assertThrows(AssertionError.class, () -> byteColumnVector.getByte(-1));
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertThrows(AssertionError.class, () -> cv.getByte(-1));
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromBytes(new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBytes(true, new byte[]{2, 3, 5})) {
+      verify.accept(bcv);
     }
   }
 
   @Test
   public void testAddingNullValues() {
-    try (HostColumnVector byteColumnVector = HostColumnVector.fromBoxedBytes(
-        new Byte[]{2, 3, 4, 5, 6, 7, null, null})) {
-      assertTrue(byteColumnVector.hasNulls());
-      assertEquals(2, byteColumnVector.getNullCount());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertTrue(cv.hasNulls());
+      assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
-        assertFalse(byteColumnVector.isNull(i));
+        assertFalse(cv.isNull(i));
       }
-      assertTrue(byteColumnVector.isNull(6));
-      assertTrue(byteColumnVector.isNull(7));
+      assertTrue(cv.isNull(6));
+      assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromBoxedBytes(
+        new Byte[]{2, 3, 4, 5, 6, 7, null, null})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBoxedBytes(true,
+        new Byte[]{2, 3, 4, 5, 6, 7, null, null})) {
+      verify.accept(bcv);
     }
   }
 
   @Test
   public void testAddingUnsignedNullValues() {
-    try (HostColumnVector byteColumnVector = HostColumnVector.fromBoxedUnsignedBytes(
-        new Byte[]{2, 3, 4, 5, (byte)128, (byte)254, null, null})) {
-      assertTrue(byteColumnVector.hasNulls());
-      assertEquals(2, byteColumnVector.getNullCount());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertTrue(cv.hasNulls());
+      assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
-        assertFalse(byteColumnVector.isNull(i));
+        assertFalse(cv.isNull(i));
       }
-      assertEquals(128, Byte.toUnsignedInt(byteColumnVector.getByte(4)));
-      assertEquals(254, Byte.toUnsignedInt(byteColumnVector.getByte(5)));
-      assertTrue(byteColumnVector.isNull(6));
-      assertTrue(byteColumnVector.isNull(7));
+      assertEquals(128, Byte.toUnsignedInt(cv.getByte(4)));
+      assertEquals(254, Byte.toUnsignedInt(cv.getByte(5)));
+      assertTrue(cv.isNull(6));
+      assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector bcv = HostColumnVector.fromBoxedUnsignedBytes(
+        new Byte[]{2, 3, 4, 5, (byte)128, (byte)254, null, null})) {
+      verify.accept(bcv);
+    }
+    try (HostColumnVector bcv = ColumnBuilderHelper.fromBoxedBytes(false,
+        new Byte[]{2, 3, 4, 5, (byte)128, (byte)254, null, null})) {
+      verify.accept(bcv);
     }
   }
 
@@ -127,9 +167,9 @@ public class ByteColumnVectorTest extends CudfTestBase {
          ColumnVector expected1 = ColumnVector.fromBytes((byte)4, (byte)3, (byte)8);
          ColumnVector expected2 = ColumnVector.fromBytes((byte)100);
          ColumnVector expected3 = ColumnVector.fromBytes((byte)-23)) {
-      TableTest.assertColumnsAreEqual(expected1, byteColumnVector1);
-      TableTest.assertColumnsAreEqual(expected2, byteColumnVector2);
-      TableTest.assertColumnsAreEqual(expected3, byteColumnVector3);
+      AssertUtils.assertColumnsAreEqual(expected1, byteColumnVector1);
+      AssertUtils.assertColumnsAreEqual(expected2, byteColumnVector2);
+      AssertUtils.assertColumnsAreEqual(expected3, byteColumnVector3);
     }
   }
 

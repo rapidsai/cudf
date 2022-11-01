@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,21 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/sequence.h>
 #include <random>
-#include "rmm/cuda_stream_view.hpp"
+#include <thrust/sequence.h>
 
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 template <typename ScalarDeviceViewType>
 __global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
@@ -57,18 +57,20 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
 
   auto scalar_device_view  = cudf::get_scalar_device_view(s);
   auto scalar_device_view1 = cudf::get_scalar_device_view(s1);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
+  rmm::device_scalar<bool> result{cudf::get_default_stream()};
 
-  test_set_value<<<1, 1>>>(scalar_device_view, scalar_device_view1);
-  CHECK_CUDA(0);
+  test_set_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view,
+                                                                  scalar_device_view1);
+  CUDF_CHECK_CUDA(0);
 
   EXPECT_EQ(s1.value(), value);
   EXPECT_TRUE(s1.is_valid());
 
-  test_value<<<1, 1>>>(scalar_device_view, scalar_device_view1, result.data());
-  CHECK_CUDA(0);
+  test_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
+    scalar_device_view, scalar_device_view1, result.data());
+  CUDF_CHECK_CUDA(0);
 
-  EXPECT_TRUE(result.value(rmm::cuda_stream_default));
+  EXPECT_TRUE(result.value(cudf::get_default_stream()));
 }
 
 template <typename ScalarDeviceViewType>
@@ -82,12 +84,12 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(5);
   cudf::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
+  rmm::device_scalar<bool> result{cudf::get_default_stream()};
 
-  test_null<<<1, 1>>>(scalar_device_view, result.data());
-  CHECK_CUDA(0);
+  test_null<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view, result.data());
+  CUDF_CHECK_CUDA(0);
 
-  EXPECT_FALSE(result.value(rmm::cuda_stream_default));
+  EXPECT_FALSE(result.value(cudf::get_default_stream()));
 }
 
 template <typename ScalarDeviceViewType>
@@ -104,8 +106,8 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
   s.set_valid_async(true);
   EXPECT_TRUE(s.is_valid());
 
-  test_setnull<<<1, 1>>>(scalar_device_view);
-  CHECK_CUDA(0);
+  test_setnull<<<1, 1, 0, cudf::get_default_stream().value()>>>(scalar_device_view);
+  CUDF_CHECK_CUDA(0);
 
   EXPECT_FALSE(s.is_valid());
 }
@@ -127,11 +129,12 @@ TEST_F(StringScalarDeviceViewTest, Value)
   cudf::string_scalar s(value);
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
-  rmm::device_scalar<bool> result{rmm::cuda_stream_default};
-  auto value_v = cudf::detail::make_device_uvector_sync(value);
+  rmm::device_scalar<bool> result{cudf::get_default_stream()};
+  auto value_v = cudf::detail::make_device_uvector_sync(value, cudf::get_default_stream());
 
-  test_string_value<<<1, 1>>>(scalar_device_view, value_v.data(), value.size(), result.data());
-  CHECK_CUDA(0);
+  test_string_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
+    scalar_device_view, value_v.data(), value.size(), result.data());
+  CUDF_CHECK_CUDA(0);
 
-  EXPECT_TRUE(result.value(rmm::cuda_stream_default));
+  EXPECT_TRUE(result.value(cudf::get_default_stream()));
 }

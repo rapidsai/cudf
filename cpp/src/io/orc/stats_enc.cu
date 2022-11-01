@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_gpu.hpp"
 
+#include <cudf/io/orc_types.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -81,8 +81,7 @@ __global__ void __launch_bounds__(block_size, 1)
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx       = start + t;
     if (idx < statistics_count) {
-      const stats_column_desc* col = groups[idx].col;
-      statistics_dtype dtype       = col->stats_dtype;
+      statistics_dtype const dtype = groups[idx].stats_dtype;
       switch (dtype) {
         case dtype_bool: stats_len = pb_fldlen_common + pb_fld_hdrlen + pb_fldlen_bucket1; break;
         case dtype_int8:
@@ -126,7 +125,7 @@ struct stats_state_s {
   uint8_t* end;   ///< Output buffer end
   statistics_chunk chunk;
   statistics_merge_group group;
-  stats_column_desc col;
+  statistics_dtype stats_dtype;  //!< Statistics data type for this column
   // ORC stats
   uint64_t numberOfValues;
   uint8_t hasNull;
@@ -150,7 +149,7 @@ __device__ inline uint8_t* pb_encode_uint(uint8_t* p, uint64_t v)
 // Protobuf field encoding for unsigned int
 __device__ inline uint8_t* pb_put_uint(uint8_t* p, uint32_t id, uint64_t v)
 {
-  p[0] = id * 8 + PB_TYPE_VARINT;  // NOTE: Assumes id < 16
+  p[0] = id * 8 + static_cast<ProtofType>(ProtofType::VARINT);  // NOTE: Assumes id < 16
   return pb_encode_uint(p + 1, v);
 }
 
@@ -165,7 +164,7 @@ __device__ inline uint8_t* pb_put_int(uint8_t* p, uint32_t id, int64_t v)
 __device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t v)
 {
   uint8_t* p2 = pb_encode_uint(p + 2, v);
-  p[0]        = id * 8 + PB_TYPE_FIXEDLEN;
+  p[0]        = id * 8 + ProtofType::FIXEDLEN;
   p[1]        = static_cast<uint8_t>(p2 - (p + 2));
   return p2;
 }
@@ -173,7 +172,7 @@ __device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t 
 // Protobuf field encoding for binary/string
 __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len)
 {
-  p[0] = id * 8 + PB_TYPE_FIXEDLEN;
+  p[0] = id * 8 + ProtofType::FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
   memcpy(p, bytes, len);
   return p + len;
@@ -182,7 +181,7 @@ __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* by
 // Protobuf field encoding for 64-bit raw encoding (double)
 __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, const void* raw64)
 {
-  p[0] = id * 8 + PB_TYPE_FIXED64;
+  p[0] = id * 8 + ProtofType::FIXED64;
   memcpy(p + 1, raw64, 8);
   return p + 9;
 }
@@ -231,12 +230,12 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   if (idx < statistics_count && t == 0) {
     s->chunk           = chunks[idx];
     s->group           = groups[idx];
-    s->col             = *(s->group.col);
+    s->stats_dtype     = s->group.stats_dtype;
     s->base            = blob_bfr + s->group.start_chunk;
     s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
     uint8_t* cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
     uint8_t* fld_start = cur;
-    switch (s->col.stats_dtype) {
+    switch (s->stats_dtype) {
       case dtype_int8:
       case dtype_int16:
       case dtype_int32:
@@ -248,7 +247,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 sum = 3;
         // }
         if (s->chunk.has_minmax || s->chunk.has_sum) {
-          *cur = 2 * 8 + PB_TYPE_FIXEDLEN;
+          *cur = 2 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           if (s->chunk.has_minmax) {
             cur = pb_put_int(cur, 1, s->chunk.min_value.i_val);
@@ -267,7 +266,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional double sum = 3;
         // }
         if (s->chunk.has_minmax) {
-          *cur = 3 * 8 + PB_TYPE_FIXEDLEN;
+          *cur = 3 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           cur          = pb_put_fixed64(cur, 1, &s->chunk.min_value.fp_val);
           cur          = pb_put_fixed64(cur, 2, &s->chunk.max_value.fp_val);
@@ -282,17 +281,17 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 sum = 3; // sum will store the total length of all strings
         // }
         if (s->chunk.has_minmax && s->chunk.has_sum) {
-          uint32_t sz = (pb_put_uint(cur, 3, s->chunk.sum.i_val) - cur) +
+          uint32_t sz = (pb_put_int(cur, 3, s->chunk.sum.i_val) - cur) +
                         (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
                         (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
                         s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
-          cur[0] = 4 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0] = 4 * 8 + ProtofType::FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
           cur    = pb_put_binary(
             cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
           cur = pb_put_binary(
             cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
-          cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
+          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
         }
         break;
       case dtype_bool:
@@ -301,7 +300,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  repeated uint64 count = 1 [packed=true];
         // }
         if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
-          cur[0]       = 5 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0]       = 5 * 8 + ProtofType::FIXEDLEN;
           cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
           fld_start[1] = cur - (fld_start + 2);
         }
@@ -325,7 +324,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint32 maximum = 2;
         // }
         if (s->chunk.has_minmax) {
-          cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0] = 7 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           cur          = pb_put_int(cur, 1, s->chunk.min_value.i_val);
           cur          = pb_put_int(cur, 2, s->chunk.max_value.i_val);
@@ -341,7 +340,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximumUtc = 4;
         // }
         if (s->chunk.has_minmax) {
-          cur[0] = 9 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
           cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc

@@ -32,8 +32,13 @@ std::unique_ptr<column> group_sum(column_view const& values,
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
-  return type_dispatcher(
-    values_type, reduce_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
+  return type_dispatcher(values_type,
+                         group_reduction_dispatcher<aggregation::SUM>{},
+                         values,
+                         num_groups,
+                         group_labels,
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

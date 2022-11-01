@@ -1,179 +1,300 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
+import operator
+import warnings
+from contextlib import contextmanager
+from functools import reduce
+
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.core._compat import PANDAS_GE_150
+from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
 
-
-@pytest.fixture
-def np_ar_tup():
-    np.random.seed(0)
-    return (np.random.random(100), np.random.random(100))
-
-
-comparison_ops_ls = [
-    np.greater,
-    np.greater_equal,
-    np.less,
-    np.less_equal,
-    np.equal,
-    np.not_equal,
+_UFUNCS = [
+    obj
+    for obj in (getattr(np, name) for name in dir(np))
+    if isinstance(obj, np.ufunc)
 ]
 
 
-@pytest.mark.parametrize(
-    "func", comparison_ops_ls + [np.subtract, np.fmod, np.power]
-)
-def test_ufunc_cudf_non_nullseries(np_ar_tup, func):
-    x, y = np_ar_tup[0], np_ar_tup[1]
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.to_array())
+@contextmanager
+def _hide_ufunc_warnings(ufunc):
+    # pandas raises warnings for some inputs to the following ufuncs:
+    name = ufunc.__name__
+    if name in {
+        "arccos",
+        "arccosh",
+        "arcsin",
+        "arctanh",
+        "fmod",
+        "log",
+        "log10",
+        "log2",
+        "reciprocal",
+    }:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                f"invalid value encountered in {name}",
+                category=RuntimeWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                f"divide by zero encountered in {name}",
+                category=RuntimeWarning,
+            )
+            yield
+    else:
+        yield
+
+
+@pytest.mark.parametrize("ufunc", _UFUNCS)
+def test_ufunc_index(ufunc):
+    # Note: This test assumes that all ufuncs are unary or binary.
+    fname = ufunc.__name__
+
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    pandas_args = args = [
+        cudf.Index(
+            cp.random.randint(low=1, high=10, size=N),
+        )
+        for _ in range(ufunc.nin)
+    ]
+
+    try:
+        got = ufunc(*args)
+    except AttributeError as e:
+        # We xfail if we don't have an explicit dispatch and cupy doesn't have
+        # the method so that we can easily identify these methods. As of this
+        # writing, the only missing methods are isnat and heaviside.
+        if "module 'cupy' has no attribute" in str(e):
+            pytest.xfail(reason="Operation not supported by cupy")
+        raise
+
+    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+
+    try:
+        if ufunc.nout > 1:
+            for g, e in zip(got, expect):
+                assert_eq(g, e, check_exact=False)
+        else:
+            assert_eq(got, expect, check_exact=False)
+    except AssertionError as e:
+        # TODO: This branch can be removed when
+        # https://github.com/rapidsai/cudf/issues/10178 is resolved
+        if fname in ("power", "float_power"):
+            if (got - expect).abs().max() == 1:
+                pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        elif fname in ("bitwise_and", "bitwise_or", "bitwise_xor"):
+            if PANDAS_GE_150:
+                raise e
+            else:
+                pytest.xfail(
+                    "https://github.com/pandas-dev/pandas/issues/46769"
+                )
+        raise
 
 
 @pytest.mark.parametrize(
-    "func", [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
+    "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
 )
-def test_ufunc_cudf_series_bitwise(func):
-    np.random.seed(0)
-    x = np.random.randint(size=100, low=0, high=100)
-    y = np.random.randint(size=100, low=0, high=100)
+@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_index_array(ufunc, type_, reflect):
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
 
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.to_array())
+    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
+    if type_ == "list":
+        arg1 = arg1.tolist()
+
+    if reflect:
+        got = ufunc(arg1, args[0])
+        expect = ufunc(args[1].to_numpy(), args[0].to_pandas())
+    else:
+        got = ufunc(args[0], arg1)
+        expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
+
+    if ufunc.nout > 1:
+        for g, e in zip(got, expect):
+            if type_ == "cupy" and reflect:
+                assert (cp.asnumpy(g) == e).all()
+            else:
+                assert_eq(g, e, check_exact=False)
+    else:
+        if type_ == "cupy" and reflect:
+            assert (cp.asnumpy(got) == expect).all()
+        else:
+            assert_eq(got, expect, check_exact=False)
+
+
+@pytest.mark.parametrize("ufunc", _UFUNCS)
+@pytest.mark.parametrize("has_nulls", [True, False])
+@pytest.mark.parametrize("indexed", [True, False])
+def test_ufunc_series(ufunc, has_nulls, indexed):
+    # Note: This test assumes that all ufuncs are unary or binary.
+    fname = ufunc.__name__
+    if indexed and fname in (
+        "greater",
+        "greater_equal",
+        "less",
+        "less_equal",
+        "not_equal",
+        "equal",
+    ):
+        pytest.skip("Comparison operators do not support misaligned indexes.")
+
+    if (indexed or has_nulls) and fname == "matmul":
+        pytest.xfail("Frame.dot currently does not support indexes or nulls")
+
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    pandas_args = args = [
+        cudf.Series(
+            cp.random.randint(low=1, high=10, size=N),
+            index=cp.random.choice(range(N), N, False) if indexed else None,
+        )
+        for _ in range(ufunc.nin)
+    ]
+
+    if has_nulls:
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series, so instead we replace nulls with an arbitrary
+        # integer value, precompute the mask, and then reapply it afterwards.
+        for arg in args:
+            set_random_null_mask_inplace(arg)
+        pandas_args = [arg.fillna(0) for arg in args]
+
+        # Note: Different indexes must be aligned before the mask is computed.
+        # This requires using an internal function (_align_indices), and that
+        # is unlikely to change for the foreseeable future.
+        aligned = (
+            cudf.core.series._align_indices(args, allow_non_unique=True)
+            if indexed and ufunc.nin == 2
+            else args
+        )
+        mask = reduce(operator.or_, (a.isna() for a in aligned)).to_pandas()
+
+    try:
+        got = ufunc(*args)
+    except AttributeError as e:
+        # We xfail if we don't have an explicit dispatch and cupy doesn't have
+        # the method so that we can easily identify these methods. As of this
+        # writing, the only missing methods are isnat and heaviside.
+        if "module 'cupy' has no attribute" in str(e):
+            pytest.xfail(reason="Operation not supported by cupy")
+        raise
+
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+
+    try:
+        if ufunc.nout > 1:
+            for g, e in zip(got, expect):
+                if has_nulls:
+                    e[mask] = np.nan
+                assert_eq(g, e, check_exact=False)
+        else:
+            if has_nulls:
+                expect[mask] = np.nan
+            assert_eq(got, expect, check_exact=False)
+    except AssertionError:
+        # TODO: This branch can be removed when
+        # https://github.com/rapidsai/cudf/issues/10178 is resolved
+        if fname in ("power", "float_power"):
+            not_equal = cudf.from_pandas(expect) != got
+            not_equal[got.isna()] = False
+            diffs = got[not_equal] - expect[not_equal.to_pandas()]
+            if diffs.abs().max() == 1:
+                pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        raise
+
+
+@pytest.mark.parametrize(
+    "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
+)
+@pytest.mark.parametrize("has_nulls", [True, False])
+@pytest.mark.parametrize("indexed", [True, False])
+@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
+    fname = ufunc.__name__
+    if fname in ("greater", "greater_equal", "logical_and") and has_nulls:
+        pytest.xfail(
+            "The way cudf casts nans in arrays to nulls during binops with "
+            "cudf objects is currently incompatible with pandas."
+        )
+    if reflect and has_nulls and type_ == "cupy":
+        pytest.skip(
+            "When cupy is the left operand there is no way for us to avoid "
+            "calling its binary operators, which cannot handle cudf objects "
+            "that contain nulls."
+        )
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    args = [
+        cudf.Series(
+            cp.random.rand(N),
+            index=cp.random.choice(range(N), N, False) if indexed else None,
+        )
+        for _ in range(ufunc.nin)
+    ]
+
+    if has_nulls:
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series, so instead we replace nulls with an arbitrary
+        # integer value, precompute the mask, and then reapply it afterwards.
+        for arg in args:
+            set_random_null_mask_inplace(arg)
+
+        # Cupy doesn't support nulls, so we fill with nans before converting.
+        args[1] = args[1].fillna(cp.nan)
+        mask = args[0].isna().to_pandas()
+
+    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
+    if type_ == "list":
+        arg1 = arg1.tolist()
+
+    if reflect:
+        got = ufunc(arg1, args[0])
+        expect = ufunc(args[1].to_numpy(), args[0].to_pandas())
+    else:
+        got = ufunc(args[0], arg1)
+        expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
+
+    if ufunc.nout > 1:
+        for g, e in zip(got, expect):
+            if has_nulls:
+                e[mask] = np.nan
+            if type_ == "cupy" and reflect:
+                assert (cp.asnumpy(g) == e).all()
+            else:
+                assert_eq(g, e, check_exact=False)
+    else:
+        if has_nulls:
+            expect[mask] = np.nan
+        if type_ == "cupy" and reflect:
+            assert (cp.asnumpy(got) == expect).all()
+        else:
+            assert_eq(got, expect, check_exact=False)
 
 
 @pytest.mark.parametrize(
     "func",
-    [
-        np.subtract,
-        np.multiply,
-        np.floor_divide,
-        np.true_divide,
-        np.power,
-        np.remainder,
-        np.divide,
-    ],
-)
-def test_ufunc_cudf_null_series(np_ar_tup, func):
-    x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
-    x[0] = np.nan
-    y[1] = np.nan
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-    scalar = 0.5
-    expect = func(x, scalar)
-    got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-    expect = func(scalar, x)
-    got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-
-@pytest.mark.xfail(
-    reason="""cuDF comparison operations with <NA> incorrectly
-    returns False rather than <NA>"""
-)
-@pytest.mark.parametrize(
-    "func", comparison_ops_ls,
-)
-def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
-    x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
-    x[0] = np.nan
-    y[1] = np.nan
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-    scalar = 0.5
-    expect = func(x, scalar)
-    got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-    expect = func(scalar, x)
-    got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_array())
-
-
-@pytest.mark.parametrize(
-    "func", [np.logaddexp, np.fmax, np.fmod],
-)
-def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
-    x, y = np_ar_tup[0], np_ar_tup[1]
-    expect = func(x, y)
-
-    cudf_s = cudf.Series(x)
-    cupy_ar = cp.array(y)
-    got = func(cudf_s, cupy_ar)
-    assert_eq(expect, got.to_array())
-
-
-@pytest.mark.parametrize(
-    "func",
-    [np.fmod, np.logaddexp, np.bitwise_and, np.bitwise_or, np.bitwise_xor],
-)
-def test_error_with_null_cudf_series(func):
-    s_1 = cudf.Series([1, 2])
-    s_2 = cudf.Series([1, None])
-
-    # this thows a value error
-    # because of nulls in cudf.Series
-    with pytest.raises(ValueError):
-        func(s_1, s_2)
-
-    s_1 = cudf.Series([1, 2])
-    s_2 = cudf.Series([1, 2, None])
-
-    # this throws a value-error if indexes are not aligned
-    # following pandas behavior for ufunc numpy dispatching
-    with pytest.raises(
-        ValueError, match="Can only compare identically-labeled Series objects"
-    ):
-        func(s_1, s_2)
-
-
-@pytest.mark.parametrize(
-    "func", [np.absolute, np.sign, np.exp2, np.tanh],
-)
-def test_ufunc_cudf_series_with_index(func):
-    data = [-1, 2, 3, 0]
-    index = [2, 3, 1, 0]
-    cudf_s = cudf.Series(data=data, index=index)
-    pd_s = pd.Series(data=data, index=index)
-
-    expect = func(pd_s)
-    got = func(cudf_s)
-
-    assert_eq(got, expect)
-
-
-@pytest.mark.parametrize(
-    "func", [np.logaddexp2],
-)
-def test_ufunc_cudf_series_with_nonaligned_index(func):
-    cudf_s1 = cudf.Series(data=[-1, 2, 3, 0], index=[2, 3, 1, 0])
-    cudf_s2 = cudf.Series(data=[-1, 2, 3, 0], index=[3, 1, 0, 2])
-
-    # this throws a value-error if indexes are not aligned
-    # following pandas behavior for ufunc numpy dispatching
-    with pytest.raises(
-        ValueError, match="Can only compare identically-labeled Series objects"
-    ):
-        func(cudf_s1, cudf_s2)
-
-
-@pytest.mark.parametrize(
-    "func", [np.add],
+    [np.add],
 )
 def test_ufunc_cudf_series_error_with_out_kwarg(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0])
@@ -182,3 +303,103 @@ def test_ufunc_cudf_series_error_with_out_kwarg(func):
     # this throws a value-error because of presence of out kwarg
     with pytest.raises(TypeError):
         func(x1=cudf_s1, x2=cudf_s2, out=cudf_s3)
+
+
+# Skip matmul since it requires aligned shapes.
+@pytest.mark.parametrize("ufunc", (uf for uf in _UFUNCS if uf != np.matmul))
+@pytest.mark.parametrize("has_nulls", [True, False])
+@pytest.mark.parametrize("indexed", [True, False])
+def test_ufunc_dataframe(ufunc, has_nulls, indexed):
+    # Note: This test assumes that all ufuncs are unary or binary.
+    fname = ufunc.__name__
+    # TODO: When pandas starts supporting misaligned indexes properly, remove
+    # this check but enable the one below.
+    if indexed:
+        pytest.xfail(
+            "pandas does not currently support misaligned indexes in "
+            "DataFrames, but we do. Until this is fixed we will skip these "
+            "tests. See the error here: "
+            "https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L212, "  # noqa: E501
+            "called from https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L258"  # noqa: E501
+        )
+    # TODO: Enable the check below when we remove the check above.
+    # if indexed and fname in (
+    #     "greater",
+    #     "greater_equal",
+    #     "less",
+    #     "less_equal",
+    #     "not_equal",
+    #     "equal",
+    # ):
+    #     pytest.skip("Comparison operators do not support misaligned indexes.")  # noqa: E501
+
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    # TODO: Add tests of mismatched columns etc.
+    pandas_args = args = [
+        cudf.DataFrame(
+            {"foo": cp.random.randint(low=1, high=10, size=N)},
+            index=cp.random.choice(range(N), N, False) if indexed else None,
+        )
+        for _ in range(ufunc.nin)
+    ]
+
+    if has_nulls:
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series, so instead we replace nulls with an arbitrary
+        # integer value, precompute the mask, and then reapply it afterwards.
+        for arg in args:
+            set_random_null_mask_inplace(arg["foo"])
+        pandas_args = [arg.copy() for arg in args]
+        for arg in pandas_args:
+            arg["foo"] = arg["foo"].fillna(0)
+
+        # Note: Different indexes must be aligned before the mask is computed.
+        # This requires using an internal function (_align_indices), and that
+        # is unlikely to change for the foreseeable future.
+        aligned = (
+            cudf.core.dataframe._align_indices(*args)
+            if indexed and ufunc.nin == 2
+            else args
+        )
+        mask = reduce(
+            operator.or_, (a["foo"].isna() for a in aligned)
+        ).to_pandas()
+
+    try:
+        got = ufunc(*args)
+    except AttributeError as e:
+        # We xfail if we don't have an explicit dispatch and cupy doesn't have
+        # the method so that we can easily identify these methods. As of this
+        # writing, the only missing methods are isnat and heaviside.
+        if "module 'cupy' has no attribute" in str(e):
+            pytest.xfail(reason="Operation not supported by cupy")
+        raise
+
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+
+    try:
+        if ufunc.nout > 1:
+            for g, e in zip(got, expect):
+                if has_nulls:
+                    e[mask] = np.nan
+                assert_eq(g, e, check_exact=False)
+        else:
+            if has_nulls:
+                expect[mask] = np.nan
+            assert_eq(got, expect, check_exact=False)
+    except AssertionError:
+        # TODO: This branch can be removed when
+        # https://github.com/rapidsai/cudf/issues/10178 is resolved
+        if fname in ("power", "float_power"):
+            not_equal = cudf.from_pandas(expect) != got
+            not_equal[got.isna()] = False
+            diffs = got[not_equal] - cudf.from_pandas(
+                expect[not_equal.to_pandas()]
+            )
+            if diffs["foo"].abs().max() == 1:
+                pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        raise

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,33 @@
  * limitations under the License.
  */
 
-#include <strings/split/split_utils.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>  // upper_bound()
-#include <thrust/copy.h>           // copy_if()
-#include <thrust/count.h>          // count_if()
-#include <thrust/reduce.h>         // maximum()
-#include <thrust/transform.h>      // transform()
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/count.h>
+#include <thrust/fill.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -426,12 +431,11 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   std::vector<std::unique_ptr<column>> results;
   auto const strings_count = strings_column.size();
   if (strings_count == 0) {
-    results.push_back(make_empty_column(data_type{type_id::STRING}));
+    results.push_back(make_empty_column(type_id::STRING));
     return std::make_unique<table>(std::move(results));
   }
 
-  auto d_offsets = strings_column.offsets().data<int32_t>();
-  d_offsets += strings_column.offset();  // nvbug-2808421 : do not combine with the previous line
+  auto d_offsets = strings_column.offsets_begin();
   auto const chars_bytes =
     cudf::detail::get_value<int32_t>(
       strings_column.offsets(), strings_column.offset() + strings_count, stream) -
@@ -491,11 +495,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     });
 
   // the columns_count is the maximum number of tokens for any string
-  auto const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                            token_counts.begin(),
-                                            token_counts.end(),
-                                            0,
-                                            thrust::maximum<size_type>{});
+  auto const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(std::make_unique<column>(
@@ -551,7 +552,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  __device__ size_type count_tokens(size_type idx) const
+  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
     const string_view d_str = d_strings.element<string_view>(idx);
@@ -749,11 +750,8 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                     [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
 
   // column count is the maximum number of tokens for any string
-  size_type const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                                 token_counts.begin(),
-                                                 token_counts.end(),
-                                                 0,
-                                                 thrust::maximum<size_type>{});
+  size_type const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
@@ -797,10 +795,10 @@ std::unique_ptr<table> split(
   strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -822,10 +820,10 @@ std::unique_ptr<table> rsplit(
   strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -853,7 +851,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split(strings_column, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
@@ -862,7 +860,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::rsplit(strings_column, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

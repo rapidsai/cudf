@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/remove.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace nvtext {
 namespace detail {
@@ -250,9 +254,8 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
   chars_per_thread[char_for_thread] = num_new_chars;
 
-  typedef cub::
-    BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>
-      BlockStore;
+  using BlockStore =
+    cub::BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename BlockStore::TempStorage temp_storage;
 
   // Now we perform coalesced writes back to global memory using cub.
@@ -262,21 +265,21 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
 }  // namespace
 
-data_normalizer::data_normalizer(rmm::cuda_stream_view stream, bool do_lower_case)
-  : do_lower_case(do_lower_case)
+data_normalizer::data_normalizer(codepoint_metadata_type const* cp_metadata,
+                                 aux_codepoint_data_type const* aux_table,
+                                 bool do_lower_case)
+  : d_cp_metadata{cp_metadata}, d_aux_table{aux_table}, do_lower_case{do_lower_case}
 {
-  d_cp_metadata = detail::get_codepoint_metadata(stream);
-  d_aux_table   = detail::get_aux_codepoint_data(stream);
 }
 
 uvector_pair data_normalizer::normalize(char const* d_strings,
                                         uint32_t const* d_offsets,
                                         uint32_t num_strings,
-                                        rmm::cuda_stream_view stream)
+                                        rmm::cuda_stream_view stream) const
 {
   if (num_strings == 0)
-    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
   // copy offsets to working memory
   size_t const num_offsets = num_strings + 1;
@@ -291,8 +294,8 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
                     });
   uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
   if (bytes_count == 0)  // if no bytes, nothing to do
-    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
   size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;

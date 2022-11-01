@@ -1,9 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
-from cudf._lib.aggregation cimport aggregation
+from cudf._lib.aggregation cimport reduce_aggregation, scan_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
@@ -14,7 +14,7 @@ from cudf._lib.scalar cimport DeviceScalar
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
     cdef unique_ptr[scalar] cpp_reduce "cudf::reduce" (
         column_view col,
-        const unique_ptr[aggregation] agg,
+        const reduce_aggregation& agg,
         data_type type
     ) except +
 
@@ -24,7 +24,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] cpp_scan "cudf::scan" (
         column_view col,
-        const unique_ptr[aggregation] agg,
+        const scan_aggregation& agg,
         scan_type inclusive
     ) except +
 

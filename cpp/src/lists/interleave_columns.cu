@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,11 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -28,6 +31,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -47,7 +55,7 @@ generate_list_offsets_and_validities(table_view const& input,
   auto const num_cols         = input.num_columns();
   auto const num_rows         = input.num_rows();
   auto const num_output_lists = num_rows * num_cols;
-  auto const table_dv_ptr     = table_device_view::create(input);
+  auto const table_dv_ptr     = table_device_view::create(input, stream);
 
   // The output offsets column.
   static_assert(sizeof(offset_type) == sizeof(int32_t));
@@ -84,6 +92,40 @@ generate_list_offsets_and_validities(table_view const& input,
     rmm::exec_policy(stream), d_offsets, d_offsets + num_output_lists + 1, d_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
+}
+
+/**
+ * @brief Concatenate all input columns into one column and gather its rows to generate an output
+ * column that is the result of interleaving the input columns.
+ */
+std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const> columns_to_concat,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  // Concatenate all columns into a single (temporary) column.
+  auto const concatenated_col =
+    cudf::detail::concatenate(columns_to_concat, stream, rmm::mr::get_current_device_resource());
+
+  // The number of input columns is known to be non-zero thus it's safe to call `front()` here.
+  auto const num_cols       = columns_to_concat.size();
+  auto const num_input_rows = columns_to_concat.front().size();
+
+  // Generate the gather map that interleaves the input columns.
+  auto const iter_gather = cudf::detail::make_counting_transform_iterator(
+    0, [num_cols, num_input_rows] __device__(auto const idx) {
+      auto const source_col_idx = idx % num_cols;
+      auto const source_row_idx = idx / num_cols;
+      return source_col_idx * num_input_rows + source_row_idx;
+    });
+
+  // The gather API should be able to handle any data type for the input columns.
+  auto result = cudf::detail::gather(table_view{{concatenated_col->view()}},
+                                     iter_gather,
+                                     iter_gather + concatenated_col->size(),
+                                     out_of_bounds_policy::DONT_CHECK,
+                                     stream,
+                                     mr);
+  return std::move(result->release()[0]);
 }
 
 /**
@@ -132,6 +174,10 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const start_str_idx = list_offsets[list_id];
     auto const end_str_idx   = list_offsets[list_id + 1];
 
+    // In case of empty list (i.e. it doesn't contain any string element), we just ignore it because
+    // there will not be anything to store for that list in the child column.
+    if (start_str_idx == end_str_idx) { return; }
+
     // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[idx];
 
@@ -156,61 +202,60 @@ struct compute_string_sizes_and_interleave_lists_fn {
   }
 };
 
-/**
- * @brief Struct used in type_dispatcher to interleave list entries of the input lists columns and
- * output the results into a destination column.
- */
-struct interleave_list_entries_fn {
-  template <class T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<column>> operator()(
-    table_view const& input,
-    column_view const& output_list_offsets,
-    size_type num_output_lists,
-    size_type num_output_entries,
-    bool data_has_null_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const noexcept
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_list_entries_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
   {
-    auto const table_dv_ptr = table_device_view::create(input);
-    auto const comp_fn      = compute_string_sizes_and_interleave_lists_fn{
+    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+  }
+};
+
+template <typename T>
+struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const noexcept
+  {
+    auto const table_dv_ptr = table_device_view::create(input, stream);
+    auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
       *table_dv_ptr, output_list_offsets.template begin<offset_type>(), data_has_null_mask};
 
-    if (data_has_null_mask) {
-      auto [offsets_column, chars_column, null_mask, null_count] =
-        cudf::strings::detail::make_strings_children_with_null_mask(
-          comp_fn, num_output_lists, num_output_entries, stream, mr);
-      return make_strings_column(num_output_entries,
-                                 std::move(offsets_column),
-                                 std::move(chars_column),
-                                 null_count,
-                                 std::move(null_mask),
-                                 stream,
-                                 mr);
-    }
+    auto validities =
+      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
+    comp_fn.d_validities = validities.data();
 
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
+
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(validities.begin(), validities.end(), thrust::identity{}, stream, mr);
+
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
                                std::move(chars_column),
-                               0,
-                               rmm::device_buffer{},
-                               stream,
-                               mr);
+                               null_count,
+                               std::move(null_mask));
   }
+};
 
-  template <class T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    table_view const& input,
-    column_view const& output_list_offsets,
-    size_type num_output_lists,
-    size_type num_output_entries,
-    bool data_has_null_mask,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const noexcept
+template <typename T>
+struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
-    auto const table_dv_ptr = table_device_view::create(input);
+    auto const table_dv_ptr = table_device_view::create(input, stream);
 
     // The output child column.
     auto output        = allocate_like(lists_column_view(*input.begin()).child(),
@@ -218,7 +263,7 @@ struct interleave_list_entries_fn {
                                 mask_allocation_policy::NEVER,
                                 stream,
                                 mr);
-    auto output_dv_ptr = mutable_column_device_view::create(*output);
+    auto output_dv_ptr = mutable_column_device_view::create(*output, stream);
 
     // The array of int8_t to store entry validities.
     auto validities =
@@ -266,26 +311,35 @@ struct interleave_list_entries_fn {
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+        validities.begin(), validities.end(), thrust::identity{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
     }
 
     return output;
   }
+};
 
+/**
+ * @brief Struct used in type_dispatcher to interleave list entries of the input lists columns and
+ * output the results into a destination column.
+ */
+struct interleave_list_entries_fn {
   template <class T>
-  std::enable_if_t<not std::is_same_v<T, cudf::string_view> and not cudf::is_fixed_width<T>(),
-                   std::unique_ptr<column>>
-  operator()(table_view const&,
-             column_view const&,
-             size_type,
-             size_type,
-             bool,
-             rmm::cuda_stream_view,
-             rmm::mr::device_memory_resource*) const
+  std::unique_ptr<column> operator()(table_view const& input,
+                                     column_view const& output_list_offsets,
+                                     size_type num_output_lists,
+                                     size_type num_output_entries,
+                                     bool data_has_null_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
-    // Currently, only support string_view and fixed-width types
-    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+    return interleave_list_entries_impl<T>{}(input,
+                                             output_list_offsets,
+                                             num_output_lists,
+                                             num_output_entries,
+                                             data_has_null_mask,
+                                             stream,
+                                             mr);
   }
 };
 
@@ -306,13 +360,20 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                  "All columns of the input table must be of lists column type.");
 
     auto const child_col = lists_column_view(col).child();
-    CUDF_EXPECTS(not cudf::is_nested(child_col.type()), "Nested types are not supported.");
     CUDF_EXPECTS(entry_type == child_col.type(),
                  "The types of entries in the input columns must be the same.");
   }
 
   if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
   if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
+
+  // For nested types, we rely on the `concatenate_and_gather` method, which costs more memory due
+  // to concatenation of the input columns into a temporary column. For non-nested types, we can
+  // directly interleave the input columns into the output column for better efficiency.
+  if (cudf::is_nested(entry_type)) {
+    auto const input_columns = std::vector<column_view>(input.begin(), input.end());
+    return concatenate_and_gather_lists(host_span<column_view const>{input_columns}, stream, mr);
+  }
 
   // Generate offsets of the output lists column.
   auto [list_offsets, list_validities] =
@@ -349,7 +410,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),

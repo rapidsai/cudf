@@ -1,9 +1,12 @@
-from datetime import datetime as dt
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
+import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import Series
 from cudf.core.index import RangeIndex, as_index
 from cudf.testing._utils import (
@@ -40,12 +43,12 @@ def get_string_series():
 testdata_all = [
     (
         cudf_date_series("20010101", "20020215", freq="400h"),
-        dt.strptime("2001-01-01", "%Y-%m-%d"),
+        datetime.datetime.strptime("2001-01-01", "%Y-%m-%d"),
         True,
     ),
     (
         cudf_date_series("20010101", "20020215", freq="400h"),
-        dt.strptime("2000-01-01", "%Y-%m-%d"),
+        datetime.datetime.strptime("2000-01-01", "%Y-%m-%d"),
         False,
     ),
     (cudf_date_series("20010101", "20020215", freq="400h"), 20000101, False),
@@ -82,7 +85,7 @@ def test_rangeindex_contains():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_lists_contains(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     inner_data = np.array([1, 2, 3], dtype=dtype)
 
     data = Series([inner_data])
@@ -96,7 +99,7 @@ def test_lists_contains(dtype):
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES + TIMEDELTA_TYPES)
 def test_lists_contains_datetime(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     inner_data = np.array([1, 2, 3])
 
     unit, _ = np.datetime_data(dtype)

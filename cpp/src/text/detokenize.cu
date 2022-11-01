@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -36,6 +37,9 @@
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace nvtext {
 namespace detail {
@@ -141,7 +145,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
                "Parameter row_indices must be the same size as the input column");
   CUDF_EXPECTS(row_indices.has_nulls() == false, "Parameter row_indices must not have nulls");
@@ -185,13 +189,8 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   chars_column->set_null_count(0);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(output_count,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    output_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -202,7 +201,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, rmm::cuda_stream_default, mr);
+  return detail::detokenize(strings, row_indices, separator, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -50,24 +51,11 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const& filepaths,
-                  parquet_reader_options const& options,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
-
-  /**
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
@@ -84,12 +72,10 @@ class reader {
    * @brief Reads the dataset as per given options.
    *
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  table_with_metadata read(parquet_reader_options const& options);
 };
 
 /**
@@ -104,13 +90,13 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,
@@ -119,7 +105,7 @@ class writer {
   /**
    * @brief Constructor for writer to handle chunked parquet options.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -127,7 +113,7 @@ class writer {
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,
@@ -142,8 +128,10 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    */
-  void write(table_view const& table);
+  void write(table_view const& table, std::vector<partition_info> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -153,7 +141,8 @@ class writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_path = {});
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob
@@ -161,7 +150,7 @@ class writer {
    * @param[in] metadata_list List of input file metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  static std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  static std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 

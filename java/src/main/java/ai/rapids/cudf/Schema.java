@@ -27,11 +27,11 @@ import java.util.List;
 public class Schema {
   public static final Schema INFERRED = new Schema();
   private final List<String> names;
-  private final List<String> typeNames;
+  private final List<DType> types;
 
-  private Schema(List<String> names, List<String> typeNames) {
+  private Schema(List<String> names, List<DType> types) {
     this.names = new ArrayList<>(names);
-    this.typeNames = new ArrayList<>(typeNames);
+    this.types = new ArrayList<>(types);
   }
 
   /**
@@ -39,7 +39,7 @@ public class Schema {
    */
   private Schema() {
     names = null;
-    typeNames = null;
+    types = null;
   }
 
   public static Builder builder() {
@@ -53,25 +53,40 @@ public class Schema {
     return names.toArray(new String[names.size()]);
   }
 
-  String[] getTypesAsStrings() {
-    if (typeNames == null) {
+  int[] getTypeIds() {
+    if (types == null) {
       return null;
     }
-    return typeNames.toArray(new String[typeNames.size()]);
+    int[] ret = new int[types.size()];
+    for (int i = 0; i < types.size(); i++) {
+      ret[i] = types.get(i).getTypeId().nativeId;
+    }
+    return ret;
+  }
+
+  int[] getTypeScales() {
+    if (types == null) {
+      return null;
+    }
+    int[] ret = new int[types.size()];
+    for (int i = 0; i < types.size(); i++) {
+      ret[i] = types.get(i).getScale();
+    }
+    return ret;
   }
 
   public static class Builder {
     private final List<String> names = new ArrayList<>();
-    private final List<String> typeNames = new ArrayList<>();
+    private final List<DType> types = new ArrayList<>();
 
     public Builder column(DType type, String name) {
-      typeNames.add(type.getSimpleName());
+      types.add(type);
       names.add(name);
       return this;
     }
 
     public Schema build() {
-      return new Schema(names, typeNames);
+      return new Schema(names, types);
     }
   }
 }

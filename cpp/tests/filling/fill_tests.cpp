@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FillTypedTestFixture, SetSingle)
 {
@@ -206,7 +206,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
         }));
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*p_ret, expected);
   }
 };
 
@@ -361,6 +361,49 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::logic_error);
+}
+
+template <typename T>
+class FixedPointAllReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointAllReps, OutOfPlaceFill)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{4104, 42, 1729, 55}, scale};
+    auto const expected = fp_wrapper{{42, 42, 42, 42}, scale};
+    auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(42, scale);
+
+    auto const result = cudf::fill(column, 0, 4, *scalar);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+  }
+}
+
+TYPED_TEST(FixedPointAllReps, InPlaceFill)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto column         = fp_wrapper{{4104, 42, 1729, 55}, scale};
+    auto const expected = fp_wrapper{{42, 42, 42, 42}, scale};
+    auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(42, scale);
+
+    auto mut_column = cudf::mutable_column_view{column};
+    cudf::fill_in_place(mut_column, 0, 4, *scalar);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(column, expected);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

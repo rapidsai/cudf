@@ -1,7 +1,9 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pytest
 
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.testing._utils import assert_eq
 
 

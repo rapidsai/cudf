@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,96 +16,314 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/logical.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
+#include <thrust/tabulate.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
-template <bool has_nested_nulls>
-std::unique_ptr<column> generate_ranks(column_view const& order_by,
+
+/**
+ * @brief Functor to compare two rows of a table in given permutation order
+ * This is useful to identify unique elements in a sorted order table, when the permutation order is
+ * the sorted order of the table.
+ *
+ */
+template <typename Iterator>
+struct permuted_comparator {
+  /**
+   * @brief comparator object which compares two rows of the table in given permutation order
+   *
+   * @param device_table Device table to compare
+   * @param permutation The permutation order, integer type column.
+   * @param has_nulls whether the table has nulls
+   */
+  permuted_comparator(table_device_view device_table, Iterator const permutation, bool has_nulls)
+    : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
+      permutation(permutation)
+  {
+  }
+  __device__ bool operator()(size_type index1, size_type index2) const
+  {
+    return comparator(permutation[index1], permutation[index2]);
+  };
+
+ private:
+  row_equality_comparator<nullate::DYNAMIC> comparator;
+  Iterator const permutation;
+};
+
+/**
+ * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
+ *
+ * @tparam forward true if the rank scan computation should use forward iterator traversal (default)
+ * else reverse iterator traversal
+ * @tparam value_resolver flag value resolver function with boolean first and row number arguments
+ * @tparam scan_operator scan function ran on the flag values
+ * @param grouped_values input column to generate ranks for
+ * @param value_order column of type INT32 that contains the order of the values in the
+ * grouped_values column
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param group_offsets group index offsets with group ID indices
+ * @param resolver flag value resolver
+ * @param scan_op scan operation ran on the flag results
+ * @param has_nulls true if nulls are included in the `grouped_values` column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return std::unique_ptr<column> rank values
+ */
+template <bool forward, typename value_resolver, typename scan_operator>
+std::unique_ptr<column> rank_generator(column_view const& grouped_values,
+                                       column_view const& value_order,
                                        device_span<size_type const> group_labels,
                                        device_span<size_type const> group_offsets,
+                                       value_resolver resolver,
+                                       scan_operator scan_op,
+                                       bool has_nulls,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const flat_order =
-    order_by.type().id() == type_id::STRUCT
-      ? table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}}
-      : table_view{{order_by}};
-  auto const d_flat_order = table_device_view::create(flat_order, stream);
-  row_equality_comparator<has_nested_nulls> comparator(*d_flat_order, *d_flat_order, true);
-  auto ranks = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
+  auto const flattened = cudf::structs::detail::flatten_nested_columns(
+    table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+  auto const d_flat_order = table_device_view::create(flattened, stream);
+  auto sorted_index_order = value_order.begin<size_type>();
+  auto comparator         = permuted_comparator(*d_flat_order, sorted_index_order, has_nulls);
+
+  auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                       flattened.flattened_columns().num_rows(),
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  if (order_by.type().id() == type_id::STRUCT && order_by.has_nulls()) {
-    auto const d_col_order = column_device_view::create(order_by, stream);
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator,
-                      d_col_order = *d_col_order,
-                      labels      = group_labels.data(),
-                      offsets     = group_offsets.data()] __device__(size_type row_index) {
-                       auto group_start = offsets[labels[row_index]];
-                       if (row_index == group_start) { return 1; }
-                       bool const lhs_is_null{d_col_order.is_null(row_index)};
-                       bool const rhs_is_null{d_col_order.is_null(row_index - 1)};
-                       if (lhs_is_null && rhs_is_null) {
-                         return 0;
-                       } else if (lhs_is_null != rhs_is_null) {
-                         return row_index - group_start + 1;
-                       }
-                       return comparator(row_index, row_index - 1) ? 0
-                                                                   : row_index - group_start + 1;
-                     });
-  } else {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator,
-                      labels  = group_labels.data(),
-                      offsets = group_offsets.data()] __device__(size_type row_index) {
-                       auto group_start = offsets[labels[row_index]];
-                       return row_index != group_start && comparator(row_index, row_index - 1)
-                                ? 0
-                                : row_index - group_start + 1;
-                     });
-  }
+  auto unique_identifier = [labels  = group_labels.begin(),
+                            offsets = group_offsets.begin(),
+                            comparator,
+                            resolver] __device__(size_type row_index) {
+    auto const group_start = offsets[labels[row_index]];
+    if constexpr (forward) {
+      // First value of equal values is 1.
+      return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
+                      row_index - group_start);
+    } else {
+      auto const group_end = offsets[labels[row_index] + 1];
+      // Last value of equal values is 1.
+      return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
+                      row_index - group_start);
+    }
+  };
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   unique_identifier);
 
+  auto [group_labels_begin, mutable_rank_begin] = [&]() {
+    if constexpr (forward) {
+      return thrust::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
+    } else {
+      return thrust::pair{thrust::reverse_iterator(group_labels.end()),
+                          thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+    }
+  }();
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                group_labels.begin(),
-                                group_labels.end(),
-                                mutable_ranks.begin<size_type>(),
-                                mutable_ranks.begin<size_type>(),
-                                thrust::equal_to<size_type>{},
-                                DeviceMax{});
-
+                                group_labels_begin,
+                                group_labels_begin + group_labels.size(),
+                                mutable_rank_begin,
+                                mutable_rank_begin,
+                                thrust::equal_to{},
+                                scan_op);
   return ranks;
 }
 }  // namespace
-std::unique_ptr<column> rank_scan(column_view const& order_by,
-                                  device_span<size_type const> group_labels,
-                                  device_span<size_type const> group_offsets,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+
+std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
+                                      column_view const& value_order,
+                                      device_span<size_type const> group_labels,
+                                      device_span<size_type const> group_offsets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
-  if ((order_by.type().id() == type_id::STRUCT &&
-       has_nested_nulls(
-         table_view{std::vector<column_view>{order_by.child_begin(), order_by.child_end()}})) ||
-      (order_by.type().id() != type_id::STRUCT && order_by.has_nulls())) {
-    return generate_ranks<true>(order_by, group_labels, group_offsets, stream, mr);
+  return rank_generator<true>(
+    grouped_values,
+    value_order,
+    group_labels,
+    group_offsets,
+    [] __device__(bool unequal, auto row_index_in_group) {
+      return unequal ? row_index_in_group + 1 : 0;
+    },
+    DeviceMax{},
+    has_nested_nulls(table_view{{grouped_values}}),
+    stream,
+    mr);
+}
+
+std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
+                                      column_view const& value_order,
+                                      device_span<size_type const> group_labels,
+                                      device_span<size_type const> group_offsets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return rank_generator<false>(
+    grouped_values,
+    value_order,
+    group_labels,
+    group_offsets,
+    [] __device__(bool unequal, auto row_index_in_group) {
+      return unequal ? row_index_in_group + 1 : std::numeric_limits<size_type>::max();
+    },
+    DeviceMin{},
+    has_nested_nulls(table_view{{grouped_values}}),
+    stream,
+    mr);
+}
+
+std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
+                                        column_view const&,
+                                        device_span<size_type const> group_labels,
+                                        device_span<size_type const> group_offsets,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+  auto mutable_ranks = ranks->mutable_view();
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [labels  = group_labels.begin(),
+                    offsets = group_offsets.begin()] __device__(size_type row_index) {
+                     auto group_start = offsets[labels[row_index]];
+                     return row_index - group_start + 1;
+                   });
+  return ranks;
+}
+
+std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
+                                          column_view const& value_order,
+                                          device_span<size_type const> group_labels,
+                                          device_span<size_type const> group_offsets,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  auto max_rank = max_rank_scan(grouped_values,
+                                value_order,
+                                group_labels,
+                                group_offsets,
+                                stream,
+                                rmm::mr::get_current_device_resource());
+  auto min_rank = min_rank_scan(grouped_values,
+                                value_order,
+                                group_labels,
+                                group_offsets,
+                                stream,
+                                rmm::mr::get_current_device_resource());
+  auto ranks    = make_fixed_width_column(
+    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+  auto mutable_ranks = ranks->mutable_view();
+  thrust::transform(rmm::exec_policy(stream),
+                    max_rank->view().begin<size_type>(),
+                    max_rank->view().end<size_type>(),
+                    min_rank->view().begin<size_type>(),
+                    mutable_ranks.begin<double>(),
+                    [] __device__(auto max_rank, auto min_rank) -> double {
+                      return min_rank + (max_rank - min_rank) / 2.0;
+                    });
+  return ranks;
+}
+
+std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
+                                        column_view const& value_order,
+                                        device_span<size_type const> group_labels,
+                                        device_span<size_type const> group_offsets,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  return rank_generator<true>(
+    grouped_values,
+    value_order,
+    group_labels,
+    group_offsets,
+    [] __device__(bool const unequal, size_type const) { return unequal ? 1 : 0; },
+    DeviceSum{},
+    has_nested_nulls(table_view{{grouped_values}}),
+    stream,
+    mr);
+}
+
+std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
+                                                 rank_percentage const percentage,
+                                                 column_view const& rank,
+                                                 column_view const& count,
+                                                 device_span<size_type const> group_labels,
+                                                 device_span<size_type const> group_offsets,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(percentage != rank_percentage::NONE, "Percentage cannot be NONE");
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+  ranks->set_null_mask(copy_bitmask(rank, stream, mr));
+  auto mutable_ranks = ranks->mutable_view();
+
+  auto one_normalized = [] __device__(auto const rank, auto const group_size) {
+    return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
+  };
+  if (method == rank_method::DENSE) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [percentage,
+                      one_normalized,
+                      is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.begin(),
+                      offsets   = group_offsets.begin(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
+                       size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
+                       auto const last_rank            = s_rank[last_rank_index];
+                       return percentage == rank_percentage::ZERO_NORMALIZED
+                                ? r / last_rank
+                                : one_normalized(r, last_rank);
+                     });
+  } else {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [percentage,
+                      one_normalized,
+                      is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.begin(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
+                       return percentage == rank_percentage::ZERO_NORMALIZED
+                                ? r / count
+                                : one_normalized(r, count);
+                     });
   }
-  return generate_ranks<false>(order_by, group_labels, group_offsets, stream, mr);
+  return ranks;
 }
 
 }  // namespace detail

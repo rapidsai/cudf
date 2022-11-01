@@ -1,16 +1,24 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-from __future__ import division
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
 from numba.cuda import compile_ptx
 from numba.np import numpy_support
 
-from cudf import _lib as libcudf
-from cudf.core import Series
+import rmm
+
+import cudf
+from cudf import Series, _lib as libcudf
 from cudf.utils import dtypes as dtypeutils
 
+_driver_version = rmm._cuda.gpu.driverGetVersion()
+_runtime_version = rmm._cuda.gpu.runtimeGetVersion()
+_CUDA_JIT128INT_SUPPORTED = (_driver_version >= 11050) and (
+    _runtime_version >= 11050
+)
 
+
+@pytest.mark.skipif(not _CUDA_JIT128INT_SUPPORTED, reason="requires CUDA 11.5")
 @pytest.mark.parametrize(
     "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int8"}))
 )
@@ -25,9 +33,9 @@ def test_generic_ptx(dtype):
     rhs_col = Series(rhs_arr)._column
 
     def generic_function(a, b):
-        return a ** 3 + b
+        return a**3 + b
 
-    nb_type = numpy_support.from_dtype(np.dtype(dtype))
+    nb_type = numpy_support.from_dtype(cudf.dtype(dtype))
     type_signature = (nb_type, nb_type)
 
     ptx_code, output_type = compile_ptx(
@@ -38,6 +46,6 @@ def test_generic_ptx(dtype):
 
     out_col = libcudf.binaryop.binaryop_udf(lhs_col, rhs_col, ptx_code, dtype)
 
-    result = lhs_arr ** 3 + rhs_arr
+    result = lhs_arr**3 + rhs_arr
 
-    np.testing.assert_almost_equal(result, out_col.to_array())
+    np.testing.assert_almost_equal(result, out_col.values_host)

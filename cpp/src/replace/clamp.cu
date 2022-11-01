@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -32,9 +33,17 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -69,21 +78,21 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
-                                                  OptionalScalarIterator const& lo_itr,
-                                                  ReplaceScalarIterator const& lo_replace_itr,
-                                                  OptionalScalarIterator const& hi_itr,
-                                                  ReplaceScalarIterator const& hi_replace_itr,
+                                                  OptionalScalarIterator lo_itr,
+                                                  ReplaceScalarIterator lo_replace_itr,
+                                                  OptionalScalarIterator hi_itr,
+                                                  ReplaceScalarIterator hi_replace_itr,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
-  size_type null_count     = input.parent().null_count();
+  size_type null_count     = input.null_count();
 
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
@@ -140,18 +149,16 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             std::move(copy_bitmask(input.parent())),
-                             stream,
-                             mr);
+                             std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)));
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -181,7 +188,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   };
 
   auto input_pair_iterator =
-    make_optional_iterator<T>(*input_device_view, contains_nulls::DYNAMIC{}, input.has_nulls());
+    make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
   thrust::transform(rmm::exec_policy(stream),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
@@ -195,10 +202,10 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -210,10 +217,10 @@ std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<column> clamp(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -233,10 +240,10 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr         = make_optional_iterator<T>(lo, contains_nulls::YES{});
-    auto hi_itr         = make_optional_iterator<T>(hi, contains_nulls::YES{});
-    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::NO{});
-    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::NO{});
+    auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
+    auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});
+    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, nullate::NO{});
+    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, nullate::NO{});
 
     return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }
@@ -282,7 +289,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto matched_view              = dictionary_column_view(input);
     std::unique_ptr<column> result = nullptr;
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
-      if (key.is_valid()) {
+      if (key.is_valid(stream)) {
         result = dictionary::detail::add_keys(
           matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
         matched_view = dictionary_column_view(result->view());
@@ -293,14 +300,17 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
+  auto default_mr   = rmm::mr::get_current_device_resource();
 
   // get the indexes for lo_replace and for hi_replace
-  auto lo_replace_index = dictionary::detail::get_index(matched_view, lo_replace, stream);
-  auto hi_replace_index = dictionary::detail::get_index(matched_view, hi_replace, stream);
+  auto lo_replace_index =
+    dictionary::detail::get_index(matched_view, lo_replace, stream, default_mr);
+  auto hi_replace_index =
+    dictionary::detail::get_index(matched_view, hi_replace, stream, default_mr);
 
   // get the closest indexes for lo and for hi
-  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream);
-  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream);
+  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream, default_mr);
+  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream, default_mr);
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
@@ -384,7 +394,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo_replace, hi, hi_replace, rmm::cuda_stream_default, mr);
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::get_default_stream(), mr);
 }
 
 // clamp input at lo and hi
@@ -394,6 +404,6 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo, hi, hi, rmm::cuda_stream_default, mr);
+  return detail::clamp(input, lo, lo, hi, hi, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

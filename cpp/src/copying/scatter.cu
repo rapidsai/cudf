@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -27,17 +25,22 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
 namespace cudf {
@@ -49,7 +52,8 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
                                        MapIterator scatter_map,
                                        size_type num_scatter_rows)
 {
-  size_type row = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type row          = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
 
   while (row < num_scatter_rows) {
     size_type const output_row = scatter_map[row];
@@ -60,7 +64,7 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
       destination.set_null(output_row);
     }
 
-    row += blockDim.x * gridDim.x;
+    row += stride;
   }
 }
 
@@ -90,7 +94,8 @@ void scatter_scalar_bitmask_inplace(std::reference_wrapper<const scalar> const& 
     bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
       *target_view, scatter_map, num_scatter_rows);
 
-    target.set_null_count(count_unset_bits(target.view().null_mask(), 0, target.size(), stream));
+    target.set_null_count(
+      cudf::detail::null_count(target.view().null_mask(), 0, target.size(), stream));
   }
 }
 
@@ -179,8 +184,9 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                    stream,
                                    mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
-    auto scalar_index = dictionary::detail::get_index(dict_view, source.get(), stream);
-    auto scalar_iter  = thrust::make_permutation_iterator(
+    auto scalar_index = dictionary::detail::get_index(
+      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
+    auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
@@ -271,7 +277,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     // Null mask pushdown inside factory method
     return make_structs_column(
-      target.size(), std::move(fields), null_count, std::move(*contents.null_mask));
+      target.size(), std::move(fields), null_count, std::move(*contents.null_mask), stream, mr);
   }
 };
 
@@ -280,7 +286,6 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
-                               bool check_bounds,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -302,13 +307,26 @@ std::unique_ptr<table> scatter(table_view const& source,
   // create index type normalizing iterator for the scatter_map
   auto map_begin = indexalator_factory::make_input_iterator(scatter_map);
   auto map_end   = map_begin + scatter_map.size();
-  return detail::scatter(source, map_begin, map_end, target, check_bounds, stream, mr);
+  return detail::scatter(source, map_begin, map_end, target, stream, mr);
+}
+
+std::unique_ptr<table> scatter(table_view const& source,
+                               device_span<size_type const> const scatter_map,
+                               table_view const& target,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(scatter_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "invalid scatter map size");
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(scatter_map.size()),
+                             scatter_map.data());
+  return scatter(source, map_col, target, stream, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
                                column_view const& indices,
                                table_view const& target,
-                               bool check_bounds,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -320,25 +338,19 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
 
   // Create normalizing iterator for indices column
   auto map_begin = indexalator_factory::make_input_iterator(indices);
-  auto map_end   = map_begin + indices.size();
 
   // Optionally check map index values are within the number of target rows.
   auto const n_rows = target.num_rows();
-  if (check_bounds) {
-    CUDF_EXPECTS(
-      indices.size() == thrust::count_if(rmm::exec_policy(stream),
-                                         map_begin,
-                                         map_end,
-                                         [n_rows] __device__(size_type index) {
-                                           return ((index >= -n_rows) && (index < n_rows));
-                                         }),
-      "Scatter map index out of bounds");
-  }
 
   // Transform negative indices to index + target size
   auto scatter_rows = indices.size();
+  // note: the intermediate ((in % n_rows) + n_rows) will overflow a size_type for any value of `in`
+  // > (2^31)/2, but the end result after the final (% n_rows) will fit. so we'll do the computation
+  // using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows] __device__(size_type in) { return ((in % n_rows) + n_rows) % n_rows; });
+    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
+      return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows;
+    });
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());
@@ -379,12 +391,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
   // The scatter map is actually a table with only one column, which is scatter map.
   auto scatter_map =
     detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream);
-  auto output_table = detail::scatter(table_view{{input}},
-                                      scatter_map->get_column(0).view(),
-                                      table_view{{target}},
-                                      false,
-                                      stream,
-                                      mr);
+  auto output_table = detail::scatter(
+    table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 
   // There is only one column in output_table
   return std::make_unique<column>(std::move(output_table->get_column(0)));
@@ -480,21 +488,19 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
-                               bool check_bounds,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, scatter_map, target, check_bounds, rmm::cuda_stream_default, mr);
+  return detail::scatter(source, scatter_map, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
                                column_view const& indices,
                                table_view const& target,
-                               bool check_bounds,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, indices, target, check_bounds, rmm::cuda_stream_default, mr);
+  return detail::scatter(source, indices, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
@@ -503,7 +509,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
@@ -513,7 +519,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

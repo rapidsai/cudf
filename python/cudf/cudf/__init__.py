@@ -1,81 +1,71 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
 
 import cupy
-from numba import cuda
+from numba import config as numba_config, cuda
 
 import rmm
 
-from cudf import core, datasets, testing
+from cudf import api, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core import (
-    NA,
+from cudf.api.types import dtype
+from cudf.core.algorithms import factorize
+from cudf.core.cut import cut
+from cudf.core.dataframe import DataFrame, from_dataframe, from_pandas, merge
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.core.groupby import Grouper
+from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
-    DataFrame,
     DatetimeIndex,
     Float32Index,
     Float64Index,
+    GenericIndex,
     Index,
     Int8Index,
     Int16Index,
     Int32Index,
     Int64Index,
     IntervalIndex,
-    MultiIndex,
     RangeIndex,
-    Scalar,
-    Series,
+    StringIndex,
     TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,
     UInt64Index,
-    cut,
-    from_pandas,
     interval_range,
-    merge,
 )
-from cudf.core.algorithms import factorize
-from cudf.core.dtypes import (
-    CategoricalDtype,
-    Decimal64Dtype,
-    Decimal32Dtype,
-    IntervalDtype,
-    ListDtype,
-    StructDtype,
+from cudf.core.missing import NA
+from cudf.core.multiindex import MultiIndex
+from cudf.core.reshape import (
+    concat,
+    crosstab,
+    get_dummies,
+    melt,
+    pivot,
+    pivot_table,
+    unstack,
 )
-from cudf.core.groupby import Grouper
-from cudf.core.ops import (
-    add,
-    arccos,
-    arcsin,
-    arctan,
-    cos,
-    exp,
-    floor_divide,
-    log,
-    logical_and,
-    logical_not,
-    logical_or,
-    multiply,
-    remainder,
-    sin,
-    sqrt,
-    subtract,
-    tan,
-    true_divide,
-)
-from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
-from cudf.core.series import isclose
-from cudf.core.tools.datetimes import DateOffset, to_datetime
+from cudf.core.scalar import Scalar
+from cudf.core.series import Series, isclose
+from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
     from_dlpack,
@@ -86,12 +76,102 @@ from cudf.io import (
     read_json,
     read_orc,
     read_parquet,
+    read_text,
 )
+from cudf.options import describe_option, get_option, set_option
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
+from cudf.utils.utils import clear_cache, set_allocator
+
+try:
+    from cubinlinker.patch import patch_numba_linker_if_needed
+except ImportError:
+    pass
+else:
+    # Patch Numba to support CUDA enhanced compatibility.
+    patch_numba_linker_if_needed()
+    del patch_numba_linker_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
+try:
+    # Numba 0.54: Disable low occupancy warnings
+    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+except AttributeError:
+    # Numba < 0.54: No occupancy warnings
+    pass
+del numba_config
+
+
+rmm.register_reinitialize_hook(clear_cache)
+
+
 __version__ = get_versions()["version"]
 del get_versions
+
+__all__ = [
+    "BaseIndex",
+    "CategoricalDtype",
+    "CategoricalIndex",
+    "DataFrame",
+    "DateOffset",
+    "DatetimeIndex",
+    "Decimal32Dtype",
+    "Decimal64Dtype",
+    "Float32Index",
+    "Float64Index",
+    "GenericIndex",
+    "Grouper",
+    "Index",
+    "Int16Index",
+    "Int32Index",
+    "Int64Index",
+    "Int8Index",
+    "IntervalDtype",
+    "IntervalIndex",
+    "ListDtype",
+    "MultiIndex",
+    "NA",
+    "RangeIndex",
+    "Scalar",
+    "Series",
+    "StringIndex",
+    "StructDtype",
+    "TimedeltaIndex",
+    "UInt16Index",
+    "UInt32Index",
+    "UInt64Index",
+    "UInt8Index",
+    "api",
+    "concat",
+    "crosstab",
+    "cut",
+    "date_range",
+    "describe_option",
+    "factorize",
+    "from_dataframe",
+    "from_dlpack",
+    "from_pandas",
+    "get_dummies",
+    "get_option",
+    "interval_range",
+    "isclose",
+    "melt",
+    "merge",
+    "pivot",
+    "pivot_table",
+    "read_avro",
+    "read_csv",
+    "read_feather",
+    "read_hdf",
+    "read_json",
+    "read_orc",
+    "read_parquet",
+    "read_text",
+    "set_allocator",
+    "set_option",
+    "testing",
+    "to_datetime",
+    "to_numeric",
+    "unstack",
+]

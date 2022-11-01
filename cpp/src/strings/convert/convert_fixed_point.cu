@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,20 +22,28 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/detail/convert/fixed_point.cuh>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <strings/convert/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/generate.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
 #include <thrust/transform.h>
+
+#include <cuda/std/climits>
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {
@@ -83,7 +91,7 @@ struct string_to_decimal_check_fn {
   int32_t const scale;
 
   string_to_decimal_check_fn(column_device_view const& d_strings, int32_t scale)
-    : d_strings(d_strings), scale(scale)
+    : d_strings{d_strings}, scale{scale}
   {
   }
 
@@ -97,7 +105,8 @@ struct string_to_decimal_check_fn {
 
     auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    auto [value, exp_offset] = parse_integer(iter, iter_end);
+    using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
+    auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
 
     // only exponent notation is expected here
     if ((iter < iter_end) && (*iter != 'e' && *iter != 'E')) { return false; }
@@ -112,11 +121,10 @@ struct string_to_decimal_check_fn {
     exp_ten += exp_offset;
 
     // finally, check for overflow based on the exp_ten and scale values
-    return (exp_ten < scale)
-             ? true
-             : value <= static_cast<uint64_t>(
-                          std::numeric_limits<DecimalType>::max() /
-                          static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
+    return (exp_ten < scale) or
+           value <= static_cast<UnsignedDecimalType>(
+                      cuda::std::numeric_limits<DecimalType>::max() /
+                      static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
 
@@ -183,7 +191,7 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_fixed_point(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::to_fixed_point(strings, output_type, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -206,8 +214,8 @@ struct decimal_to_string_size_fn {
 
     if (scale >= 0) return count_digits(value) + scale;
 
-    auto const abs_value = std::abs(value);
-    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const abs_value = numeric::detail::abs(value);
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const fraction  = count_digits(abs_value % exp_ten);
     auto const num_zeros = std::max(0, (-scale - fraction));
     return static_cast<int32_t>(value < 0) +    // sign if negative
@@ -247,9 +255,9 @@ struct decimal_to_string_fn {
     // write format:   [-]integer.fraction
     // where integer  = abs(value) / (10^abs(scale))
     //       fraction = abs(value) % (10^abs(scale))
-    auto const abs_value = std::abs(value);
     if (value < 0) *d_buffer++ = '-';  // add sign
-    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const abs_value = numeric::detail::abs(value);
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
     d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
@@ -296,9 +304,7 @@ struct dispatch_from_fixed_point_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr),
-                               stream,
-                               mr);
+                               cudf::detail::copy_bitmask(input, stream, mr));
   }
 
   template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
@@ -316,7 +322,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 
@@ -328,7 +334,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(input, rmm::cuda_stream_default, mr);
+  return detail::from_fixed_point(input, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -381,7 +387,7 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  if (input.is_empty()) return cudf::make_empty_column(type_id::BOOL8);
   return type_dispatcher(
     decimal_type, dispatch_is_fixed_point_fn{}, input, decimal_type, stream, mr);
 }
@@ -392,7 +398,7 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_fixed_point(input, decimal_type, rmm::cuda_stream_default, mr);
+  return detail::is_fixed_point(input, decimal_type, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

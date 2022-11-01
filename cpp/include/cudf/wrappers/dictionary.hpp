@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,34 +46,76 @@ namespace cudf {
  */
 template <typename IndexType>
 struct dictionary_wrapper {
-  using value_type = IndexType;
+  using value_type = IndexType;  ///< The underlying type of the dictionary
 
-  dictionary_wrapper()                            = default;
-  ~dictionary_wrapper()                           = default;
-  dictionary_wrapper(dictionary_wrapper&&)        = default;
-  dictionary_wrapper(dictionary_wrapper const& v) = default;
+  dictionary_wrapper()                          = default;
+  ~dictionary_wrapper()                         = default;
+  dictionary_wrapper(dictionary_wrapper&&)      = default;  ///< Move constructor
+  dictionary_wrapper(dictionary_wrapper const&) = default;  ///< Copy constructor
+
+  /**
+   * @brief Move assignment operator
+   *
+   * @return The reference to this dictionary wrapper object
+   */
   dictionary_wrapper& operator=(dictionary_wrapper&&) = default;
+
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return The reference to this dictionary wrapper object
+   */
   dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
 
-  // construct object from type
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
+  /**
+   * @brief Construct dictionary_wrapper from a value
+   *
+   * @param v The value to construct the dictionary_wrapper from
+   */
+  CUDF_HOST_DEVICE inline constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
 
-  // conversion operator
-  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const { return _value; }
-  // simple accessor
-  CUDA_HOST_DEVICE_CALLABLE value_type value() const { return _value; }
+  /**
+   * @brief Conversion operator
+   *
+   * @return The value of this dictionary wrapper
+   */
+  CUDF_HOST_DEVICE inline explicit operator value_type() const { return _value; }
 
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type max_value()
+  /**
+   * @brief Simple accessor
+   *
+   * @return The value of this dictionary wrapper
+   */
+  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
+
+  /**
+   * @brief Returns the maximum value of the value type.
+   *
+   * @return The maximum value of the value type
+   */
+  static CUDF_HOST_DEVICE inline constexpr value_type max_value()
   {
     return std::numeric_limits<value_type>::max();
   }
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type min_value()
+
+  /**
+   * @brief Returns the minimum value of the value type.
+   *
+   * @return The minimum value of the value type
+   */
+  static CUDF_HOST_DEVICE inline constexpr value_type min_value()
   {
     return std::numeric_limits<value_type>::min();
   }
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type lowest_value()
+
+  /**
+   * @brief Returns the lowest value of the value type.
+   *
+   * @return The lowest value of the value type
+   */
+  static CUDF_HOST_DEVICE inline constexpr value_type lowest_value()
   {
-    return std::numeric_limits<IndexType>::lowest();
+    return std::numeric_limits<value_type>::lowest();
   }
 
  private:
@@ -81,49 +123,97 @@ struct dictionary_wrapper {
 };
 
 // comparison operators
+/**
+ * @brief Wqual to operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is equal to rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator==(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator==(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() == rhs.value();
 }
 
+/**
+ * @brief Not equal to operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is not equal to rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator!=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator!=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() != rhs.value();
 }
 
+/**
+ * @brief Less than or equal to operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is less than or equal to rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator<=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator<=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() <= rhs.value();
 }
 
+/**
+ * @brief Greater than or equal to operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is greater than or equal to rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator>=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() >= rhs.value();
 }
 
+/**
+ * @brief Less than operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is less than rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
-                                                   dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
+                                                 dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() < rhs.value();
 }
 
+/**
+ * @brief Greater than operator for dictionary_wrapper
+ *
+ * @tparam Integer Index type
+ * @param lhs Left hand side of comparison
+ * @param rhs Right hand side of comparison
+ * @return Returns true if lhs is greater than rhs, false otherwise
+ */
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator>(dictionary_wrapper<Integer> const& lhs,
-                                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
+                                       dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() > rhs.value();
 }
 
-using dictionary32 = dictionary_wrapper<int32_t>;
+using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
 /** @} */  // end of group
 }  // namespace cudf

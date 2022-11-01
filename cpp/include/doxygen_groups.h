@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,11 +146,13 @@
  * @{
  *   @defgroup lists_combine Combining
  *   @defgroup lists_extract Extracting
+ *   @defgroup lists_filling Filling
  *   @defgroup lists_contains Searching
  *   @defgroup lists_gather Gathering
  *   @defgroup lists_elements Counting
- *   @defgroup lists_drop_duplicates Filtering
+ *   @defgroup lists_filtering Filtering
  *   @defgroup lists_sort Sorting
+ *   @defgroup set_operations Set Operations
  * @}
  * @defgroup nvtext_apis NVText
  * @{

@@ -1,7 +1,27 @@
+/*
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/table/table.hpp>
+
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <memory>
 #include <string>
@@ -25,7 +45,7 @@ void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
 }
 
 std::vector<cudf::groupby::aggregation_request> make_single_aggregation_request(
-  std::unique_ptr<cudf::aggregation>&& agg, cudf::column_view value)
+  std::unique_ptr<cudf::groupby_aggregation>&& agg, cudf::column_view value)
 {
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
@@ -42,7 +62,8 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
   // Compute the average of each company's closing price with entire column
   cudf::groupby::groupby grpby_obj(keys);
-  auto requests = make_single_aggregation_request(cudf::make_mean_aggregation(), val);
+  auto requests =
+    make_single_aggregation_request(cudf::make_mean_aggregation<cudf::groupby_aggregation>(), val);
 
   auto agg_results = grpby_obj.aggregate(requests);
 
@@ -55,6 +76,21 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
 int main(int argc, char** argv)
 {
+  // Construct a CUDA memory resource using RAPIDS Memory Manager (RMM)
+  // This is the default memory resource for libcudf for allocating device memory.
+  rmm::mr::cuda_memory_resource cuda_mr{};
+  // Construct a memory pool using the CUDA memory resource
+  // Using a memory pool for device memory allocations is important for good performance in libcudf.
+  // The pool defaults to allocating half of the available GPU memory.
+  rmm::mr::pool_memory_resource mr{&cuda_mr};
+
+  // Set the pool resource to be used by default for all device memory allocations
+  // Note: It is the user's responsibility to ensure the `mr` object stays alive for the duration of
+  // it being set as the default
+  // Also, call this before the first libcudf API call to ensure all data is allocated by the same
+  // memory resource.
+  rmm::mr::set_current_device_resource(&mr);
+
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");
 

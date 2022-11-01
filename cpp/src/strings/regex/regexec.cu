@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,48 +18,19 @@
 #include <strings/regex/regex.cuh>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <algorithm>
+#include <functional>
+#include <numeric>
 
 namespace cudf {
 namespace strings {
 namespace detail {
-namespace {
-/**
- * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
- *
- * No character conversion occurs.
- * Each UTF-8 character is promoted into a 32-bit value.
- * The last entry in the returned vector will be a 0 value.
- * The fixed-width vector makes it easier to compile and faster to execute.
- *
- * @param pattern Regular expression encoded with UTF-8.
- * @return Fixed-width 32-bit character vector.
- */
-std::vector<char32_t> string_to_char32_vector(std::string const& pattern)
-{
-  size_type size  = static_cast<size_type>(pattern.size());
-  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
-    return is_begin_utf8_char(static_cast<uint8_t>(ch));
-  });
-  std::vector<char32_t> result(count + 1);
-  char32_t* output_ptr  = result.data();
-  const char* input_ptr = pattern.data();
-  for (size_type idx = 0; idx < size; ++idx) {
-    char_utf8 output_character = 0;
-    size_type ch_width         = to_char_utf8(input_ptr, output_character);
-    input_ptr += ch_width;
-    idx += ch_width - 1;
-    *output_ptr++ = output_character;
-  }
-  result[count] = 0;  // last entry set to 0
-  return result;
-}
-
-}  // namespace
 
 // Copy reprog primitive values
 reprog_device::reprog_device(reprog& prog)
@@ -68,103 +39,142 @@ reprog_device::reprog_device(reprog& prog)
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
     _classes_count{prog.classes_count()},
-    _relists_mem{nullptr}
+    _max_insts{prog.insts_count()},
+    _codepoint_flags{get_character_flags_table()}
 {
+}
+
+std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
+  std::string_view pattern, rmm::cuda_stream_view stream)
+{
+  return reprog_device::create(
+    pattern, regex_flags::MULTILINE, capture_groups::NON_CAPTURE, stream);
 }
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string const& pattern,
-  uint8_t const* codepoint_flags,
-  int32_t strings_count,
+  std::string_view pattern,
+  regex_flags const flags,
+  capture_groups const capture,
   rmm::cuda_stream_view stream)
 {
-  std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
   // compile pattern into host object
-  reprog h_prog = reprog::create_from(pattern32.data());
-  // compute size to hold all the member data
-  auto insts_count   = h_prog.insts_count();
-  auto classes_count = h_prog.classes_count();
-  auto starts_count  = h_prog.starts_count();
-  // compute size of each section; make sure each is aligned appropriately
-  auto insts_size =
-    cudf::util::round_up_safe<size_t>(insts_count * sizeof(_insts[0]), sizeof(size_t));
-  auto startids_size =
-    cudf::util::round_up_safe<size_t>(starts_count * sizeof(_startinst_ids[0]), sizeof(size_t));
-  auto classes_size =
-    cudf::util::round_up_safe<size_t>(classes_count * sizeof(_classes[0]), sizeof(size_t));
-  for (int32_t idx = 0; idx < classes_count; ++idx)
-    classes_size += static_cast<int32_t>((h_prog.class_at(idx).literals.size()) * sizeof(char32_t));
-  size_t memsize  = insts_size + startids_size + classes_size;
-  size_t rlm_size = 0;
-  // check memory size needed for executing regex
-  if (insts_count > RX_LARGE_INSTS) {
-    auto relist_alloc_size = relist::alloc_size(insts_count);
-    rlm_size               = relist_alloc_size * 2L * strings_count;  // reljunk has 2 relist ptrs
-  }
+  reprog h_prog = reprog::create_from(pattern, flags, capture);
 
-  // allocate memory to store prog data
-  std::vector<u_char> h_buffer(memsize);
-  u_char* h_ptr  = h_buffer.data();  // running pointer
-  auto* d_buffer = new rmm::device_buffer(memsize, stream);
-  u_char* d_ptr  = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
-  // put everything into a flat host buffer first
+  // compute size to hold all the member data
+  auto const insts_count   = h_prog.insts_count();
+  auto const classes_count = h_prog.classes_count();
+  auto const starts_count  = h_prog.starts_count();
+
+  // compute size of each section
+  auto insts_size    = insts_count * sizeof(_insts[0]);
+  auto startids_size = starts_count * sizeof(_startinst_ids[0]);
+  auto classes_size  = std::transform_reduce(
+    h_prog.classes_data(),
+    h_prog.classes_data() + h_prog.classes_count(),
+    classes_count * sizeof(_classes[0]),
+    std::plus<std::size_t>{},
+    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
+  // make sure each section is aligned for the subsequent section's data type
+  auto const memsize = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0])) +
+                       cudf::util::round_up_safe(startids_size, sizeof(_classes[0])) +
+                       cudf::util::round_up_safe(classes_size, sizeof(char32_t));
+
+  // allocate memory to store all the prog data in a flat contiguous buffer
+  std::vector<u_char> h_buffer(memsize);                        // copy everything into here;
+  auto h_ptr    = h_buffer.data();                              // this is our running host ptr;
+  auto d_buffer = new rmm::device_buffer(memsize, stream);      // output device memory;
+  auto d_ptr    = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
+
+  // create our device object; this is managed separately and returned to the caller
   reprog_device* d_prog = new reprog_device(h_prog);
-  // copy the instructions array first (fixed-size structs)
-  reinst* insts = reinterpret_cast<reinst*>(h_ptr);
-  memcpy(insts, h_prog.insts_data(), insts_size);
-  h_ptr += insts_size;  // next section
+
+  // copy the instructions array first (fixed-sized structs)
+  memcpy(h_ptr, h_prog.insts_data(), insts_size);
   d_prog->_insts = reinterpret_cast<reinst*>(d_ptr);
+
+  // point to the end for the next section
+  insts_size = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0]));
+  h_ptr += insts_size;
   d_ptr += insts_size;
-  // copy the startinst_ids next (ints)
-  int32_t* startinst_ids = reinterpret_cast<int32_t*>(h_ptr);
-  memcpy(startinst_ids, h_prog.starts_data(), startids_size);
-  h_ptr += startids_size;  // next section
+  // copy the startinst_ids next
+  memcpy(h_ptr, h_prog.starts_data(), startids_size);
   d_prog->_startinst_ids = reinterpret_cast<int32_t*>(d_ptr);
+
+  // next section; align the size for next data type
+  startids_size = cudf::util::round_up_safe(startids_size, sizeof(_classes[0]));
+  h_ptr += startids_size;
   d_ptr += startids_size;
   // copy classes into flat memory: [class1,class2,...][char32 arrays]
-  reclass_device* classes = reinterpret_cast<reclass_device*>(h_ptr);
-  d_prog->_classes        = reinterpret_cast<reclass_device*>(d_ptr);
+  auto classes     = reinterpret_cast<reclass_device*>(h_ptr);
+  d_prog->_classes = reinterpret_cast<reclass_device*>(d_ptr);
   // get pointer to the end to handle variable length data
-  u_char* h_end = h_ptr + (classes_count * sizeof(reclass_device));
-  u_char* d_end = d_ptr + (classes_count * sizeof(reclass_device));
+  auto h_end = h_ptr + (classes_count * sizeof(reclass_device));
+  auto d_end = d_ptr + (classes_count * sizeof(reclass_device));
   // place each class and append the variable length data
   for (int32_t idx = 0; idx < classes_count; ++idx) {
-    reclass& h_class = h_prog.class_at(idx);
-    reclass_device d_class;
-    d_class.builtins = h_class.builtins;
-    d_class.count    = h_class.literals.size() / 2;
-    d_class.literals = reinterpret_cast<char32_t*>(d_end);
-    memcpy(classes++, &d_class, sizeof(d_class));
-    memcpy(h_end, h_class.literals.c_str(), h_class.literals.size() * sizeof(char32_t));
-    h_end += h_class.literals.size() * sizeof(char32_t);
-    d_end += h_class.literals.size() * sizeof(char32_t);
-  }
-  // initialize the rest of the elements
-  d_prog->_insts_count     = insts_count;
-  d_prog->_starts_count    = starts_count;
-  d_prog->_classes_count   = classes_count;
-  d_prog->_codepoint_flags = codepoint_flags;
-  // allocate execute memory if needed
-  rmm::device_buffer* d_relists{};
-  if (rlm_size > 0) {
-    d_relists            = new rmm::device_buffer(rlm_size, stream);
-    d_prog->_relists_mem = d_relists->data();
+    auto const& h_class = h_prog.class_at(idx);
+    reclass_device d_class{h_class.builtins,
+                           static_cast<int32_t>(h_class.literals.size()),
+                           reinterpret_cast<reclass_range*>(d_end)};
+    *classes++ = d_class;
+    memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_range));
+    h_end += h_class.literals.size() * sizeof(reclass_range);
+    d_end += h_class.literals.size() * sizeof(reclass_range);
   }
 
+  // initialize the rest of the elements
+  d_prog->_max_insts = insts_count;
+  d_prog->_prog_size = memsize + sizeof(reprog_device);
+
   // copy flat prog to device memory
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
-  //
-  auto deleter = [d_buffer, d_relists](reprog_device* t) {
+
+  // build deleter to cleanup device memory
+  auto deleter = [d_buffer](reprog_device* t) {
     t->destroy();
     delete d_buffer;
-    delete d_relists;
   };
+
   return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog, deleter);
 }
 
 void reprog_device::destroy() { delete this; }
+
+std::size_t reprog_device::working_memory_size(int32_t num_threads) const
+{
+  return relist::alloc_size(_insts_count, num_threads) * 2;
+}
+
+std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
+  int32_t rows, int32_t min_rows, std::size_t requested_max_size) const
+{
+  auto thread_count = rows;
+  auto buffer_size  = working_memory_size(thread_count);
+  while ((buffer_size > requested_max_size) && (thread_count > min_rows)) {
+    thread_count = thread_count / 2;
+    buffer_size  = working_memory_size(thread_count);
+  }
+  // clamp to min_rows but only if rows is greater than min_rows
+  if (rows > min_rows && thread_count < min_rows) {
+    thread_count = min_rows;
+    buffer_size  = working_memory_size(thread_count);
+  }
+  return std::make_pair(buffer_size, thread_count);
+}
+
+void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts)
+{
+  _buffer       = buffer;
+  _thread_count = thread_count;
+  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+}
+
+int32_t reprog_device::compute_shared_memory_size() const
+{
+  return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
 
 }  // namespace detail
 }  // namespace strings

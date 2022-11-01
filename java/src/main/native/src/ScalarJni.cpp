@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,16 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
+#include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+
+using cudf::jni::release_as_jlong;
 
 extern "C" {
 
@@ -105,6 +109,20 @@ JNIEXPORT jdouble JNICALL Java_ai_rapids_cudf_Scalar_getDouble(JNIEnv *env, jcla
     using ScalarType = cudf::scalar_type_t<double>;
     auto s = reinterpret_cast<ScalarType *>(scalar_handle);
     return static_cast<jdouble>(s->value());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getBigIntegerBytes(JNIEnv *env, jclass,
+                                                                           jlong scalar_handle) {
+  try {
+    cudf::jni::auto_set_device(env);
+    using ScalarType = cudf::scalar_type_t<__int128_t>;
+    auto s = reinterpret_cast<ScalarType *>(scalar_handle);
+    auto val = s->value();
+    jbyte const *ptr = reinterpret_cast<jbyte const *>(&val);
+    cudf::jni::native_jbyteArray jbytes{env, ptr, sizeof(__int128_t)};
+    return jbytes.get_jArray();
   }
   CATCH_STD(env, 0);
 }
@@ -455,6 +473,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal128Scalar(JNIEnv *env, jclass,
+                                                                        jbyteArray value,
+                                                                        jint scale,
+                                                                        jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    cudf::jni::native_jbyteArray jbytes{env, value};
+    auto const value_ = reinterpret_cast<__int128_t *>(jbytes.data());
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_fixed_point_scalar<numeric::decimal128>(*value_, scale_);
+    s->set_valid_async(is_valid);
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclass, jlong lhs_ptr,
                                                               jlong rhs_view, jint int_op,
                                                               jint out_dtype, jint scale) {
@@ -465,10 +500,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
-
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result = cudf::binary_operation(*lhs, *rhs, op, n_data_type);
-    return reinterpret_cast<jlong>(result.release());
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto out = make_fixed_width_column(n_data_type, rhs->size(), cudf::mask_state::UNALLOCATED);
+
+      if (op == cudf::binary_operator::NULL_EQUALS) {
+        out->set_null_mask(rmm::device_buffer{}, 0);
+      } else {
+        auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs);
+        out->set_null_mask(std::move(new_mask), new_null_count);
+      }
+
+      auto lhs_col = cudf::make_column_from_scalar(*lhs, 1);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
+          out_view, lhs_col->view(), *rhs, true, false, op, cudf::get_default_stream());
+      return release_as_jlong(out);
+    }
+
+    return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
 }

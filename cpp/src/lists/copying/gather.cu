@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace lists {
@@ -53,8 +57,8 @@ namespace detail {
  * @endcode
  */
 struct list_gatherer {
-  typedef size_type argument_type;
-  typedef size_type result_type;
+  using argument_type = size_type;
+  using result_type   = size_type;
 
   size_t offset_count;
   size_type const* base_offsets;
@@ -96,36 +100,17 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   size_type gather_map_size = gd.gather_map_size;
 
   // call the normal gather
-  auto leaf_column = cudf::type_dispatcher<dispatch_storage_type>(
-    column.type(),
-    cudf::detail::column_gatherer{},
-    column,
-    gather_map_begin,
-    gather_map_begin + gather_map_size,
-    // note : we don't need to bother checking for out-of-bounds here since
-    // our inputs at this stage aren't coming from the user.
-    false,
-    stream,
-    mr);
+  // note : we don't need to bother checking for out-of-bounds here since
+  // our inputs at this stage aren't coming from the user.
+  auto gather_table = cudf::detail::gather(cudf::table_view({column}),
+                                           gather_map_begin,
+                                           gather_map_begin + gather_map_size,
+                                           out_of_bounds_policy::DONT_CHECK,
+                                           stream,
+                                           mr);
+  auto leaf_column  = std::move(gather_table->release().front());
 
-  // the column_gatherer doesn't create the null mask because it expects
-  // that will be done in the gather_bitmask() step.  however, gather_bitmask()
-  // only happens at the root level, and by definition this column is a
-  // leaf.  so we have to generate the bitmask ourselves.
-  // TODO : it might make sense to expose a gather() function that takes a column_view and
-  // returns a column that does this work correctly.
-  size_type null_count = column.null_count();
-  if (null_count > 0) {
-    auto list_cdv = column_device_view::create(column);
-    auto validity = cudf::detail::valid_if(
-      gather_map_begin,
-      gather_map_begin + gd.gather_map_size,
-      [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
-      stream,
-      mr);
-
-    leaf_column->set_null_mask(std::move(validity.first), validity.second);
-  }
+  if (column.null_count() == 0) { leaf_column->set_null_mask(rmm::device_buffer{}, 0); }
 
   return leaf_column;
 }
@@ -150,7 +135,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = list.null_count();
   if (null_count > 0) {
-    auto list_cdv = column_device_view::create(list.parent());
+    auto list_cdv = column_device_view::create(list.parent(), stream);
     auto validity = cudf::detail::valid_if(
       gather_map_begin,
       gather_map_begin + gather_map_size,
@@ -176,7 +161,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
-                             std::move(null_mask));
+                             std::move(null_mask),
+                             stream,
+                             mr);
   }
 
   // it's a leaf.  do a regular gather
@@ -187,7 +174,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

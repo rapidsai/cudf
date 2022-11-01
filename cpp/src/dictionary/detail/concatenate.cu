@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -30,6 +32,14 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
@@ -104,14 +114,7 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    auto d_offsets = rmm::device_uvector<offsets_pair>(offsets.size(), stream);
-    CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                             offsets.data(),
-                             offsets.size() * sizeof(offsets_pair),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
-    stream.synchronize();
-    return d_offsets;
+    return cudf::detail::make_device_uvector_sync(offsets, stream);
   }
 
  private:
@@ -127,8 +130,7 @@ struct compute_children_offsets_fn {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(column_view const& all_keys,
              column_view const& all_indices,
              column_view const& new_keys,
@@ -189,8 +191,7 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(Args&&...)
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
@@ -222,15 +223,20 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{all_keys->view()}},
-                                                  std::vector<size_type>{0},
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::BEFORE,
-                                                  stream,
-                                                  mr)
-                      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+  auto table_keys  = cudf::detail::distinct(table_view{{all_keys->view()}},
+                                           std::vector<size_type>{0},
+                                           duplicate_keep_option::KEEP_ANY,
+                                           null_equality::EQUAL,
+                                           nan_equality::ALL_EQUAL,
+                                           stream,
+                                           mr);
+  auto sorted_keys = cudf::detail::sort(table_keys->view(),
+                                        std::vector<order>{order::ASCENDING},
+                                        std::vector<null_order>{null_order::BEFORE},
+                                        stream,
+                                        mr)
+                       ->release();
+  std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // next, concatenate the indices
   std::vector<column_view> indices_views(columns.size());

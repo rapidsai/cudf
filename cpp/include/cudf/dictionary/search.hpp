@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -34,6 +37,7 @@ namespace dictionary {
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Numeric scalar index value of the key within the dictionary
  */
 std::unique_ptr<scalar> get_index(

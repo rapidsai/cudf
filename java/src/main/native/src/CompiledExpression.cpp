@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,10 @@
 #include <stdexcept>
 #include <vector>
 
-#include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
-#include <cudf/ast/transform.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -60,7 +59,7 @@ public:
     check_for_eof(sizeof(T));
     // use memcpy since data may be misaligned
     T result;
-    memcpy(&result, data_ptr, sizeof(T));
+    memcpy(reinterpret_cast<jbyte *>(&result), data_ptr, sizeof(T));
     data_ptr += sizeof(T);
     return result;
   }
@@ -104,15 +103,15 @@ public:
 };
 
 /**
- * Enumeration of the AST node types that can appear in the serialized data.
+ * Enumeration of the AST expression types that can appear in the serialized data.
  * NOTE: This must be kept in sync with the NodeType enumeration in AstNode.java!
  */
-enum class jni_serialized_node_type : int8_t {
+enum class jni_serialized_expression_type : int8_t {
   VALID_LITERAL = 0,
   NULL_LITERAL = 1,
   COLUMN_REFERENCE = 2,
-  UNARY_EXPRESSION = 3,
-  BINARY_EXPRESSION = 4
+  UNARY_OPERATION = 3,
+  BINARY_OPERATION = 4
 };
 
 /**
@@ -145,6 +144,9 @@ cudf::ast::ast_operator jni_to_unary_operator(jbyte jni_op_value) {
     case 20: return cudf::ast::ast_operator::RINT;
     case 21: return cudf::ast::ast_operator::BIT_INVERT;
     case 22: return cudf::ast::ast_operator::NOT;
+    case 23: return cudf::ast::ast_operator::CAST_TO_INT64;
+    case 24: return cudf::ast::ast_operator::CAST_TO_UINT64;
+    case 25: return cudf::ast::ast_operator::CAST_TO_FLOAT64;
     default: throw std::invalid_argument("unexpected JNI AST unary operator value");
   }
 }
@@ -166,16 +168,19 @@ cudf::ast::ast_operator jni_to_binary_operator(jbyte jni_op_value) {
     case 7: return cudf::ast::ast_operator::PYMOD;
     case 8: return cudf::ast::ast_operator::POW;
     case 9: return cudf::ast::ast_operator::EQUAL;
-    case 10: return cudf::ast::ast_operator::NOT_EQUAL;
-    case 11: return cudf::ast::ast_operator::LESS;
-    case 12: return cudf::ast::ast_operator::GREATER;
-    case 13: return cudf::ast::ast_operator::LESS_EQUAL;
-    case 14: return cudf::ast::ast_operator::GREATER_EQUAL;
-    case 15: return cudf::ast::ast_operator::BITWISE_AND;
-    case 16: return cudf::ast::ast_operator::BITWISE_OR;
-    case 17: return cudf::ast::ast_operator::BITWISE_XOR;
-    case 18: return cudf::ast::ast_operator::LOGICAL_AND;
-    case 19: return cudf::ast::ast_operator::LOGICAL_OR;
+    case 10: return cudf::ast::ast_operator::NULL_EQUAL;
+    case 11: return cudf::ast::ast_operator::NOT_EQUAL;
+    case 12: return cudf::ast::ast_operator::LESS;
+    case 13: return cudf::ast::ast_operator::GREATER;
+    case 14: return cudf::ast::ast_operator::LESS_EQUAL;
+    case 15: return cudf::ast::ast_operator::GREATER_EQUAL;
+    case 16: return cudf::ast::ast_operator::BITWISE_AND;
+    case 17: return cudf::ast::ast_operator::BITWISE_OR;
+    case 18: return cudf::ast::ast_operator::BITWISE_XOR;
+    case 19: return cudf::ast::ast_operator::LOGICAL_AND;
+    case 20: return cudf::ast::ast_operator::NULL_LOGICAL_AND;
+    case 21: return cudf::ast::ast_operator::LOGICAL_OR;
+    case 22: return cudf::ast::ast_operator::NULL_LOGICAL_OR;
     default: throw std::invalid_argument("unexpected JNI AST binary operator value");
   }
 }
@@ -276,41 +281,42 @@ cudf::ast::column_reference &compile_column_reference(cudf::jni::ast::compiled_e
 }
 
 // forward declaration
-cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_expr,
-                                      jni_serialized_ast &jni_ast);
+cudf::ast::expression &compile_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                          jni_serialized_ast &jni_ast);
 
 /** Decode a serialized AST unary expression */
-cudf::ast::expression &compile_unary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
-                                                jni_serialized_ast &jni_ast) {
+cudf::ast::operation &compile_unary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                               jni_serialized_ast &jni_ast) {
   auto const ast_op = jni_to_unary_operator(jni_ast.read_byte());
-  cudf::ast::detail::node &child_node = compile_node(compiled_expr, jni_ast);
-  return compiled_expr.add_expression(std::make_unique<cudf::ast::expression>(ast_op, child_node));
+  cudf::ast::expression &child_expression = compile_expression(compiled_expr, jni_ast);
+  return compiled_expr.add_operation(
+      std::make_unique<cudf::ast::operation>(ast_op, child_expression));
 }
 
 /** Decode a serialized AST binary expression */
-cudf::ast::expression &compile_binary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
-                                                 jni_serialized_ast &jni_ast) {
+cudf::ast::operation &compile_binary_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                                jni_serialized_ast &jni_ast) {
   auto const ast_op = jni_to_binary_operator(jni_ast.read_byte());
-  cudf::ast::detail::node &left_child = compile_node(compiled_expr, jni_ast);
-  cudf::ast::detail::node &right_child = compile_node(compiled_expr, jni_ast);
-  return compiled_expr.add_expression(
-      std::make_unique<cudf::ast::expression>(ast_op, left_child, right_child));
+  cudf::ast::expression &left_child = compile_expression(compiled_expr, jni_ast);
+  cudf::ast::expression &right_child = compile_expression(compiled_expr, jni_ast);
+  return compiled_expr.add_operation(
+      std::make_unique<cudf::ast::operation>(ast_op, left_child, right_child));
 }
 
-/** Decode a serialized AST node by reading the node type and dispatching */
-cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_expr,
-                                      jni_serialized_ast &jni_ast) {
-  auto const node_type = static_cast<jni_serialized_node_type>(jni_ast.read_byte());
-  switch (node_type) {
-    case jni_serialized_node_type::VALID_LITERAL:
+/** Decode a serialized AST expression by reading the expression type and dispatching */
+cudf::ast::expression &compile_expression(cudf::jni::ast::compiled_expr &compiled_expr,
+                                          jni_serialized_ast &jni_ast) {
+  auto const expression_type = static_cast<jni_serialized_expression_type>(jni_ast.read_byte());
+  switch (expression_type) {
+    case jni_serialized_expression_type::VALID_LITERAL:
       return compile_literal(true, compiled_expr, jni_ast);
-    case jni_serialized_node_type::NULL_LITERAL:
+    case jni_serialized_expression_type::NULL_LITERAL:
       return compile_literal(false, compiled_expr, jni_ast);
-    case jni_serialized_node_type::COLUMN_REFERENCE:
+    case jni_serialized_expression_type::COLUMN_REFERENCE:
       return compile_column_reference(compiled_expr, jni_ast);
-    case jni_serialized_node_type::UNARY_EXPRESSION:
+    case jni_serialized_expression_type::UNARY_OPERATION:
       return compile_unary_expression(compiled_expr, jni_ast);
-    case jni_serialized_node_type::BINARY_EXPRESSION:
+    case jni_serialized_expression_type::BINARY_OPERATION:
       return compile_binary_expression(compiled_expr, jni_ast);
     default: throw std::invalid_argument("data is not a serialized AST expression");
   }
@@ -319,16 +325,7 @@ cudf::ast::detail::node &compile_node(cudf::jni::ast::compiled_expr &compiled_ex
 /** Decode a serialized AST into a native libcudf AST and associated resources */
 std::unique_ptr<cudf::jni::ast::compiled_expr> compile_serialized_ast(jni_serialized_ast &jni_ast) {
   auto jni_expr_ptr = std::make_unique<cudf::jni::ast::compiled_expr>();
-  auto const node_type = static_cast<jni_serialized_node_type>(jni_ast.read_byte());
-  switch (node_type) {
-    case jni_serialized_node_type::UNARY_EXPRESSION:
-      (void)compile_unary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    case jni_serialized_node_type::BINARY_EXPRESSION:
-      (void)compile_binary_expression(*jni_expr_ptr, jni_ast);
-      break;
-    default: throw std::invalid_argument("data is not a serialized AST expression");
-  }
+  (void)compile_expression(*jni_expr_ptr, jni_ast);
 
   if (!jni_ast.at_eof()) {
     throw std::invalid_argument("Extra bytes at end of serialized AST");
@@ -366,7 +363,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ast_CompiledExpression_computeColumn
     auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_ast);
     auto tview_ptr = reinterpret_cast<cudf::table_view const *>(j_table);
     std::unique_ptr<cudf::column> result =
-        cudf::ast::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
+        cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

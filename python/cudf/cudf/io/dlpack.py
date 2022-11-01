@@ -1,10 +1,9 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+
+import cudf
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
-from cudf.core.dataframe import DataFrame
-from cudf.core.index import BaseIndex
-from cudf.core.series import Series
 from cudf.utils import ioutils
 
 
@@ -35,12 +34,13 @@ def from_dlpack(pycapsule_obj):
     tensor is row-major, transpose it before passing it to this function.
     """
 
-    res = libdlpack.from_dlpack(pycapsule_obj)
+    columns = libdlpack.from_dlpack(pycapsule_obj)
+    column_names = range(len(columns))
 
-    if res._num_columns == 1:
-        return Series(res._data[0])
+    if len(columns) == 1:
+        return cudf.Series._from_columns(columns, column_names=column_names)
     else:
-        return DataFrame(data=res._data)
+        return cudf.DataFrame._from_columns(columns, column_names=column_names)
 
 
 @ioutils.doc_to_dlpack()
@@ -68,17 +68,25 @@ def to_dlpack(cudf_obj):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if len(cudf_obj) == 0:
-        raise ValueError("Cannot create DLPack tensor of 0 size")
-
-    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
-        gdf_cols = cudf_obj
+    if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
+        gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf_cols = cudf_obj.as_frame()
+        gdf = cudf_obj.as_frame()
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "
             "to DLPack tensor"
         )
 
-    return libdlpack.to_dlpack(gdf_cols)
+    if any(
+        not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype)
+        for col in gdf._data.columns
+    ):
+        raise TypeError("non-numeric data not yet supported")
+
+    dtype = cudf.utils.dtypes.find_common_type(
+        [col.dtype for col in gdf._data.columns]
+    )
+    gdf = gdf.astype(dtype)
+
+    return libdlpack.to_dlpack([*gdf._columns])

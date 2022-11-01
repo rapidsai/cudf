@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,20 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/iterator_traits.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
+#include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf {
@@ -196,7 +205,7 @@ struct column_scatterer_impl<dictionary32> {
                                      rmm::mr::device_memory_resource* mr) const
   {
     if (target_in.is_empty())  // empty begets empty
-      return make_empty_column(data_type{type_id::DICTIONARY32});
+      return make_empty_column(type_id::DICTIONARY32);
     if (source_in.is_empty())  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
@@ -209,7 +218,8 @@ struct column_scatterer_impl<dictionary32> {
     // first combine keys so both dictionaries have the same set
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), stream, mr);
     auto const target_view = dictionary_column_view(target_matched->view());
-    auto source_matched    = dictionary::detail::set_keys(source, target_view.keys(), stream);
+    auto source_matched    = dictionary::detail::set_keys(
+      source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
@@ -381,23 +391,12 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   table_view const& target,
-  bool check_bounds                   = false,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
 
   using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
-
-  if (check_bounds) {
-    auto const begin = -target.num_rows();
-    auto const end   = target.num_rows();
-    auto bounds      = bounds_checker<MapType>{begin, end};
-    CUDF_EXPECTS(
-      std::distance(scatter_map_begin, scatter_map_end) ==
-        thrust::count_if(rmm::exec_policy(stream), scatter_map_begin, scatter_map_end, bounds),
-      "Scatter map index out of bounds");
-  }
 
   CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");

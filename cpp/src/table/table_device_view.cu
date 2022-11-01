@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/logical.h>
 
 namespace cudf {
 namespace detail {
@@ -53,46 +51,6 @@ template class table_device_view_base<column_device_view, table_view>;
 
 // Explicit instantiation for a device table of mutable views
 template class table_device_view_base<mutable_column_device_view, mutable_table_view>;
-
-namespace {
-struct is_relationally_comparable_functor {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return cudf::is_relationally_comparable<T, T>();
-  }
-};
-}  // namespace
-
-template <typename TableView>
-bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
-{
-  return thrust::all_of(thrust::counting_iterator<size_type>(0),
-                        thrust::counting_iterator<size_type>(lhs.num_columns()),
-                        [lhs, rhs] __device__(auto const i) {
-                          // Simplified this for compile time. (Ideally use double_type_dispatcher)
-                          // TODO: possible to implement without double type dispatcher.
-                          return lhs.column(i).type() == rhs.column(i).type() and
-                                 type_dispatcher(lhs.column(i).type(),
-                                                 is_relationally_comparable_functor{});
-                        });
-}
-
-// Explicit extern template instantiation for a table of immutable views
-extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
-                                                            table_view const& rhs);
-
-// Explicit extern template instantiation for a table of mutable views
-extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
-                                                                    mutable_table_view const& rhs);
-
-// Explicit extern template instantiation for a device table of immutable views
-template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
-                                                            table_device_view const& rhs);
-
-// Explicit extern template instantiation for a device table of mutable views
-template bool is_relationally_comparable<mutable_table_device_view>(
-  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
 
 }  // namespace detail
 }  // namespace cudf

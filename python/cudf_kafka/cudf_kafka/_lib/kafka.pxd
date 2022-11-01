@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
@@ -11,14 +11,21 @@ from cudf._lib.cpp.io.types cimport datasource
 from cudf._lib.io.datasource cimport Datasource
 
 
+cdef extern from "kafka_callback.hpp" \
+        namespace "cudf::io::external::kafka" nogil:
+    ctypedef object (*python_callable_type)()
+
+
 cdef extern from "kafka_consumer.hpp" \
         namespace "cudf::io::external::kafka" nogil:
 
     cpdef cppclass kafka_consumer:
 
-        kafka_consumer(map[string, string] configs) except +
+        kafka_consumer(map[string, string] configs,
+                       python_callable_type python_callable) except +
 
         kafka_consumer(map[string, string] configs,
+                       python_callable_type python_callable,
                        string topic_name,
                        int32_t partition,
                        int64_t start_offset,
@@ -49,7 +56,6 @@ cdef extern from "kafka_consumer.hpp" \
 cdef class KafkaDatasource(Datasource):
 
     cdef unique_ptr[datasource] c_datasource
-    cdef map[string, string] kafka_configs
     cdef string topic
     cdef int32_t partition
     cdef int64_t start_offset

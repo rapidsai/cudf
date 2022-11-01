@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package ai.rapids.cudf;
+
+import ai.rapids.cudf.NvtxColor;
+import ai.rapids.cudf.NvtxRange;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -384,6 +387,42 @@ public class Cuda {
   static native int getNativeComputeMode() throws CudaException;
 
   /**
+   * Gets the major CUDA compute capability of the current device.
+   * 
+   * For reference: https://developer.nvidia.com/cuda-gpus
+   * Hardware Generation	Compute Capability
+   *     Ampere	                8.x
+   *     Turing	                7.5
+   *     Volta	                7.0, 7.2
+   *     Pascal	                6.x
+   *     Maxwell                5.x
+   *     Kepler	                3.x
+   *     Fermi	                2.x
+   * 
+   * @return The Major compute capability version number of the current CUDA device
+   * @throws CudaException on any error
+   */
+  public static native int getComputeCapabilityMajor() throws CudaException;  
+
+  /**
+   * Gets the minor CUDA compute capability of the current device.
+   * 
+   * For reference: https://developer.nvidia.com/cuda-gpus
+   * Hardware Generation	Compute Capability
+   *     Ampere	                8.x
+   *     Turing	                7.5
+   *     Volta	                7.0, 7.2
+   *     Pascal	                6.x
+   *     Maxwell                5.x
+   *     Kepler	                3.x
+   *     Fermi	                2.x
+   * 
+   * @return The Minor compute capability version number of the current CUDA device
+   * @throws CudaException on any error
+   */
+  public static native int getComputeCapabilityMinor() throws CudaException;
+
+  /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
    * @throws CudaException on any error
    */
@@ -521,4 +560,46 @@ public class Cuda {
    * Whether per-thread default stream is enabled.
    */
   public static native boolean isPtdsEnabled();
+
+  /**
+   * Copy data from multiple device buffer sources to multiple device buffer destinations.
+   * For each buffer to copy there is a corresponding entry in the destination address, source
+   * address, and copy size vectors.
+   * @param destAddrs vector of device destination addresses
+   * @param srcAddrs vector of device source addresses
+   * @param copySizes vector of copy sizes
+   * @param stream CUDA stream to use for the copy
+   */
+  public static void multiBufferCopyAsync(long [] destAddrs,
+                                          long [] srcAddrs,
+                                          long [] copySizes,
+                                          Stream stream) {
+    // Temporary sub-par stand-in for a multi-buffer copy CUDA kernel
+    assert(destAddrs.length == srcAddrs.length);
+    assert(copySizes.length == destAddrs.length);
+    try (NvtxRange copyRange = new NvtxRange("multiBufferCopyAsync", NvtxColor.CYAN)){
+      for (int i = 0; i < destAddrs.length; i++) {
+        asyncMemcpy(destAddrs[i], srcAddrs[i], copySizes[i], CudaMemcpyKind.DEVICE_TO_DEVICE, stream);
+      }
+    }
+  }
+  /**
+   * Begins an Nsight profiling session, if a profiler is currently attached.
+   * @note if a profiler session has a already started, `profilerStart` has
+   * no effect.
+   */
+  public static native void profilerStart();
+
+  /**
+   * Stops an active Nsight profiling session.
+   * @note if a profiler session isn't active, `profilerStop` has
+   * no effect.
+   */
+  public static native void profilerStop();
+
+  /**
+   * Synchronizes the whole device using cudaDeviceSynchronize.
+   * @note this is very expensive and should almost never be used
+   */
+  public static native void deviceSynchronize();
 }

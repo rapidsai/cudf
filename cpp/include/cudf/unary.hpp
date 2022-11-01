@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -27,29 +30,32 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
+/**
+ * @brief Types of unary operations that can be performed on data.
+ */
 enum class unary_operator : int32_t {
-  SIN,         // < Trigonometric sine
-  COS,         // < Trigonometric cosine
-  TAN,         // < Trigonometric tangent
-  ARCSIN,      // < Trigonometric sine inverse
-  ARCCOS,      // < Trigonometric cosine inverse
-  ARCTAN,      // < Trigonometric tangent inverse
-  SINH,        // < Hyperbolic sine
-  COSH,        // < Hyperbolic cosine
-  TANH,        // < Hyperbolic tangent
-  ARCSINH,     // < Hyperbolic sine inverse
-  ARCCOSH,     // < Hyperbolic cosine inverse
-  ARCTANH,     // < Hyperbolic tangent inverse
-  EXP,         // < Exponential (base e, Euler number)
-  LOG,         // < Natural Logarithm (base e)
-  SQRT,        // < Square-root (x^0.5)
-  CBRT,        // < Cube-root (x^(1.0/3))
-  CEIL,        // < Smallest integer value not less than arg
-  FLOOR,       // < largest integer value not greater than arg
-  ABS,         // < Absolute value
-  RINT,        // < Rounds the floating-point argument arg to an integer value
-  BIT_INVERT,  // < Bitwise Not (~)
-  NOT,         // < Logical Not (!)
+  SIN,         ///< Trigonometric sine
+  COS,         ///< Trigonometric cosine
+  TAN,         ///< Trigonometric tangent
+  ARCSIN,      ///< Trigonometric sine inverse
+  ARCCOS,      ///< Trigonometric cosine inverse
+  ARCTAN,      ///< Trigonometric tangent inverse
+  SINH,        ///< Hyperbolic sine
+  COSH,        ///< Hyperbolic cosine
+  TANH,        ///< Hyperbolic tangent
+  ARCSINH,     ///< Hyperbolic sine inverse
+  ARCCOSH,     ///< Hyperbolic cosine inverse
+  ARCTANH,     ///< Hyperbolic tangent inverse
+  EXP,         ///< Exponential (base e, Euler number)
+  LOG,         ///< Natural Logarithm (base e)
+  SQRT,        ///< Square-root (x^0.5)
+  CBRT,        ///< Cube-root (x^(1.0/3))
+  CEIL,        ///< Smallest integer value not less than arg
+  FLOOR,       ///< largest integer value not greater than arg
+  ABS,         ///< Absolute value
+  RINT,        ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,  ///< Bitwise Not (~)
+  NOT,         ///< Logical Not (!)
 };
 
 /**
@@ -101,7 +107,7 @@ std::unique_ptr<cudf::column> is_valid(
  *
  * Supports only fixed-width types.
  *
- * @param column_view Input column
+ * @param input Input column
  * @param out_type Desired datatype of output column
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
@@ -121,7 +127,7 @@ std::unique_ptr<column> cast(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `true` representing `NAN` values
  */
@@ -137,7 +143,7 @@ std::unique_ptr<column> is_nan(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `false` representing `NAN`
  * values

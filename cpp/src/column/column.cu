@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -116,15 +117,16 @@ mutable_column_view column::mutable_view()
     child_views.emplace_back(*c);
   }
 
-  // Store the old null count before resetting it. By accessing the value directly instead of
-  // calling `null_count()`, we can avoid a potential invocation of `count_unset_bits()`. This does
-  // however mean that calling `null_count()` on the resulting mutable view could still potentially
-  // invoke `count_unset_bits()`.
+  // Store the old null count before resetting it. By accessing the value
+  // directly instead of calling `this->null_count()`, we can avoid a potential
+  // invocation of `cudf::detail::null_count()`. This does however mean that
+  // calling `this->null_count()` on the resulting mutable view could still
+  // potentially invoke `cudf::detail::null_count()`.
   auto current_null_count = _null_count;
 
   // The elements of a column could be changed through a `mutable_column_view`, therefore the
   // existing `null_count` is no longer valid. Reset it to `UNKNOWN_NULL_COUNT` forcing it to be
-  // recomputed on the next invocation of `null_count()`.
+  // recomputed on the next invocation of `this->null_count()`.
   set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
   return mutable_column_view{type(),
@@ -141,8 +143,8 @@ size_type column::null_count() const
 {
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count =
-      cudf::count_unset_bits(static_cast<bitmask_type const*>(_null_mask.data()), 0, size());
+    _null_count = cudf::detail::null_count(
+      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::get_default_stream());
   }
   return _null_count;
 }
@@ -180,7 +182,7 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::get_default_stream()};
   rmm::mr::device_memory_resource* mr;
 
   template <typename ColumnType,

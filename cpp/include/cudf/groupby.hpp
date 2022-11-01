@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <memory>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -56,8 +57,23 @@ class sort_groupby_helper;
  * `values.size()` column must equal `keys.num_rows()`.
  */
 struct aggregation_request {
-  column_view values;                                      ///< The elements to aggregate
-  std::vector<std::unique_ptr<aggregation>> aggregations;  ///< Desired aggregations
+  column_view values;                                              ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_aggregation>> aggregations;  ///< Desired aggregations
+};
+
+/**
+ * @brief Request for groupby aggregation(s) for scanning a column.
+ *
+ * The group membership of each `value[i]` is determined by the corresponding
+ * row `i` in the original order of `keys` used to construct the
+ * `groupby`. I.e., for each `aggregation`, `values[i]` is aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+ *
+ * `values.size()` column must equal `keys.num_rows()`.
+ */
+struct scan_request {
+  column_view values;  ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_scan_aggregation>> aggregations;  ///< Desired aggregations
 };
 
 /**
@@ -222,7 +238,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -290,9 +306,9 @@ class groupby {
    * `offsets[i+1] - offsets[i]` gives the size of group `i`.
    */
   struct groups {
-    std::unique_ptr<table> keys;
-    std::vector<size_type> offsets;
-    std::unique_ptr<table> values;
+    std::unique_ptr<table> keys;     ///< Table of grouped keys
+    std::vector<size_type> offsets;  ///< Group Offsets
+    std::unique_ptr<table> values;   ///< Table of grouped values
   };
 
   /**
@@ -338,10 +354,10 @@ class groupby {
    *          {"x" "x" "x" @ "tt" "tt" @}
    * @endcode
    *
-   * @param[in] values A table whose column null values will be replaced.
+   * @param[in] values A table whose column null values will be replaced
    * @param[in] replace_policies Specify the position of replacement values relative to null values,
    * one for each column
-   * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+   * @param[in] mr Device memory resource used to allocate device memory of the returned column
    *
    * @return Pair that contains a table with the sorted keys and the result column
    */
@@ -388,7 +404,7 @@ class groupby {
     rmm::mr::device_memory_resource* mr);
 
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
 };

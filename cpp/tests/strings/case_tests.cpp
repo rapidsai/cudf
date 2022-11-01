@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <tests/strings/utilities.h>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -149,6 +148,32 @@ TEST_F(StringsCaseTest, Title)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
+TEST_F(StringsCaseTest, IsTitle)
+{
+  cudf::test::strings_column_wrapper input({"Sⱥⱥnich",
+                                            "Examples Abc",
+                                            "Thesé Strings",
+                                            "",
+                                            "Are The",
+                                            "Tést strings",
+                                            "",
+                                            "N2Vidia Corp",
+                                            "SNAKE",
+                                            "!Abc",
+                                            " Eagle",
+                                            "A Test",
+                                            "12345",
+                                            "Alpha Not Upper Or Lower: ƻC",
+                                            "one More"},
+                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+  auto results = cudf::strings::is_title(cudf::strings_column_view(input));
+
+  cudf::test::fixed_width_column_wrapper<bool> expected(
+    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsCaseTest, MultiCharUpper)
 {
   cudf::test::strings_column_wrapper strings{"\u1f52 \u1f83", "\u1e98 \ufb05", "\u0149"};
@@ -185,19 +210,19 @@ TEST_F(StringsCaseTest, EmptyStringsColumn)
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
 
   auto results = cudf::strings::to_lower(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::to_upper(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::swapcase(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::capitalize(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::title(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsCaseTest, ErrorTest)

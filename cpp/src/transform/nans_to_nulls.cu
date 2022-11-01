@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,19 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf {
 namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
-  std::enable_if_t<std::is_floating_point<T>::value,
+  std::enable_if_t<std::is_floating_point_v<T>,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,
@@ -51,8 +54,7 @@ struct dispatch_nan_to_null {
                                    stream,
                                    mr);
 
-      return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)),
-                            mask.second);
+      return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
     } else {
       auto pred = [input_device_view] __device__(cudf::size_type idx) {
         return not(std::isnan(input_device_view.element<T>(idx)));
@@ -64,13 +66,12 @@ struct dispatch_nan_to_null {
                                    stream,
                                    mr);
 
-      return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)),
-                            mask.second);
+      return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
     }
   }
 
   template <typename T>
-  std::enable_if_t<!std::is_floating_point<T>::value,
+  std::enable_if_t<!std::is_floating_point_v<T>,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,
@@ -83,7 +84,7 @@ struct dispatch_nan_to_null {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
+  if (input.is_empty()) { return std::pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, stream, mr);
 }
@@ -94,7 +95,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, rmm::cuda_stream_default, mr);
+  return detail::nans_to_nulls(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

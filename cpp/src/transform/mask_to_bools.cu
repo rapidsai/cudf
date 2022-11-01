@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/transform.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -60,6 +63,7 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type end_bit,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

@@ -1,6 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-import pandas as pd
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -9,55 +7,47 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
     distinct_count as cpp_distinct_count,
-    drop_duplicates as cpp_drop_duplicates,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    unique as cpp_unique,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     nan_policy,
     null_equality,
+    null_order,
     null_policy,
+    order,
     size_type,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
-def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
+def drop_nulls(list columns, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
     Parameters
     ----------
-    source_table : source table whose null rows are dropped to form new table
+    columns : list of columns
     how  : "any" or "all". If thresh is None, drops rows of cols that have any
            nulls or all nulls (respectively) in subset (default: "any")
-    keys : List of Column names. If set, then these columns are checked for
-           nulls rather than all of cols (optional)
+    keys : List of column indices. If set, then these columns are checked for
+           nulls rather than all of columns (optional)
     thresh : Minimum number of non-nulls required to keep a row (optional)
 
     Returns
     -------
-    Table with null rows dropped
+    columns with null rows dropped
     """
 
-    num_index_columns = (
-        0 if source_table._index is None else
-        source_table._index._num_columns)
-    # shifting the index number by number of index columns
     cdef vector[size_type] cpp_keys = (
-        [
-            num_index_columns + source_table._column_names.index(name)
-            for name in keys
-        ]
-        if keys is not None
-        else range(
-            num_index_columns, num_index_columns + source_table._num_columns
-        )
+        keys if keys is not None else range(len(columns))
     )
 
     cdef size_type c_keep_threshold = cpp_keys.size()
@@ -67,7 +57,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
         c_keep_threshold = 1
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view = table_view_from_columns(columns)
 
     with nogil:
         c_result = move(
@@ -78,33 +68,25 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
             )
         )
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index is None
-            else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
-def apply_boolean_mask(Table source_table, Column boolean_mask):
+def apply_boolean_mask(list columns, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
 
     Parameters
     ----------
-    source_table : source table whose rows are dropped as per boolean_mask
+    columns : list of columns whose rows are dropped as per boolean_mask
     boolean_mask : a boolean column of same size as source_table
 
     Returns
     -------
-    Table obtained from applying mask
+    columns obtained from applying mask
     """
 
-    assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
-
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     with nogil:
@@ -115,35 +97,32 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
             )
         )
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
-def drop_duplicates(Table source_table,
+def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
-                    bool nulls_are_equal=True,
-                    bool ignore_index=False):
+                    bool nulls_are_equal=True):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
     Parameters
     ----------
-    source_table : source_table whose rows gets dropped
-    keys : List of Column names belong to source_table
+    columns : List of columns
+    keys : List of column indices. If set, then these columns are checked for
+           duplicates rather than all of columns (optional)
     keep : keep 'first' or 'last' or none of the duplicate rows
     nulls_are_equal : if True, nulls are treated equal else not.
 
     Returns
     -------
-    Table with duplicate dropped
+    columns with duplicate dropped
     """
 
+    cdef vector[size_type] cpp_keys = (
+        keys if keys is not None else range(len(columns))
+    )
     cdef duplicate_keep_option cpp_keep_option
 
     if keep == 'first':
@@ -155,50 +134,54 @@ def drop_duplicates(Table source_table,
     else:
         raise ValueError('keep must be either "first", "last" or False')
 
-    num_index_columns =(
-        0 if (source_table._index is None or ignore_index)
-        else source_table._index._num_columns)
     # shifting the index number by number of index columns
-    cdef vector[size_type] cpp_keys = (
-        [
-            num_index_columns + source_table._column_names.index(name)
-            for name in keys
-        ]
-        if keys is not None
-        else range(
-            num_index_columns, num_index_columns + source_table._num_columns
-        )
-    )
-
     cdef null_equality cpp_nulls_equal = (
         null_equality.EQUAL
         if nulls_are_equal
         else null_equality.UNEQUAL
     )
+
+    cdef vector[order] column_order = (
+        vector[order](
+            cpp_keys.size(),
+            order.ASCENDING
+        )
+    )
+    cdef vector[null_order] null_precedence = (
+        vector[null_order](
+            cpp_keys.size(),
+            null_order.BEFORE
+        )
+    )
+
+    cdef table_view source_table_view = table_view_from_columns(columns)
+    cdef table_view keys_view = source_table_view.select(cpp_keys)
+    cdef unique_ptr[table] sorted_source_table
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view
-    if ignore_index:
-        source_table_view = source_table.data_view()
-    else:
-        source_table_view = source_table.view()
 
     with nogil:
-        c_result = move(
-            cpp_drop_duplicates(
+        # cudf::unique keeps unique rows in each consecutive group of
+        # equivalent rows. To match the behavior of pandas.DataFrame.
+        # drop_duplicates, users need to stable sort the input first
+        # and then invoke cudf::unique.
+        sorted_source_table = move(
+            cpp_stable_sort_by_key(
                 source_table_view,
+                keys_view,
+                column_order,
+                null_precedence
+            )
+        )
+        c_result = move(
+            cpp_unique(
+                sorted_source_table.get().view(),
                 cpp_keys,
                 cpp_keep_option,
                 cpp_nulls_equal
             )
         )
 
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if (source_table._index is None or ignore_index)
-            else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):

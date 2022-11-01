@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/sequence.h>
-#include <random>
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {
@@ -36,8 +29,8 @@ template <typename T>
 struct TypedScalarTestWithoutFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(TypedScalarTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {

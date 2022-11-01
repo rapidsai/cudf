@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
 #include <nvtext/generate_ngrams.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -103,9 +105,9 @@ TEST_F(TextGenerateNgramsTest, Empty)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
   results = nvtext::generate_character_ngrams(cudf::strings_column_view(zero_size_strings_column));
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(TextGenerateNgramsTest, Errors)

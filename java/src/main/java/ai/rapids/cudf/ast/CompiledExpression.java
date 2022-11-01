@@ -18,12 +18,17 @@ package ai.rapids.cudf.ast;
 
 import ai.rapids.cudf.ColumnVector;
 import ai.rapids.cudf.MemoryCleaner;
+import ai.rapids.cudf.NativeDepsLoader;
 import ai.rapids.cudf.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** This class wraps a native compiled AST and must be closed to avoid native memory leaks. */
 public class CompiledExpression implements AutoCloseable {
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   private static final Logger log = LoggerFactory.getLogger(CompiledExpression.class);
 
   private static class CompiledExpressionCleaner extends MemoryCleaner.Cleaner {

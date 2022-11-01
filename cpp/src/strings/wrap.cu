@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -25,10 +23,14 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -98,7 +100,7 @@ std::unique_ptr<column> wrap(
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -125,9 +127,7 @@ std::unique_ptr<column> wrap(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
@@ -137,7 +137,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, rmm::cuda_stream_default, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
 };
 
 template <typename T>
@@ -35,7 +36,7 @@ struct NumericScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_numeric_scalar;
 };
 
-TYPED_TEST_CASE(NumericScalarFactory, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(NumericScalarFactory, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericScalarFactory, FactoryDefault)
 {
@@ -65,7 +66,7 @@ struct TimestampScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_timestamp_scalar;
 };
 
-TYPED_TEST_CASE(TimestampScalarFactory, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TimestampScalarFactory, cudf::test::TimestampTypes);
 
 TYPED_TEST(TimestampScalarFactory, FactoryDefault)
 {
@@ -96,7 +97,7 @@ struct DefaultScalarFactory : public ScalarFactoryTest {
 };
 
 using MixedTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::StringTypes>;
-TYPED_TEST_CASE(DefaultScalarFactory, MixedTypes);
+TYPED_TEST_SUITE(DefaultScalarFactory, MixedTypes);
 
 TYPED_TEST(DefaultScalarFactory, FactoryDefault)
 {
@@ -114,7 +115,7 @@ TYPED_TEST(DefaultScalarFactory, TypeCast)
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
-  EXPECT_NO_THROW(numeric_s->value());
+  EXPECT_NO_THROW((void)numeric_s->value());
   EXPECT_FALSE(numeric_s->is_valid());
   EXPECT_FALSE(s->is_valid());
 }
@@ -123,7 +124,7 @@ template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {
@@ -144,7 +145,7 @@ template <typename T>
 struct FixedPointScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointScalarFactory, ValueProvided)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 
@@ -57,7 +61,7 @@ std::unique_ptr<column> make_strings_column(
   device_span<size_type> offsets,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
@@ -114,9 +118,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
                                             std::unique_ptr<column> chars_column,
                                             size_type null_count,
-                                            rmm::device_buffer&& null_mask,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_buffer&& null_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -129,6 +131,48 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(chars_column));
+  return std::make_unique<column>(data_type{type_id::STRING},
+                                  num_strings,
+                                  rmm::device_buffer{},
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
+}
+
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            rmm::device_uvector<size_type>&& offsets,
+                                            rmm::device_uvector<char>&& chars,
+                                            rmm::device_buffer&& null_mask,
+                                            size_type null_count)
+{
+  CUDF_FUNC_RANGE();
+
+  auto const offsets_size = static_cast<size_type>(offsets.size());
+  auto const chars_size   = static_cast<size_type>(chars.size());
+
+  if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
+
+  CUDF_EXPECTS(num_strings == offsets_size - 1, "Invalid offsets column size for strings column.");
+
+  auto offsets_column = std::make_unique<column>(  //
+    data_type{type_id::INT32},
+    offsets_size,
+    offsets.release(),
+    rmm::device_buffer(),
+    0);
+
+  auto chars_column = std::make_unique<column>(  //
+    data_type{type_id::INT8},
+    chars_size,
+    chars.release(),
+    rmm::device_buffer(),
+    0);
+
+  auto children = std::vector<std::unique_ptr<column>>();
+
+  children.emplace_back(std::move(offsets_column));
+  children.emplace_back(std::move(chars_column));
+
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
                                   rmm::device_buffer{},

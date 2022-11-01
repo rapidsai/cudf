@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from itertools import product
 
 import numpy as np
@@ -5,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -38,7 +40,7 @@ def test_cumsum(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumsum().to_array(), ps.cumsum(), decimal=decimal
+        gs.cumsum().to_numpy(), ps.cumsum(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -47,7 +49,7 @@ def test_cumsum(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumsum().to_array(), pdf.a.cumsum(), decimal=decimal
+        gdf.a.cumsum().to_numpy(), pdf.a.cumsum(), decimal=decimal
     )
 
 
@@ -69,7 +71,13 @@ def test_cumsum_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(10, 5), Decimal64Dtype(12, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(10, 5),
+        Decimal64Dtype(12, 7),
+        Decimal32Dtype(8, 5),
+        Decimal128Dtype(13, 6),
+    ],
 )
 def test_cumsum_decimal(dtype):
     data = ["243.32", "48.245", "-7234.298", np.nan, "-467.2"]
@@ -96,7 +104,7 @@ def test_cummin(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummin().to_array(), ps.cummin(), decimal=decimal
+        gs.cummin().to_numpy(), ps.cummin(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -105,7 +113,7 @@ def test_cummin(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummin().to_array(), pdf.a.cummin(), decimal=decimal
+        gdf.a.cummin().to_numpy(), pdf.a.cummin(), decimal=decimal
     )
 
 
@@ -126,7 +134,13 @@ def test_cummin_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
 )
 def test_cummin_decimal(dtype):
     data = ["8394.294", np.nan, "-9940.444", np.nan, "-23.928"]
@@ -153,7 +167,7 @@ def test_cummax(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummax().to_array(), ps.cummax(), decimal=decimal
+        gs.cummax().to_numpy(), ps.cummax(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -162,7 +176,7 @@ def test_cummax(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummax().to_array(), pdf.a.cummax(), decimal=decimal
+        gdf.a.cummax().to_numpy(), pdf.a.cummax(), decimal=decimal
     )
 
 
@@ -183,7 +197,13 @@ def test_cummax_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
 )
 def test_cummax_decimal(dtype):
     data = [np.nan, "54.203", "8.222", "644.32", "-562.272"]
@@ -210,7 +230,7 @@ def test_cumprod(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumprod().to_array(), ps.cumprod(), decimal=decimal
+        gs.cumprod().to_numpy(), ps.cumprod(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -219,7 +239,7 @@ def test_cumprod(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumprod().to_array(), pdf.a.cumprod(), decimal=decimal
+        gdf.a.cumprod().to_numpy(), pdf.a.cumprod(), decimal=decimal
     )
 
 

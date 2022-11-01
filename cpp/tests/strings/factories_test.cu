@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -23,15 +26,15 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <cstring>
@@ -56,7 +59,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
   cudf::size_type count = (cudf::size_type)h_test_strings.size();
   thrust::host_vector<char> h_buffer(memsize);
-  rmm::device_uvector<char> d_buffer(memsize, rmm::cuda_stream_default);
+  rmm::device_uvector<char> d_buffer(memsize, cudf::get_default_stream());
   thrust::host_vector<thrust::pair<const char*, cudf::size_type>> strings(count);
   thrust::host_vector<cudf::size_type> h_offsets(count + 1);
   cudf::size_type offset = 0;
@@ -68,15 +71,15 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
       strings[idx] = thrust::pair<const char*, cudf::size_type>{nullptr, 0};
       nulls++;
     } else {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       strings[idx] = thrust::pair<const char*, cudf::size_type>{d_buffer.data() + offset, length};
       offset += length;
     }
     h_offsets[idx + 1] = offset;
   }
-  auto d_strings = cudf::detail::make_device_uvector_sync(strings);
-  CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  auto d_strings = cudf::detail::make_device_uvector_sync(strings, cudf::get_default_stream());
+  CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), nulls);
@@ -94,12 +97,12 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
       strings_view.size() + 1),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -130,7 +133,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     h_null_mask     = (h_null_mask << 1);
     const char* str = h_test_strings[idx];
     if (str) {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       offset += length;
       h_null_mask |= 1;
@@ -140,9 +143,9 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   }
 
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
-  auto d_buffer  = cudf::detail::make_device_uvector_sync(h_buffer);
-  auto d_offsets = cudf::detail::make_device_uvector_sync(h_offsets);
-  auto d_nulls   = cudf::detail::make_device_uvector_sync(h_nulls);
+  auto d_buffer  = cudf::detail::make_device_uvector_sync(h_buffer, cudf::get_default_stream());
+  auto d_offsets = cudf::detail::make_device_uvector_sync(h_offsets, cudf::get_default_stream());
+  auto d_nulls   = cudf::detail::make_device_uvector_sync(h_nulls, cudf::get_default_stream());
   auto column    = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
@@ -156,12 +159,12 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
       strings_view.size() + 1),
-    rmm::cuda_stream_default);
+    cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -180,17 +183,18 @@ TEST_F(StringsFactoriesTest, CreateScalar)
 
 TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 {
-  rmm::device_uvector<char> d_chars{0, rmm::cuda_stream_default};
-  auto d_offsets = cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(1);
-  rmm::device_uvector<cudf::bitmask_type> d_nulls{0, rmm::cuda_stream_default};
+  rmm::device_uvector<char> d_chars{0, cudf::get_default_stream()};
+  auto d_offsets =
+    cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(1, cudf::get_default_stream());
+  rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::get_default_stream()};
 
   auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> d_strings{
-    0, rmm::cuda_stream_default};
+    0, cudf::get_default_stream()};
   results = cudf::make_strings_column(d_strings);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 namespace {
@@ -210,8 +214,8 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
     {0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1});
 
   auto d_column = cudf::column_device_view::create(data);
-  rmm::device_uvector<string_pair> pairs(d_column->size(), rmm::cuda_stream_default);
-  thrust::transform(thrust::device,
+  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
                     pairs.data(),

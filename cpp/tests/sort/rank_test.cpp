@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+
 #include <tuple>
 #include <vector>
 
@@ -88,8 +91,7 @@ struct Rank : public BaseFixture {
            test_case_t{table_view{{col1, col2, col3}},
                        table_view{{col1_rank, col2_rank, col3_rank}}},
          }) {
-      table_view input, output;
-      std::tie(input, output) = test_case;
+      auto [input, output] = test_case;
 
       run_rank_test(input,
                     output,
@@ -103,7 +105,7 @@ struct Rank : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(Rank, NumericTypes);
+TYPED_TEST_SUITE(Rank, NumericTypes);
 
 // fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
 //                                        3,   2,   1,   4,   6,   5
@@ -408,6 +410,20 @@ TYPED_TEST(Rank, min_desc_bottom_pct)
   cudf::test::fixed_width_column_wrapper<double> col3_rank{
     {0.5, 1.0 / 3.0, 1., 0.5, 1.0 / 6.0, 0.5}};
   this->run_all_tests(rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank, true);
+}
+
+struct RankLarge : public BaseFixture {
+};
+
+TEST_F(RankLarge, average_large)
+{
+  // testcase of https://github.com/rapidsai/cudf/issues/9703
+  auto iter = thrust::counting_iterator<int64_t>(0);
+  fixed_width_column_wrapper<int64_t> col1(iter, iter + 10558);
+  auto result =
+    cudf::rank(col1, rank_method::AVERAGE, {}, null_policy::EXCLUDE, null_order::AFTER, false);
+  fixed_width_column_wrapper<double, int> expected(iter + 1, iter + 10559);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 }  // namespace test

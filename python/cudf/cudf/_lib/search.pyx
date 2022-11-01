@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -10,20 +10,20 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport table_view_from_columns
 
 
 def search_sorted(
-    Table table, Table values, side, ascending=True, na_position="last"
+    list source, list values, side, ascending=True, na_position="last"
 ):
     """Find indices where elements should be inserted to maintain order
 
     Parameters
     ----------
-    table : Table
-        Table to search in
-    values : Table
-        Table of values to search for
+    source : list of columns
+        List of columns to search in
+    values : List of columns
+        List of value columns to search for
     side : str {‘left’, ‘right’} optional
         If ‘left’, the index of the first suitable location is given.
         If ‘right’, return the last such index
@@ -33,8 +33,8 @@ def search_sorted(
     cdef vector[libcudf_types.null_order] c_null_precedence
     cdef libcudf_types.order c_order
     cdef libcudf_types.null_order c_null_order
-    cdef table_view c_table_data = table.data_view()
-    cdef table_view c_values_data = values.data_view()
+    cdef table_view c_table_data = table_view_from_columns(source)
+    cdef table_view c_values_data = table_view_from_columns(values)
 
     # Note: We are ignoring index columns here
     c_order = (libcudf_types.order.ASCENDING
@@ -45,9 +45,9 @@ def search_sorted(
         if na_position=="last"
         else libcudf_types.null_order.BEFORE
     )
-    c_column_order = vector[libcudf_types.order](table._num_columns, c_order)
+    c_column_order = vector[libcudf_types.order](len(source), c_order)
     c_null_precedence = vector[libcudf_types.null_order](
-        table._num_columns, c_null_order
+        len(source), c_null_order
     )
 
     if side == 'left':

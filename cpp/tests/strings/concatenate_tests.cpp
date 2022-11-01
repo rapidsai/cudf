@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/strings/detail/concatenate.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <tests/strings/utilities.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <vector>
 
@@ -61,7 +60,7 @@ TEST_F(StringsConcatenateTest, Concatenate)
   strings_columns.push_back(strings2);
   strings_columns.push_back(strings3);
 
-  auto results = cudf::strings::detail::concatenate(strings_columns);
+  auto results = cudf::strings::detail::concatenate(strings_columns, cudf::get_default_stream());
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -75,8 +74,8 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
-  auto results = cudf::strings::detail::concatenate(strings_columns);
-  cudf::test::expect_strings_empty(results->view());
+  auto results = cudf::strings::detail::concatenate(strings_columns, cudf::get_default_stream());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
@@ -108,6 +107,6 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
                                               h_strings.data() + h_strings.size());
   strings_columns.push_back(strings1);
 
-  auto results = cudf::strings::detail::concatenate(strings_columns);
+  auto results = cudf::strings::detail::concatenate(strings_columns, cudf::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings1);
 }

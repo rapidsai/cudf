@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "gpuinflate.h"
+#include "gpuinflate.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -55,9 +55,9 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
  */
 static inline __device__ uint32_t fetch4(const uint8_t* src)
 {
-  uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
-  const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align);
-  uint32_t v            = src32[0];
+  uint32_t src_align = 3 & reinterpret_cast<uintptr_t>(src);
+  const auto* src32  = reinterpret_cast<const uint32_t*>(src - src_align);
+  uint32_t v         = src32[0];
   return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
 }
 
@@ -91,7 +91,7 @@ static __device__ uint8_t* StoreLiterals(
       dst[2] = len_minus1 >> 8;
     }
     dst += 3;
-  } else if (len_minus1 <= 0xffffff) {
+  } else if (len_minus1 <= 0xff'ffff) {
     if (!t && dst + 3 < end) {
       dst[0] = 62 << 2;
       dst[1] = len_minus1;
@@ -205,7 +205,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
         offset = pos + local_match_lane;
       } else {
         offset = (pos & ~0xffff) | s->hash_map[hash];
-        if (offset >= pos) { offset = (offset >= 0x10000) ? offset - 0x10000 : pos; }
+        if (offset >= pos) { offset = (offset >= 0x1'0000) ? offset - 0x1'0000 : pos; }
         match =
           (offset < pos && offset + max_copy_distance >= pos + t && fetch4(src + offset) == data32);
       }
@@ -257,8 +257,10 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
  */
-extern "C" __global__ void __launch_bounds__(128)
-  snap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int count)
+__global__ void __launch_bounds__(128)
+  snap_kernel(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<compression_result> results)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -268,11 +270,11 @@ extern "C" __global__ void __launch_bounds__(128)
   const uint8_t* src;
 
   if (!t) {
-    const uint8_t* src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
-    uint32_t src_len   = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    uint8_t* dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
-    uint32_t dst_len   = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
-    uint8_t* end       = dst + dst_len;
+    auto const src     = inputs[blockIdx.x].data();
+    auto src_len       = static_cast<uint32_t>(inputs[blockIdx.x].size());
+    auto dst           = outputs[blockIdx.x].data();
+    auto const dst_len = static_cast<uint32_t>(outputs[blockIdx.x].size());
+    auto const end     = dst + dst_len;
     s->src             = src;
     s->src_len         = src_len;
     s->dst_base        = dst;
@@ -335,23 +337,23 @@ extern "C" __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (!t) {
-    outputs[blockIdx.x].bytes_written = s->dst - s->dst_base;
-    outputs[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
-    outputs[blockIdx.x].reserved      = 0;
+    results[blockIdx.x].bytes_written = s->dst - s->dst_base;
+    results[blockIdx.x].status =
+      (s->dst > s->end) ? compression_status::FAILURE : compression_status::SUCCESS;
+    results[blockIdx.x].reserved = 0;
   }
 }
 
-cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
-                              gpu_inflate_status_s* outputs,
-                              int count,
-                              rmm::cuda_stream_view stream)
+void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<compression_result> results,
+              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
-  dim3 dim_grid(count, 1);
-  if (count > 0) {
-    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, count);
+  dim3 dim_grid(inputs.size(), 1);
+  if (inputs.size() > 0) {
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
   }
-  return cudaSuccess;
 }
 
 }  // namespace io

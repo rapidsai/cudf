@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,10 +82,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
         case 27: // MERGE_M2
           return cudf::make_merge_m2_aggregation();
         case 28: // RANK
-          return cudf::make_rank_aggregation();
+          return cudf::make_rank_aggregation(cudf::rank_method::MIN, {},
+                                             cudf::null_policy::INCLUDE);
         case 29: // DENSE_RANK
-          return cudf::make_dense_rank_aggregation();
-
+          return cudf::make_rank_aggregation(cudf::rank_method::DENSE, {},
+                                             cudf::null_policy::INCLUDE);
+        case 30: // ANSI SQL PERCENT_RANK
+          return cudf::make_rank_aggregation(cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE,
+                                             {}, cudf::rank_percentage::ONE_NORMALIZED);
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
     }();
@@ -125,6 +129,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv *en
         ret = cudf::make_std_aggregation(ddof);
         break;
       default: throw std::logic_error("Unsupported DDOF Aggregation Operation");
+    }
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv *env,
+                                                                         jclass class_object,
+                                                                         jint kind, jint delta) {
+  try {
+    cudf::jni::auto_set_device(env);
+
+    std::unique_ptr<cudf::aggregation> ret;
+    // These numbers come from Aggregation.java and must stay in sync
+    switch (kind) {
+      case 31: // TDIGEST
+        ret = cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta);
+        break;
+      case 32: // MERGE_TDIGEST
+        ret = cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta);
+        break;
+      default: throw std::logic_error("Unsupported TDigest Aggregation Operation");
     }
     return reinterpret_cast<jlong>(ret.release());
   }

@@ -18,6 +18,10 @@
 
 package ai.rapids.cudf;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 /**
  * Options for reading a parquet file
  */
@@ -26,31 +30,32 @@ public class ParquetOptions extends ColumnFilterOptions {
   public static ParquetOptions DEFAULT = new ParquetOptions(new Builder());
 
   private final DType unit;
-
-  private final boolean strictDecimalType;
-
+  private final boolean[] readBinaryAsString;
 
   private ParquetOptions(Builder builder) {
     super(builder);
     unit = builder.unit;
-    strictDecimalType = builder.strictDecimalType;
+    readBinaryAsString = new boolean[builder.binaryAsStringColumns.size()];
+    for (int i = 0 ; i < builder.binaryAsStringColumns.size() ; i++) {
+      readBinaryAsString[i] = builder.binaryAsStringColumns.get(i);
+    }
   }
 
   DType timeUnit() {
     return unit;
   }
 
-  boolean isStrictDecimalType() {
-    return strictDecimalType;
+  boolean[] getReadBinaryAsString() {
+    return readBinaryAsString;
   }
 
-  public static Builder builder() {
+  public static ParquetOptions.Builder builder() {
     return new Builder();
   }
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private DType unit = DType.EMPTY;
-    private boolean strictDecimalType = false;
+    final List<Boolean> binaryAsStringColumns = new ArrayList<>();
 
     /**
      * Specify the time unit to use when returning timestamps.
@@ -64,12 +69,39 @@ public class ParquetOptions extends ColumnFilterOptions {
     }
 
     /**
-     * Specify how to deal with decimal columns who are not backed by INT32/64 while reading.
-     * @param strictDecimalType whether strictly reading all decimal columns as fixed-point decimal type
-     * @return builder for chaining
+     * Include one or more specific columns.  Any column not included will not be read.
+     * @param names the name of the column, or more than one if you want.
      */
-    public Builder enableStrictDecimalType(boolean strictDecimalType) {
-      this.strictDecimalType = strictDecimalType;
+    @Override
+    public Builder includeColumn(String... names) {
+      super.includeColumn(names);
+      for (int i = 0 ; i < names.length ; i++) {
+        binaryAsStringColumns.add(true);
+      }
+      return this;
+    }
+
+    /**
+     * Include this column.
+     * @param name the name of the column
+     * @param isBinary whether this column is to be read in as binary
+     */
+    public Builder includeColumn(String name, boolean isBinary) {
+      includeColumnNames.add(name);
+      binaryAsStringColumns.add(!isBinary);
+      return this;
+    }
+
+    /**
+     * Include one or more specific columns.  Any column not included will not be read.
+     * @param names the name of the column, or more than one if you want.
+     */
+    @Override
+    public Builder includeColumn(Collection<String> names) {
+      super.includeColumn(names);
+      for (int i = 0 ; i < names.size() ; i++) {
+        binaryAsStringColumns.add(true);
+      }
       return this;
     }
 

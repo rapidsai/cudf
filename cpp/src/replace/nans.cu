@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,15 @@
 #include <cudf/detail/replace.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -35,7 +39,7 @@ namespace {
 
 struct replace_nans_functor {
   template <typename T, typename Replacement>
-  std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
     column_view const& input,
     Replacement const& replacement,
     bool replacement_nullable,
@@ -47,64 +51,29 @@ struct replace_nans_functor {
 
     if (input.is_empty()) { return cudf::make_empty_column(input.type()); }
 
-    auto input_device_view = column_device_view::create(input);
+    auto input_device_view = column_device_view::create(input, stream);
     size_type size         = input.size();
 
     auto predicate = [dinput = *input_device_view] __device__(auto i) {
       return dinput.is_null(i) or !std::isnan(dinput.element<T>(i));
     };
 
-    if (input.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(false,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    }
+    auto input_iterator =
+      make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
+    auto replacement_iterator =
+      make_optional_iterator<T>(replacement, nullate::DYNAMIC{replacement_nullable});
+    return copy_if_else(input.has_nulls() or replacement_nullable,
+                        input_iterator,
+                        input_iterator + size,
+                        replacement_iterator,
+                        predicate,
+                        input.type(),
+                        stream,
+                        mr);
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<!std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
@@ -123,7 +92,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
   return type_dispatcher(input.type(),
                          replace_nans_functor{},
                          input,
-                         *column_device_view::create(replacement),
+                         *column_device_view::create(replacement, stream),
                          replacement.nullable(),
                          stream,
                          mr);
@@ -145,7 +114,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
+  return detail::replace_nans(input, replacement, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
@@ -153,7 +122,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
+  return detail::replace_nans(input, replacement, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
@@ -178,7 +147,7 @@ struct normalize_nans_and_zeros_lambda {
  */
 struct normalize_nans_and_zeros_kernel_forwarder {
   // floats and doubles. what we really care about.
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   void operator()(cudf::column_device_view in,
                   cudf::mutable_column_device_view out,
                   rmm::cuda_stream_view stream)
@@ -192,7 +161,7 @@ struct normalize_nans_and_zeros_kernel_forwarder {
 
   // if we get in here for anything but a float or double, that's a problem.
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_floating_point<T>::value, void> operator()(Args&&...)
+  std::enable_if_t<not std::is_floating_point_v<T>, void> operator()(Args&&...)
   {
     CUDF_FAIL("Unexpected non floating-point type.");
   }
@@ -214,43 +183,48 @@ void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view 
   column_view input = in_out;
 
   // to device. unique_ptr which gets automatically cleaned up when we leave
-  auto device_in = column_device_view::create(input);
+  auto device_in = column_device_view::create(input, stream);
 
   // from device. unique_ptr which gets automatically cleaned up when we leave.
-  auto device_out = mutable_column_device_view::create(in_out);
+  auto device_out = mutable_column_device_view::create(in_out, stream);
 
   // invoke the actual kernel.
   cudf::type_dispatcher(
     input.type(), normalize_nans_and_zeros_kernel_forwarder{}, *device_in, *device_out, stream);
 }
 
+std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  // output. copies the input
+  auto out = std::make_unique<column>(input, stream, mr);
+
+  // from device. unique_ptr which gets automatically cleaned up when we leave.
+  auto out_view = out->mutable_view();
+  normalize_nans_and_zeros(out_view, stream);
+  out->set_null_count(input.null_count());
+
+  return out;
+}
+
 }  // namespace detail
 
 /**
- * @brief Makes all NaNs and zeroes positive.
+ * @brief Makes all Nans and zeroes positive.
  *
- * Converts floating point values from @p input using the following rules:
+ * Converts floating point values from @p in_out using the following rules:
  *        Convert  -NaN  -> NaN
  *        Convert  -0.0  -> 0.0
  *
- * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] column_view representing input data
- * @param[in] device_memory_resource allocator for allocating output data
- *
- * @returns new column with the modified data
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // output. copies the input
-  std::unique_ptr<column> out = std::make_unique<column>(input, rmm::cuda_stream_default, mr);
-  // from device. unique_ptr which gets automatically cleaned up when we leave.
-  auto out_view = out->mutable_view();
-
-  detail::normalize_nans_and_zeros(out_view, rmm::cuda_stream_default);
-
-  return out;
+  return detail::normalize_nans_and_zeros(input, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -261,12 +235,12 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in, out] mutable_column_view representing input data. data is processed in-place
+ * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out)
 {
   CUDF_FUNC_RANGE();
-  detail::normalize_nans_and_zeros(in_out, rmm::cuda_stream_default);
+  detail::normalize_nans_and_zeros(in_out, cudf::get_default_stream());
 }
 
 }  // namespace cudf

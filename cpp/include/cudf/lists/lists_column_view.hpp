@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,15 +38,30 @@ namespace cudf {
  */
 class lists_column_view : private column_view {
  public:
+  /**
+   * @brief Construct a new lists column view object from a column view.
+   *
+   * @param lists_column The column view to wrap
+   */
   lists_column_view(column_view const& lists_column);
-  lists_column_view(lists_column_view&& lists_view)      = default;
-  lists_column_view(const lists_column_view& lists_view) = default;
-  ~lists_column_view()                                   = default;
+  lists_column_view(lists_column_view&&)      = default;  ///< Move constructor
+  lists_column_view(const lists_column_view&) = default;  ///< Copy constructor
+  ~lists_column_view()                        = default;
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return The reference to this lists column
+   */
   lists_column_view& operator=(lists_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return The reference to this lists column
+   */
   lists_column_view& operator=(lists_column_view&&) = default;
 
-  static constexpr size_type offsets_column_index{0};
-  static constexpr size_type child_column_index{1};
+  static constexpr size_type offsets_column_index{0};  ///< The index of the offsets column
+  static constexpr size_type child_column_index{1};    ///< The index of the child column
 
   using column_view::child_begin;
   using column_view::child_end;
@@ -58,26 +73,30 @@ class lists_column_view : private column_view {
   using column_view::size;
   static_assert(std::is_same_v<offset_type, size_type>,
                 "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;
+  using offset_iterator = offset_type const*;  ///< Iterator type for offsets
 
   /**
    * @brief Returns the parent column.
+   *
+   * @return The parent column
    */
-  column_view parent() const;
+  [[nodiscard]] column_view parent() const;
 
   /**
    * @brief Returns the internal column of offsets
    *
    * @throw cudf::logic error if this is an empty column
+   * @return The internal column of offsets
    */
-  column_view offsets() const;
+  [[nodiscard]] column_view offsets() const;
 
   /**
    * @brief Returns the internal child column
    *
    * @throw cudf::logic error if this is an empty column
+   * @return The internal child column
    */
-  column_view child() const;
+  [[nodiscard]] column_view child() const;
 
   /**
    * @brief Returns the internal child column, applying any offset from the root.
@@ -88,15 +107,17 @@ class lists_column_view : private column_view {
    * on lists columns should be using `get_sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return A sliced child column view
    */
-  column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+  [[nodiscard]] column_view get_sliced_child(rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Return first offset (accounting for column offset)
    *
    * @return int32_t const* Pointer to the first offset
    */
-  offset_iterator offsets_begin() const noexcept
+  [[nodiscard]] offset_iterator offsets_begin() const noexcept
   {
     return offsets().begin<offset_type>() + offset();
   }
@@ -111,7 +132,10 @@ class lists_column_view : private column_view {
    *
    * @return int32_t const* Pointer to one past the last offset
    */
-  offset_iterator offsets_end() const noexcept { return offsets_begin() + size() + 1; }
+  [[nodiscard]] offset_iterator offsets_end() const noexcept
+  {
+    return offsets_begin() + size() + 1;
+  }
 };
 /** @} */  // end of group
 }  // namespace cudf

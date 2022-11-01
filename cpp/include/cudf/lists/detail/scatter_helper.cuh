@@ -65,9 +65,9 @@ struct unbound_list_view {
    * @param lists_column The actual source/target lists column
    * @param row_index Index of the row in lists_column that this instance represents
    */
-  CUDA_DEVICE_CALLABLE unbound_list_view(label_type scatter_source_label,
-                                         cudf::detail::lists_column_device_view const& lists_column,
-                                         size_type const& row_index)
+  __device__ inline unbound_list_view(label_type scatter_source_label,
+                                      cudf::detail::lists_column_device_view const& lists_column,
+                                      size_type const& row_index)
     : _label{scatter_source_label}, _row_index{row_index}
   {
     _size = list_device_view{lists_column, row_index}.size();
@@ -81,9 +81,9 @@ struct unbound_list_view {
    * @param row_index Index of the row that this instance represents in the source/target column
    * @param size The number of elements in this list row
    */
-  CUDA_DEVICE_CALLABLE unbound_list_view(label_type scatter_source_label,
-                                         size_type const& row_index,
-                                         size_type const& size)
+  __device__ inline unbound_list_view(label_type scatter_source_label,
+                                      size_type const& row_index,
+                                      size_type const& size)
     : _label{scatter_source_label}, _row_index{row_index}, _size{size}
   {
   }
@@ -91,17 +91,17 @@ struct unbound_list_view {
   /**
    * @brief Returns number of elements in this list row.
    */
-  CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
+  [[nodiscard]] __device__ inline size_type size() const { return _size; }
 
   /**
    * @brief Returns whether this row came from the `scatter()` source or target
    */
-  CUDA_DEVICE_CALLABLE label_type label() const { return _label; }
+  [[nodiscard]] __device__ inline label_type label() const { return _label; }
 
   /**
    * @brief Returns the index in the source/target column
    */
-  CUDA_DEVICE_CALLABLE size_type row_index() const { return _row_index; }
+  [[nodiscard]] __device__ inline size_type row_index() const { return _row_index; }
 
   /**
    * @brief Binds to source/target column (depending on SOURCE/TARGET labels),
@@ -111,9 +111,9 @@ struct unbound_list_view {
    * @param scatter_target Target column for the scatter operation
    * @return A (bound) list_view for the row that this object represents
    */
-  CUDA_DEVICE_CALLABLE list_device_view
-  bind_to_column(lists_column_device_view const& scatter_source,
-                 lists_column_device_view const& scatter_target) const
+  [[nodiscard]] __device__ inline list_device_view bind_to_column(
+    lists_column_device_view const& scatter_source,
+    lists_column_device_view const& scatter_target) const
   {
     return list_device_view(_label == label_type::SOURCE ? scatter_source : scatter_target,
                             _row_index);

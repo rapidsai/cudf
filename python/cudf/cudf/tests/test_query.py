@@ -1,6 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import division, print_function
 
 import datetime
 import inspect
@@ -11,7 +10,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 from cudf.utils import queryutils
 
@@ -59,7 +58,7 @@ def test_query(data, fn, nulls):
 params_query_env_fn = [
     (lambda a, b, c, d: a * c > b + d, "a * @c > b + @d"),
     (
-        lambda a, b, c, d: ((a / c) < d) | ((b ** c) > d),
+        lambda a, b, c, d: ((a / c) < d) | ((b**c) > d),
         "((a / @c) < @d) | ((b ** @c) > @d)",
     ),
 ]
@@ -84,8 +83,8 @@ def test_query_ref_env(data, fn):
     df2 = df.query(query_expr)
     # check
     assert len(df2) == np.count_nonzero(expect_mask)
-    np.testing.assert_array_almost_equal(df2["a"].to_array(), aa[expect_mask])
-    np.testing.assert_array_almost_equal(df2["b"].to_array(), bb[expect_mask])
+    np.testing.assert_array_almost_equal(df2["a"].to_numpy(), aa[expect_mask])
+    np.testing.assert_array_almost_equal(df2["b"].to_numpy(), bb[expect_mask])
 
 
 def test_query_env_changing():
@@ -95,11 +94,11 @@ def test_query_env_changing():
     # first attempt
     c = 10
     got = df.query(expr)
-    np.testing.assert_array_equal(aa[aa < c], got["a"].to_array())
+    np.testing.assert_array_equal(aa[aa < c], got["a"].to_numpy())
     # change env
     c = 50
     got = df.query(expr)
-    np.testing.assert_array_equal(aa[aa < c], got["a"].to_array())
+    np.testing.assert_array_equal(aa[aa < c], got["a"].to_numpy())
 
 
 def test_query_local_dict():
@@ -108,7 +107,7 @@ def test_query_local_dict():
     expr = "a < @val"
 
     got = df.query(expr, local_dict={"val": 10})
-    np.testing.assert_array_equal(aa[aa < 10], got["a"].to_array())
+    np.testing.assert_array_equal(aa[aa < 10], got["a"].to_numpy())
 
     # test for datetime
     df = DataFrame()
@@ -118,7 +117,7 @@ def test_query_local_dict():
     expr = "datetimes==@search_date"
 
     got = df.query(expr, local_dict={"search_date": search_date})
-    np.testing.assert_array_equal(data[1], got["datetimes"].to_array())
+    np.testing.assert_array_equal(data[1], got["datetimes"].to_numpy())
 
 
 def test_query_splitted_combine():
@@ -141,7 +140,7 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_query_empty_frames():
@@ -209,3 +208,26 @@ def test_query_with_index_keyword(query, a_val, b_val, c_val):
     expect = pdf.query(query)
 
     assert_eq(out, expect)
+
+
+@pytest.mark.parametrize(
+    "data, query",
+    [
+        # Only need to test the dtypes that pandas
+        # supports but that we do not
+        (["a", "b", "c"], "data == 'a'"),
+    ],
+)
+def test_query_unsupported_dtypes(data, query):
+    gdf = cudf.DataFrame({"data": data})
+
+    # make sure the query works in pandas
+    pdf = gdf.to_pandas()
+    pdf_result = pdf.query(query)
+
+    expect = pd.DataFrame({"data": ["a"]})
+    assert_eq(expect, pdf_result)
+
+    # but fails in cuDF
+    with pytest.raises(TypeError):
+        gdf.query(query)

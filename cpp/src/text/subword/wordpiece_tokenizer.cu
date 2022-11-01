@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/remove.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -56,15 +64,15 @@ namespace {
  * - 1 byte for each each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
- * @param code_points[in] A pointer to the code points in the strings after normalization.
- * @param start_word_indices[out] An array of size `num_code_points` which will contain the
+ * @param[in] code_points A pointer to the code points in the strings after normalization.
+ * @param[out] start_word_indices An array of size `num_code_points` which will contain the
  *        starting index for each word.
- * @param end_word_indices[out] An array of size `num_code_points` which will contain the
+ * @param[out] end_word_indices An array of size `num_code_points` which will contain the
  *        ending index for each word.
  * @param num_code_points The total number of code_points.
- * @param token_ids[out] An array of size `num_code_points` which will hold the token ids.
+ * @param[out] token_ids An array of size `num_code_points` which will hold the token ids.
  *        This kernel just sets all the values to max uint32_t.
- * @param tokens_per_word[out] An array of size `num_code_points` which hold the number of
+ * @param[out] tokens_per_word An array of size `num_code_points` which hold the number of
  *        tokens. This kernel just sets all the values to 0.
  */
 __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
@@ -168,7 +176,7 @@ struct mark_special_tokens {
     });
     // search the special tokens array for the str_token
     cudf::string_view tokens(special_tokens, sizeof(special_tokens));
-    return tokens.find(str_token, size) >= 0;
+    return tokens.find(str_token, size) != cudf::string_view::npos;
   }
 
   /**
@@ -394,10 +402,11 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                                          uint32_t stride,
                                          bool do_truncate,
                                          bool do_lower_case,
-                                         rmm::cuda_stream_view stream,
                                          uint32_t max_word_length)
   : vocab_table(vocab_table),
-    normalizer(stream, do_lower_case),
+    normalizer(vocab_table.cp_metadata->view().data<codepoint_metadata_type>(),
+               vocab_table.aux_cp_table->view().data<aux_codepoint_data_type>(),
+               do_lower_case),
     max_sequence_length{max_sequence_length},
     stride(stride),
     do_truncate(do_truncate),
@@ -451,7 +460,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                                      num_code_points,
                                                                      device_token_ids.data(),
                                                                      device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
@@ -463,7 +472,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                          device_start_word_indices,
                                                          device_end_word_indices,
                                                          num_strings);
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // check for special tokens and adjust indices
   thrust::for_each_n(
@@ -506,7 +515,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       num_words,
       device_token_ids.data(),
       device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.

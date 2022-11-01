@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,15 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <algorithm>
@@ -129,9 +132,9 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                "All columns must be of type string");
   auto const strings_count = strings_columns.num_rows();
   if (strings_count == 0)  // empty begets empty
-    return make_empty_column(data_type{type_id::STRING});
+    return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
   string_view d_separator(separator.data(), separator.size());
   auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
@@ -156,9 +159,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 namespace {
@@ -221,7 +222,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   CUDF_EXPECTS(strings_count == separators.size(),
                "Separators column should be the same size as the strings columns");
   if (strings_count == 0)  // Empty begets empty
-    return make_empty_column(data_type{type_id::STRING});
+    return make_empty_column(type_id::STRING);
 
   // Invalid output column strings - null rows
   string_view const invalid_str{nullptr, 0};
@@ -254,9 +255,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
@@ -271,7 +270,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, rmm::cuda_stream_default, mr);
+    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -287,7 +286,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              separator_narep,
                              col_narep,
                              separate_nulls,
-                             rmm::cuda_stream_default,
+                             cudf::get_default_stream(),
                              mr);
 }
 

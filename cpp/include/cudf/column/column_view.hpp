@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,13 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <limits>
+#include <type_traits>
 #include <vector>
 
 /**
@@ -122,18 +127,24 @@ class column_view_base {
 
   /**
    * @brief Returns the number of elements in the column
+   *
+   * @return The number of elements in the column
    */
-  size_type size() const noexcept { return _size; }
+  [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
+   *
+   * @return True if `size()` returns zero, or false otherwise
    */
-  size_type is_empty() const noexcept { return size() == 0; }
+  [[nodiscard]] bool is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
+   *
+   * @return The `data_type` of the elements in the column
    */
-  data_type type() const noexcept { return _type; }
+  [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates if the column can contain null elements, i.e., if it has
@@ -144,7 +155,7 @@ class column_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns the count of null elements
@@ -153,8 +164,10 @@ class column_view_base {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
+   *
+   * @return The count of null elements
    */
-  size_type null_count() const;
+  [[nodiscard]] size_type null_count() const;
 
   /**
    * @brief Returns the count of null elements in the range [begin, end)
@@ -168,8 +181,9 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
+   * @return The count of null elements in the given range
    */
-  size_type null_count(size_type begin, size_type end) const;
+  [[nodiscard]] size_type null_count(size_type begin, size_type end) const;
 
   /**
    * @brief Indicates if the column contains null elements,
@@ -178,7 +192,7 @@ class column_view_base {
    * @return true One or more elements are null
    * @return false All elements are valid
    */
-  bool has_nulls() const { return null_count() > 0; }
+  [[nodiscard]] bool has_nulls() const { return null_count() > 0; }
 
   /**
    * @brief Indicates if the column contains null elements in the range
@@ -192,7 +206,10 @@ class column_view_base {
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    */
-  bool has_nulls(size_type begin, size_type end) const { return null_count(begin, end) > 0; }
+  [[nodiscard]] bool has_nulls(size_type begin, size_type end) const
+  {
+    return null_count(begin, end) > 0;
+  }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -200,14 +217,17 @@ class column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
+   * @return Raw pointer to the bitmask
    */
-  bitmask_type const* null_mask() const noexcept { return _null_mask; }
+  [[nodiscard]] bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
+   *
+   * @return The index of the first element relative to `head<T>()`
    */
-  size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
  protected:
   data_type _type{type_id::EMPTY};   ///< Element type
@@ -222,9 +242,19 @@ class column_view_base {
 
   column_view_base()                        = default;
   ~column_view_base()                       = default;
-  column_view_base(column_view_base const&) = default;
-  column_view_base(column_view_base&&)      = default;
+  column_view_base(column_view_base const&) = default;  ///< Copy constructor
+  column_view_base(column_view_base&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view_base& operator=(column_view_base const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
   column_view_base& operator=(column_view_base&&) = default;
 
   /**
@@ -254,8 +284,6 @@ class column_view_base {
    * indicator bitmask
    * @param null_count Optional, the number of null elements.
    * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
-   * contain additional data
    */
   column_view_base(data_type type,
                    size_type size,
@@ -304,10 +332,19 @@ class column_view : public detail::column_view_base {
 #pragma nv_exec_check_disable
   ~column_view() = default;
 #pragma nv_exec_check_disable
-  column_view(column_view const& c) = default;
-
-  column_view(column_view&&) = default;
+  column_view(column_view const&) = default;  ///< Copy constructor
+  column_view(column_view&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view& operator=(column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object
+   */
   column_view& operator=(column_view&&) = default;
 
   /**
@@ -354,22 +391,69 @@ class column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  column_view child(size_type child_index) const noexcept { return _children[child_index]; }
+  [[nodiscard]] column_view child(size_type child_index) const noexcept
+  {
+    return _children[child_index];
+  }
 
   /**
    * @brief Returns the number of child columns.
+   *
+   * @return The number of child columns
    */
-  size_type num_children() const noexcept { return _children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return _children.cbegin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `column_view` one past the end of the child columns
    */
   auto child_end() const noexcept { return _children.cend(); }
+
+  /**
+   * @brief Construct a column view from a device_span<T>.
+   *
+   * Only numeric and chrono types are supported.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @param data A typed device span containing the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  column_view(device_span<T const> data)
+    : column_view(
+        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+  {
+    CUDF_EXPECTS(
+      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the maximum size of a column view.");
+  }
+
+  /**
+   * @brief Converts a column view into a device span.
+   *
+   * Only numeric and chrono data types are supported. The column view must not
+   * be nullable.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @throws cudf::logic_error if the column view type does not match the span type.
+   * @throws cudf::logic_error if the column view is nullable.
+   * @return A typed device span of the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  [[nodiscard]] operator device_span<T const>() const
+  {
+    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
+                 "Device span type must match column view type.");
+    CUDF_EXPECTS(!nullable(), "A nullable column view cannot be converted to a device span.");
+    return device_span<T const>(data<T>(), size());
+  }
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
@@ -404,10 +488,19 @@ class mutable_column_view : public detail::column_view_base {
 
   ~mutable_column_view() = default;
 
-  mutable_column_view(mutable_column_view const&) = default;
-
-  mutable_column_view(mutable_column_view&&) = default;
+  mutable_column_view(mutable_column_view const&) = default;  ///< Copy constructor
+  mutable_column_view(mutable_column_view&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   mutable_column_view& operator=(mutable_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
   mutable_column_view& operator=(mutable_column_view&&) = default;
 
   /**
@@ -525,8 +618,10 @@ class mutable_column_view : public detail::column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
+   *
+   * @return Raw pointer to the underlying bitmask allocation
    */
-  bitmask_type* null_mask() const noexcept
+  [[nodiscard]] bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
@@ -546,23 +641,29 @@ class mutable_column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
    */
-  mutable_column_view child(size_type child_index) const noexcept
+  [[nodiscard]] mutable_column_view child(size_type child_index) const noexcept
   {
     return mutable_children[child_index];
   }
 
   /**
    * @brief Returns the number of child columns.
+   *
+   * @return The number of child columns
    */
-  size_type num_children() const noexcept { return mutable_children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return mutable_children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `mutable_column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return mutable_children.begin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   *
+   * @return An iterator to a `mutable_column_view` to the element following the last child column
    */
   auto child_end() const noexcept { return mutable_children.end(); }
 
@@ -633,4 +734,45 @@ column_view bit_cast(column_view const& input, data_type type);
  */
 mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
+namespace detail {
+/**
+ * @brief Computes a hash value from the shallow state of the specified column
+ *
+ * For any two columns, if `is_shallow_equivalent(c0,c1)` then `shallow_hash(c0) ==
+ * shallow_hash(c1)`.
+ *
+ * The complexity of computing the hash value of `input` is `O( count_descendants(input) )`, i.e.,
+ * it is independent of the number of elements in the column.
+ *
+ * This function does _not_ inspect the elements of `input` nor access any device memory or launch
+ * any kernels.
+ *
+ * @param input The `column_view` to compute hash
+ * @return The hash value derived from the shallow state of `input`.
+ */
+std::size_t shallow_hash(column_view const& input);
+
+/**
+ * @brief Uses only shallow state to determine if two `column_view`s view equivalent columns
+ *
+ *  Two columns are equivalent if for any operation `F` then:
+ *   ```
+ *    is_shallow_equivalent(c0, c1) ==> The results of F(c0) and F(c1) are equivalent
+ *   ```
+ * For any two non-empty columns, `is_shallow_equivalent(c0,c1)` is true only if they view the exact
+ * same physical column. In other words, two physically independent columns may have exactly
+ * equivalent elements but their shallow state would not be equivalent.
+ *
+ * The complexity of this function is `O( min(count_descendants(lhs), count_descendants(rhs)) )`,
+ * i.e., it is independent of the number of elements in either column.
+ *
+ * This function does _not_ inspect the elements of `lhs` or `rhs` nor access any device memory nor
+ * launch any kernels.
+ *
+ * @param lhs The left `column_view` to compare
+ * @param rhs The right `column_view` to compare
+ * @return If `lhs` and `rhs` have equivalent shallow state
+ */
+bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
+}  // namespace detail
 }  // namespace cudf

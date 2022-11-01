@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
+from cudf.testing.dataset_generator import rand_dataframe
 
 
 def cudf_from_avro_util(schema, records):
@@ -207,3 +208,39 @@ def test_can_parse_no_schema():
     actual = cudf_from_avro_util(schema_root, records)
     expected = cudf.DataFrame()
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("rows", [0, 1, 10, 1000])
+@pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
+def test_avro_compression(rows, codec):
+    schema = {
+        "name": "root",
+        "type": "record",
+        "fields": [
+            {"name": "0", "type": "int"},
+            {"name": "1", "type": "string"},
+        ],
+    }
+
+    df = rand_dataframe(
+        [
+            {"dtype": "int32", "null_frequency": 0, "cardinality": 1000},
+            {
+                "dtype": "str",
+                "null_frequency": 0,
+                "cardinality": 100,
+                "max_string_length": 10,
+            },
+        ],
+        rows,
+    )
+    expected_df = cudf.DataFrame.from_arrow(df)
+
+    records = df.to_pandas().to_dict(orient="records")
+
+    buffer = io.BytesIO()
+    fastavro.writer(buffer, schema, records, codec=codec)
+    buffer.seek(0)
+    got_df = cudf.read_avro(buffer)
+
+    assert_eq(expected_df, got_df)

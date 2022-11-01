@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -524,8 +524,8 @@ namespace detail {
 template <typename T>
 constexpr auto has_name_member() noexcept -> decltype(T::name, bool())
 {
-  return (std::is_same<char const*, typename std::decay<decltype(T::name)>::type>::value or
-          std::is_same<wchar_t const*, typename std::decay<decltype(T::name)>::type>::value);
+  return (std::is_same_v<char const*, typename std::decay<decltype(T::name)>::type> or
+          std::is_same_v<wchar_t const*, typename std::decay<decltype(T::name)>::type>);
 }
 }  // namespace detail
 
@@ -1728,7 +1728,7 @@ class domain_thread_range {
   template <typename First,
             typename... Args,
             typename = typename std::enable_if<
-              not std::is_same<event_attributes, typename std::decay<First>>::value>>
+              not std::is_same_v<event_attributes, typename std::decay<First>>>>
   explicit domain_thread_range(First const& first, Args const&... args) noexcept
     : domain_thread_range{event_attributes{first, args...}}
   {
@@ -1798,7 +1798,7 @@ class domain_process_range {
   template <typename First,
             typename... Args,
             typename = typename std::enable_if<
-              not std::is_same<event_attributes, typename std::decay<First>>::value>>
+              not std::is_same_v<event_attributes, typename std::decay<First>>>>
   explicit domain_process_range(First const& first, Args const&... args) noexcept
     : domain_process_range{event_attributes{first, args...}}
   {
@@ -1907,7 +1907,7 @@ inline void mark(event_attributes const& attr) noexcept
 #define NVTX3_FUNC_RANGE_IN(D)                                                 \
   static ::nvtx3::registered_message<D> const nvtx3_func_name__{__func__};     \
   static ::nvtx3::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \
-  ::nvtx3::domain_thread_range<D> const nvtx3_range__{nvtx3_func_attr__};
+  [[maybe_unused]] ::nvtx3::domain_thread_range<D> const nvtx3_range__{nvtx3_func_attr__};
 
 /**
  * @brief Convenience macro for generating a range in the global domain from the

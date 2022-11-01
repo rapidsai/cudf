@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,28 @@
 
 #include <quantiles/quantiles_util.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 
 #include <memory>
 #include <vector>
@@ -47,7 +55,7 @@ struct quantile_functor {
   rmm::mr::device_memory_resource* mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>(),
+  std::enable_if_t<not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>(),
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {
@@ -55,8 +63,7 @@ struct quantile_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>(),
-                   std::unique_ptr<column>>
+  std::enable_if_t<std::is_arithmetic_v<T> or cudf::is_fixed_point<T>(), std::unique_ptr<column>>
   operator()(column_view const& input)
   {
     using StorageType   = cudf::device_storage_type_t<T>;
@@ -76,14 +83,14 @@ struct quantile_functor {
     }
 
     auto d_input  = column_device_view::create(input, stream);
-    auto d_output = mutable_column_device_view::create(output->mutable_view());
+    auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
-    auto q_device = cudf::detail::make_device_uvector_sync(q);
+    auto q_device = cudf::detail::make_device_uvector_sync(q, stream);
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -93,7 +100,7 @@ struct quantile_functor {
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -107,10 +114,7 @@ struct quantile_functor {
         ordered_indices,
         [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); });
 
-      rmm::device_buffer mask;
-      size_type null_count;
-
-      std::tie(mask, null_count) = valid_if(
+      auto [mask, null_count] = valid_if(
         q_device.begin(),
         q_device.end(),
         [sorted_validity, interp = interp, size = size] __device__(double q) {
@@ -185,7 +189,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, rmm::cuda_stream_default, mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

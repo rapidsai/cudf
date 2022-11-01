@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,19 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 
 namespace cudf {
 namespace detail {
 std::vector<column_view> slice(column_view const& input,
-                               std::vector<size_type> const& indices,
+                               host_span<size_type const> indices,
                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
@@ -40,7 +43,7 @@ std::vector<column_view> slice(column_view const& input,
   // to count
   auto indices_iter = cudf::detail::make_counting_transform_iterator(
     0, [offset = input.offset(), &indices](size_type index) { return indices[index] + offset; });
-  auto null_counts = cudf::detail::segmented_count_unset_bits(
+  auto null_counts = cudf::detail::segmented_null_count(
     input.null_mask(), indices_iter, indices_iter + indices.size(), stream);
 
   auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
@@ -63,25 +66,16 @@ std::vector<column_view> slice(column_view const& input,
   return std::vector<column_view>{begin, begin + indices.size() / 2};
 }
 
-}  // namespace detail
-
-std::vector<cudf::column_view> slice(cudf::column_view const& input,
-                                     std::vector<size_type> const& indices)
+std::vector<table_view> slice(table_view const& input,
+                              host_span<size_type const> indices,
+                              rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
-}
-
-std::vector<cudf::table_view> slice(cudf::table_view const& input,
-                                    std::vector<size_type> const& indices)
-{
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
   if (indices.empty()) { return {}; }
 
   // 2d arrangement of column_views that represent the outgoing table_views sliced_table[i][j]
   // where i is the i'th column of the j'th table_view
-  auto op = [&indices](auto const& c) { return cudf::slice(c, indices); };
+  auto op = [&indices, &stream](auto const& c) { return cudf::detail::slice(c, indices, stream); };
   auto f  = thrust::make_transform_iterator(input.begin(), op);
 
   auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + input.num_columns());
@@ -99,6 +93,46 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   }
 
   return result;
+}
+
+std::vector<column_view> slice(column_view const& input,
+                               std::initializer_list<size_type> indices,
+                               rmm::cuda_stream_view stream)
+{
+  return slice(input, host_span<size_type const>(indices.begin(), indices.size()), stream);
+}
+
+std::vector<table_view> slice(table_view const& input,
+                              std::initializer_list<size_type> indices,
+                              rmm::cuda_stream_view stream)
+{
+  return slice(input, host_span<size_type const>(indices.begin(), indices.size()), stream);
+};
+
+}  // namespace detail
+
+std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, cudf::get_default_stream());
+}
+
+std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, cudf::get_default_stream());
+};
+
+std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, cudf::get_default_stream());
+}
+
+std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, cudf::get_default_stream());
 };
 
 }  // namespace cudf

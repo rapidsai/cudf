@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <map>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -34,16 +36,29 @@ namespace io {
  * @file
  */
 
-/**
- * @brief Builds settings to use for `read_json()`.
- */
 class json_reader_options_builder;
+
+/**
+ * @brief Allows specifying the target types for nested JSON data via json_reader_options'
+ * `set_dtypes` method.
+ */
+struct schema_element {
+  /**
+   * @brief The type that this column should be converted to
+   */
+  data_type type;
+
+  /**
+   * @brief Allows specifying this column's child columns target type
+   */
+  std::map<std::string, schema_element> child_types;
+};
 
 /**
  * @brief Input arguments to the `read_json` interface.
  *
- * Available parameters and are closely patterned after PANDAS' `read_json` API.
- * Not all parameters are unsupported. If the matching PANDAS' parameter
+ * Available parameters are closely patterned after PANDAS' `read_json` API.
+ * Not all parameters are supported. If the matching PANDAS' parameter
  * has a default value of `None`, then a default value of `-1` or `0` may be
  * used as the equivalent.
  *
@@ -66,7 +81,10 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>>
+    _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -81,10 +99,16 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
+  // Whether to use the experimental reader
+  bool _experimental = false;
+
+  // Whether to keep the quote characters of string values
+  bool _keep_quotes = false;
+
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read parquet file.
+   * @param src source information used to read parquet file
    */
   explicit json_reader_options(const source_info& src) : _source(src) {}
 
@@ -101,89 +125,191 @@ class json_reader_options {
   /**
    * @brief create json_reader_options_builder which will build json_reader_options.
    *
-   * @param src source information used to read json file.
-   * @returns builder to build the options.
+   * @param src source information used to read json file
+   * @returns builder to build the options
    */
   static json_reader_options_builder builder(source_info const& src);
 
   /**
    * @brief Returns source info.
+   *
+   * @returns Source info
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns data types of the columns.
+   *
+   * @returns Data types of the columns
    */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>> const&
+  get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns compression format of the source.
+   *
+   * @return Compression format of the source
    */
   compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
+   *
+   * @return Number of bytes to skip from source start
    */
   size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
+   *
+   * @return Number of bytes to read
    */
   size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
+   * @brief Returns number of bytes to read with padding.
+   *
+   * @return Number of bytes to read with padding
+   */
+  size_t get_byte_range_size_with_padding() const
+  {
+    if (_byte_range_size == 0) {
+      return 0;
+    } else {
+      return _byte_range_size + get_byte_range_padding();
+    }
+  }
+
+  /**
+   * @brief Returns number of bytes to pad when reading.
+   *
+   * @return Number of bytes to pad
+   */
+  size_t get_byte_range_padding() const
+  {
+    auto const num_columns = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+
+    auto const max_row_bytes = 16 * 1024;  // 16KB
+    auto const column_bytes  = 64;
+    auto const base_padding  = 1024;  // 1KB
+
+    if (num_columns == 0) {
+      // Use flat size if the number of columns is not known
+      return max_row_bytes;
+    }
+
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
+
+  /**
    * @brief Whether to read the file as a json object per line.
+   *
+   * @return `true` if reading the file as a json object per line
    */
   bool is_enabled_lines() const { return _lines; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @returns true if dates are parsed as DD/MM, false if MM/DD
    */
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
+   * @brief Whether the experimental reader should be used.
+   *
+   * @returns true if the experimental reader will be used, false otherwise
+   */
+  bool is_enabled_experimental() const { return _experimental; }
+
+  /**
+   * @brief Whether the experimental reader should keep quotes of string values.
+   *
+   * @returns true if the experimental reader should keep quotes, false otherwise
+   */
+  bool is_enabled_keep_quotes() const { return _keep_quotes; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
+   * @param types Vector of dtypes
    */
-  void dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Vector dtypes in string format
+   */
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
    *
-   * @param comp_type The compression type used.
+   * @param comp_type The compression type used
    */
-  void compression(compression_type comp_type) { _compression = comp_type; }
+  void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set number of bytes to skip from source start.
    *
-   * @param offset Number of bytes of offset.
+   * @param offset Number of bytes of offset
    */
   void set_byte_range_offset(size_type offset) { _byte_range_offset = offset; }
 
   /**
    * @brief Set number of bytes to read.
    *
-   * @param size Number of bytes to read.
+   * @param size Number of bytes to read
    */
   void set_byte_range_size(size_type size) { _byte_range_size = size; }
 
   /**
    * @brief Set whether to read the file as a json object per line.
    *
-   * @param val Boolean value to enable/disable the option to read each line as a json object.
+   * @param val Boolean value to enable/disable the option to read each line as a json object
    */
   void enable_lines(bool val) { _lines = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
-   * @param val Boolean value to enable/disable day first parsing format.
+   * @param val Boolean value to enable/disable day first parsing format
    */
   void enable_dayfirst(bool val) { _dayfirst = val; }
+
+  /**
+   * @brief Set whether to use the experimental reader.
+   *
+   * @param val Boolean value to enable/disable the experimental reader
+   */
+  void enable_experimental(bool val) { _experimental = val; }
+
+  /**
+   * @brief Set whether the experimental reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * of string values
+   */
+  void enable_keep_quotes(bool val) { _keep_quotes = val; }
 };
 
+/**
+ * @brief Builds settings to use for `read_json()`.
+ */
 class json_reader_options_builder {
   json_reader_options options;
 
@@ -198,17 +324,41 @@ class json_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read avro file.
+   * @param src The source information used to read avro file
    */
   explicit json_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
-   * @return this for chaining.
+   * @param types Vector of dtypes
+   * @return this for chaining
    */
-  json_reader_options_builder& dtypes(std::vector<std::string> types)
+  json_reader_options_builder& dtypes(std::vector<data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> dtype map
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> schema_element map
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, schema_element> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -217,8 +367,8 @@ class json_reader_options_builder {
   /**
    * @brief Set the compression type.
    *
-   * @param comp_type The compression type used.
-   * @return this for chaining.
+   * @param comp_type The compression type used
+   * @return this for chaining
    */
   json_reader_options_builder& compression(compression_type comp_type)
   {
@@ -229,8 +379,8 @@ class json_reader_options_builder {
   /**
    * @brief Set number of bytes to skip from source start.
    *
-   * @param offset Number of bytes of offset.
-   * @return this for chaining.
+   * @param offset Number of bytes of offset
+   * @return this for chaining
    */
   json_reader_options_builder& byte_range_offset(size_type offset)
   {
@@ -241,7 +391,7 @@ class json_reader_options_builder {
   /**
    * @brief Set number of bytes to read.
    *
-   * @param size Number of bytes to read.
+   * @param size Number of bytes to read
    * @return this for chaining
    */
   json_reader_options_builder& byte_range_size(size_type size)
@@ -253,8 +403,8 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to read the file as a json object per line.
    *
-   * @param val Boolean value to enable/disable the option to read each line as a json object.
-   * @return this for chaining.
+   * @param val Boolean value to enable/disable the option to read each line as a json object
+   * @return this for chaining
    */
   json_reader_options_builder& lines(bool val)
   {
@@ -265,12 +415,37 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
-   * @param val Boolean value to enable/disable day first parsing format.
-   * @return this for chaining.
+   * @param val Boolean value to enable/disable day first parsing format
+   * @return this for chaining
    */
   json_reader_options_builder& dayfirst(bool val)
   {
     options._dayfirst = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to use the experimental reader.
+   *
+   * @param val Boolean value to enable/disable experimental parsing
+   * @return this for chaining
+   */
+  json_reader_options_builder& experimental(bool val)
+  {
+    options._experimental = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the experimental reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * of string values
+   * @return this for chaining
+   */
+  json_reader_options_builder& keep_quotes(bool val)
+  {
+    options._keep_quotes = val;
     return *this;
   }
 
@@ -283,6 +458,8 @@ class json_reader_options_builder {
    * @brief move json_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `json_reader_options` object r-value reference
    */
   json_reader_options&& build() { return std::move(options); }
 };
@@ -292,21 +469,19 @@ class json_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.json";
- *  cudf::read_json_options options = cudf::read_json_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_json(options);
+ *  auto source  = cudf::io::source_info("dataset.json");
+ *  auto options = cudf::io::read_json_options::builder(source);
+ *  auto result  = cudf::io::read_json(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior.
+ * @param options Settings for controlling reading behavior
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
- * @return The set of columns along with metadata.
+ * @return The set of columns along with metadata
  */
 table_with_metadata read_json(
-  json_reader_options const& options,
+  json_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ THE SOFTWARE.
 
 */
 
-#include "brotli_dict.h"
-#include "gpuinflate.h"
+#include "brotli_dict.hpp"
+#include "gpuinflate.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -68,7 +68,7 @@ namespace io {
 constexpr uint32_t huffman_lookup_table_width      = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
-constexpr uint32_t brotli_max_allowed_distance     = 0x7FFFFFFC;
+constexpr uint32_t brotli_max_allowed_distance     = 0x7FFF'FFFC;
 constexpr int block_size                           = 256;
 
 template <typename T0, typename T1>
@@ -90,7 +90,7 @@ inline __device__ uint32_t brev8(uint32_t x)
 }
 
 #define CONSTANT static const __device__ __constant__
-#include "brotli_tables.h"
+#include "brotli_tables.hpp"
 
 /* typeof(MODE) == ContextType; returns ContextLut */
 __inline__ __device__ int brotli_context_lut(int mode) { return (mode << 9); }
@@ -193,7 +193,7 @@ struct debrotli_state_s {
   uint16_t* block_type_vlc[3];
   huff_scratch_s hs;
   uint32_t mtf[65];
-  uint64_t heap[local_heap_size / 8];
+  __align__(8) char heap[local_heap_size];
 };
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
@@ -201,8 +201,8 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s* s, const uint8_t* base, size_t len, size_t pos = 0)
 {
-  const uint8_t* p      = base + pos;
-  uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
+  const uint8_t* p  = base + pos;
+  auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
   p -= prefix_bytes;
   s->base     = base;
   s->end      = base + len;
@@ -248,7 +248,7 @@ inline __device__ uint32_t getbits(debrotli_state_s* s, uint32_t n)
 
 inline __device__ uint32_t getbits_bytealign(debrotli_state_s* s)
 {
-  uint32_t n    = (uint32_t)((-(int32_t)s->bitpos) & 7);
+  auto n        = (uint32_t)((-(int32_t)s->bitpos) & 7);
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
   return bits;
@@ -307,13 +307,15 @@ static __device__ uint32_t getvlc(debrotli_state_s* s, const uint16_t* lut)
   return vlc;
 }
 
+static auto __device__ allocation_size(uint32_t bytes) { return (bytes + 7) & ~7; }
+
 /// Alloc bytes from the local (shared mem) heap
 static __device__ uint8_t* local_alloc(debrotli_state_s* s, uint32_t bytes)
 {
-  int heap_used = s->heap_used;
-  int len       = (bytes + 7) >> 3;
+  int heap_used  = s->heap_used;
+  auto const len = allocation_size(bytes);
   if (heap_used + len <= s->heap_limit) {
-    uint8_t* ptr = reinterpret_cast<uint8_t*>(&s->heap[heap_used]);
+    auto* ptr    = reinterpret_cast<uint8_t*>(&s->heap[heap_used]);
     s->heap_used = (uint16_t)(heap_used + len);
     return ptr;
   } else {
@@ -327,7 +329,7 @@ static __device__ uint8_t* local_heap_shrink(debrotli_state_s* s, uint32_t bytes
 {
   int heap_used  = s->heap_used;
   int heap_limit = s->heap_limit;
-  int len        = (bytes + 7) >> 3;
+  auto const len = allocation_size(bytes);
   if (heap_limit - len >= heap_used) {
     heap_limit -= len;
     s->heap_limit = (uint16_t)heap_limit;
@@ -339,7 +341,7 @@ static __device__ uint8_t* local_heap_shrink(debrotli_state_s* s, uint32_t bytes
 
 static __device__ void local_heap_grow(debrotli_state_s* s, uint32_t bytes)
 {
-  int len        = (bytes + 7) >> 3;
+  auto const len = allocation_size(bytes);
   int heap_limit = s->heap_limit + len;
   s->heap_limit  = (uint16_t)heap_limit;
 }
@@ -349,9 +351,9 @@ static __device__ uint8_t* ext_heap_alloc(uint32_t bytes,
                                           uint8_t* ext_heap_base,
                                           uint32_t ext_heap_size)
 {
-  uint32_t len                = (bytes + 0xf) & ~0xf;
-  volatile uint32_t* heap_ptr = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
-  uint32_t first_free_block   = ~0;
+  uint32_t len              = (bytes + 0xf) & ~0xf;
+  volatile auto* heap_ptr   = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
+  uint32_t first_free_block = ~0;
   for (;;) {
     uint32_t blk_next, blk_prev;
     first_free_block = atomicExch((unsigned int*)heap_ptr, first_free_block);
@@ -419,10 +421,10 @@ static __device__ void ext_heap_free(void* ptr,
                                      uint8_t* ext_heap_base,
                                      uint32_t ext_heap_size)
 {
-  uint32_t len                = (bytes + 0xf) & ~0xf;
-  volatile uint32_t* heap_ptr = (volatile uint32_t*)ext_heap_base;
-  uint32_t first_free_block   = ~0;
-  uint32_t cur_blk            = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
+  uint32_t len              = (bytes + 0xf) & ~0xf;
+  volatile auto* heap_ptr   = (volatile uint32_t*)ext_heap_base;
+  uint32_t first_free_block = ~0;
+  auto cur_blk              = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
   for (;;) {
     first_free_block = atomicExch((unsigned int*)heap_ptr, first_free_block);
     if (first_free_block != ~0) { break; }
@@ -1297,13 +1299,13 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
   uint32_t i           = 1;
   uint32_t upper_bound = s->mtf_upper_bound;
   uint32_t* mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
-  uint8_t* mtf_u8      = reinterpret_cast<uint8_t*>(mtf);
-  uint32_t pattern     = 0x03020100;  // Little-endian
+  auto* mtf_u8         = reinterpret_cast<uint8_t*>(mtf);
+  uint32_t pattern     = 0x0302'0100;  // Little-endian
 
   // Initialize list using 4 consequent values pattern.
   mtf[0] = pattern;
   do {
-    pattern += 0x04040404;  // Advance all 4 values by 4.
+    pattern += 0x0404'0404;  // Advance all 4 values by 4.
     mtf[i] = pattern;
     i++;
   } while (i <= upper_bound);
@@ -1417,12 +1419,12 @@ static __device__ debrotli_huff_tree_group_s* HuffmanTreeGroupInit(debrotli_stat
                                                                    uint32_t max_symbol,
                                                                    uint32_t ntrees)
 {
-  debrotli_huff_tree_group_s* group = reinterpret_cast<debrotli_huff_tree_group_s*>(local_alloc(
+  auto* group          = reinterpret_cast<debrotli_huff_tree_group_s*>(local_alloc(
     s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t*) - sizeof(uint16_t*)));
-  group->alphabet_size              = (uint16_t)alphabet_size;
-  group->max_symbol                 = (uint16_t)max_symbol;
-  group->num_htrees                 = (uint16_t)ntrees;
-  group->htrees[0]                  = nullptr;
+  group->alphabet_size = (uint16_t)alphabet_size;
+  group->max_symbol    = (uint16_t)max_symbol;
+  group->num_htrees    = (uint16_t)ntrees;
+  group->htrees[0]     = nullptr;
   return group;
 }
 
@@ -1638,7 +1640,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
   const uint8_t *context_map_slice, *dist_context_map_slice;
   int dist_rb_idx;
   uint32_t blen_L, blen_I, blen_D;
-  uint8_t* const dict_scratch = reinterpret_cast<uint8_t*>(
+  auto* const dict_scratch = reinterpret_cast<uint8_t*>(
     &s->hs);  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
   int context_mode;
 
@@ -1742,10 +1744,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
                 int dist = distance_code << 1;
                 // kDistanceShortCodeIndexOffset has 2-bit values from LSB: 3, 2, 1, 0, 3, 3, 3, 3,
                 // 3, 3, 2, 2, 2, 2, 2, 2
-                const uint32_t kDistanceShortCodeIndexOffset = 0xAAAFFF1B;
+                const uint32_t kDistanceShortCodeIndexOffset = 0xAAAF'FF1B;
                 // kDistanceShortCodeValueOffset has 2-bit values from LSB: -0, 0,-0, 0,-1, 1,-2,
                 // 2,-3, 3,-1, 1,-2, 2,-3, 3
-                const uint32_t kDistanceShortCodeValueOffset = 0xFA5FA500;
+                const uint32_t kDistanceShortCodeValueOffset = 0xFA5F'A500;
                 int v         = (dist_rb_idx + (int)(kDistanceShortCodeIndexOffset >> dist)) & 0x3;
                 distance_code = s->dist_rb[v];
                 v             = (int)(kDistanceShortCodeValueOffset >> dist) & 0x3;
@@ -1756,7 +1758,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
                   if (distance_code <= 0) {
                     // A huge distance will cause a failure later on. This is a little faster than
                     // failing here.
-                    distance_code = 0x7FFFFFFF;
+                    distance_code = 0x7FFF'FFFF;
                   }
                 }
               }
@@ -1794,7 +1796,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
           // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is
           // larger than the max LZ77 distance
           if (distance_code > max_distance) {
-            // The maximum allowed distance is brotli_max_allowed_distance = 0x7FFFFFFC.
+            // The maximum allowed distance is brotli_max_allowed_distance = 0x7FFF'FFFC.
             // With this choice, no signed overflow can occur after decoding
             // a special distance code (e.g., after adding 3 to the last distance).
             if (distance_code > brotli_max_allowed_distance ||
@@ -1806,7 +1808,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
               pos         = meta_block_len;
               copy_length = 0;
             } else {
-              int32_t offset         = (int32_t)words->offsets_by_length[copy_length];
+              auto offset            = (int32_t)words->offsets_by_length[copy_length];
               uint32_t shift         = words->size_bits_by_length[copy_length];
               uint32_t address       = distance_code - max_distance - 1;
               int32_t word_idx       = address & ((1 << shift) - 1);
@@ -1885,6 +1887,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
       pos += copy_length;
     }
   }
+
+  // Ensure all other threads have observed prior state of p1 & p2 before overwriting
+  __syncwarp();
+
   if (!t) {
     s->p1          = (uint8_t)p1;
     s->p2          = (uint8_t)p2;
@@ -1898,41 +1904,42 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  *
  * blockDim = {block_size,1,1}
  *
- * @param inputs[in] Source/Destination buffer information per block
- * @param outputs[out] Decompressor status per block
+ * @param[in] inputs Source buffer per block
+ * @param[out] outputs Destination buffer per block
+ * @param[out] results Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
- *blocks)
- * @param count Number of blocks to decompress
+ * blocks)
  */
-extern "C" __global__ void __launch_bounds__(block_size, 2)
-  gpu_debrotli_kernel(gpu_inflate_input_s* inputs,
-                      gpu_inflate_status_s* outputs,
+__global__ void __launch_bounds__(block_size, 2)
+  gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
+                      device_span<device_span<uint8_t> const> outputs,
+                      device_span<compression_result> results,
                       uint8_t* scratch,
-                      uint32_t scratch_size,
-                      uint32_t count)
+                      uint32_t scratch_size)
 {
   __shared__ __align__(16) debrotli_state_s state_g;
 
   int t                     = threadIdx.x;
-  int z                     = blockIdx.x;
+  auto const block_id       = blockIdx.x;
   debrotli_state_s* const s = &state_g;
 
-  if (z >= count) { return; }
+  if (block_id >= inputs.size()) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    uint8_t const* src = static_cast<uint8_t const*>(inputs[z].srcDevice);
-    size_t src_size    = inputs[z].srcSize;
+    auto const src      = inputs[block_id].data();
+    auto const src_size = inputs[block_id].size();
     if (src && src_size >= 8) {
-      s->error = 0;
-      s->out = s->outbase = static_cast<uint8_t*>(inputs[z].dstDevice);
-      s->bytes_left       = inputs[z].dstSize;
-      s->mtf_upper_bound  = 63;
-      s->dist_rb[0]       = 16;
-      s->dist_rb[1]       = 15;
-      s->dist_rb[2]       = 11;
-      s->dist_rb[3]       = 4;
-      s->dist_rb_idx      = 0;
+      s->error           = 0;
+      s->out             = outputs[block_id].data();
+      s->outbase         = s->out;
+      s->bytes_left      = outputs[block_id].size();
+      s->mtf_upper_bound = 63;
+      s->dist_rb[0]      = 16;
+      s->dist_rb[1]      = 15;
+      s->dist_rb[2]      = 11;
+      s->dist_rb[3]      = 4;
+      s->dist_rb_idx     = 0;
       s->p1 = s->p2 = 0;
       initbits(s, src, src_size);
       DecodeStreamHeader(s);
@@ -2009,9 +2016,11 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
   __syncthreads();
   // Output decompression status
   if (!t) {
-    outputs[z].bytes_written = s->out - s->outbase;
-    outputs[z].status        = s->error;
-    outputs[z].reserved      = s->fb_size;  // Return ext heap used by last block (statistics)
+    results[block_id].bytes_written = s->out - s->outbase;
+    results[block_id].status =
+      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
+    // Return ext heap used by last block (statistics)
+    results[block_id].reserved = s->fb_size;
   }
 }
 
@@ -2042,7 +2051,7 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
   int sm_count = 0;
   int dev      = 0;
   uint32_t max_fb_size, min_fb_size, fb_size;
-  CUDA_TRY(cudaGetDevice(&dev));
+  CUDF_CUDA_TRY(cudaGetDevice(&dev));
   if (cudaSuccess == cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev)) {
     // printf("%d SMs on device %d\n", sm_count, dev);
     max_num_inputs =
@@ -2069,47 +2078,46 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 #include <stdio.h>
 #endif
 
-cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
-                                  gpu_inflate_status_s* outputs,
-                                  void* scratch,
-                                  size_t scratch_size,
-                                  int count,
-                                  rmm::cuda_stream_view stream)
+void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
+                  device_span<device_span<uint8_t> const> outputs,
+                  device_span<compression_result> results,
+                  void* scratch,
+                  size_t scratch_size,
+                  rmm::cuda_stream_view stream)
 {
-  uint32_t count32 = (count > 0) ? count : 0;
+  auto const count = inputs.size();
   uint32_t fb_heap_size;
-  uint8_t* scratch_u8 = static_cast<uint8_t*>(scratch);
+  auto* scratch_u8 = static_cast<uint8_t*>(scratch);
   dim3 dim_block(block_size, 1);
-  dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
+  dim3 dim_grid(count, 1);  // TODO: Check max grid dimensions vs max expected count
 
-  if (scratch_size < sizeof(brotli_dictionary_s)) { return cudaErrorLaunchOutOfResources; }
-  scratch_size = min(scratch_size, (size_t)0xffffffffu);
+  CUDF_EXPECTS(scratch_size >= sizeof(brotli_dictionary_s),
+               "Insufficient scratch space for debrotli");
+  scratch_size = min(scratch_size, static_cast<size_t>(0xffff'ffffu));
   fb_heap_size = (uint32_t)((scratch_size - sizeof(brotli_dictionary_s)) & ~0xf);
 
-  CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
   // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
   // page-locked
-  CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
-                           get_brotli_dictionary(),
-                           sizeof(brotli_dictionary_s),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
+                                get_brotli_dictionary(),
+                                sizeof(brotli_dictionary_s),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
-    inputs, outputs, scratch_u8, fb_heap_size, count32);
+    inputs, outputs, results, scratch_u8, fb_heap_size);
 #if DUMP_FB_HEAP
   uint32_t dump[2];
   uint32_t cur = 0;
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
-    cur = (dump[0] > cur) ? dump[0] : 0xffffffffu;
+    cur = (dump[0] > cur) ? dump[0] : 0xffff'ffffu;
   }
 #endif
-
-  return cudaSuccess;
 }
 
 }  // namespace io

@@ -1,42 +1,24 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 
 import rmm
 
 import cudf
-import cudf._lib as libcudfxx
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
+import cudf._lib as libcudf
+from cudf.api.types import is_categorical_dtype
+from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
-from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
-from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.cpp.strings.convert.convert_integers cimport (
-    from_integers as cpp_from_integers,
-)
-
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
-
-from cudf._lib.types cimport (
-    dtype_from_column_view,
-    dtype_to_data_type,
-    underlying_type_t_type_id,
-)
+from cudf._lib.types cimport dtype_from_column_view, dtype_to_data_type
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
@@ -48,7 +30,6 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -58,9 +39,9 @@ cdef class Column:
     A Column stores columnar data in device memory.
     A Column may be composed of:
 
-    * A *data* Buffer
+    * A *data* DeviceBufferLike
     * One or more (optional) *children* Columns
-    * An (optional) *mask* Buffer representing the nullmask
+    * An (optional) *mask* DeviceBufferLike representing the nullmask
 
     The *dtype* indicates the Column's element type.
     """
@@ -76,7 +57,7 @@ cdef class Column:
     ):
 
         self._size = size
-        self._cached_sizeof = None
+        self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -109,17 +90,12 @@ cdef class Column:
 
     @property
     def data(self):
+        if self.base_data is None:
+            return None
         if self._data is None:
-            if self.base_data is None:
-                self._data = self.base_data
-            else:
-                buf = Buffer(self.base_data)
-                if self.size == 0:
-                    buf.ptr = 0
-                else:
-                    buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
-                buf.size = self.size * self.dtype.itemsize
-                self._data = buf
+            start = self.offset * self.dtype.itemsize
+            end = start + self.size * self.dtype.itemsize
+            self._data = self.base_data[start:end]
         return self._data
 
     @property
@@ -130,20 +106,20 @@ cdef class Column:
             return self.data.ptr
 
     def set_base_data(self, value):
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError("Expected a Buffer or None for data, got " +
-                            type(value).__name__)
+        if value is not None and not isinstance(value, DeviceBufferLike):
+            raise TypeError(
+                "Expected a DeviceBufferLike or None for data, "
+                f"got {type(value).__name__}"
+            )
 
         self._data = None
-
         self._base_data = value
 
     @property
     def nullable(self):
         return self.base_mask is not None
 
-    @property
-    def has_nulls(self):
+    def has_nulls(self, include_nan=False):
         return self.null_count != 0
 
     @property
@@ -163,7 +139,7 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudfxx.null_mask.copy_bitmask(self)
+                self._mask = libcudf.null_mask.copy_bitmask(self)
         return self._mask
 
     @property
@@ -179,17 +155,18 @@ cdef class Column:
         modify size or offset in any way, so the passed mask is expected to be
         compatible with the current offset.
         """
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError("Expected a Buffer or None for mask, got " +
-                            type(value).__name__)
+        if value is not None and not isinstance(value, DeviceBufferLike):
+            raise TypeError(
+                "Expected a DeviceBufferLike or None for mask, "
+                f"got {type(value).__name__}"
+            )
 
         if value is not None:
             required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
-                    "The Buffer for mask is smaller than expected, got " +
-                    str(value.size) + " bytes, expected " +
-                    str(required_size) + " bytes."
+                    "The DeviceBufferLike for mask is smaller than expected, "
+                    f"got {value.size} bytes, expected {required_size} bytes."
                 )
                 if self.offset > 0 or self.size < self.base_size:
                     error_msg += (
@@ -200,9 +177,18 @@ cdef class Column:
                 raise ValueError(error_msg)
 
         self._mask = None
-        self._null_count = None
         self._children = None
         self._base_mask = value
+        self._clear_cache()
+
+    def _clear_cache(self):
+        self._distinct_count = {}
+        try:
+            del self.memory_usage
+        except AttributeError:
+            # `self.memory_usage` was never called before, So ignore.
+            pass
+        self._null_count = None
 
     def set_mask(self, value):
         """
@@ -224,31 +210,31 @@ cdef class Column:
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
-            mask = Buffer(value)
+            mask = as_device_buffer_like(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             if mask.size < mask_size:
                 dbuf = rmm.DeviceBuffer(size=mask_size)
                 dbuf.copy_from_device(value)
-                mask = Buffer(dbuf)
+                mask = as_device_buffer_like(dbuf)
         elif hasattr(value, "__array_interface__"):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = Buffer(dbuf)
+            mask = as_device_buffer_like(dbuf)
         elif PyObject_CheckBuffer(value):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = Buffer(dbuf)
+            mask = as_device_buffer_like(dbuf)
         else:
             raise TypeError(
-                "Expected a Buffer-like object or None for mask, got "
-                + type(value).__name__
+                "Expected a DeviceBufferLike object or None for mask, "
+                f"got {type(value).__name__}"
             )
 
         return cudf.core.column.build_column(
@@ -282,9 +268,17 @@ cdef class Column:
             if self.base_children == ():
                 self._children = ()
             else:
-                self._children = Column.from_unique_ptr(
+                children = Column.from_unique_ptr(
                     make_unique[column](self.view())
                 ).base_children
+                dtypes = [
+                    base_child.dtype for base_child in self.base_children
+                ]
+                self._children = [
+                    child._with_type_metadata(dtype) for child, dtype in zip(
+                        children, dtypes
+                    )
+                ]
         return self._children
 
     def set_base_children(self, value):
@@ -432,21 +426,19 @@ cdef class Column:
 
         size = c_col.get()[0].size()
         dtype = dtype_from_column_view(c_col.get()[0].view())
-        has_nulls = c_col.get()[0].has_nulls()
+        null_count = c_col.get()[0].null_count()
 
         # After call to release(), c_col is unusable
         cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = Buffer(data)
+        data = as_device_buffer_like(data)
 
-        if has_nulls:
+        if null_count > 0:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = Buffer(mask)
-            null_count = c_col.get()[0].null_count()
+            mask = as_device_buffer_like(mask)
         else:
             mask = None
-            null_count = 0
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = ()
@@ -469,9 +461,10 @@ cdef class Column:
         Given a ``cudf::column_view``, constructs a ``cudf.Column`` from it,
         along with referencing an ``owner`` Python object that owns the memory
         lifetime. If ``owner`` is a ``cudf.Column``, we reach inside of it and
-        make the owner of each newly created ``Buffer`` the respective
-        ``Buffer`` from the ``owner`` ``cudf.Column``. If ``owner`` is
-        ``None``, we allocate new memory for the resulting ``cudf.Column``.
+        make the owner of each newly created ``DeviceBufferLike`` the
+        respective ``DeviceBufferLike`` from the ``owner`` ``cudf.Column``.
+        If ``owner`` is ``None``, we allocate new memory for the resulting
+        ``cudf.Column``.
         """
         column_owner = isinstance(owner, Column)
         mask_owner = owner
@@ -486,12 +479,15 @@ cdef class Column:
         data = None
         base_size = size + offset
         data_owner = owner
+
         if column_owner:
             data_owner = owner.base_data
+            mask_owner = mask_owner.base_mask
             base_size = owner.base_size
+
         if data_ptr:
             if data_owner is None:
-                data = Buffer(
+                data = as_device_buffer_like(
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype.itemsize)
                 )
@@ -502,22 +498,42 @@ cdef class Column:
                     owner=data_owner
                 )
         else:
-            data = Buffer(
+            data = as_device_buffer_like(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
             )
 
-        mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
+        mask_ptr = <uintptr_t>(cv.null_mask())
         if mask_ptr:
-            if column_owner:
-                mask_owner = mask_owner.base_mask
             if mask_owner is None:
-                mask = Buffer(
-                    rmm.DeviceBuffer(
-                        ptr=mask_ptr,
-                        size=bitmask_allocation_size_bytes(size+offset)
+                if column_owner:
+                    # if we reached here, it means `owner` is a `Column`
+                    # that does not have a null mask, but `cv` thinks it
+                    # should have a null mask. This can happen in the
+                    # following sequence of events:
+                    #
+                    # 1) `cv` is constructed as a view into a
+                    #    `cudf::column` that is nullable (i.e., it has
+                    #    a null mask), but contains no nulls.
+                    # 2) `owner`, a `Column`, is constructed from the
+                    #    same `cudf::column`. Because `cudf::column`
+                    #    is memory owning, `owner` takes ownership of
+                    #    the memory owned by the
+                    #    `cudf::column`. Because the column has a null
+                    #    count of 0, it may choose to discard the null
+                    #    mask.
+                    # 3) Now, `cv` points to a discarded null mask.
+                    #
+                    # TL;DR: we should not include a null mask in the
+                    # result:
+                    mask = None
+                else:
+                    mask = as_device_buffer_like(
+                        rmm.DeviceBuffer(
+                            ptr=mask_ptr,
+                            size=bitmask_allocation_size_bytes(size+offset)
+                        )
                     )
-                )
             else:
                 mask = Buffer(
                     data=mask_ptr,

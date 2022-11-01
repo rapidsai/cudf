@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 using namespace cudf::test::iterators;
 
 namespace cudf {
@@ -41,7 +43,7 @@ template <typename T>
 struct FixedWidthGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FixedWidthGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthGetValueTest, BasicGet)
 {
@@ -131,7 +133,7 @@ template <typename T>
 struct DictionaryGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(DictionaryGetValueTest, BasicGet)
 {
@@ -193,7 +195,7 @@ struct ListGetFixedWidthValueTest : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(ListGetFixedWidthValueTest, FixedWidthTypes);
+TYPED_TEST_SUITE(ListGetFixedWidthValueTest, FixedWidthTypes);
 
 TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullNonEmpty)
 {
@@ -603,7 +605,7 @@ struct ListGetStructValueTest : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(ListGetStructValueTest, FixedWidthTypes);
+TYPED_TEST_SUITE(ListGetStructValueTest, FixedWidthTypes);
 
 TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullNonEmpty)
 {
@@ -800,7 +802,7 @@ template <typename T>
 struct StructGetValueTestTyped : public BaseFixture {
 };
 
-TYPED_TEST_CASE(StructGetValueTestTyped, FixedWidthTypes);
+TYPED_TEST_SUITE(StructGetValueTestTyped, FixedWidthTypes);
 
 TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
 {

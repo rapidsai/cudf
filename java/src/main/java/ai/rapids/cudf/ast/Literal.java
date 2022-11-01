@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /** A literal value in an AST expression. */
-public final class Literal extends AstNode {
+public final class Literal extends AstExpression {
   private final DType type;
   private final byte[] serializedValue;
 
@@ -207,8 +207,8 @@ public final class Literal extends AstNode {
 
   @Override
   int getSerializedSize() {
-    NodeType nodeType = serializedValue != null
-        ? NodeType.VALID_LITERAL : NodeType.NULL_LITERAL;
+    ExpressionType nodeType = serializedValue != null
+        ? ExpressionType.VALID_LITERAL : ExpressionType.NULL_LITERAL;
     int size = nodeType.getSerializedSize() + getDataTypeSerializedSize();
     if (serializedValue != null) {
       size += serializedValue.length;
@@ -218,8 +218,8 @@ public final class Literal extends AstNode {
 
   @Override
   void serialize(ByteBuffer bb) {
-    NodeType nodeType = serializedValue != null
-        ? NodeType.VALID_LITERAL : NodeType.NULL_LITERAL;
+    ExpressionType nodeType = serializedValue != null
+        ? ExpressionType.VALID_LITERAL : ExpressionType.NULL_LITERAL;
     nodeType.serialize(bb);
     serializeDataType(bb);
     if (serializedValue != null) {

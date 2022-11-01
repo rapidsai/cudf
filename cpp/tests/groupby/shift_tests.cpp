@@ -32,7 +32,7 @@ template <typename T>
 struct groupby_shift_fixed_width_test : public BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_shift_fixed_width_test, FixedWidthTypes);
+TYPED_TEST_SUITE(groupby_shift_fixed_width_test, FixedWidthTypes);
 
 template <typename V>
 void test_groupby_shift_fixed_width_single(fixed_width_column_wrapper<K> const& key,
@@ -370,7 +370,7 @@ template <typename T>
 struct groupby_shift_mixed_test : public BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_shift_mixed_test, FixedWidthTypes);
+TYPED_TEST_SUITE(groupby_shift_mixed_test, FixedWidthTypes);
 
 void test_groupby_shift_multi(fixed_width_column_wrapper<K> const& key,
                               table_view const& value,

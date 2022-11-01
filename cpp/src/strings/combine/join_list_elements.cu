@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,19 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -60,12 +64,9 @@ struct compute_size_and_concatenate_fn {
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
-  // We need to set `1` or `0` for the validities of the output strings.
-  int8_t* d_validities{nullptr};
-
-  __device__ bool output_is_null(size_type const idx,
-                                 size_type const start_idx,
-                                 size_type const end_idx) const noexcept
+  [[nodiscard]] __device__ bool output_is_null(size_type const idx,
+                                               size_type const start_idx,
+                                               size_type const end_idx) const noexcept
   {
     if (func.is_null_list(lists_dv, idx)) { return true; }
     return empty_list_policy == output_if_empty_list::NULL_ELEMENT && start_idx == end_idx;
@@ -73,33 +74,31 @@ struct compute_size_and_concatenate_fn {
 
   __device__ void operator()(size_type const idx) const noexcept
   {
-    // If this is the second pass, and the row `idx` is known to be a null string
-    if (d_chars && !d_validities[idx]) { return; }
+    // If this is the second pass, and the row `idx` is known to be a null or empty string
+    if (d_chars && (d_offsets[idx] == d_offsets[idx + 1])) { return; }
 
     // Indices of the strings within the list row
     auto const start_idx = list_offsets[idx];
     auto const end_idx   = list_offsets[idx + 1];
 
     if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
-      d_offsets[idx]    = 0;
-      d_validities[idx] = false;
+      d_offsets[idx] = 0;
       return;
     }
 
     auto const separator   = func.separator(idx);
-    auto size_bytes        = size_type{0};
     char* output_ptr       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    bool has_valid_element = false;
     bool write_separator   = false;
+    auto size_bytes        = size_type{0};
+    bool has_valid_element = false;
 
     for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
       bool null_element = strings_dv.is_null(str_idx);
       has_valid_element = has_valid_element || !null_element;
 
       if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
-        d_offsets[idx]    = 0;
-        d_validities[idx] = false;
-        return;  // early termination: the entire list of strings will result in a null string
+        size_bytes = 0;
+        break;
       }
 
       if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
@@ -119,11 +118,7 @@ struct compute_size_and_concatenate_fn {
 
     // If there are all null elements, the output should be the same as having an empty list input:
     // a null or an empty string
-    if (!d_chars) {
-      d_offsets[idx] = has_valid_element ? size_bytes : 0;
-      d_validities[idx] =
-        has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
-    }
+    if (!d_chars) { d_offsets[idx] = has_valid_element ? size_bytes : 0; }
   }
 };
 
@@ -135,13 +130,43 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv,
-                               size_type const idx) const noexcept
+  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+                                             size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx);
   }
 
-  __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
+  [[nodiscard]] __device__ string_view separator(size_type const) const noexcept
+  {
+    return d_separator.value();
+  }
+};
+
+template <typename CompFn>
+struct validities_fn {
+  CompFn comp_fn;
+
+  validities_fn(CompFn comp_fn) : comp_fn(comp_fn) {}
+
+  __device__ bool operator()(size_type idx)
+  {
+    auto const start_idx = comp_fn.list_offsets[idx];
+    auto const end_idx   = comp_fn.list_offsets[idx + 1];
+    bool valid_output    = !comp_fn.output_is_null(idx, start_idx, end_idx);
+    if (valid_output) {
+      bool check_elements = false;
+      for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
+        bool const valid_element = comp_fn.strings_dv.is_valid(str_idx);
+        check_elements           = check_elements || valid_element;
+        // if an element is null and narep is invalid, the output row is null
+        if (!valid_element && !comp_fn.string_narep_dv.is_valid()) { return false; }
+      }
+      // handle empty-list-as-null output policy setting
+      valid_output =
+        check_elements || comp_fn.empty_list_policy == output_if_empty_list::EMPTY_STRING;
+    }
+    return valid_output;
+  }
 };
 
 }  // namespace
@@ -156,10 +181,10 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
 
   auto const num_rows = lists_strings_column.size();
-  if (num_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (num_rows == 0) { return make_empty_column(type_id::STRING); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
@@ -180,16 +205,17 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     string_narep_dv,
                                                     separate_nulls,
                                                     empty_list_policy};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
-  return make_strings_column(num_rows,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [null_mask, null_count] =
+    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(num_rows),
+                           validities_fn{comp_fn},
+                           stream,
+                           mr);
+
+  return make_strings_column(
+    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
 
 namespace {
@@ -202,13 +228,13 @@ struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv,
-                               size_type const idx) const noexcept
+  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+                                             size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
 
-  __device__ string_view separator(size_type const idx) const noexcept
+  [[nodiscard]] __device__ string_view separator(size_type const idx) const noexcept
   {
     return separators_dv.is_valid(idx) ? separators_dv.element<string_view>(idx)
                                        : sep_narep_dv.value();
@@ -232,7 +258,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                "Separators column should be the same size as the lists columns");
 
   auto const num_rows = lists_strings_column.size();
-  if (num_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (num_rows == 0) { return make_empty_column(type_id::STRING); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
@@ -254,16 +280,17 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     string_narep_dv,
                                                     separate_nulls,
                                                     empty_list_policy};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
-  return make_strings_column(num_rows,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [null_mask, null_count] =
+    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(num_rows),
+                           validities_fn{comp_fn},
+                           stream,
+                           mr);
+
+  return make_strings_column(
+    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
@@ -281,7 +308,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    rmm::cuda_stream_default,
+                                    cudf::get_default_stream(),
                                     mr);
 }
 
@@ -300,7 +327,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     string_narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    rmm::cuda_stream_default,
+                                    cudf::get_default_stream(),
                                     mr);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,11 +79,12 @@ Jon L. Bentley
 For more information on these sources, see the manual.
 --*/
 
-#include <stdio.h>
-#include <stdlib.h>
+#include "io_uncomp.hpp"
+#include "unbz2.hpp"
+
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
-#include "io_uncomp.h"
-#include "unbz2.h"
 
 namespace cudf {
 namespace io {
@@ -111,15 +112,15 @@ namespace io {
 
 #define BZ_MAX_SELECTORS (2 + (900000 / BZ_G_SIZE))
 
-typedef struct {
+using huff_s = struct {
   int32_t minLen;
   int32_t limit[BZ_MAX_CODE_LEN];
   int32_t base[BZ_MAX_CODE_LEN];
   uint16_t perm[BZ_MAX_ALPHA_SIZE];
-} huff_s;
+};
 
 // Decoder state
-typedef struct {
+using unbz_state_s = struct {
   // Input
   const uint8_t* cur;
   const uint8_t* end;
@@ -153,7 +154,7 @@ typedef struct {
   uint8_t len[BZ_MAX_ALPHA_SIZE];
 
   huff_s ht[BZ_N_GROUPS];
-} unbz_state_s;
+};
 
 // return next 32 bits
 static inline uint32_t next32bits(const unbz_state_s* s)
@@ -211,7 +212,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   // Start-of-block signature
   sig0 = getbits(s, 24);
   sig1 = getbits(s, 24);
-  if (sig0 != 0x314159 || sig1 != 0x265359) { return BZ_DATA_ERROR; }
+  if (sig0 != 0x31'4159 || sig1 != 0x26'5359) { return BZ_DATA_ERROR; }
 
   s->currBlockNo++;
 
@@ -245,7 +246,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
     if (nGroups < 2 || nGroups > 6 || nSelectors < 1 || nSelectors > BZ_MAX_SELECTORS)
       return BZ_DATA_ERROR;
 
-    pos = 0x76543210;
+    pos = 0x7654'3210;
     for (i = 0; i < nSelectors; i++) {
       uint32_t selectorMtf = 0, mask, tmp;
       for (int32_t v = next32bits(s); v < 0; v <<= 1) {
@@ -464,13 +465,13 @@ int32_t bz2_decompress_block(unbz_state_s* s)
     uint32_t save_bitpos    = s->bitpos;
     sig0                    = getbits(s, 24);
     sig1                    = getbits(s, 24);
-    if (sig0 == 0x314159 && sig1 == 0x265359) {
+    if (sig0 == 0x31'4159 && sig1 == 0x26'5359) {
       // Start of another block: restore bitstream location
       s->cur    = save_cur;
       s->bitbuf = save_bitbuf;
       s->bitpos = save_bitpos;
       return BZ_OK;
-    } else if (sig0 == 0x177245 && sig1 == 0x385090) {
+    } else if (sig0 == 0x17'7245 && sig1 == 0x38'5090) {
       // End-of-stream signature
       return BZ_STREAM_END;
     } else {
@@ -530,7 +531,8 @@ int32_t cpu_bz2_uncompress(
   int ret;
   size_t last_valid_block_in, last_valid_block_out;
 
-  if (dest == NULL || destLen == NULL || source == NULL || sourceLen < 12) return BZ_PARAM_ERROR;
+  if (dest == nullptr || destLen == nullptr || source == nullptr || sourceLen < 12)
+    return BZ_PARAM_ERROR;
   s.currBlockNo = 0;
 
   s.cur  = source;

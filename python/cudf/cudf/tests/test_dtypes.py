@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,16 +6,24 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
+    Decimal32Dtype,
     Decimal64Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
 )
 from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import np_to_pa_dtype
+
+if PANDAS_GE_150:
+    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
+else:
+    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 
 def test_cdt_basic():
@@ -138,25 +146,56 @@ def test_struct_dtype_fields(fields):
     assert_eq(dt.fields, fields)
 
 
-def test_decimal_dtype():
-    dt = Decimal64Dtype(4, 2)
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_decimal_dtype_arrow_roundtrip(decimal_type):
+    dt = decimal_type(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
-    assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
+    assert dt == decimal_type.from_arrow(pa.decimal128(4, 2))
 
 
-def test_max_precision():
-    Decimal64Dtype(scale=0, precision=18)
+@pytest.mark.parametrize(
+    "decimal_type,max_precision",
+    [
+        (cudf.Decimal32Dtype, 9),
+        (cudf.Decimal64Dtype, 18),
+        (cudf.Decimal128Dtype, 38),
+    ],
+)
+def test_max_precision(decimal_type, max_precision):
+    decimal_type(scale=0, precision=max_precision)
     with pytest.raises(ValueError):
-        Decimal64Dtype(scale=0, precision=19)
+        decimal_type(scale=0, precision=max_precision + 1)
 
 
-@pytest.mark.parametrize("fields", ["int64", "int32"])
-@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-def test_interval_dtype_pyarrow_round_trip(fields, closed):
-    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
+@pytest.fixture(params=["int64", "int32"])
+def subtype(request):
+    return request.param
+
+
+@pytest.fixture(params=["left", "right", "both", "neither"])
+def closed(request):
+    return request.param
+
+
+def test_interval_dtype_pyarrow_round_trip(subtype, closed):
+    pa_array = ArrowIntervalType(subtype, closed)
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_130,
+    reason="pandas<1.3.0 doesn't have a closed argument for IntervalDtype",
+)
+def test_interval_dtype_from_pandas(subtype, closed):
+    expect = cudf.IntervalDtype(subtype, closed=closed)
+    pd_type = pd.IntervalDtype(subtype, closed=closed)
+    got = cudf.IntervalDtype.from_pandas(pd_type)
+    assert expect == got
 
 
 def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
@@ -175,12 +214,12 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
         )
     elif isinstance(column.dtype, StructDtype):
         return array.type.equals(column.dtype.to_arrow()) and all(
-            [
-                assert_column_array_dtype_equal(child, array.field(i))
-                for i, child in enumerate(column.base_children)
-            ]
+            assert_column_array_dtype_equal(child, array.field(i))
+            for i, child in enumerate(column.base_children)
         )
-    elif isinstance(column.dtype, Decimal64Dtype):
+    elif isinstance(
+        column.dtype, (Decimal128Dtype, Decimal64Dtype, Decimal32Dtype)
+    ):
         return array.type.equals(column.dtype.to_arrow())
     elif isinstance(column.dtype, CategoricalDtype):
         raise NotImplementedError()
@@ -257,3 +296,79 @@ def test_lists_of_structs_dtype(data):
 
     assert_column_array_dtype_equal(got._column, expected)
     assert expected.equals(got._column.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "in_dtype,expect",
+    [
+        (np.dtype("int8"), np.dtype("int8")),
+        (np.int8, np.dtype("int8")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.StringDtype(), np.dtype("object")),
+        ("int8", np.dtype("int8")),
+        ("boolean", np.dtype("bool")),
+        ("bool_", np.dtype("bool")),
+        (np.bool_, np.dtype("bool")),
+        (int, np.dtype("int64")),
+        (float, np.dtype("float64")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        (np.dtype("U"), np.dtype("object")),
+        ("timedelta64[ns]", np.dtype("<m8[ns]")),
+        ("timedelta64[ms]", np.dtype("<m8[ms]")),
+        ("<m8[s]", np.dtype("<m8[s]")),
+        ("datetime64[ns]", np.dtype("<M8[ns]")),
+        ("datetime64[ms]", np.dtype("<M8[ms]")),
+        ("<M8[s]", np.dtype("<M8[s]")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        ("category", cudf.CategoricalDtype()),
+        (
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            pd.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            # this is a pandas.core.arrays.numpy_.PandasDtype...
+            pd.array([1], dtype="int16").dtype,
+            np.dtype("int16"),
+        ),
+        (pd.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (cudf.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (pd.IntervalDtype("int64"), cudf.IntervalDtype("int64")),
+    ],
+)
+def test_dtype(in_dtype, expect):
+    assert_eq(cudf.dtype(in_dtype), expect)
+
+
+@pytest.mark.parametrize(
+    "in_dtype",
+    [
+        "complex",
+        np.complex128,
+        complex,
+        "S",
+        "a",
+        "V",
+        "float16",
+        np.float16,
+        "timedelta64",
+        "timedelta64[D]",
+        "datetime64[D]",
+        "datetime64",
+    ],
+)
+def test_dtype_raise(in_dtype):
+    with pytest.raises(TypeError):
+        cudf.dtype(in_dtype)
+
+
+def test_dtype_np_bool_to_pa_bool():
+    """This test case captures that utility np_to_pa_dtype
+    should map np.bool_ to pa.bool_, nuances on bit width
+    difference should be handled elsewhere.
+    """
+
+    assert np_to_pa_dtype(np.dtype("bool")) == pa.bool_()

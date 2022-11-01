@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
+#include "orc_gpu.hpp"
+
+#include <cudf/io/orc_types.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
-#include "orc_common.h"
-#include "orc_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -43,11 +45,6 @@ inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
-
-struct int128_s {
-  uint64_t lo;
-  int64_t hi;
-};
 
 struct orc_bytestream_s {
   const uint8_t* base;
@@ -126,12 +123,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
@@ -362,19 +361,19 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
 {
   if (bytestream_readbyte(bs, pos) > 0x7f) {
     uint32_t next32 = bytestream_readu32(bs, pos + 1);
-    uint32_t zbit   = __ffs((~next32) & 0x80808080);
+    uint32_t zbit   = __ffs((~next32) & 0x8080'8080);
     if (sizeof(T) <= 4 || zbit) {
       return 1 + (zbit >> 3);  // up to 5x7 bits
     } else {
       next32 = bytestream_readu32(bs, pos + 5);
-      zbit   = __ffs((~next32) & 0x80808080);
+      zbit   = __ffs((~next32) & 0x8080'8080);
       if (zbit) {
         return 5 + (zbit >> 3);  // up to 9x7 bits
       } else if ((sizeof(T) <= 8) || (bytestream_readbyte(bs, pos + 9) <= 0x7f)) {
         return 10;  // up to 70 bits
       } else {
         uint64_t next64 = bytestream_readu64(bs, pos + 10);
-        zbit            = __ffsll((~next64) & 0x8080808080808080ull);
+        zbit            = __ffsll((~next64) & 0x8080'8080'8080'8080ull);
         if (zbit) {
           return 10 + (zbit >> 3);  // Up to 18x7 bits (126)
         } else {
@@ -407,11 +406,11 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
       v = (v & 0x3fff) | (b << 14);
       if (b > 0x7f) {
         b = bytestream_readbyte(bs, pos++);
-        v = (v & 0x1fffff) | (b << 21);
+        v = (v & 0x1f'ffff) | (b << 21);
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
-          v = (v & 0x0fffffff) | (b << 28);
-          if (sizeof(T) > 4) {
+          v = (v & 0x0fff'ffff) | (b << 28);
+          if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
             v = b >> 4;
@@ -423,10 +422,10 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
                 v = (v & 0x3ff) | (b << 10);
                 if (b > 0x7f) {
                   b = bytestream_readbyte(bs, pos++);
-                  v = (v & 0x1ffff) | (b << 17);
+                  v = (v & 0x1'ffff) | (b << 17);
                   if (b > 0x7f) {
                     b = bytestream_readbyte(bs, pos++);
-                    v = (v & 0xffffff) | (b << 24);
+                    v = (v & 0xff'ffff) | (b << 24);
                     if (b > 0x7f) {
                       pos++;  // last bit is redundant (extra byte implies bit63 is 1)
                     }
@@ -450,29 +449,18 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
-inline __device__ int128_s decode_varint128(volatile orc_bytestream_s* bs, int pos)
+inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
 {
-  uint32_t b        = bytestream_readbyte(bs, pos++);
-  int64_t sign_mask = -(int32_t)(b & 1);
-  uint64_t v        = (b >> 1) & 0x3f;
-  uint32_t bitpos   = 6;
-  uint64_t lo       = v;
-  uint64_t hi       = 0;
-  while (b > 0x7f && bitpos < 128) {
-    b = bytestream_readbyte(bs, pos++);
-    v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
-    if (bitpos == 62) {  // 6 + 7 * 8 = 62
-      lo = v;
-      v  = (b & 0x7f) >> 2;  // 64 - 62
-    }
+  auto byte                  = bytestream_readbyte(bs, pos++);
+  __int128_t const sign_mask = -(int32_t)(byte & 1);
+  __int128_t value           = (byte >> 1) & 0x3f;
+  uint32_t bitpos            = 6;
+  while (byte & 0x80 && bitpos < 128) {
+    byte = bytestream_readbyte(bs, pos++);
+    value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
     bitpos += 7;
   }
-  if (bitpos >= 64) {
-    hi = v;
-  } else {
-    lo = v;
-  }
-  return {(uint64_t)(lo ^ sign_mask), (int64_t)(hi ^ sign_mask)};
+  return value ^ sign_mask;
 }
 
 /**
@@ -663,13 +651,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          int t,
                                          bool has_buffered_values = false)
 {
-  uint32_t numvals, numruns;
-  int r, tr;
-
   if (t == 0) {
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
-    numvals = numruns = 0;
+    auto numvals     = 0;
+    auto numruns     = 0;
     // Find the length and start location of each run
     while (numvals < maxvals) {
       uint32_t pos   = lastpos;
@@ -726,9 +712,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
   }
   __syncthreads();
   // Process the runs, 1 warp per run
-  numruns = rle->num_runs;
-  r       = t >> 5;
-  tr      = t & 0x1f;
+  auto const numruns = rle->num_runs;
+  auto const r       = t >> 5;
+  auto const tr      = t & 0x1f;
   for (uint32_t run = r; run < numruns; run += num_warps) {
     uint32_t base, pos, w, n;
     int mode;
@@ -744,7 +730,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         w = 8 + (byte0 & 0x38);  // 8 to 64 bits
         n = 3 + (byte0 & 7);     // 3 to 10 values
         bytestream_readbe(bs, pos * 8, w, baseval);
-        if (sizeof(T) <= 4) {
+        if constexpr (sizeof(T) <= 4) {
           rle->baseval.u32[r] = baseval;
         } else {
           rle->baseval.u64[r] = baseval;
@@ -759,18 +745,22 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t byte3 = bytestream_readbyte(bs, pos++);
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
-            if (sizeof(T) <= 4) {
-              uint32_t baseval, mask;
+            if constexpr (sizeof(T) <= 4) {
+              uint32_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask                = (1 << (bw * 8 - 1)) - 1;
-              rle->baseval.u32[r] = (baseval > mask) ? (-(int32_t)(baseval & mask)) : baseval;
+              uint32_t const mask = (1u << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u32[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int32_t>(baseval & mask)
+                                      : baseval;
             } else {
-              uint64_t baseval, mask;
+              uint64_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask = 1;
-              mask <<= (bw * 8) - 1;
-              mask -= 1;
-              rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
+              uint64_t const mask = (1ul << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u64[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int64_t>(baseval & mask)
+                                      : baseval;
             }
             rle->m2_pw_byte3[r] = (pw << 8) | byte3;
             pos += bw;
@@ -779,7 +769,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             int64_t delta;
             // Delta
             pos = decode_varint(bs, pos, baseval);
-            if (sizeof(T) <= 4) {
+            if constexpr (sizeof(T) <= 4) {
               rle->baseval.u32[r] = baseval;
             } else {
               rle->baseval.u64[r] = baseval;
@@ -795,8 +785,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     pos  = shuffle(pos);
     n    = shuffle(n);
     w    = shuffle(w);
+    __syncwarp();  // Not required, included to fix the racecheck warning
     for (uint32_t i = tr; i < n; i += 32) {
-      if (sizeof(T) <= 4) {
+      if constexpr (sizeof(T) <= 4) {
         if (mode == 0) {
           vals[base + i] = rle->baseval.u32[r];
         } else if (mode == 1) {
@@ -873,7 +864,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
           if (j & i) vals[base + j] += vals[base + ((j & ~i) | (i - 1))];
         }
       }
-      if (sizeof(T) <= 4)
+      if constexpr (sizeof(T) <= 4)
         baseval = rle->baseval.u32[r];
       else
         baseval = rle->baseval.u64[r];
@@ -881,6 +872,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         vals[base + j] += baseval;
       }
     }
+    __syncwarp();
   }
   __syncthreads();
   return rle->num_vals;
@@ -975,15 +967,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s* bs,
   return rle->num_vals;
 }
 
-/**
- * @brief Powers of 10
- */
-static const __device__ __constant__ double kPow10[40] = {
-  1.0,   1.e1,  1.e2,  1.e3,  1.e4,  1.e5,  1.e6,  1.e7,  1.e8,  1.e9,  1.e10, 1.e11, 1.e12, 1.e13,
-  1.e14, 1.e15, 1.e16, 1.e17, 1.e18, 1.e19, 1.e20, 1.e21, 1.e22, 1.e23, 1.e24, 1.e25, 1.e26, 1.e27,
-  1.e28, 1.e29, 1.e30, 1.e31, 1.e32, 1.e33, 1.e34, 1.e35, 1.e36, 1.e37, 1.e38, 1.e39,
-};
-
 static const __device__ __constant__ int64_t kPow5i[28] = {1,
                                                            5,
                                                            25,
@@ -1030,6 +1013,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
+                                      type_id dtype_id,
                                       int col_scale,
                                       int t)
 {
@@ -1045,8 +1029,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        vals.i64[n] = lastpos;
-        lastpos     = pos;
+        vals.i64[2 * n] = lastpos;
+        lastpos         = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1054,44 +1038,27 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      auto const pos = static_cast<int>(vals.i64[t]);
-      int128_s v     = decode_varint128(bs, pos);
+      auto const pos = static_cast<int>(vals.i64[2 * t]);
+      __int128_t v   = decode_varint128(bs, pos);
 
-      if (col_scale & orc_decimal2float64_scale) {
-        double f      = Int128ToDouble_rn(v.lo, v.hi);
-        int32_t scale = (t < numvals) ? val_scale : 0;
-        if (scale >= 0)
-          vals.f64[t] = f / kPow10[min(scale, 39)];
-        else
-          vals.f64[t] = f * kPow10[min(-scale, 39)];
-      } else {
-        // Since cuDF column stores just one scale, value needs to
-        // be adjusted to col_scale from val_scale. So the difference
-        // of them will be used to add 0s or remove digits.
-        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+      auto const scaled_value = [&]() {
+        // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+        // val_scale. So the difference of them will be used to add 0s or remove digits.
+        int32_t const scale = (t < numvals) ? col_scale - val_scale : 0;
         if (scale >= 0) {
-          scale       = min(scale, 27);
-          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-        } else  // if (scale < 0)
-        {
-          bool is_negative = (v.hi < 0);
-          uint64_t hi = v.hi, lo = v.lo;
-          scale = min(-scale, 27);
-          if (is_negative) {
-            hi = (~hi) + (lo == 0);
-            lo = (~lo) + 1;
-          }
-          lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-          hi >>= (int32_t)scale;
-          if (hi != 0) {
-            // Use intermediate float
-            lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-            hi = 0;
-          } else {
-            lo /= kPow5i[scale];
-          }
-          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+          auto const abs_scale = min(scale, 27);
+          return (v * kPow5i[abs_scale]) << abs_scale;
+        } else {
+          auto const abs_scale = min(-scale, 27);
+          return (v / kPow5i[abs_scale]) >> abs_scale;
         }
+      }();
+      if (dtype_id == type_id::DECIMAL32) {
+        vals.i32[t] = scaled_value;
+      } else if (dtype_id == type_id::DECIMAL64) {
+        vals.i64[t] = scaled_value;
+      } else {
+        vals.i128[t] = scaled_value;
       }
     }
     // There is nothing to read, so break
@@ -1167,8 +1134,17 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls_desc_row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
+    auto const prev_parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr && stripe > 0)
+        ? s->chunk.parent_null_count_prefix_sums[stripe - 1]
+        : 0;
+    auto const parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr)
+        ? s->chunk.parent_null_count_prefix_sums[stripe] - prev_parent_null_count
+        : 0;
+    auto const num_elems = s->chunk.num_rows - parent_null_count;
+    while (s->top.nulls_desc_row < num_elems) {
+      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1187,9 +1163,9 @@ __global__ void __launch_bounds__(block_size)
       }
       __syncthreads();
 
-      row_in = s->chunk.start_row + s->top.nulls_desc_row;
+      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
-          s->chunk.valid_map_base != NULL) {
+          s->chunk.valid_map_base != nullptr) {
         int64_t dst_row   = row_in - first_row;
         int64_t dst_pos   = max(dst_row, (int64_t)0);
         uint32_t startbit = -static_cast<int32_t>(min(dst_row, (int64_t)0));
@@ -1237,7 +1213,7 @@ __global__ void __launch_bounds__(block_size)
           // Need to arrange the bytes to apply mask properly.
           uint32_t bits = (i + 32 <= skippedrows) ? s->vals.u32[i >> 5]
                                                   : (__byte_perm(s->vals.u32[i >> 5], 0, 0x0123) &
-                                                     (0xffffffffu << (0x20 - skippedrows + i)));
+                                                     (0xffff'ffffu << (0x20 - skippedrows + i)));
           skip_count += __popc(bits);
         }
         skip_count = warp_reduce(temp_storage.wr_storage[t / 32]).Sum(skip_count);
@@ -1251,7 +1227,7 @@ __global__ void __launch_bounds__(block_size)
     // Sum up the valid counts and infer null_count
     null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
     if (t == 0) {
-      chunks[chunk_id].null_count = null_count;
+      chunks[chunk_id].null_count = parent_null_count + null_count;
       chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
   } else {
@@ -1335,14 +1311,14 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    if (s->chunk.valid_map_base != NULL) {
+    if (s->chunk.valid_map_base != nullptr) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
-      uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
+      auto r         = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid = (t < nrows && r < rmax)
                          ? (((const uint8_t*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
                          : 0;
-      volatile uint16_t* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
+      volatile auto* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
       uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
       if (t < nrows) { row_ofs_plus1[t] = valid; }
       lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
@@ -1563,9 +1539,10 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST)
-                             ? s->top.data.index.run_pos[CI_DATA2]
-                             : s->top.data.index.run_pos[CI_DATA];
+        uint32_t run_pos =
+          (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST || s->chunk.type_kind == MAP)
+            ? s->top.data.index.run_pos[CI_DATA2]
+            : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
       }
@@ -1578,7 +1555,7 @@ __global__ void __launch_bounds__(block_size)
           numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
         }
         __syncthreads();
-      } else if (s->chunk.type_kind == LIST) {
+      } else if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
@@ -1642,8 +1619,14 @@ __global__ void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
+          numvals = Decode_Decimals(&s->bs,
+                                    &s->u.rle8,
+                                    s->vals,
+                                    val_scale,
+                                    numvals,
+                                    s->chunk.dtype_id,
+                                    s->chunk.decimal_scale,
+                                    t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1667,24 +1650,27 @@ __global__ void __launch_bounds__(block_size)
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
-          uint32_t run_pos = (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2]
-                                                          : s->top.data.index.run_pos[CI_DATA];
+          uint32_t run_pos = (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                               ? s->top.data.index.run_pos[CI_DATA2]
+                               : s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
             vals_skipped = min(numvals, run_pos);
             numvals -= vals_skipped;
             __syncthreads();
             if (t == 0) {
-              (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2] = 0
-                                           : s->top.data.index.run_pos[CI_DATA]  = 0;
+              (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                ? s->top.data.index.run_pos[CI_DATA2] = 0
+                : s->top.data.index.run_pos[CI_DATA]  = 0;
             }
           }
         }
       }
-      if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals) {
-        if (s->chunk.type_kind == TIMESTAMP) {
-          s->top.data.buffered_count = s->top.data.max_vals - numvals;
+      if (t == 0 && numvals + vals_skipped > 0) {
+        auto const max_vals = s->top.data.max_vals;
+        if (max_vals > numvals) {
+          if (s->chunk.type_kind == TIMESTAMP) { s->top.data.buffered_count = max_vals - numvals; }
+          s->top.data.max_vals = numvals;
         }
-        s->top.data.max_vals = numvals;
       }
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
@@ -1707,15 +1693,23 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT: static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
-            case LONG:
+            case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              if (s->chunk.dtype_id == type_id::DECIMAL32) {
+                static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
+              } else if (s->chunk.dtype_id == type_id::DECIMAL64) {
+                static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              } else {
+                // decimal128
+                static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              }
               break;
+            case MAP:
             case LIST: {
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -1731,9 +1725,10 @@ __global__ void __launch_bounds__(block_size)
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
-                // Convert from days to milliseconds by multiplying by 24*3600*1000
+                cudf::duration_D days{s->vals.i32[t + vals_skipped]};
+                // Convert from days to milliseconds
                 static_cast<int64_t*>(data_out)[row] =
-                  86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
+                  cuda::std::chrono::duration_cast<cudf::duration_ms>(days).count();
               } else {
                 static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
               }
@@ -1768,26 +1763,46 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              uint64_t nanos  = secondary_val;
+              int64_t nanos   = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
-              if (seconds < 0 && nanos != 0) { seconds -= 1; }
-              if (s->chunk.ts_clock_rate)
-                static_cast<int64_t*>(data_out)[row] =
-                  seconds * s->chunk.ts_clock_rate +
-                  (nanos + (499999999 / s->chunk.ts_clock_rate)) /
-                    (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
-              else
-                static_cast<int64_t*>(data_out)[row] = seconds * 1000000000 + nanos;
+              // Adjust seconds only for negative timestamps with positive nanoseconds.
+              // Alternative way to represent negative timestamps is with negative nanoseconds
+              // in which case the adjustment in not needed.
+              // Comparing with 999999 instead of zero to match the apache writer.
+              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
+
+              duration_ns d_ns{nanos};
+              duration_s d_s{seconds};
+
+              static_cast<int64_t*>(data_out)[row] = [&]() {
+                using cuda::std::chrono::duration_cast;
+                switch (s->chunk.timestamp_type_id) {
+                  case type_id::TIMESTAMP_SECONDS:
+                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                  case type_id::TIMESTAMP_MILLISECONDS:
+                    return duration_cast<duration_ms>(d_s).count() +
+                           duration_cast<duration_ms>(d_ns).count();
+                  case type_id::TIMESTAMP_MICROSECONDS:
+                    return duration_cast<duration_us>(d_s).count() +
+                           duration_cast<duration_us>(d_ns).count();
+                  case type_id::TIMESTAMP_NANOSECONDS:
+                  default:
+                    return duration_cast<duration_ns>(d_s).count() +
+                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
+                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                }
+              }();
+
               break;
             }
           }
         }
       }
       // Aggregate num of elements for the chunk
-      if (s->chunk.type_kind == LIST) {
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         list_child_elements = block_reduce(temp_storage.blk_uint64).Sum(list_child_elements);
       }
       __syncthreads();
@@ -1804,14 +1819,16 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
-      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
+        s->num_child_rows += list_child_elements;
+      }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
-  if (t == 0 and s->chunk.type_kind == LIST) {
+  if (t == 0 and (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)) {
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }

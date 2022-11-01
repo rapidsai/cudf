@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 # Generate a junit-xml file from parsing a nbtest log
 
 import re
@@ -7,11 +8,11 @@ import string
 from enum import Enum
 
 
-startingPatt = re.compile("^STARTING: ([\w\.\-]+)$")
-skippingPatt = re.compile("^SKIPPING: ([\w\.\-]+)\s*(\(([\w\.\-\ \,]+)\))?\s*$")
-exitCodePatt = re.compile("^EXIT CODE: (\d+)$")
-folderPatt = re.compile("^FOLDER: ([\w\.\-]+)$")
-timePatt = re.compile("^real\s+([\d\.ms]+)$")
+startingPatt = re.compile(r"^STARTING: ([\w\.\-]+)$")
+skippingPatt = re.compile(r"^SKIPPING: ([\w\.\-]+)\s*(\(([\w\.\-\ \,]+)\))?\s*$")
+exitCodePatt = re.compile(r"^EXIT CODE: (\d+)$")
+folderPatt = re.compile(r"^FOLDER: ([\w\.\-]+)$")
+timePatt = re.compile(r"^real\s+([\d\.ms]+)$")
 linePatt = re.compile("^" + ("-" * 80) + "$")
 
 

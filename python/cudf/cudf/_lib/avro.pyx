@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -11,12 +11,12 @@ from cudf._lib.cpp.io.avro cimport (
 from cudf._lib.cpp.io.types cimport table_with_metadata
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
     """
-    Cython function to call libcudf++ read_avro, see `read_avro`.
+    Cython function to call libcudf read_avro, see `read_avro`.
 
     See Also
     --------
@@ -52,4 +52,4 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    return Table.from_unique_ptr(move(c_result.tbl), column_names=names)
+    return data_from_unique_ptr(move(c_result.tbl), column_names=names)

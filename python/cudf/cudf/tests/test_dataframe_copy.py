@@ -41,7 +41,7 @@ def test_dataframe_deep_copy(copy_parameters):
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
     gdf_is_equal = np.array_equal(
-        gdf["b"].to_array(), copy_gdf["b"].to_array()
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
     )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]
@@ -67,7 +67,7 @@ def test_dataframe_deep_copy_and_insert(copy_parameters):
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
     gdf_is_equal = np.array_equal(
-        gdf["b"].to_array(), copy_gdf["b"].to_array()
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
     )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]
@@ -160,8 +160,6 @@ def test_kernel_deep_copy():
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
 
-    # column.to_gpu_array calls to_dense_buffer which returns a copy
-    # need to access buffer directly and then call gpu_array
     add_one[1, len(sr)](sr._column.data_array_view)
     assert not gdf.to_string().split() == cdf.to_string().split()
 
@@ -173,7 +171,7 @@ def test_kernel_shallow_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
-    add_one[1, len(sr)](sr.to_gpu_array())
+    add_one[1, len(sr)](sr.to_cupy())
     assert_eq(gdf, cdf)
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import json
 import re
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -82,7 +82,7 @@ def test_string_export(ps_gs):
     assert_eq(expect, got)
 
     expect = np.array(ps)
-    got = gs.to_array()
+    got = gs.to_numpy()
     assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
@@ -183,7 +183,19 @@ def test_string_astype(dtype):
     ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
-        data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
@@ -217,9 +229,13 @@ def test_string_astype(dtype):
         ([], 0, 5),
     ],
 )
-def test_string_to_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_string_to_decimal(data, scale, precision, decimal_dtype):
     gs = cudf.Series(data, dtype="str")
-    fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    fp = gs.astype(decimal_dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
 
@@ -228,7 +244,8 @@ def test_string_empty_to_decimal():
     gs = cudf.Series(["", "-85", ""], dtype="str")
     got = gs.astype(cudf.Decimal64Dtype(scale=0, precision=5))
     expected = cudf.Series(
-        [0, -85, 0], dtype=cudf.Decimal64Dtype(scale=0, precision=5),
+        [0, -85, 0],
+        dtype=cudf.Decimal64Dtype(scale=0, precision=5),
     )
     assert_eq(expected, got)
 
@@ -244,7 +261,11 @@ def test_string_empty_to_decimal():
         ([], 0, 5),
     ],
 )
-def test_string_from_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_string_from_decimal(data, scale, precision, decimal_dtype):
     decimal_data = []
     for d in data:
         if d is None:
@@ -253,10 +274,10 @@ def test_string_from_decimal(data, scale, precision):
             decimal_data.append(Decimal(d))
     fp = cudf.Series(
         decimal_data,
-        dtype=cudf.Decimal64Dtype(scale=scale, precision=precision),
+        dtype=decimal_dtype(scale=scale, precision=precision),
     )
     gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    got = gs.astype(decimal_dtype(scale=scale, precision=precision))
     assert_eq(fp, got)
 
 
@@ -514,11 +535,7 @@ def _cat_convert_seq_to_cudf(others):
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
 @pytest.mark.parametrize(
     "index",
-    [
-        ["1", "2", "3", "4", "5"],
-        pd.Series(["1", "2", "3", "4", "5"]),
-        pd.Index(["1", "2", "3", "4", "5"]),
-    ],
+    [["1", "2", "3", "4", "5"]],
 )
 def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
@@ -668,12 +685,15 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
     got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
 
     assert_eq(
-        expect, got, exact=False,
+        expect,
+        got,
+        exact=False,
     )
 
 
 @pytest.mark.parametrize(
-    "data", [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
+    "data",
+    [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
 )
 @pytest.mark.parametrize(
     "others",
@@ -775,13 +795,8 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     # in `.str.cat`
     # https://github.com/rapidsai/cudf/issues/5862
 
-    # TODO: Replace ``pd.Index(expect.to_series().sort_values())`` with
-    # ``expect.sort_values()`` once the below issue is fixed
-    # https://github.com/pandas-dev/pandas/issues/35584
     assert_eq(
-        pd.Index(expect.to_series().sort_values())
-        if not isinstance(expect, str)
-        else expect,
+        expect.sort_values() if not isinstance(expect, str) else expect,
         got.sort_values() if not isinstance(got, str) else got,
         exact=False,
     )
@@ -815,7 +830,9 @@ def test_string_join(ps_gs, sep):
 
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+)
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
     expectation = raise_builder([flags_raise], NotImplementedError)
@@ -839,12 +856,17 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise",
+    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
+)
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = raise_builder([flags_raise, na_raise], NotImplementedError)
+    expectation = does_not_raise()
+    if flags_raise or na_raise:
+        expectation = pytest.raises(NotImplementedError)
 
     with expectation:
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
@@ -852,7 +874,62 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         assert_eq(expect, got)
 
 
-# Pandas isn't respect the `n` parameter so ignoring it in test parameters
+@pytest.mark.parametrize(
+    "pat,esc,expect",
+    [
+        ("abc", "", [True, False, False, False, False, False]),
+        ("b%", "/", [False, True, False, False, False, False]),
+        ("%b", ":", [False, True, False, False, False, False]),
+        ("%b%", "*", [True, True, False, False, False, False]),
+        ("___", "", [True, True, True, False, False, False]),
+        ("__/%", "/", [False, False, True, False, False, False]),
+        ("55/____", "/", [False, False, False, True, False, False]),
+        ("%:%%", ":", [False, False, True, False, False, False]),
+        ("55*_100", "*", [False, False, False, True, False, False]),
+        ("abc", "abc", [True, False, False, False, False, False]),
+    ],
+)
+def test_string_like(pat, esc, expect):
+
+    expectation = does_not_raise()
+    if len(esc) > 1:
+        expectation = pytest.raises(ValueError)
+
+    with expectation:
+        gs = cudf.Series(["abc", "bab", "99%", "55_100", "", "556100"])
+        got = gs.str.like(pat, esc)
+        expect = cudf.Series(expect)
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [["hello", "world", None, "", "!"]],
+)
+@pytest.mark.parametrize(
+    "repeats",
+    [
+        2,
+        0,
+        -3,
+        [5, 4, 3, 2, 6],
+        [5, None, 3, 2, 6],
+        [0, 0, 0, 0, 0],
+        [-1, -2, -3, -4, -5],
+        [None, None, None, None, None],
+    ],
+)
+def test_string_repeat(data, repeats):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.repeat(repeats)
+    got = gs.str.repeat(repeats)
+
+    assert_eq(expect, got)
+
+
+# Pandas doesn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
     [("a", False), ("f", False), (r"[a-z]", True), (r"[A-Z]", True)],
@@ -872,6 +949,16 @@ def test_string_replace(
         got = gs.str.replace(pat, repl, case=case, flags=flags, regex=regex)
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("pat", ["A*", "F?H?"])
+def test_string_replace_zero_length(ps_gs, pat):
+    ps, gs = ps_gs
+
+    expect = ps.str.replace(pat, "_", regex=True)
+    got = gs.str.replace(pat, "_", regex=True)
+
+    assert_eq(expect, got)
 
 
 def test_string_lower(ps_gs):
@@ -903,13 +990,36 @@ def test_string_upper(ps_gs):
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_string_split(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
 
     expect = ps.str.split(pat=pat, n=n, expand=expand)
     got = gs.str.split(pat=pat, n=n, expand=expand)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a b", " c ", "   d", "e   ", "f"],
+        ["a-b", "-c-", "---d", "e---", "f"],
+        ["ab", "c", "d", "e", "f"],
+        [None, None, None, None, None],
+    ],
+)
+@pytest.mark.parametrize("pat", [None, " ", "\\-+", "\\s+"])
+@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("expand", [True, False])
+def test_string_split_re(data, pat, n, expand):
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    # Pandas does not support the regex parameter until 1.4.0
+    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
     assert_eq(expect, got)
 
@@ -1142,7 +1252,8 @@ def test_string_get(string, index):
     gds = cudf.Series(string)
 
     assert_eq(
-        pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
+        pds.str.get(index).fillna(""),
+        gds.str.get(index).fillna(""),
     )
 
 
@@ -1155,10 +1266,12 @@ def test_string_get(string, index):
     ],
 )
 @pytest.mark.parametrize(
-    "number", [-10, 0, 1, 3, 10],
+    "number",
+    [-10, 0, 1, 3, 10],
 )
 @pytest.mark.parametrize(
-    "diff", [0, 2, 5, 9],
+    "diff",
+    [0, 2, 5, 9],
 )
 def test_string_slice_str(string, number, diff):
     pds = pd.Series(string)
@@ -1224,6 +1337,12 @@ def test_string_slice_replace(string, number, diff, repr):
     )
 
 
+def test_string_slice_replace_fail():
+    gs = cudf.Series(["abc", "xyz", ""])
+    with pytest.raises(TypeError):
+        gs.str.slice_replace(0, 1, ["_"])
+
+
 def test_string_insert():
     gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
 
@@ -1236,6 +1355,9 @@ def test_string_insert():
         gs.str.insert(5, "---"),
         ps.str.slice(stop=5) + "---" + ps.str.slice(start=5),
     )
+
+    with pytest.raises(TypeError):
+        gs.str.insert(0, ["+"])
 
 
 _string_char_types_data = [
@@ -1329,6 +1451,9 @@ def test_string_filter_alphanum():
         expected.append(rs)
     assert_eq(gs.str.filter_alphanum("*", keep=False), cudf.Series(expected))
 
+    with pytest.raises(TypeError):
+        gs.str.filter_alphanum(["a"])
+
 
 @pytest.mark.parametrize(
     "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
@@ -1363,6 +1488,26 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isspace(), ps.str.isspace())
 
     assert_eq(gs.str.isempty(), ps == "")
+
+
+def test_string_is_title():
+    data = [
+        "leopard",
+        "Golden Eagle",
+        "SNAKE",
+        "",
+        "!A",
+        "hello World",
+        "A B C",
+        "#",
+        "AƻB",
+        "Ⓑⓖ",
+        "Art of War",
+    ]
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.istitle(), ps.str.istitle())
 
 
 @pytest.mark.parametrize(
@@ -1409,6 +1554,14 @@ def test_strings_partition(data):
     assert_eq(pi.str.partition("-"), gi.str.partition("-"))
 
 
+def test_string_partition_fail():
+    gs = cudf.Series(["abc", "aa", "cba"])
+    with pytest.raises(TypeError):
+        gs.str.partition(["a"])
+    with pytest.raises(TypeError):
+        gs.str.rpartition(["a"])
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1425,7 +1578,7 @@ def test_strings_partition(data):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_strings_rsplit(data, n, expand):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1445,6 +1598,26 @@ def test_strings_rsplit(data, n, expand):
     )
 
 
+@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("expand", [True, False])
+def test_string_rsplit_re(n, expand):
+    data = ["a b", " c ", "   d", "e   ", "f"]
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    # Pandas does not yet support the regex parameter for rsplit
+    import inspect
+
+    assert (
+        "regex"
+        not in inspect.signature(pd.Series.str.rsplit).parameters.keys()
+    )
+
+    expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
+    got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1461,7 +1634,7 @@ def test_strings_rsplit(data, n, expand):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_strings_split(data, n, expand):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1525,6 +1698,16 @@ def test_strings_strip_tests(data, to_strip):
     )
 
 
+def test_string_strip_fail():
+    gs = cudf.Series(["a", "aa", ""])
+    with pytest.raises(TypeError):
+        gs.str.strip(["a"])
+    with pytest.raises(TypeError):
+        gs.str.lstrip(["a"])
+    with pytest.raises(TypeError):
+        gs.str.rstrip(["a"])
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1582,8 +1765,14 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        ["+23", "³", "⅕", ""],
-        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["³", "⅕", ""],
+        pytest.param(
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/20868",
+            ),
+        ),
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
@@ -1614,7 +1803,8 @@ def test_strings_zfill_tests(data, width):
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
 @pytest.mark.parametrize(
-    "side", ["left", "right", "both"],
+    "side",
+    ["left", "right", "both"],
 )
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
@@ -1686,28 +1876,46 @@ def test_string_wrap(data, width):
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
-        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-        ["line to be wrapped", "another line to be wrapped"],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\ndog"],
+        ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
-@pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
-def test_string_count(data, pat):
+@pytest.mark.parametrize(
+    "pat",
+    ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be", "cat$"],
+)
+@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
+def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
+    assert_eq(
+        gs.str.count(pat=pat, flags=flags),
+        ps.str.count(pat=pat, flags=flags),
+        check_dtype=False,
+    )
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
-def test_string_findall():
-    ps = pd.Series(["Lion", "Monkey", "Rabbit"])
-    gs = cudf.Series(["Lion", "Monkey", "Rabbit"])
+@pytest.mark.parametrize(
+    "pat, flags",
+    [
+        ("Monkey", 0),
+        ("on", 0),
+        ("b", 0),
+        ("on$", 0),
+        ("on$", re.MULTILINE),
+        ("o.*k", re.DOTALL),
+    ],
+)
+def test_string_findall(pat, flags):
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
 
-    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
-    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
-    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
-    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
-    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
+    expected = ps.str.findall(pat, flags)
+    actual = gs.str.findall(pat, flags)
+    assert_eq(expected, actual)
 
 
 def test_string_replace_multi():
@@ -1744,6 +1952,7 @@ def test_string_replace_multi():
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
+        re.compile("([A-Z])(\\d)"),
     ],
 )
 @pytest.mark.parametrize(
@@ -1797,16 +2006,39 @@ def test_string_table_view_creation():
     ],
 )
 @pytest.mark.parametrize(
-    "pat", ["", None, " ", "a", "abc", "cat", "$", "\n"],
+    "pat",
+    ["", None, " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(
-        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
-    )
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+    if pat is None:
+        assert_exceptions_equal(
+            lfunc=ps.str.startswith,
+            rfunc=gs.str.startswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+            compare_error_message=False,
+            expected_error_message="expected a string or a sequence-like "
+            "object, not NoneType",
+        )
+    else:
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -1873,7 +2105,8 @@ def test_string_starts_ends_list_like_pat(data, pat):
     ],
 )
 @pytest.mark.parametrize(
-    "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
+    "sub",
+    ["", " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_find(data, sub):
     ps = pd.Series(data)
@@ -1882,49 +2115,65 @@ def test_string_find(data, sub):
     got = gs.str.find(sub)
     expect = ps.str.find(sub)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, start=1)
     expect = ps.str.find(sub, start=1)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, end=10)
     expect = ps.str.find(sub, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.find(sub, start=2, end=10)
     expect = ps.str.find(sub, start=2, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub)
     expect = ps.str.rfind(sub)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=1)
     expect = ps.str.rfind(sub, start=1)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, end=10)
     expect = ps.str.rfind(sub, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
     got = gs.str.rfind(sub, start=2, end=10)
     expect = ps.str.rfind(sub, start=2, end=10)
     assert_eq(
-        expect, got, check_dtype=False,
+        expect,
+        got,
+        check_dtype=False,
     )
 
 
@@ -2050,6 +2299,33 @@ def test_string_contains_multi(data, sub, expect):
     assert_eq(expect, got, check_dtype=False)
 
 
+# Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern
+# This covers contains, match, count, and replace
+@pytest.mark.parametrize(
+    "pat",
+    [re.compile("[n-z]"), re.compile("[A-Z]"), re.compile("de"), "A"],
+)
+@pytest.mark.parametrize("repl", ["xyz", "", " "])
+def test_string_compiled_re(ps_gs, pat, repl):
+    ps, gs = ps_gs
+
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got)
+
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got)
+
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+
+    expect = ps.str.replace(pat, repl, regex=True)
+    got = gs.str.replace(pat, repl, regex=True)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -2158,6 +2434,9 @@ def test_string_str_filter_characters():
         ["hello world", "A B C D", "           ", "acc nt", None, " 1 50", ""]
     )
     assert_eq(expected, gs.str.filter_characters(filter, True, " "))
+
+    with pytest.raises(TypeError):
+        gs.str.filter_characters(filter, True, ["a"])
 
 
 def test_string_str_code_points():
@@ -2881,6 +3160,157 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
         gs.str.get_json_object(json_path)
 
 
+def test_string_get_json_object_allow_single_quotes():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            'author':"Nigel Rees",
+                            "title":'Sayings of the Century',
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            'title':"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=True
+        ),
+        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"]),
+    )
+
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+
+
+def test_string_get_json_object_strip_quotes_from_single_strings():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(["Nigel Rees"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['"Nigel Rees"']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+
+
+def test_string_get_json_object_missing_fields_as_nulls():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(["null"]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(['[null,"fiction"]']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series(['["fiction"]']),
+    )
+
+
 def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])
 
@@ -2993,3 +3423,64 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
         sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
     )
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "patterns, expected",
+    [
+        (
+            lambda: ["a", "s", "g", "i", "o", "r"],
+            [
+                [-1, 0, 5, 3, -1, 2],
+                [-1, -1, -1, -1, 1, -1],
+                [2, 0, -1, -1, -1, 3],
+                [-1, -1, -1, 0, -1, -1],
+            ],
+        ),
+        (
+            lambda: cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"]),
+            [
+                [-1, 0, 5, -1, -1, 2, -1],
+                [-1, -1, -1, -1, 1, -1, -1],
+                [2, -1, -1, -1, -1, 3, 0],
+                [-1, -1, -1, -1, -1, -1, -1],
+            ],
+        ),
+    ],
+)
+def test_str_find_multiple(patterns, expected):
+    s = cudf.Series(["strings", "to", "search", "in"])
+    t = patterns()
+
+    expected = cudf.Series(expected)
+
+    # We convert to pandas because find_multiple returns ListDtype(int32)
+    # and expected is ListDtype(int64).
+    # Currently there is no easy way to type-cast these to match.
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+    s = cudf.Index(s)
+    t = cudf.Index(t)
+
+    expected.index = s
+
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+
+def test_str_find_multiple_error():
+    s = cudf.Series(["strings", "to", "search", "in"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "patterns should be an array-like or a Series object, found "
+            "<class 'str'>"
+        ),
+    ):
+        s.str.find_multiple("a")
+
+    t = cudf.Series([1, 2, 3])
+    with pytest.raises(
+        TypeError,
+        match=re.escape("patterns can only be of 'string' dtype, got: int64"),
+    ):
+        s.str.find_multiple(t)

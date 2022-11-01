@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,13 +48,18 @@
 #include <cudf/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
+#include <thrust/pair.h>
+#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -125,7 +130,7 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
 {
   cudf::size_type nrows = input.size();
   cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t active_mask  = 0xffffffff;
+  uint32_t active_mask  = 0xffff'ffffu;
   active_mask           = __ballot_sync(active_mask, i < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
@@ -246,7 +251,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
-  uint32_t active_mask = 0xffffffff;
+  uint32_t active_mask = 0xffff'ffffu;
   active_mask          = __ballot_sync(active_mask, i < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
@@ -323,10 +328,10 @@ struct replace_kernel_forwarder {
     auto output_view = output->mutable_view();
     auto grid        = cudf::detail::grid_1d{output_view.size(), BLOCK_SIZE, 1};
 
-    auto device_in                 = cudf::column_device_view::create(input_col);
-    auto device_out                = cudf::mutable_column_device_view::create(output_view);
-    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace);
-    auto device_replacement_values = cudf::column_device_view::create(replacement_values);
+    auto device_in                 = cudf::column_device_view::create(input_col, stream);
+    auto device_out                = cudf::mutable_column_device_view::create(output_view, stream);
+    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace, stream);
+    auto device_replacement_values = cudf::column_device_view::create(replacement_values, stream);
 
     replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(*device_in,
                                                                 *device_out,
@@ -389,11 +394,11 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto sizes_view   = sizes->mutable_view();
   auto indices_view = indices->mutable_view();
 
-  auto device_in                = cudf::column_device_view::create(input_col);
-  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
-  auto device_replacement       = cudf::column_device_view::create(replacement_values);
-  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
-  auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
+  auto device_in                = cudf::column_device_view::create(input_col, stream);
+  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace, stream);
+  auto device_replacement       = cudf::column_device_view::create(replacement_values, stream);
+  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view, stream);
+  auto device_indices           = cudf::mutable_column_device_view::create(indices_view, stream);
 
   rmm::device_buffer valid_bits =
     cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
@@ -412,7 +417,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
-  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
+  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
@@ -422,7 +427,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
-  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
+  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view, stream);
 
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
     *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);
@@ -431,9 +436,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
                                    std::move(offsets),
                                    std::move(output_chars),
                                    null_count,
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
@@ -454,9 +457,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
-  auto matched_values = cudf::dictionary::detail::set_keys(values, matched_view.keys(), stream);
-  auto matched_replacements =
-    cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
+  auto matched_values = cudf::dictionary::detail::set_keys(
+    values, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
+  auto matched_replacements = cudf::dictionary::detail::set_keys(
+    replacements, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
@@ -516,7 +520,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
  *        `replacement_values`, that is, replace all `values_to_replace[i]` present in `input_col`
  *        with `replacement_values[i]`.
  *
- * @param[in] col column_view of the data to be modified
+ * @param[in] input_col column_view of the data to be modified
  * @param[in] values_to_replace column_view of the old values to be replaced
  * @param[in] replacement_values column_view of the new values
  *
@@ -527,7 +531,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& replacement_values,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  return cudf::detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, rmm::cuda_stream_default, mr);
+  return detail::find_and_replace_all(
+    input_col, values_to_replace, replacement_values, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

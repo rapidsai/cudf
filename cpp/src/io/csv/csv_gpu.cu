@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,17 @@
  * limitations under the License.
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
-#include "datetime.cuh"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -38,7 +35,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/detail/copy.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 #include <type_traits>
@@ -193,11 +192,11 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   // Going through all the columns of a given record
-  while (col < column_flags.size() && field_start <= row_end) {
+  while (col < column_flags.size() && field_start < row_end) {
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
-    if (column_flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::inferred) {
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
@@ -291,255 +290,6 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   }
 }
 
-template <typename T, int base>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
-}
-
-template <typename T>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_D decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_s{cudf::duration_s{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_s{cudf::duration_s{milli / 1000}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ms{cudf::duration_ms{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_ms{cudf::duration_ms{milli}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_us{cudf::duration_us{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_us{cudf::duration_us{milli * 1000}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ns{cudf::duration_ns{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
-  }
-}
-
-#ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                     \
-  template <>                                                           \
-  __inline__ __device__ Type decode_value(                              \
-    const char* begin, const char* end, parse_options_view const& opts) \
-  {                                                                     \
-    return Type{to_time_delta<Type>(begin, end)};                       \
-  }
-#endif
-DURATION_DECODE_VALUE(duration_D)
-DURATION_DECODE_VALUE(duration_s)
-DURATION_DECODE_VALUE(duration_ms)
-DURATION_DECODE_VALUE(duration_us)
-DURATION_DECODE_VALUE(duration_ns)
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::string_view decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return cudf::string_view{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  return cudf::dictionary32{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::list_view decode_value(char const* begin,
-                                                   char const* end,
-                                                   parse_options_view const& opts)
-{
-  return cudf::list_view{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ cudf::struct_view decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return cudf::struct_view{};
-}
-
-/**
- * @brief Functor for converting CSV raw data to typed value.
- */
-struct decode_op {
-  /**
-   * @brief Dispatch for numeric types whose values can be convertible to
-   * 0 or 1 to represent boolean false/true, based upon checking against a
-   * true/false values list.
-   *
-   * @return bool Whether the parsed value is valid.
-   */
-  template <typename T,
-            typename std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
-                                                      size_t row,
-                                                      const data_type,
-                                                      char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts,
-                                                      column_parse::flags flags)
-  {
-    static_cast<T*>(out_buffer)[row] = [&flags, &opts, begin, end]() -> T {
-      // Check for user-specified true/false values
-      auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
-      return flags & column_parse::as_hexadecimal ? decode_value<T, 16>(begin, end, opts)
-                                                  : decode_value<T>(begin, end, opts);
-    }();
-
-    return true;
-  }
-
-  /**
-   * @brief Dispatch for fixed point types.
-   *
-   * @return bool Whether the parsed value is valid.
-   */
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
-                                                      size_t row,
-                                                      const data_type output_type,
-                                                      char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts,
-                                                      column_parse::flags flags)
-  {
-    static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
-      [&flags, &opts, output_type, begin, end]() -> device_storage_type_t<T> {
-      return strings::detail::parse_decimal<device_storage_type_t<T>>(
-        begin, end, output_type.scale());
-    }();
-
-    return true;
-  }
-
-  /**
-   * @brief Dispatch for boolean type types.
-   */
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
-                                                      size_t row,
-                                                      const data_type,
-                                                      char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts,
-                                                      column_parse::flags flags)
-  {
-    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
-      // Check for user-specified true/false values
-      auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
-      return decode_value<T>(begin, end, opts);
-    }();
-
-    return true;
-  }
-
-  /**
-   * @brief Dispatch for floating points, which are set to NaN if the input
-   * is not valid. In such case, the validity mask is set to zero too.
-   */
-  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
-                                                      size_t row,
-                                                      const data_type,
-                                                      char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts,
-                                                      column_parse::flags flags)
-  {
-    T const value                    = decode_value<T>(begin, end, opts);
-    static_cast<T*>(out_buffer)[row] = value;
-
-    return !std::isnan(value);
-  }
-
-  /**
-   * @brief Dispatch for all other types.
-   */
-  template <typename T,
-            typename std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
-                                                      size_t row,
-                                                      const data_type,
-                                                      char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts,
-                                                      column_parse::flags flags)
-  {
-    static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
-
-    return true;
-  }
-};
-
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -579,7 +329,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   int col         = 0;
   int actual_col  = 0;
 
-  while (col < column_flags.size() && field_start <= row_end) {
+  while (col < column_flags.size() && field_start < row_end) {
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
@@ -610,14 +360,14 @@ __global__ void __launch_bounds__(csvparse_block_dim)
           str_list[rec_id].second = end - field_start;
         } else {
           if (cudf::type_dispatcher(dtypes[actual_col],
-                                    decode_op{},
+                                    ConvertFunctor{},
+                                    field_start,
+                                    field_end,
                                     columns[actual_col],
                                     rec_id,
                                     dtypes[actual_col],
-                                    field_start,
-                                    field_end,
                                     options,
-                                    column_flags[col])) {
+                                    column_flags[col] & column_parse::as_hexadecimal)) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
           }
@@ -727,8 +477,8 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
  * @tparam tmask mask to specify principle thread for merging row context
  * @tparam base start location for writing into packed row context tree
  * @tparam level_scale level of the node in the tree
- * @param ctxtree[out] packed row context tree
- * @param ctxb[in] packed row context for the current character block
+ * @param[out] ctxtree packed row context tree
+ * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
@@ -783,8 +533,8 @@ inline __device__ void ctx_unmerge(
  *   parent.count[k] = left.count[k] + right.count[left.outctx[k]]
  *   parent.outctx[k] = right.outctx[left.outctx[k]]
  *
- * @param ctxtree[out] packed row context tree
- * @param ctxb[in] packed row context for the current character block
+ * @param[out] ctxtree packed row context tree
+ * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
 static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
@@ -951,7 +701,7 @@ __global__ void __launch_bounds__(rowofs_block_dim)
   // Eliminate rows that start before byte_range_start
   if (start_offset + block_pos < byte_range_start) {
     uint32_t dist_minus1 = min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
-    uint32_t mask        = 0xfffffffe << dist_minus1;
+    uint32_t mask        = 0xffff'fffe << dist_minus1;
     ctx_map.x &= mask;
     ctx_map.y &= mask;
     ctx_map.z &= mask;

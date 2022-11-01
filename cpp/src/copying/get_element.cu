@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,14 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/is_element_valid.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -207,7 +209,8 @@ std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::get_element(input, index, rmm::cuda_stream_default, mr);
+  CUDF_FUNC_RANGE();
+  return detail::get_element(input, index, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

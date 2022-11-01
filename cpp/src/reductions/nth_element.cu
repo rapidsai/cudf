@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scan.h>
 
 std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& col,
                                                            size_type n,
@@ -38,7 +40,7 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
     auto valid_count = col.size() - col.null_count();
     n                = wrap_n(valid_count);
     CUDF_EXPECTS(n >= 0 and n < valid_count, "Index out of bounds");
-    auto dcol = column_device_view::create(col);
+    auto dcol = column_device_view::create(col, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*dcol),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/strings/utilities.h>
-
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -28,11 +21,17 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+
 template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 
 TYPED_TEST(GatherTest, IdentityTest)
 {

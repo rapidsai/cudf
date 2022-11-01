@@ -1,11 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-import cudf
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from cpython cimport pycapsule
-from libcpp cimport bool
 from libcpp.memory cimport shared_ptr, unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
@@ -20,12 +16,14 @@ from cudf._lib.cpp.interop cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+
+from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
 def from_dlpack(dlpack_capsule):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
+    Converts a DLPack Tensor PyCapsule into a list of columns.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
@@ -40,29 +38,25 @@ def from_dlpack(dlpack_capsule):
             cpp_from_dlpack(dlpack_tensor)
         )
 
-    res = Table.from_unique_ptr(
-        move(c_result),
-        column_names=range(0, c_result.get()[0].num_columns())
-    )
+    res = columns_from_unique_ptr(move(c_result))
     dlpack_tensor.deleter(dlpack_tensor)
     return res
 
 
-def to_dlpack(Table source_table):
+def to_dlpack(list source_columns):
     """
-    Converts a Table cudf object into a DLPack Tensor PyCapsule.
+    Converts a list of columns into a DLPack Tensor PyCapsule.
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
-    for column in source_table._columns:
-        if column.null_count:
-            raise ValueError(
-                "Cannot create a DLPack tensor with null values. \
-                    Input is required to have null count as zero."
-            )
+    if any(column.null_count for column in source_columns):
+        raise ValueError(
+            "Cannot create a DLPack tensor with null values. \
+                Input is required to have null count as zero."
+        )
 
     cdef DLManagedTensor *dlpack_tensor
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_columns(source_columns)
 
     with nogil:
         dlpack_tensor = cpp_to_dlpack(
@@ -88,47 +82,72 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata) except *:
+cdef vector[column_metadata] gather_metadata(object cols_dtypes) except *:
     """
-    Metadata is stored as lists, and expected format is as follows,
-    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
-    First value signifies name of the main parent column,
-    and adjacent list will signify child column.
-    """
-    cdef vector[column_metadata] cpp_metadata
-    if isinstance(metadata, list):
-        cpp_metadata.reserve(len(metadata))
-        for i, val in enumerate(metadata):
-            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
-            if len(val) == 2:
-                cpp_metadata[i].children_meta = gather_metadata(val[1])
-
-        return cpp_metadata
-    else:
-        raise ValueError("Malformed metadata has been encountered")
-
-
-def to_arrow(Table input_table,
-             object metadata,
-             bool keep_index=True):
-    """Convert from cudf Table to PyArrow Table.
+    Generates a column_metadata vector for each column.
 
     Parameters
     ----------
-    input_table : cudf table
-    column_names : names for the pyarrow arrays
-    field_names : field names for nested type arrays
-    keep_index : whether index needs to be part of arrow table
+    cols_dtypes : iterable
+        An iterable of ``(column_name, dtype)`` pairs.
+    """
+    cdef vector[column_metadata] cpp_metadata
+    cpp_metadata.reserve(len(cols_dtypes))
+
+    if cols_dtypes is not None:
+        for idx, (col_name, col_dtype) in enumerate(cols_dtypes):
+            cpp_metadata.push_back(column_metadata(col_name.encode()))
+            if is_struct_dtype(col_dtype) or is_list_dtype(col_dtype):
+                _set_col_children_metadata(col_dtype, cpp_metadata[idx])
+    else:
+        raise TypeError(
+            "An iterable of (column_name, dtype) pairs is required to "
+            "construct column_metadata"
+        )
+    return cpp_metadata
+
+cdef _set_col_children_metadata(dtype,
+                                column_metadata& col_meta):
+
+    cdef column_metadata element_metadata
+
+    if is_struct_dtype(dtype):
+        for name, value in dtype.fields.items():
+            element_metadata = column_metadata(name.encode())
+            _set_col_children_metadata(
+                value, element_metadata
+            )
+            col_meta.children_meta.push_back(element_metadata)
+    elif is_list_dtype(dtype):
+        col_meta.children_meta.reserve(2)
+        # Offsets - child 0
+        col_meta.children_meta.push_back(column_metadata())
+
+        # Element column - child 1
+        element_metadata = column_metadata()
+        _set_col_children_metadata(
+            dtype.element_type, element_metadata
+        )
+        col_meta.children_meta.push_back(element_metadata)
+    else:
+        col_meta.children_meta.push_back(column_metadata())
+
+
+def to_arrow(list source_columns, object column_dtypes):
+    """Convert a list of columns from
+    cudf Frame to a PyArrow Table.
+
+    Parameters
+    ----------
+    source_columns : a list of columns to convert
+    column_dtypes : Iterable of ``(column_name, column_dtype)`` pairs
 
     Returns
     -------
     pyarrow table
     """
-
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
-    cdef table_view input_table_view = (
-        input_table.view() if keep_index else input_table.data_view()
-    )
+    cdef vector[column_metadata] cpp_metadata = gather_metadata(column_dtypes)
+    cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
@@ -139,22 +158,16 @@ def to_arrow(Table input_table,
     return pyarrow_wrap_table(cpp_arrow_table)
 
 
-def from_arrow(
-    object input_table,
-    object column_names=None,
-    object index_names=None
-):
-    """Convert from PyArrow Table to cudf Table.
+def from_arrow(object input_table):
+    """Convert from PyArrow Table to a list of columns.
 
     Parameters
     ----------
     input_table : PyArrow table
-    column_names : names for the cudf table data columns
-    index_names : names for the cudf table index columns
 
     Returns
     -------
-    cudf Table
+    A list of columns to construct Frame object
     """
     cdef shared_ptr[CTable] cpp_arrow_table = (
         pyarrow_unwrap_table(input_table)
@@ -164,10 +177,4 @@ def from_arrow(
     with nogil:
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
-    out_table = Table.from_unique_ptr(
-        move(c_result),
-        column_names=column_names,
-        index_names=index_names
-    )
-
-    return out_table
+    return columns_from_unique_ptr(move(c_result))

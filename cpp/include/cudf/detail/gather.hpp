@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/table/table_view.hpp>
-
 #include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -55,17 +56,33 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * indices. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices in `gather_map`,
  * the behavior is undefined.
  * @param[in] negative_index_policy Interpret each negative index `i` in the
- * gathermap as the positive index `i+num_source_rows`.
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * `gather_map` as the positive index `i+num_source_rows`.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @return cudf::table Result of the gather
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @return Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
   out_of_bounds_policy bounds_policy,
   negative_index_policy neg_indices,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::detail::gather(table_view const&,column_view const&,table_view
+ * const&,cudf::out_of_bounds_policy,cudf::detail::negative_index_policy,rmm::cuda_stream_view,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @throws cudf::logic_error if `gather_map` span size is larger than max of `size_type`.
+ */
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  device_span<size_type const> const gather_map,
+  out_of_bounds_policy bounds_policy,
+  negative_index_policy neg_indices,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf

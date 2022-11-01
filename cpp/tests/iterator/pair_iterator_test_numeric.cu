@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,19 @@
  */
 #include <tests/iterator/pair_iterator_test.cuh>
 
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+
 using TestingTypes = cudf::test::NumericTypes;
 
 template <typename T>
 struct NumericPairIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(NumericPairIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
 TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
 
@@ -36,8 +42,7 @@ template <typename ElementType>
 struct transformer_pair_meanvar {
   using ResultType = thrust::pair<cudf::meanvar<ElementType>, bool>;
 
-  CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::pair<ElementType, bool> const& pair)
+  CUDF_HOST_DEVICE inline ResultType operator()(thrust::pair<ElementType, bool> const& pair)
   {
     ElementType v = pair.first;
     return {{v, static_cast<ElementType>(v * v), (pair.second) ? 1 : 0}, pair.second};
@@ -46,8 +51,8 @@ struct transformer_pair_meanvar {
 
 struct sum_if_not_null {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                             const thrust::pair<T, bool>& rhs)
+  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
+                                                           const thrust::pair<T, bool>& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
@@ -108,7 +113,8 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(it_dev_squared,
+  auto result         = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+                               it_dev_squared,
                                it_dev_squared + d_col->size(),
                                thrust::make_pair(T_output{}, true),
                                sum_if_not_null{});

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,6 @@ class wordpiece_tokenizer {
    * @param do_lower_case If true, the tokenizer will convert uppercase characters in the
    *        input stream to lowercase and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param max_word_length The length of the longest word that will be tokenized. Words
    *        longer than this will simply be replaced by the unknown token
    *        specified in the `vocab_file`.
@@ -72,7 +71,6 @@ class wordpiece_tokenizer {
                       uint32_t stride,
                       bool do_truncate,
                       bool do_lower_case,
-                      rmm::cuda_stream_view stream,
                       uint32_t max_word_length = 200);
 
   /**
@@ -96,7 +94,7 @@ class wordpiece_tokenizer {
   /**
    * @brief Splits the code points from the normalizer into tokens.
    *
-   * @param cps_and_offsets[in,out] The output code points and offsets
+   * @param[in,out] cps_and_offsets The output code points and offsets
    *        from the normalizer.
    *        The data is modified to contain the token ids and token counts
    *        per string.

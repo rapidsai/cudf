@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,19 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/distance.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
 
 namespace cudf {
 namespace strings {
@@ -48,8 +52,8 @@ namespace detail {
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
@@ -58,30 +62,25 @@ std::unique_ptr<column> scatter(
   SourceIterator end,
   MapIterator scatter_map,
   strings_column_view const& target,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (target.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (target.is_empty()) return make_empty_column(type_id::STRING);
 
   // create vector of string_view's to scatter into
   rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);
 
+  // this ensures empty strings are not mapped to nulls in the make_strings_column function
+  auto const size = thrust::distance(begin, end);
+  auto itr        = thrust::make_transform_iterator(
+    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+
   // do the scatter
-  thrust::scatter(rmm::exec_policy(stream), begin, end, scatter_map, target_vector.begin());
+  thrust::scatter(rmm::exec_policy(stream), itr, itr + size, scatter_map, target_vector.begin());
 
-  // build offsets column
-  auto offsets_column = child_offsets_from_string_vector(target_vector, stream, mr);
-  // build chars column
-  auto chars_column =
-    child_chars_from_string_vector(target_vector, offsets_column->view(), stream, mr);
-
-  return make_strings_column(target.size(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             UNKNOWN_NULL_COUNT,
-                             cudf::detail::copy_bitmask(target.parent(), stream, mr),
-                             stream,
-                             mr);
+  // build the output column
+  auto sv_span = cudf::device_span<string_view const>(target_vector);
+  return make_strings_column(sv_span, string_view{nullptr, 0}, stream, mr);
 }
 
 }  // namespace detail

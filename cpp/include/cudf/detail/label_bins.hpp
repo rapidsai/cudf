@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -39,8 +40,8 @@ namespace detail {
 
 /**
  * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
- * left_inclusive, column_view const& right_edges, inclusive right_inclusive, null_order
- * edge_null_precedence null_order::BEFORE, rmm::mr::device_memory_resource* mr)
+ * left_inclusive, column_view const& right_edges, inclusive right_inclusive, rmm::cuda_stream_view,
+ * rmm::mr::device_memory_resource* mr)
  *
  * @param stream Stream view on which to allocate resources and queue execution.
  */
@@ -50,7 +51,7 @@ std::unique_ptr<column> label_bins(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
@@ -34,14 +34,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         out_of_bounds_policy policy
     ) except +
 
-    cdef unique_ptr[table] reverse (
-        const table_view& source_table
-    ) except +
-
-    cdef unique_ptr[column] reverse (
-        const column_view& source_column
-    ) except +
-
     cdef unique_ptr[column] shift(
         const column_view& input,
         size_type offset,
@@ -52,14 +44,12 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view source_table,
         column_view scatter_map,
         table_view target_table,
-        bool bounds_check
     ) except +
 
     cdef unique_ptr[table] scatter (
         vector[reference_wrapper[constscalar]] source_scalars,
         column_view indices,
         table_view target,
-        bool bounds_check
     ) except +
 
     ctypedef enum mask_allocation_policy:
@@ -122,7 +112,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         vector[size_type] splits
     ) except +
 
-    cdef struct packed_columns:
+    cdef cppclass packed_columns:
         unique_ptr[metadata] metadata_
         unique_ptr[device_buffer] gpu_data
 
@@ -183,10 +173,3 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ctypedef enum sample_with_replacement:
         FALSE 'cudf::sample_with_replacement::FALSE',
         TRUE 'cudf::sample_with_replacement::TRUE',
-
-    cdef unique_ptr[table] sample (
-        table_view input,
-        size_type n,
-        sample_with_replacement replacement,
-        int64_t seed
-    ) except +

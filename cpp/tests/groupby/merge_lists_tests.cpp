@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,12 +42,12 @@ auto merge_lists(vcol_views const& keys_cols, vcol_views const& values_cols)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = *values;
-  requests[0].aggregations.emplace_back(cudf::make_merge_lists_aggregation());
+  requests[0].aggregations.emplace_back(
+    cudf::make_merge_lists_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);
-  return std::make_pair(std::move(result.first->release()[0]),
-                        std::move(result.second[0].results[0]));
+  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
 }
 
 }  // namespace
@@ -59,7 +59,7 @@ struct GroupbyMergeListsTypedTest : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(GroupbyMergeListsTypedTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(GroupbyMergeListsTypedTest, FixedWidthTypesNotBool);
 
 TYPED_TEST(GroupbyMergeListsTypedTest, InvalidInput)
 {

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import functools
 from typing import Any, Dict
@@ -103,7 +103,7 @@ def apply_chunks(
     return applychunks.run(df, chunks=chunks, tpb=tpb)
 
 
-def make_aggregate_nullmask(df, columns=None, op="and"):
+def make_aggregate_nullmask(df, columns=None, op="__and__"):
 
     out_mask = None
     for k in columns or df._data:
@@ -125,7 +125,7 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
     return out_mask
 
 
-class ApplyKernelCompilerBase(object):
+class ApplyKernelCompilerBase:
     def __init__(
         self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
     ):
@@ -173,7 +173,9 @@ class ApplyKernelCompilerBase(object):
                 outputs[k], index=outdf.index, nan_as_null=False
             )
             if out_mask is not None:
-                outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
+                outdf._data[k] = outdf[k]._column.set_mask(
+                    out_mask.data_array_view
+                )
 
         return outdf
 
@@ -251,7 +253,7 @@ def row_wise_kernel({args}):
                 srcidx.format(a=a, start=start, stop=stop, stride=stride)
             )
 
-    body.append("inner({})".format(args))
+    body.append(f"inner({args})")
 
     indented = ["{}{}".format(" " * 4, ln) for ln in body]
     # Finalize source
@@ -307,7 +309,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     slicedargs = {}
     for a in argnames:
         if a not in extras:
-            slicedargs[a] = "{}[start:stop]".format(a)
+            slicedargs[a] = f"{a}[start:stop]"
         else:
             slicedargs[a] = str(a)
     body.append(
@@ -332,8 +334,7 @@ _cache = dict()  # type: Dict[Any, Any]
 
 @functools.wraps(_make_row_wise_kernel)
 def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``.
-    """
+    """Caching version of ``_make_row_wise_kernel``."""
     if cache_key is None:
         cache_key = func
     try:
@@ -349,8 +350,7 @@ def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
 
 @functools.wraps(_make_chunk_wise_kernel)
 def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``.
-    """
+    """Caching version of ``_make_row_wise_kernel``."""
     try:
         return _cache[func]
     except KeyError:
@@ -360,6 +360,5 @@ def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
 
 
 def _mangle_user(name):
-    """Mangle user variable name
-    """
-    return "__user_{}".format(name)
+    """Mangle user variable name"""
+    return f"__user_{name}"

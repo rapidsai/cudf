@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 /**
  * @file
@@ -51,8 +53,10 @@ class scalar {
 
   /**
    * @brief Returns the scalar's logical value type.
+   *
+   * @return The scalar's logical value type
    */
-  data_type type() const noexcept;
+  [[nodiscard]] data_type type() const noexcept;
 
   /**
    * @brief Updates the validity of the value.
@@ -60,7 +64,7 @@ class scalar {
    * @param is_valid true: set the value to valid. false: set it to null.
    * @param stream CUDA stream used for device memory operations.
    */
-  void set_valid_async(bool is_valid, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  void set_valid_async(bool is_valid, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Indicates whether the scalar contains a valid value.
@@ -69,20 +73,24 @@ class scalar {
    * function does a stream synchronization.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return true Value is valid.
-   * @return false Value is invalid/null.
+   * @return true Value is valid
+   * @return false Value is invalid/null
    */
-  bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns a raw pointer to the validity bool in device memory.
+   *
+   * @return Raw pointer to the validity bool in device memory
    */
   bool* validity_data();
 
   /**
-   * @brief Returns a const raw pointer to the validity bool in device memory.
+   * @brief Return a const raw pointer to the validity bool in device memory.
+   *
+   * @return Raw pointer to the validity bool in device memory
    */
-  bool const* validity_data() const;
+  [[nodiscard]] bool const* validity_data() const;
 
  protected:
   data_type _type{type_id::EMPTY};     ///< Logical type of value in the scalar
@@ -90,6 +98,10 @@ class scalar {
 
   scalar() = delete;
 
+  /**
+   * @brief Move constructor for scalar.
+   * @param other The other scalar to move from.
+   */
   scalar(scalar&& other) = default;
 
   /**
@@ -100,7 +112,7 @@ class scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   scalar(scalar const& other,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+         rmm::cuda_stream_view stream        = cudf::get_default_stream(),
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -116,19 +128,29 @@ class scalar {
    */
   scalar(data_type type,
          bool is_valid                       = false,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+         rmm::cuda_stream_view stream        = cudf::get_default_stream(),
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 
 namespace detail {
+/**
+ * @brief An owning class to represent a fixed-width type value in device memory.
+ *
+ * @tparam T the data type of the fixed-width type value.
+ */
 template <typename T>
 class fixed_width_scalar : public scalar {
   static_assert(is_fixed_width<T>(), "Unexpected non-fixed-width type.");
 
  public:
-  using value_type = T;
+  using value_type = T;  ///< Type of the value held by the scalar.
 
-  ~fixed_width_scalar()                          = default;
+  ~fixed_width_scalar() override = default;
+
+  /**
+   * @brief Move constructor for fixed_width_scalar.
+   * @param other The other fixed_width_scalar to move from.
+   */
   fixed_width_scalar(fixed_width_scalar&& other) = default;
 
   fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
@@ -142,7 +164,7 @@ class fixed_width_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(fixed_width_scalar const& other,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -151,7 +173,7 @@ class fixed_width_scalar : public scalar {
    * @param value New value of scalar.
    * @param stream CUDA stream used for device memory operations.
    */
-  void set_value(T value, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  void set_value(T value, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Explicit conversion operator to get the value of the scalar on the host.
@@ -162,16 +184,19 @@ class fixed_width_scalar : public scalar {
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return Value of the scalar
    */
-  T value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  T value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
+   * @return A raw pointer to the value in device memory
    */
   T* data();
 
   /**
    * @brief Returns a const raw pointer to the value in device memory.
+   * @return A const raw pointer to the value in device memory
    */
   T const* data() const;
 
@@ -190,7 +215,7 @@ class fixed_width_scalar : public scalar {
    */
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -203,7 +228,7 @@ class fixed_width_scalar : public scalar {
    */
   fixed_width_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 
@@ -219,8 +244,13 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
 
  public:
-  numeric_scalar()                       = delete;
-  ~numeric_scalar()                      = default;
+  numeric_scalar()  = delete;
+  ~numeric_scalar() = default;
+
+  /**
+   * @brief Move constructor for numeric_scalar.
+   * @param other The other numeric_scalar to move from.
+   */
   numeric_scalar(numeric_scalar&& other) = default;
 
   numeric_scalar& operator=(numeric_scalar const& other) = delete;
@@ -234,7 +264,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(numeric_scalar const& other,
-                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                 rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -247,7 +277,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    */
   numeric_scalar(T value,
                  bool is_valid                       = true,
-                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                 rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -260,7 +290,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
    */
   numeric_scalar(rmm::device_scalar<T>&& data,
                  bool is_valid                       = true,
-                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                 rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 
@@ -274,11 +304,16 @@ class fixed_point_scalar : public scalar {
   static_assert(is_fixed_point<T>(), "Unexpected non-fixed_point type.");
 
  public:
-  using rep_type   = typename T::rep;
-  using value_type = T;
+  using rep_type   = typename T::rep;  ///< The representation type of the fixed_point number.
+  using value_type = T;                ///< The value type of the fixed_point number.
 
-  fixed_point_scalar()                           = delete;
-  ~fixed_point_scalar()                          = default;
+  fixed_point_scalar()           = delete;
+  ~fixed_point_scalar() override = default;
+
+  /**
+   * @brief Move constructor for fixed_point_scalar.
+   * @param other The other fixed_point_scalar to move from.
+   */
   fixed_point_scalar(fixed_point_scalar&& other) = default;
 
   fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
@@ -292,7 +327,7 @@ class fixed_point_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(fixed_point_scalar const& other,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -307,7 +342,7 @@ class fixed_point_scalar : public scalar {
   fixed_point_scalar(rep_type value,
                      numeric::scale_type scale,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -320,7 +355,7 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(rep_type value,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -333,7 +368,7 @@ class fixed_point_scalar : public scalar {
    */
   fixed_point_scalar(T value,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -348,22 +383,24 @@ class fixed_point_scalar : public scalar {
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                      numeric::scale_type scale,
                      bool is_valid                       = true,
-                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar
    */
-  rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  rep_type value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
-   * @brief Get the decimal32 or decimal64.
+   * @brief Get the decimal32, decimal64 or decimal128.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The decimal32, decimal64 or decimal128 value
    */
-  T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  T fixed_point_value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Explicit conversion operator to get the value of the scalar on the host.
@@ -372,11 +409,13 @@ class fixed_point_scalar : public scalar {
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
+   * @return A raw pointer to the value in device memory
    */
   rep_type* data();
 
   /**
    * @brief Returns a const raw pointer to the value in device memory.
+   * @return a const raw pointer to the value in device memory
    */
   rep_type const* data() const;
 
@@ -389,10 +428,15 @@ class fixed_point_scalar : public scalar {
  */
 class string_scalar : public scalar {
  public:
-  using value_type = cudf::string_view;
+  using value_type = cudf::string_view;  ///< The value type of the string scalar.
 
-  string_scalar()                      = delete;
-  ~string_scalar()                     = default;
+  string_scalar()           = delete;
+  ~string_scalar() override = default;
+
+  /**
+   * @brief Move constructor for string_scalar.
+   * @param other The other string_scalar to move from.
+   */
   string_scalar(string_scalar&& other) = default;
 
   // string_scalar(string_scalar const& other) = delete;
@@ -407,20 +451,20 @@ class string_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(string_scalar const& other,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new string scalar object.
    *
-   * @param value The value of the string.
+   * @param string The value of the string.
    * @param is_valid Whether the value held by the scalar is valid.
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -435,7 +479,7 @@ class string_scalar : public scalar {
    */
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -450,7 +494,7 @@ class string_scalar : public scalar {
    */
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -466,7 +510,7 @@ class string_scalar : public scalar {
    */
   string_scalar(rmm::device_buffer&& data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -478,25 +522,30 @@ class string_scalar : public scalar {
    * @brief Get the value of the scalar in a host std::string.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar in a host std::string
    */
-  std::string to_string(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  [[nodiscard]] std::string to_string(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Get the value of the scalar as a string_view.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar as a string_view
    */
-  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  [[nodiscard]] value_type value(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Returns the size of the string in bytes.
+   * @return The size of the string in bytes
    */
-  size_type size() const;
+  [[nodiscard]] size_type size() const;
 
   /**
    * @brief Returns a raw pointer to the string in device memory.
+   * @return a raw pointer to the string in device memory
    */
-  const char* data() const;
+  [[nodiscard]] const char* data() const;
 
  protected:
   rmm::device_buffer _data{};  ///< device memory containing the string
@@ -513,8 +562,13 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
-  chrono_scalar()                      = delete;
-  ~chrono_scalar()                     = default;
+  chrono_scalar()  = delete;
+  ~chrono_scalar() = default;
+
+  /**
+   * @brief Move constructor for chrono_scalar.
+   * @param other The other chrono_scalar to move from.
+   */
   chrono_scalar(chrono_scalar&& other) = default;
 
   chrono_scalar& operator=(chrono_scalar const& other) = delete;
@@ -528,7 +582,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(chrono_scalar const& other,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -541,7 +595,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    */
   chrono_scalar(T value,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -554,18 +608,29 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
    */
   chrono_scalar(rmm::device_scalar<T>&& data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 
+/**
+ * @brief An owning class to represent a timestamp value in device memory.
+ *
+ * @tparam T the data type of the timestamp value.
+ * @see cudf/wrappers/timestamps.hpp for a list of allowed types.
+ */
 template <typename T>
 class timestamp_scalar : public chrono_scalar<T> {
  public:
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
   using chrono_scalar<T>::chrono_scalar;
-  using rep_type = typename T::rep;
+  using rep_type = typename T::rep;  ///< The underlying representation type of the timestamp.
 
-  timestamp_scalar()                         = delete;
+  timestamp_scalar() = delete;
+
+  /**
+   * @brief Move constructor for timestamp_scalar.
+   * @param other The other timestamp_scalar to move from.
+   */
   timestamp_scalar(timestamp_scalar&& other) = default;
 
   /**
@@ -576,7 +641,7 @@ class timestamp_scalar : public chrono_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   timestamp_scalar(timestamp_scalar const& other,
-                   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -592,23 +657,35 @@ class timestamp_scalar : public chrono_scalar<T> {
   template <typename Duration2>
   timestamp_scalar(Duration2 const& value,
                    bool is_valid,
-                   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Return the duration in number of ticks since the UNIX epoch.
+   * @brief Returns the duration in number of ticks since the UNIX epoch.
+   * @return The duration in number of ticks since the UNIX epoch
    */
   rep_type ticks_since_epoch();
 };
 
+/**
+ * @brief An owning class to represent a duration value in device memory.
+ *
+ * @tparam T the data type of the duration value.
+ * @see cudf/wrappers/durations.hpp for a list of allowed types.
+ */
 template <typename T>
 class duration_scalar : public chrono_scalar<T> {
  public:
   static_assert(is_duration<T>(), "Unexpected non-duration type");
   using chrono_scalar<T>::chrono_scalar;
-  using rep_type = typename T::rep;
+  using rep_type = typename T::rep;  ///< The duration's underlying representation type.
 
-  duration_scalar()                        = delete;
+  duration_scalar() = delete;
+
+  /**
+   * @brief Move constructor for duration_scalar.
+   * @param other The other duration_scalar to move from.
+   */
   duration_scalar(duration_scalar&& other) = default;
 
   /**
@@ -619,7 +696,7 @@ class duration_scalar : public chrono_scalar<T> {
    * @param mr Device memory resource to use for device memory allocation.
    */
   duration_scalar(duration_scalar const& other,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -632,11 +709,12 @@ class duration_scalar : public chrono_scalar<T> {
    */
   duration_scalar(rep_type value,
                   bool is_valid,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Return the duration in number of ticks.
+   * @brief Returns the duration in number of ticks.
+   * @return The duration in number of ticks
    */
   rep_type count();
 };
@@ -646,8 +724,13 @@ class duration_scalar : public chrono_scalar<T> {
  */
 class list_scalar : public scalar {
  public:
-  list_scalar()                    = delete;
-  ~list_scalar()                   = default;
+  list_scalar()           = delete;
+  ~list_scalar() override = default;
+
+  /**
+   * @brief Move constructor for list_scalar.
+   * @param other The other list_scalar to move from.
+   */
   list_scalar(list_scalar&& other) = default;
 
   list_scalar& operator=(list_scalar const& other) = delete;
@@ -661,7 +744,7 @@ class list_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation.
    */
   list_scalar(list_scalar const& other,
-              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::cuda_stream_view stream        = cudf::get_default_stream(),
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -676,7 +759,7 @@ class list_scalar : public scalar {
    */
   list_scalar(cudf::column_view const& data,
               bool is_valid                       = true,
-              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::cuda_stream_view stream        = cudf::get_default_stream(),
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -689,13 +772,14 @@ class list_scalar : public scalar {
    */
   list_scalar(cudf::column&& data,
               bool is_valid                       = true,
-              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::cuda_stream_view stream        = cudf::get_default_stream(),
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
+   * @return A non-owning, immutable view to underlying device data
    */
-  column_view view() const;
+  [[nodiscard]] column_view view() const;
 
  private:
   cudf::column _data;
@@ -706,12 +790,27 @@ class list_scalar : public scalar {
  */
 class struct_scalar : public scalar {
  public:
-  struct_scalar()                           = delete;
-  ~struct_scalar()                          = default;
-  struct_scalar(struct_scalar&& other)      = default;
-  struct_scalar(struct_scalar const& other) = default;
+  struct_scalar()           = delete;
+  ~struct_scalar() override = default;
+
+  /**
+   * @brief Move constructor for struct_scalar.
+   * @param other The other struct_scalar to move from.
+   */
+  struct_scalar(struct_scalar&& other) = default;
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new struct scalar object by deep copying another.
+   *
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
+   */
+  struct_scalar(struct_scalar const& other,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new struct scalar object from table_view.
@@ -725,7 +824,7 @@ class struct_scalar : public scalar {
    */
   struct_scalar(table_view const& data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -740,7 +839,7 @@ class struct_scalar : public scalar {
    */
   struct_scalar(host_span<column_view const> data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -756,13 +855,14 @@ class struct_scalar : public scalar {
    */
   struct_scalar(table&& data,
                 bool is_valid                       = true,
-                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
+   * @return A non-owning, immutable view to underlying device data
    */
-  table_view view() const;
+  [[nodiscard]] table_view view() const;
 
  private:
   table _data;

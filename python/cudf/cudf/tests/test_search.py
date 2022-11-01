@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 import cupy
 import numpy as np
 import pandas as pd
@@ -26,13 +26,13 @@ def test_searchsorted(side, obj_class, vals_class):
 
     # Reference object can be Series, Index, or Column
     if obj_class == "index":
-        sr = cudf.Series.as_index(sr)
+        sr.reset_index(drop=True)
     elif obj_class == "column":
         sr = sr._column
 
     # Values can be Series or Index
     if vals_class == "index":
-        vals = cudf.Series.as_index(vals)
+        vals.reset_index(drop=True)
 
     psr = sr.to_pandas()
     pvals = vals.to_pandas()
@@ -71,6 +71,14 @@ def test_searchsorted_dataframe(side, multiindex):
         assert result == [1, 0, 3, 1]
     else:
         assert result == [2, 0, 4, 1]
+
+
+def test_search_sorted_dataframe_unequal_number_of_columns():
+    values = cudf.DataFrame({"a": [1, 0, 5, 1]})
+    base = cudf.DataFrame({"a": [1, 0, 5, 1], "b": ["x", "z", "w", "a"]})
+
+    with pytest.raises(ValueError, match="Mismatch number of columns"):
+        base.searchsorted(values)
 
 
 @pytest.mark.parametrize("side", ["left", "right"])

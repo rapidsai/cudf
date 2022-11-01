@@ -1,8 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
-
-import numpy as np
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -11,12 +9,11 @@ from libcpp.utility cimport move
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 
-from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -24,10 +21,11 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
-from cudf.utils.dtypes import is_scalar, is_string_dtype
+from cudf.api.types import is_scalar, is_string_dtype
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator
+import cudf
 
 
 class BinaryOperation(IntEnum):
@@ -54,6 +52,9 @@ class BinaryOperation(IntEnum):
     )
     POW = (
         <underlying_type_t_binary_operator> binary_operator.POW
+    )
+    INT_POW = (
+        <underlying_type_t_binary_operator> binary_operator.INT_POW
     )
     EQ = (
         <underlying_type_t_binary_operator> binary_operator.EQUAL
@@ -159,6 +160,10 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    # TODO: Shouldn't have to keep special-casing. We need to define a separate
+    # pipeline for libcudf binops that don't map to Python binops.
+    if op not in {"INT_POW", "NULL_EQUALS"}:
+        op = op[2:-2]
 
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
@@ -211,7 +216,7 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     cdef type_id tid = (
         <type_id> (
             <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
+                SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[cudf.dtype(dtype)]
             )
         )
     )

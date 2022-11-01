@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -90,6 +93,7 @@ namespace cudf {
  * @param[in] column_order Sort order types of columns indexed by key_cols
  * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns A table containing sorted data from all input tables
  */

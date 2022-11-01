@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 
@@ -52,7 +54,6 @@ namespace cudf {
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @return void
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -102,26 +103,22 @@ std::unique_ptr<column> fill(
  * ```
  * @p count should not have null values; should not contain negative values;
  * and the sum of count elements should not overflow the size_type's limit.
- * It is undefined behavior if @p count has negative values or the sum overflows
- * and @p check_count is set to false.
+ * The behavior of this function is undefined if @p count has negative values
+ * or the sum overflows.
  *
  * @throws cudf::logic_error if the data type of @p count is not size_type.
  * @throws cudf::logic_error if @p input_table and @p count have different
  * number of rows.
  * @throws cudf::logic_error if @p count has null values.
- * @throws cudf::logic_error if @p check_count is set to true and @p count
- * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
  * @param count Non-nullable column of an integral type
- * @param check_count Whether to check count (negative values and overflow)
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
-  bool check_count                    = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -141,7 +138,7 @@ std::unique_ptr<table> repeat(
  *
  * @param input_table Input table
  * @param count Number of repetitions
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
@@ -162,7 +159,7 @@ std::unique_ptr<table> repeat(
  * step = 2
  * return = [0, 2, 4]
  * ```
- * @throws cudf::logic_error if @p init and @p @step are not the same type.
+ * @throws cudf::logic_error if @p init and @p step are not the same type.
  * @throws cudf::logic_error if scalar types are not numeric.
  * @throws cudf::logic_error if @p size is < 0.
  *
@@ -170,7 +167,7 @@ std::unique_ptr<table> repeat(
  * @param init First value in the sequence
  * @param step Increment value
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
@@ -196,11 +193,40 @@ std::unique_ptr<column> sequence(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Generate a sequence of timestamps beginning at `init` and incrementing by `months` for
+ * each successive element, i.e., `output[i] = init + i * months` for `i` in `[0, size)`.
+ *
+ * If a given date is invalid, the date is scaled back to the last available day of that month.
+ *
+ * Example:
+ * ```
+ * size = 3
+ * init = 2020-01-31 08:00:00
+ * months = 1
+ * return = [2020-01-31 08:00:00, 2020-02-29 08:00:00, 2020-03-31 08:00:00]
+ * ```
+ *
+ * @throw cudf::logic_error if input datatype is not a TIMESTAMP
+ *
+ * @param size Number of timestamps to generate
+ * @param init The initial timestamp
+ * @param months Months to increment
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @return Timestamps column with sequences of months
+ */
+std::unique_ptr<cudf::column> calendrical_month_sequence(
+  size_type size,
+  scalar const& init,
+  size_type months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

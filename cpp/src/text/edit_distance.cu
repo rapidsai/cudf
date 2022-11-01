@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,17 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -226,7 +232,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
   rmm::device_uvector<int32_t> offsets(n_upper, stream);
   auto d_offsets = offsets.data();
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -303,7 +309,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance(strings, targets, rmm::cuda_stream_default, mr);
+  return detail::edit_distance(strings, targets, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -313,7 +319,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance_matrix(strings, rmm::cuda_stream_default, mr);
+  return detail::edit_distance_matrix(strings, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

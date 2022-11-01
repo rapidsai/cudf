@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,10 @@
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <optional>
 
 namespace cudf {
 namespace strings {
@@ -47,7 +51,7 @@ namespace strings {
  *
  * @throw cudf::logic_error if the size of the output string scalar exceeds the maximum value that
  *        can be stored by the index type
- *        (i.e., `input.size() * repeat_times > numeric_limits<size_type>::max()`).
+ *        (i.e., @code input.size() * repeat_times > numeric_limits<size_type>::max() @endcode).
  *
  * @param input The scalar containing the string to repeat.
  * @param repeat_times The number of times the input string is repeated.

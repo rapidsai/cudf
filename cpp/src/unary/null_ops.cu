@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,42 +15,57 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
-std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
+namespace detail {
+std::unique_ptr<column> is_null(cudf::column_view const& input,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  auto input_device_view = column_device_view::create(input);
+  auto input_device_view = column_device_view::create(input, stream);
   auto device_view       = *input_device_view;
   auto predicate = [device_view] __device__(auto index) { return (device_view.is_null(index)); };
   return detail::true_if(thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
-                         rmm::cuda_stream_default,
+                         stream,
                          mr);
 }
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  auto input_device_view = column_device_view::create(input);
+  auto input_device_view = column_device_view::create(input, stream);
   auto device_view       = *input_device_view;
   auto predicate = [device_view] __device__(auto index) { return device_view.is_valid(index); };
   return detail::true_if(thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
-                         rmm::cuda_stream_default,
+                         stream,
                          mr);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_null(input, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> is_valid(cudf::column_view const& input,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_valid(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

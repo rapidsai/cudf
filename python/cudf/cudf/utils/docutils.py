@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 """
 Helper functions for parameterized docstring
@@ -20,7 +20,7 @@ _wrapopts = {"width": 78, "replace_whitespace": False}
 def docfmt(**kwargs):
     """Format docstring.
 
-    Simliar to saving the result of ``__doc__.format(**kwargs)`` as the
+    Similiar to saving the result of ``__doc__.format(**kwargs)`` as the
     function's docstring.
     """
     kwargs = {k: v.lstrip() for k, v in kwargs.items()}
@@ -63,6 +63,16 @@ def copy_docstring(other):
 
     def wrapper(func):
         func.__doc__ = other.__doc__
+        return func
+
+    return wrapper
+
+
+def doc_apply(doc):
+    """Set `__doc__` attribute of `func` to `doc`."""
+
+    def wrapper(func):
+        func.__doc__ = doc
         return func
 
     return wrapper
@@ -215,13 +225,13 @@ doc_describe = docfmt_partial(
         2   2010-01-01
         dtype: datetime64[s]
         >>> s.describe()
-        count                                3
-        mean     2006-09-01 08:00:00.000000000
-        min      2000-01-01 00:00:00.000000000
-        25%      2004-12-31 12:00:00.000000000
-        50%      2010-01-01 00:00:00.000000000
-        75%      2010-01-01 00:00:00.000000000
-        max      2010-01-01 00:00:00.000000000
+        count                     3
+        mean    2006-09-01 08:00:00
+        min     2000-01-01 00:00:00
+        25%     2004-12-31 12:00:00
+        50%     2010-01-01 00:00:00
+        75%     2010-01-01 00:00:00
+        max     2010-01-01 00:00:00
         dtype: object
 
         Describing a ``DataFrame``. By default only numeric fields are

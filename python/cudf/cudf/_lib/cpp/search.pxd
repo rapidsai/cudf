@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -12,15 +12,15 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cdef extern from "cudf/search.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] lower_bound(
-        table_view t,
-        table_view values,
+        table_view haystack,
+        table_view needles,
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence,
     ) except +
 
     cdef unique_ptr[column] upper_bound(
-        table_view t,
-        table_view values,
+        table_view haystack,
+        table_view needles,
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence,
     ) except +

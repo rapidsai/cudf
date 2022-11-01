@@ -1,5 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -7,15 +8,18 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.contains cimport (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
+    like as cpp_like,
     matches_re as cpp_matches_re,
 )
+from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 from cudf._lib.scalar cimport DeviceScalar
 
 
-def contains_re(Column source_strings, object reg_ex):
+def contains_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain regular expression `reg_ex`.
@@ -24,17 +28,19 @@ def contains_re(Column source_strings, object reg_ex):
     cdef column_view source_view = source_strings.view()
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
+    cdef regex_flags c_flags = <regex_flags>flags
 
     with nogil:
         c_result = move(cpp_contains_re(
             source_view,
-            reg_ex_string
+            reg_ex_string,
+            c_flags
         ))
 
     return Column.from_unique_ptr(move(c_result))
 
 
-def count_re(Column source_strings, object reg_ex):
+def count_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column with count of occurrences of `reg_ex` in
     each string of `source_strings`
@@ -43,17 +49,19 @@ def count_re(Column source_strings, object reg_ex):
     cdef column_view source_view = source_strings.view()
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
+    cdef regex_flags c_flags = <regex_flags>flags
 
     with nogil:
         c_result = move(cpp_count_re(
             source_view,
-            reg_ex_string
+            reg_ex_string,
+            c_flags
         ))
 
     return Column.from_unique_ptr(move(c_result))
 
 
-def match_re(Column source_strings, object reg_ex):
+def match_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column with each value True if the string matches `reg_ex`
     regular expression with each record of `source_strings`
@@ -62,11 +70,41 @@ def match_re(Column source_strings, object reg_ex):
     cdef column_view source_view = source_strings.view()
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
+    cdef regex_flags c_flags = <regex_flags>flags
 
     with nogil:
         c_result = move(cpp_matches_re(
             source_view,
-            reg_ex_string
+            reg_ex_string,
+            c_flags
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def like(Column source_strings, object py_pattern, object py_escape):
+    """
+    Returns a Column with each value True if the string matches the
+    `py_pattern` like expression with each record of `source_strings`
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    cdef DeviceScalar pattern = py_pattern.device_value
+    cdef DeviceScalar escape = py_escape.device_value
+
+    cdef const string_scalar* scalar_ptn = <const string_scalar*>(
+        pattern.get_raw_ptr()
+    )
+    cdef const string_scalar* scalar_esc = <const string_scalar*>(
+        escape.get_raw_ptr()
+    )
+
+    with nogil:
+        c_result = move(cpp_like(
+            source_view,
+            scalar_ptn[0],
+            scalar_esc[0]
         ))
 
     return Column.from_unique_ptr(move(c_result))

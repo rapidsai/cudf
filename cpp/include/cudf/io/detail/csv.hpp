@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -24,95 +25,39 @@ namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
+
 /**
- * @brief Class to read CSV dataset data into columns.
+ * @brief Reads the entire dataset.
+ *
+ * @param sources Input `datasource` object to read the dataset from
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ *
+ * @return The set of columns along with table metadata
  */
-class reader {
- private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
+                             csv_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
- public:
-  /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const& filepaths,
-                  csv_reader_options const& options,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+/**
+ * @brief Write an entire dataset to CSV format.
+ *
+ * @param sink Output sink
+ * @param table The set of columns
+ * @param column_names Column names for the output CSV
+ * @param options Settings for controlling behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_csv(data_sink* sink,
+               table_view const& table,
+               host_span<std::string const> column_names,
+               csv_writer_options const& options,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-  /**
-   * @brief Constructor from an array of datasources
-   *
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                  csv_reader_options const& options,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~reader();
-
-  /**
-   * @brief Reads the entire dataset.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return The set of columns along with table metadata
-   */
-  table_with_metadata read(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
-};
-
-class writer {
- public:
-  class impl;
-
- private:
-  std::unique_ptr<impl> _impl;
-
- public:
-  /**
-   * @brief Constructor for output to a file.
-   *
-   * @param sinkp The data sink to write the data to
-   * @param options Settings for controlling writing behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  writer(std::unique_ptr<cudf::io::data_sink> sinkp,
-         csv_writer_options const& options,
-         rmm::cuda_stream_view stream,
-         rmm::mr::device_memory_resource* mr);  // cannot provide definition here (because
-                                                // _impl is incomplete hence unique_ptr has
-                                                // not enough sizeof() info)
-
-  /**
-   * @brief Destructor explicitly-declared to avoid inlined in header
-   */
-  ~writer();
-
-  /**
-   * @brief Writes the entire dataset.
-   *
-   * @param table Set of columns to output
-   * @param metadata Table metadata and column names
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  void write(table_view const& table,
-             const table_metadata* metadata = nullptr,
-             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
-};
 }  // namespace csv
 }  // namespace detail
 }  // namespace io

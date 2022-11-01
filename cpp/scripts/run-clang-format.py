@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-from __future__ import print_function
 
 import argparse
 import os
@@ -22,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 
-EXPECTED_VERSION = "11.0.0"
+EXPECTED_VERSION = "11.1.0"
 VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 # NOTE: populate this list with more top-level dirs as we add more of them to
 # the cudf repo
@@ -124,9 +123,9 @@ def run_clang_format(src, dst, exe, verbose, inplace):
         os.makedirs(dstdir)
     # run the clang format command itself
     if src == dst:
-        cmd = "%s -i %s" % (exe, src)
+        cmd = f"{exe} -i {src}"
     else:
-        cmd = "%s %s > %s" % (exe, src, dst)
+        cmd = f"{exe} {src} > {dst}"
     try:
         subprocess.check_call(cmd, shell=True)
     except subprocess.CalledProcessError:
@@ -134,9 +133,9 @@ def run_clang_format(src, dst, exe, verbose, inplace):
         raise
     # run the diff to check if there are any formatting issues
     if inplace:
-        cmd = "diff -q %s %s >/dev/null" % (src, dst)
+        cmd = f"diff -q {src} {dst} >/dev/null"
     else:
-        cmd = "diff %s %s" % (src, dst)
+        cmd = f"diff {src} {dst}"
 
     try:
         subprocess.check_call(cmd, shell=True)

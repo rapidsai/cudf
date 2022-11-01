@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,16 +90,16 @@ test_case<T> interpolate_center()
   auto low     = std::numeric_limits<T>::lowest();
   auto max     = std::numeric_limits<T>::max();
   double mid_d = [] {
-    if (std::is_floating_point<T>::value) return 0.0;
-    if (std::is_signed<T>::value) return -0.5;
+    if (std::is_floating_point_v<T>) return 0.0;
+    if (std::is_signed_v<T>) return -0.5;
     return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
   }();
 
   // int64_t is internally casted to a double, meaning the lerp center point
   // is float-like.
   double lin_d = [] {
-    if (std::is_floating_point<T>::value || std::is_same_v<T, int64_t>) return 0.0;
-    if (std::is_signed<T>::value) return -0.5;
+    if (std::is_floating_point_v<T> || std::is_same_v<T, int64_t>) return 0.0;
+    if (std::is_signed_v<T>) return -0.5;
     return static_cast<double>(std::numeric_limits<T>::max()) / 2.0;
   }();
   auto max_d = static_cast<double>(max);
@@ -164,7 +164,7 @@ test_case<bool> interpolate_extrema_low<bool>()
 // single
 
 template <typename T>
-std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> single()
+std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> single()
 {
   return test_case<T>{fixed_width_column_wrapper<T>({7.309999942779541}),
                       {
@@ -196,7 +196,7 @@ std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> single()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>> single()
+std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> single()
 {
   return test_case<T>{fixed_width_column_wrapper<T>({1}), {q_expect{0.7, 1, 1, 1, 1, 1}}};
 }
@@ -210,7 +210,7 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> single()
 // all_invalid
 
 template <typename T>
-std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> all_invalid()
+std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> all_invalid()
 {
   return test_case<T>{
     fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7},
@@ -219,8 +219,7 @@ std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> all_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
-all_invalid()
+std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> all_invalid()
 {
   return test_case<T>{
     fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}, {0, 0, 0, 0, 0, 0, 0, 0, 0}),
@@ -274,8 +273,7 @@ std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
-some_invalid()
+std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> some_invalid()
 {
   return test_case<T>{
     fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}, {0, 0, 1, 0, 0, 0, 0, 0, 1}),
@@ -299,7 +297,7 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> some_invalid()
 // unsorted
 
 template <typename T>
-std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> unsorted()
+std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> unsorted()
 {
   return test_case<T>{
     fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.00, 0.8, 5.7}),
@@ -310,7 +308,7 @@ std::enable_if_t<std::is_floating_point<T>::value, test_case<T>> unsorted()
 }
 
 template <typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>> unsorted()
+std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> unsorted()
 {
   return std::is_signed<T>()
            ? test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
@@ -391,7 +389,7 @@ struct QuantileTest : public BaseFixture {
 };
 
 using TestTypes = NumericTypes;
-TYPED_TEST_CASE(QuantileTest, TestTypes);
+TYPED_TEST_SUITE(QuantileTest, TestTypes);
 
 TYPED_TEST(QuantileTest, TestSingle) { test(testdata::single<TypeParam>()); }
 
@@ -424,8 +422,9 @@ template <typename T>
 struct QuantileUnsupportedTypesTest : public BaseFixture {
 };
 
-using UnsupportedTestTypes = RemoveIf<ContainedIn<TestTypes>, AllTypes>;
-TYPED_TEST_CASE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
+// TODO add tests for FixedPointTypes
+using UnsupportedTestTypes = RemoveIf<ContainedIn<Concat<TestTypes, FixedPointTypes>>, AllTypes>;
+TYPED_TEST_SUITE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 {

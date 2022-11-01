@@ -1,9 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 
-class UnSupportedGPUError(Exception):
-    pass
-
-
-class UnSupportedCUDAError(Exception):
+class UnsupportedCUDAError(Exception):
     pass

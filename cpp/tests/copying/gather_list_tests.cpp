@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/strings/utilities.h>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -23,13 +29,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
-
 template <typename T>
 class GatherTestListTyped : public cudf::test::BaseFixture {
 };
@@ -38,7 +37,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(GatherTestListTyped, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(GatherTestListTyped, FixedWidthTypesNotBool);
 
 class GatherTestList : public cudf::test::BaseFixture {
 };
@@ -267,7 +266,8 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
     auto results = cudf::detail::gather(source_table,
                                         gather_map,
                                         cudf::out_of_bounds_policy::NULLIFY,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        cudf::get_default_stream());
 
     std::vector<int32_t> expected_validity{1, 0, 0, 1};
     LCW<T> expected{{{{2, 3}, {4, 5}},

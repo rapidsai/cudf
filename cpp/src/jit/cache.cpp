@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,9 +77,9 @@ std::filesystem::path get_cache_dir()
     int device;
     int cc_major;
     int cc_minor;
-    CUDA_TRY(cudaGetDevice(&device));
-    CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
-    CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
+    CUDF_CUDA_TRY(cudaGetDevice(&device));
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+    CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
     int cc = cc_major * 10 + cc_minor;
 
     kernel_cache_path /= std::to_string(cc);
@@ -104,13 +104,10 @@ std::string get_program_cache_dir()
 #endif
 }
 
-void try_parse_numeric_env_var(std::size_t& result, char const* const env_name)
+std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
 {
-  auto value = std::getenv(env_name);
-
-  if (value != nullptr) {
-    result = std::stoull(value);  // fails if env var contains invalid value.
-  }
+  auto const value = std::getenv(env_name);
+  return value != nullptr ? std::stoull(value) : default_val;
 }
 
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
@@ -123,27 +120,19 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    std::size_t kernel_limit_proc = std::numeric_limits<std::size_t>::max();
-    std::size_t kernel_limit_disk = std::numeric_limits<std::size_t>::max();
-    try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
-    try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
+    auto const kernel_limit_proc =
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
+    auto const kernel_limit_disk =
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
 
-    auto cache_dir = get_program_cache_dir();
+    // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
+    // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
+    auto const cache_dir = kernel_limit_disk == 0 ? std::string{} : get_program_cache_dir();
 
-    if (kernel_limit_disk == 0) {
-      // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
-      // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
-      cache_dir = {};
-    }
-
-    auto res = caches.insert({preprog.name(),
-                              std::make_unique<jitify2::ProgramCache<>>(  //
-                                kernel_limit_proc,
-                                preprog,
-                                nullptr,
-                                cache_dir,
-                                kernel_limit_disk)});
-
+    auto const res =
+      caches.insert({preprog.name(),
+                     std::make_unique<jitify2::ProgramCache<>>(
+                       kernel_limit_proc, preprog, nullptr, cache_dir, kernel_limit_disk)});
     existing_cache = res.first;
   }
 

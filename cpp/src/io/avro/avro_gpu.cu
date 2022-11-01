@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "avro_gpu.h"
+#include "avro_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -65,14 +65,15 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, 
  *
  * @return data pointer at the end of the row (start of next row)
  */
-static const uint8_t* __device__ avro_decode_row(const schemadesc_s* schema,
-                                                 schemadesc_s* schema_g,
-                                                 uint32_t schema_len,
-                                                 size_t row,
-                                                 size_t max_rows,
-                                                 const uint8_t* cur,
-                                                 const uint8_t* end,
-                                                 device_span<string_index_pair> global_dictionary)
+static uint8_t const* __device__
+avro_decode_row(schemadesc_s const* schema,
+                schemadesc_s* schema_g,
+                uint32_t schema_len,
+                size_t row,
+                size_t max_rows,
+                uint8_t const* cur,
+                uint8_t const* end,
+                device_span<string_index_pair const> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
@@ -119,7 +120,7 @@ static const uint8_t* __device__ avro_decode_row(const schemadesc_s* schema,
           if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
         } else {  // string or enum
           size_t count    = 0;
-          const char* ptr = 0;
+          const char* ptr = nullptr;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
             if (idx < global_dictionary.size()) {
@@ -220,19 +221,17 @@ static const uint8_t* __device__ avro_decode_row(const schemadesc_s* schema,
  * @param[in] schema Schema description
  * @param[in] global_Dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
- * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  */
 // blockDim {32,num_warps,1}
-extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
-  gpuDecodeAvroColumnData(block_desc_s* blocks,
+__global__ void __launch_bounds__(num_warps * 32, 2)
+  gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
-                          device_span<string_index_pair> global_dictionary,
-                          const uint8_t* avro_data,
-                          uint32_t num_blocks,
+                          device_span<string_index_pair const> global_dictionary,
+                          uint8_t const* avro_data,
                           uint32_t schema_len,
                           uint32_t min_row_size,
                           size_t max_rows,
@@ -258,9 +257,9 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   } else {
     schema = schema_g;
   }
-  if (block_id < num_blocks and threadIdx.x == 0) { *blk = blocks[block_id]; }
+  if (block_id < blocks.size() and threadIdx.x == 0) { *blk = blocks[block_id]; }
   __syncthreads();
-  if (block_id >= num_blocks) { return; }
+  if (block_id >= blocks.size()) { return; }
   cur_row        = blk->first_row;
   rows_remaining = blk->num_rows;
   cur            = avro_data + blk->offset;
@@ -304,18 +303,16 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
  * @param[in] schema Schema description
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
- * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecodeAvroColumnData(block_desc_s* blocks,
+void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema,
-                          device_span<string_index_pair> global_dictionary,
-                          const uint8_t* avro_data,
-                          uint32_t num_blocks,
+                          device_span<string_index_pair const> global_dictionary,
+                          uint8_t const* avro_data,
                           uint32_t schema_len,
                           size_t max_rows,
                           size_t first_row,
@@ -325,17 +322,10 @@ void DecodeAvroColumnData(block_desc_s* blocks,
   // num_warps warps per threadblock
   dim3 const dim_block(32, num_warps);
   // 1 warp per datablock, num_warps datablocks per threadblock
-  dim3 const dim_grid((num_blocks + num_warps - 1) / num_warps, 1);
+  dim3 const dim_grid((blocks.size() + num_warps - 1) / num_warps, 1);
 
-  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(blocks,
-                                                                      schema,
-                                                                      global_dictionary,
-                                                                      avro_data,
-                                                                      num_blocks,
-                                                                      schema_len,
-                                                                      min_row_size,
-                                                                      max_rows,
-                                                                      first_row);
+  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(
+    blocks, schema, global_dictionary, avro_data, schema_len, min_row_size, max_rows, first_row);
 }
 
 }  // namespace gpu

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -8,7 +8,6 @@ import cudf
 # Base class for anything class that needs to interact with Apache Kafka
 class CudfKafkaClient:
     def __init__(self, kafka_configs):
-
         """
         Base object for any client that wants to interact with a Kafka broker.
         This object creates the underlying KafkaDatasource connection which
@@ -25,16 +24,9 @@ class CudfKafkaClient:
         """
 
         self.kafka_configs = kafka_configs
-
-        self.kafka_confs = {
-            str.encode(key): str.encode(value)
-            for key, value in self.kafka_configs.items()
-        }
-
-        self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
+        self.kafka_meta_client = KafkaDatasource(kafka_configs)
 
     def list_topics(self, specific_topic=None):
-
         """
         List the topics associated with the underlying Kafka Broker connection.
 
@@ -51,7 +43,6 @@ class CudfKafkaClient:
         )
 
     def unsubscribe(self):
-
         """
         Stop all active consumption and remove consumer subscriptions
         to topic/partition instances
@@ -60,7 +51,6 @@ class CudfKafkaClient:
         self.kafka_meta_client.unsubscribe()
 
     def close(self, timeout=10000):
-
         """
         Close the underlying socket connection to Kafka and
         clean up system resources
@@ -72,7 +62,6 @@ class CudfKafkaClient:
 # Apache Kafka Consumer implementation
 class Consumer(CudfKafkaClient):
     def __init__(self, kafka_configs):
-
         """
         Creates a KafkaConsumer object which allows for all valid Kafka
         consumer type operations such as reading messages, committing
@@ -100,8 +89,7 @@ class Consumer(CudfKafkaClient):
         delimiter="\n",
         message_format="json",
     ):
-
-        """
+        r"""
         Read messages from the underlying KafkaDatasource connection and create
         a cudf Dataframe
 
@@ -145,7 +133,7 @@ class Consumer(CudfKafkaClient):
             )
 
         kafka_datasource = KafkaDatasource(
-            self.kafka_confs,
+            self.kafka_configs,
             topic.encode(),
             partition,
             start,
@@ -173,13 +161,15 @@ class Consumer(CudfKafkaClient):
         kafka_datasource.close(batch_timeout)
 
         if result is not None:
-            return cudf.DataFrame._from_table(result)
+            if isinstance(result, cudf.DataFrame):
+                return result
+            else:
+                return cudf.DataFrame._from_data(result)
         else:
             # empty Dataframe
             return cudf.DataFrame()
 
     def committed(self, partitions, timeout=10000):
-
         """
         Retrieves the last successfully committed Kafka offset of the
         underlying KafkaDatasource connection.
@@ -262,7 +252,6 @@ class Consumer(CudfKafkaClient):
         return offsets[b"low"], offsets[b"high"]
 
     def commit(self, offsets=None, asynchronous=True):
-
         """
         Takes a list of ck.TopicPartition objects and commits their
         offset values to the KafkaDatasource connection

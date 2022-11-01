@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,14 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 #include <memory>
 
@@ -49,7 +52,7 @@ void in_place_fill(cudf::mutable_column_view& destination,
   using ScalarType = cudf::scalar_type_t<T>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
-  bool is_valid    = p_scalar->is_valid();
+  bool is_valid    = p_scalar->is_valid(stream);
   cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
                            thrust::make_constant_iterator(is_valid),
                            destination,
@@ -74,11 +77,10 @@ struct in_place_fill_range_dispatch {
                                                                cudf::size_type end,
                                                                rmm::cuda_stream_view stream)
   {
-    auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value();
+    auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value(stream);
     using RepType = typename T::rep;
-    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid());
-    auto view     = cudf::bit_cast(destination, s.type());
-    in_place_fill<RepType>(view, begin, end, s, stream);
+    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream));
+    in_place_fill<RepType>(destination, begin, end, s, stream);
   }
 
   template <typename T, typename... Args>
@@ -93,13 +95,15 @@ struct out_of_place_fill_range_dispatch {
   cudf::column_view const& input;
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>() and not cudf::is_fixed_point<T>(),
+                   std::unique_ptr<cudf::column>>
   operator()(Args...)
   {
     CUDF_FAIL("Unsupported type in fill.");
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>() or cudf::is_fixed_point<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type begin,
     cudf::size_type end,
@@ -110,14 +114,15 @@ struct out_of_place_fill_range_dispatch {
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
-      if (!p_ret->nullable() && !value.is_valid()) {
+      if (!p_ret->nullable() && !value.is_valid(stream)) {
         p_ret->set_null_mask(
           cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr),
           0);
       }
 
-      auto ret_view = p_ret->mutable_view();
-      in_place_fill<T>(ret_view, begin, end, value, stream);
+      auto ret_view    = p_ret->mutable_view();
+      using DeviceType = cudf::device_storage_type_t<T>;
+      in_place_fill<DeviceType>(ret_view, begin, end, value, stream);
     }
 
     return p_ret;
@@ -150,11 +155,11 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
 
   // if the scalar is invalid, then just copy the column and fill the null mask
-  if (!value.is_valid()) {
+  if (!value.is_valid(stream)) {
     auto result = std::make_unique<cudf::column>(input, stream, mr);
     auto mview  = result->mutable_view();
     cudf::detail::set_null_mask(mview.null_mask(), begin, end, false, stream);
-    mview.set_null_count(input.null_count() + (end - begin));
+    result->set_null_count(input.null_count() + (end - begin));
     return result;
   }
 
@@ -166,7 +171,8 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
   // get the index of the key just added
-  auto index_of_value = cudf::dictionary::detail::get_index(target_matched->view(), value, stream);
+  auto index_of_value = cudf::dictionary::detail::get_index(
+    target_matched->view(), value, stream, rmm::mr::get_current_device_resource());
   // now call fill using just the indices column and the new index
   auto new_indices =
     cudf::type_dispatcher(target_indices.type(),
@@ -210,7 +216,7 @@ void fill_in_place(mutable_column_view& destination,
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) && (end <= destination.size()) && (begin <= end),
                "Range is out of bounds.");
-  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid() == true),
+  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid(stream) == true),
                "destination should be nullable or value should be non-null.");
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
@@ -243,7 +249,7 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, rmm::cuda_stream_default);
+  return detail::fill_in_place(destination, begin, end, value, cudf::get_default_stream());
 }
 
 std::unique_ptr<column> fill(column_view const& input,
@@ -253,7 +259,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, rmm::cuda_stream_default, mr);
+  return detail::fill(input, begin, end, value, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
