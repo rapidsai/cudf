@@ -6019,11 +6019,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @ioutils.doc_to_parquet()
-    def to_parquet(self, path, *args, **kwargs):
+    def to_parquet(
+        self,
+        path,
+        engine="cudf",
+        compression="snappy",
+        index=None,
+        partition_cols=None,
+        partition_file_name=None,
+        partition_offsets=None,
+        statistics="ROWGROUP",
+        metadata_file_path=None,
+        int96_timestamps=False,
+        row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+        row_group_size_rows=None,
+        max_page_size_bytes=None,
+        max_page_size_rows=None,
+        storage_options=None,
+        return_metadata=False,
+        *args,
+        **kwargs,
+    ):
         """{docstring}"""
         from cudf.io import parquet
 
-        return parquet.to_parquet(self, path, *args, **kwargs)
+        return parquet.to_parquet(
+            self,
+            path=path,
+            engine=engine,
+            compression=compression,
+            index=index,
+            partition_cols=partition_cols,
+            partition_file_name=partition_file_name,
+            partition_offsets=partition_offsets,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
+            storage_options=storage_options,
+            return_metadata=return_metadata,
+            *args,
+            **kwargs,
+        )
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
@@ -6066,11 +6106,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression="snappy", *args, **kwargs):
+    def to_orc(
+        self,
+        fname,
+        compression="snappy",
+        statistics="ROWGROUP",
+        stripe_size_bytes=None,
+        stripe_size_rows=None,
+        row_index_stride=None,
+        cols_as_map_type=None,
+        storage_options=None,
+        index=None,
+    ):
         """{docstring}"""
         from cudf.io import orc
 
-        orc.to_orc(self, fname, compression, *args, **kwargs)
+        return orc.to_orc(
+            df=self,
+            fname=fname,
+            compression=compression,
+            statistics=statistics,
+            stripe_size_bytes=stripe_size_bytes,
+            stripe_size_rows=stripe_size_rows,
+            row_index_stride=row_index_stride,
+            cols_as_map_type=cols_as_map_type,
+            storage_options=storage_options,
+            index=index,
+        )
 
     @_cudf_nvtx_annotate
     def stack(self, level=-1, dropna=True):
