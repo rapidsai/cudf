@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import warnings
 from collections import abc
 from io import BytesIO, StringIO
@@ -17,22 +18,23 @@ from cudf.utils.dtypes import _maybe_convert_to_default_type
 def read_json(
     path_or_buf,
     engine="auto",
-    dtype=True,
+    orient=None,
+    dtype=None,
     lines=False,
     compression="infer",
     byte_range=None,
     keep_quotes=False,
+    storage_options=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
-    if not isinstance(dtype, (abc.Mapping, bool)):
-        warnings.warn(
-            "passing 'dtype' as list is deprecated, instead pass "
-            "a dict of column name and types key-value paris."
-            "in future versions 'dtype' can only be a dict or bool",
-            FutureWarning,
+    if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
+        raise TypeError(
+            "'dtype' parameter only supports "
+            "a dict of column names and types as key-value pairs, "
+            f"or a bool, or None. Got {type(dtype)}"
         )
 
     if engine == "cudf" and not lines:
@@ -45,6 +47,20 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine == "cudf" or engine == "cudf_experimental":
+        if dtype is None:
+            dtype = True
+
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following keyword arguments: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following positional arguments: {list(args)}"
+            )
+
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
         if not is_list_like(path_or_buf):
@@ -52,9 +68,13 @@ def read_json(
 
         filepaths_or_buffers = []
         for source in path_or_buf:
-            if ioutils.is_directory(source, **kwargs):
+            if ioutils.is_directory(
+                path_or_data=source, storage_options=storage_options
+            ):
                 fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None, path=source, **kwargs
+                    passed_filesystem=None,
+                    path=source,
+                    storage_options=storage_options,
                 )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
@@ -64,7 +84,7 @@ def read_json(
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
-                **kwargs,
+                storage_options=storage_options,
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -88,7 +108,7 @@ def read_json(
 
         if not ioutils.ensure_single_filepath_or_buffer(
             path_or_data=path_or_buf,
-            **kwargs,
+            storage_options=storage_options,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
@@ -100,27 +120,23 @@ def read_json(
             compression=compression,
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
-            **kwargs,
+            storage_options=storage_options,
         )
 
-        if kwargs.get("orient") == "table":
-            pd_value = pd.read_json(
-                path_or_buf,
-                lines=lines,
-                compression=compression,
-                *args,
-                **kwargs,
-            )
-        else:
-            pd_value = pd.read_json(
-                path_or_buf,
-                lines=lines,
-                dtype=dtype,
-                compression=compression,
-                *args,
-                **kwargs,
-            )
+        pd_value = pd.read_json(
+            path_or_buf,
+            lines=lines,
+            dtype=dtype,
+            compression=compression,
+            storage_options=storage_options,
+            orient=orient,
+            *args,
+            **kwargs,
+        )
         df = cudf.from_pandas(pd_value)
+
+    if dtype is None:
+        dtype = True
 
     if dtype is True or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.

@@ -40,7 +40,6 @@ from cudf._lib.cpp.io.types cimport (
     quote_style,
     sink_info,
     source_info,
-    table_metadata,
     table_with_metadata,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -469,7 +468,7 @@ cpdef write_csv(
     cdef string line_term_c = line_terminator.encode()
     cdef string na_c = na_rep.encode()
     cdef int rows_per_chunk_c = rows_per_chunk
-    cdef table_metadata metadata_ = table_metadata()
+    cdef vector[string] col_names
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
     cdef unique_ptr[data_sink] data_sink_c
@@ -481,26 +480,26 @@ cpdef write_csv(
             all_names = table._index.names + all_names
 
         if len(all_names) > 0:
-            metadata_.column_names.reserve(len(all_names))
+            col_names.reserve(len(all_names))
             if len(all_names) == 1:
                 if all_names[0] in (None, ''):
-                    metadata_.column_names.push_back('""'.encode())
+                    col_names.push_back('""'.encode())
                 else:
-                    metadata_.column_names.push_back(
+                    col_names.push_back(
                         str(all_names[0]).encode()
                     )
             else:
                 for idx, col_name in enumerate(all_names):
                     if col_name is None:
-                        metadata_.column_names.push_back(''.encode())
+                        col_names.push_back(''.encode())
                     else:
-                        metadata_.column_names.push_back(
+                        col_names.push_back(
                             str(col_name).encode()
                         )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
-        .metadata(&metadata_)
+        .names(col_names)
         .na_rep(na_c)
         .include_header(include_header_c)
         .rows_per_chunk(rows_per_chunk_c)

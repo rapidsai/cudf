@@ -22,7 +22,11 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
 from cudf.io.parquet import _default_open_file_options
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
-from cudf.utils.ioutils import _is_local_filesystem, _open_remote_files
+from cudf.utils.ioutils import (
+    _ROW_GROUP_SIZE_BYTES_DEFAULT,
+    _is_local_filesystem,
+    _open_remote_files,
+)
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -292,24 +296,47 @@ class CudfEngine(ArrowDatasetEngine):
             preserve_index = True
         if partition_on:
             md = write_to_dataset(
-                df,
-                path,
+                df=df,
+                root_path=path,
+                compression=compression,
                 filename=filename,
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
                 return_metadata=return_metadata,
-                **kwargs,
+                statistics=kwargs.get("statistics", "ROWGROUP"),
+                int96_timestamps=kwargs.get("int96_timestamps", False),
+                row_group_size_bytes=kwargs.get(
+                    "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
+                ),
+                row_group_size_rows=kwargs.get("row_group_size_rows", None),
+                max_page_size_bytes=kwargs.get("max_page_size_bytes", None),
+                max_page_size_rows=kwargs.get("max_page_size_rows", None),
+                storage_options=kwargs.get("storage_options", None),
             )
         else:
             with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
                 if not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
                 md = df.to_parquet(
-                    out_file,
-                    compression=compression,
+                    path=out_file,
+                    engine=kwargs.get("engine", "cudf"),
+                    index=kwargs.get("index", None),
+                    partition_cols=kwargs.get("partition_cols", None),
+                    partition_file_name=kwargs.get(
+                        "partition_file_name", None
+                    ),
+                    partition_offsets=kwargs.get("partition_offsets", None),
+                    statistics=kwargs.get("statistics", "ROWGROUP"),
+                    int96_timestamps=kwargs.get("int96_timestamps", False),
+                    row_group_size_bytes=kwargs.get(
+                        "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
+                    ),
+                    row_group_size_rows=kwargs.get(
+                        "row_group_size_rows", None
+                    ),
+                    storage_options=kwargs.get("storage_options", None),
                     metadata_file_path=filename if return_metadata else None,
-                    **kwargs,
                 )
         # Return the schema needed to write the metadata
         if return_metadata:
