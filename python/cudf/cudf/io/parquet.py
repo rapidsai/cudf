@@ -229,7 +229,8 @@ def write_to_dataset(
         filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
 
-        metadata_file_path = (filename if return_metadata else None,)
+        metadata_file_path = filename if return_metadata else None
+
         metadata = df.to_parquet(
             path=full_path,
             compression=compression,
