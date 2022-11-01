@@ -464,7 +464,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TEST_F(ParquetWriterTest, Durations)
+template <typename mask_op_t>
+void test_durations(mask_op_t mask_op)
 {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution_d(0, 30);
@@ -479,18 +480,20 @@ TEST_F(ParquetWriterTest, Durations)
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [&](auto i) { return distribution(generator); });
 
+  auto mask = cudf::detail::make_counting_transform_iterator(0, mask_op);
+
   constexpr auto num_rows = 100;
   // Durations longer than a day are not exactly valid, but cudf should be able to round trip
   auto durations_d = cudf::test::fixed_width_column_wrapper<cudf::duration_D, int64_t>(
-    sequence_d, sequence_d + num_rows);
+    sequence_d, sequence_d + num_rows, mask);
   auto durations_s = cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t>(
-    sequence_s, sequence_s + num_rows);
+    sequence_s, sequence_s + num_rows, mask);
   auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
-    sequence, sequence + num_rows);
+    sequence, sequence + num_rows, mask);
   auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
-    sequence, sequence + num_rows);
+    sequence, sequence + num_rows, mask);
   auto durations_ns = cudf::test::fixed_width_column_wrapper<cudf::duration_ns, int64_t>(
-    sequence, sequence + num_rows);
+    sequence, sequence + num_rows, mask);
 
   auto expected = table_view{{durations_d, durations_s, durations_ms, durations_us, durations_ns}};
 
@@ -514,6 +517,14 @@ TEST_F(ParquetWriterTest, Durations)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ms, result.tbl->view().column(2));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_us, result.tbl->view().column(3));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ns, result.tbl->view().column(4));
+}
+
+TEST_F(ParquetWriterTest, Durations)
+{
+  test_durations([](auto i) { return true; });
+  test_durations([](auto i) { return (i % 2) != 0; });
+  test_durations([](auto i) { return (i % 3) != 0; });
+  test_durations([](auto i) { return false; });
 }
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
