@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <cudf/column/column.hpp>
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace test {
-/**
- * @brief Utility will verify the given strings column is empty.
- *
- * @param strings_column Column of strings to check
- */
-void expect_strings_empty(cudf::column_view strings_column);
 
-}  // namespace test
+namespace detail {
+
+/**
+ * @brief Default stream for cudf
+ *
+ * Use this value to ensure the correct stream is used when compiled with per
+ * thread default stream.
+ */
+extern rmm::cuda_stream_view const default_stream_value;
+
+}  // namespace detail
+
 }  // namespace cudf

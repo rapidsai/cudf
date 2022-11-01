@@ -38,7 +38,7 @@ namespace detail {
  *                           `agg` is not Min or Max.
  *
  * @param input The input column view for the scan.
- * @param agg unique_ptr to aggregation operator applied by the scan.
+ * @param agg Aggregation operator applied by the scan
  * @param null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
  *                      Include nulls if null_policy::INCLUDE. Any operation with a null results in
  *                      a null.
@@ -47,7 +47,7 @@ namespace detail {
  * @returns Column with scan results.
  */
 std::unique_ptr<column> scan_exclusive(column_view const& input,
-                                       std::unique_ptr<scan_aggregation> const& agg,
+                                       scan_aggregation const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
@@ -64,7 +64,7 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
  *                           but the `agg` is not Min or Max.
  *
  * @param input The input column view for the scan.
- * @param agg unique_ptr to aggregation operator applied by the scan.
+ * @param agg Aggregation operator applied by the scan
  * @param null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
  *                      Include nulls if null_policy::INCLUDE. Any operation with a null results in
  *                      a null.
@@ -73,7 +73,7 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
  * @returns Column with scan results.
  */
 std::unique_ptr<column> scan_inclusive(column_view const& input,
-                                       std::unique_ptr<scan_aggregation> const& agg,
+                                       scan_aggregation const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);

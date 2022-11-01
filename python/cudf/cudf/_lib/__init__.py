@@ -33,9 +33,9 @@ from . import (
     stream_compaction,
     string_casting,
     strings,
+    text,
     transpose,
     unary,
-    text,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

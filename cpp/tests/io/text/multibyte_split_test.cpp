@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <io/utilities/output_builder.cuh>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -26,6 +28,7 @@
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 using namespace cudf;
 using namespace test;
@@ -62,12 +65,25 @@ TEST_F(MultibyteSplitTest, NondeterministicMatching)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
+TEST_F(MultibyteSplitTest, NoDelimiter)
+{
+  auto delimiter  = std::string(":");
+  auto host_input = std::string("abcdefg");
+
+  auto expected = strings_column_wrapper{"abcdefg"};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
 TEST_F(MultibyteSplitTest, DelimiterAtEnd)
 {
   auto delimiter  = std::string(":");
   auto host_input = std::string("abcdefg:");
 
-  auto expected = strings_column_wrapper{"abcdefg:", ""};
+  auto expected = strings_column_wrapper{"abcdefg:"};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(*source, delimiter);
@@ -80,13 +96,29 @@ TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange)
   auto delimiter  = std::string(":");
   auto host_input = std::string("abcdefg:");
 
-  auto expected = strings_column_wrapper{"abcdefg:", ""};
+  auto expected = strings_column_wrapper{"abcdefg:"};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(
     *source,
     delimiter,
     cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size())});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, DelimiterAtEndByteRange2)
+{
+  auto delimiter  = std::string(":");
+  auto host_input = std::string("abcdefg:");
+
+  auto expected = strings_column_wrapper{"abcdefg:"};
+
+  auto source = cudf::io::text::make_source(host_input);
+  auto out    = cudf::io::text::multibyte_split(
+    *source,
+    delimiter,
+    cudf::io::text::byte_range_info{0, static_cast<int64_t>(host_input.size() - 1)});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
@@ -120,8 +152,6 @@ TEST_F(MultibyteSplitTest, LargeInput)
     host_expected.emplace_back(std::string("...:|"));
   }
 
-  host_expected.emplace_back(std::string(""));
-
   auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
 
   auto delimiter = std::string("...:|");
@@ -144,6 +174,52 @@ TEST_F(MultibyteSplitTest, OverlappingMatchErasure)
   auto out    = cudf::io::text::multibyte_split(*source, delimiter);
 
   // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out); // this use case it not yet supported.
+}
+
+TEST_F(MultibyteSplitTest, DelimiterErasure)
+{
+  auto delimiter = "\r\n";
+
+  auto host_input = std::string("line\r\nanother line\r\nthird line\r\n");
+  auto expected   = strings_column_wrapper{"line", "another line", "third line"};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, DelimiterErasureByteRange)
+{
+  auto delimiter = "\r\n";
+
+  auto host_input = std::string("line\r\nanother line\r\nthird line\r\n");
+  auto expected   = strings_column_wrapper{"line", "another line", "third line"};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  options.byte_range       = cudf::io::text::byte_range_info(0, host_input.size() - 1);
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
+}
+
+TEST_F(MultibyteSplitTest, DelimiterErasureOverlap)
+{
+  auto delimiter = "::";
+
+  auto host_input = std::string("::a:::b::c::::d");
+  auto expected   = strings_column_wrapper{"", "a", "", "b", "c", "", "", "d"};
+
+  cudf::io::text::parse_options options;
+  options.strip_delimiters = true;
+  auto source              = cudf::io::text::make_source(host_input);
+  auto out                 = cudf::io::text::multibyte_split(*source, delimiter, options);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
 }
 
 TEST_F(MultibyteSplitTest, HandpickedInput)
@@ -184,7 +260,7 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
     "ggg::|",         "hhh::|",      "___::|",       "here::|", "is::|",     "another::|",
     "simple::|",      "text::|",     "seperated::|", "by::|",   "emojis::|", "which::|",
     "are::|",         "multiple::|", "bytes::|",     "and::|",  "used::|",   "as::|",
-    "delimiters.::|", "::|",         "::|",          "::|",     ""};
+    "delimiters.::|", "::|",         "::|",          "::|"};
 
   auto source = cudf::io::text::make_source(host_input);
   auto out    = cudf::io::text::multibyte_split(*source, delimiters);
@@ -197,7 +273,7 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
   auto host_input    = std::string();
   auto host_expected = std::vector<std::string>();
 
-  for (auto i = 0; i < 1000; i++) {
+  for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
   }
 
@@ -222,7 +298,7 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
   auto host_input    = std::string();
   auto host_expected = std::vector<std::string>();
 
-  for (auto i = 0; i < 1000; i++) {
+  for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += ".....";
   }
 
@@ -230,6 +306,57 @@ TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRange)
   host_input[host_input.size() / 2]     = ':';
   host_input[host_input.size() / 2 + 1] = '|';
   auto source                           = cudf::io::text::make_source(host_input);
+
+  auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
+  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
+  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
+  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+
+  auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
+  auto out       = cudf::concatenate(out_views);
+
+  auto expected = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, LargeInputMultipleRangeSingleByte)
+{
+  auto host_input    = std::string();
+  auto host_expected = std::vector<std::string>();
+
+  for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
+    host_input += "...:|";
+  }
+
+  auto delimiter = std::string("|");
+  auto source    = cudf::io::text::make_source(host_input);
+
+  auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
+  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
+  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
+  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+
+  auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
+  auto out       = cudf::concatenate(out_views);
+
+  auto expected = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, LargeInputSparseMultipleRangeSingleByte)
+{
+  auto host_input    = std::string();
+  auto host_expected = std::vector<std::string>();
+
+  for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
+    host_input += ".....";
+  }
+
+  auto delimiter                    = std::string("|");
+  host_input[host_input.size() / 2] = '|';
+  auto source                       = cudf::io::text::make_source(host_input);
 
   auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
   auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
@@ -308,6 +435,21 @@ TEST_F(MultibyteSplitTest, SmallInputAllPossibleRangesSingleByte)
   }
 }
 
+TEST_F(MultibyteSplitTest, SingletonRangeAtEnd)
+{
+  // we want a delimiter at the end of the file to not create a new empty row even if it is the only
+  // character in the byte range
+  using namespace cudf::io::text;
+  auto host_input = std::string("ab:cd:");
+  auto delimiter  = std::string(":");
+  auto source     = make_source(host_input);
+  auto expected   = strings_column_wrapper{};
+
+  auto out = multibyte_split(*source, delimiter, byte_range_info{5, 1});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
 TEST_F(MultibyteSplitTest, EmptyInput)
 {
   using namespace cudf::io::text;
@@ -358,6 +500,67 @@ TEST_F(MultibyteSplitTest, EmptyRangeSingleByte)
   auto out = multibyte_split(*source, delimiter, byte_range_info{3, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(MultibyteSplitTest, EmptySplitDeviceSpan)
+{
+  cudf::split_device_span<int> span;
+  ASSERT_EQ(span.size(), 0);
+  ASSERT_EQ(span.head().size(), 0);
+  ASSERT_EQ(span.head().data(), nullptr);
+  ASSERT_EQ(span.tail().size(), 0);
+  ASSERT_EQ(span.tail().data(), nullptr);
+}
+
+TEST_F(MultibyteSplitTest, SplitDeviceSpan)
+{
+  int i = 0;
+  int j = 1;
+  cudf::split_device_span<int> span{{&i, 1}, {&j, 1}};
+  ASSERT_EQ(span.size(), 2);
+  ASSERT_EQ(span.head().size(), 1);
+  ASSERT_EQ(span.head().data(), &i);
+  ASSERT_EQ(span.tail().size(), 1);
+  ASSERT_EQ(span.tail().data(), &j);
+  ASSERT_EQ(&span[0], &i);
+  ASSERT_EQ(&span[1], &j);
+  ASSERT_EQ(&*span.begin(), &i);
+  ASSERT_EQ(&*(span.begin() + 1), &j);
+  ASSERT_NE(span.begin() + 1, span.end());
+  ASSERT_EQ(span.begin() + 2, span.end());
+}
+
+TEST_F(MultibyteSplitTest, OutputBuilder)
+{
+  auto const stream = cudf::get_default_stream();
+  cudf::output_builder<char> builder{10, 4, stream};
+  auto const output = builder.next_output(stream);
+  ASSERT_GE(output.size(), 10);
+  ASSERT_EQ(output.tail().size(), 0);
+  ASSERT_EQ(output.tail().data(), nullptr);
+  ASSERT_EQ(builder.size(), 0);
+  builder.advance_output(1, stream);
+  ASSERT_EQ(builder.size(), 1);
+  auto const output2 = builder.next_output(stream);
+  ASSERT_EQ(output2.head().data(), output.head().data() + 1);
+  builder.advance_output(10, stream);
+  ASSERT_EQ(builder.size(), 11);
+  auto const output3 = builder.next_output(stream);
+  ASSERT_EQ(output3.head().size(), 9);
+  ASSERT_EQ(output3.head().data(), output.head().data() + 11);
+  ASSERT_EQ(output3.tail().size(), 40);
+  builder.advance_output(9, stream);
+  ASSERT_EQ(builder.size(), 20);
+  auto const output4 = builder.next_output(stream);
+  ASSERT_EQ(output4.head().size(), 0);
+  ASSERT_EQ(output4.tail().size(), output3.tail().size());
+  ASSERT_EQ(output4.tail().data(), output3.tail().data());
+  builder.advance_output(1, stream);
+  auto const output5 = builder.next_output(stream);
+  ASSERT_EQ(output5.head().size(), 39);
+  ASSERT_EQ(output5.head().data(), output4.tail().data() + 1);
+  ASSERT_EQ(output5.tail().size(), 0);
+  ASSERT_EQ(output5.tail().data(), nullptr);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -23,6 +23,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <optional>
+
 namespace cudf::io::nvcomp {
 
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };

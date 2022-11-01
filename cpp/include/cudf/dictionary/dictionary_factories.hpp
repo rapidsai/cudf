@@ -65,7 +65,7 @@ namespace cudf {
 std::unique_ptr<column> make_dictionary_column(
   column_view const& keys_column,
   column_view const& indices_column,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -117,7 +117,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 std::unique_ptr<column> make_dictionary_column(
   std::unique_ptr<column> keys_column,
   std::unique_ptr<column> indices_column,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

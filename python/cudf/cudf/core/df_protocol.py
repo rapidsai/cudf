@@ -529,6 +529,16 @@ class _CuDFDataFrame:
         self._nan_as_null = nan_as_null
         self._allow_copy = allow_copy
 
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ) -> "_CuDFDataFrame":
+        """
+        See the docstring of the `cudf.DataFrame.__dataframe__` for details
+        """
+        return _CuDFDataFrame(
+            self._df, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
     @property
     def metadata(self):
         # `index` isn't a regular column, and the protocol doesn't support row

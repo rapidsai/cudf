@@ -44,7 +44,7 @@ static void BM_tokenize(benchmark::State& state, tokenize_type tt)
   cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (tt) {
       case tokenize_type::single:
         // single whitespace delimiter

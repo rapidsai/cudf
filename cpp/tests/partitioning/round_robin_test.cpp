@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,18 @@ class RoundRobinTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_SUITE(RoundRobinTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(RoundRobinTest, EmptyInput)
+{
+  auto const empty_column    = fixed_width_column_wrapper<TypeParam>{};
+  auto const num_partitions  = 5;
+  auto const start_partition = 0;
+  auto const [out_table, out_offsets] =
+    cudf::round_robin_partition(cudf::table_view{{empty_column}}, num_partitions, start_partition);
+
+  EXPECT_EQ(out_table->num_rows(), 0);
+  EXPECT_EQ(out_offsets.size(), std::size_t{num_partitions});
+}
 
 TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 {

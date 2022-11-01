@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
-#include <rmm/cuda_stream_view.hpp>
-
-#include "orc_common.hpp"
 #include "orc_gpu.hpp"
+
+#include <cudf/io/orc_types.hpp>
+#include <io/utilities/block_utils.cuh>
+
+#include <cub/cub.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -1770,7 +1771,8 @@ __global__ void __launch_bounds__(block_size)
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
-              if (seconds < 0 && nanos > 0) { seconds -= 1; }
+              // Comparing with 999999 instead of zero to match the apache writer.
+              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
 
               duration_ns d_ns{nanos};
               duration_s d_s{seconds};

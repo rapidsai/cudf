@@ -13,7 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/strings/utilities.h>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -23,13 +29,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -47,8 +46,9 @@ TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
 {
   constexpr cudf::size_type source_size{1000};
-  rmm::device_uvector<cudf::size_type> gather_map(source_size, cudf::default_stream_value);
-  thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
+  rmm::device_uvector<cudf::size_type> gather_map(source_size, cudf::get_default_stream());
+  thrust::sequence(
+    rmm::exec_policy(cudf::get_default_stream()), gather_map.begin(), gather_map.end());
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data + source_size);
@@ -96,7 +96,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     cudf::detail::gather(source_table,
                          gather_map,
                          cudf::out_of_bounds_policy::NULLIFY,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED);
+                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         cudf::get_default_stream());
 
   auto expect_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });

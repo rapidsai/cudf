@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -22,7 +22,7 @@ list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 list(APPEND CUDF_CUDA_FLAGS -Werror=cross-execution-space-call)
 list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wall,-Werror,-Wno-error=deprecated-declarations)
 
-if(DISABLE_DEPRECATION_WARNING)
+if(DISABLE_DEPRECATION_WARNINGS)
   list(APPEND CUDF_CXX_FLAGS -Wno-deprecated-declarations)
   list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-Wno-deprecated-declarations)
 endif()

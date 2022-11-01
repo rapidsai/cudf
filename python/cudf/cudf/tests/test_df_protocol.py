@@ -124,6 +124,9 @@ def test_from_dataframe():
     df2 = cudf.from_dataframe(df1)
     assert_eq(df1, df2)
 
+    df3 = cudf.from_dataframe(df2)
+    assert_eq(df1, df3)
+
 
 def test_int_dtype():
     data_int = dict(a=[1, 2, 3], b=[9, 10, 11])

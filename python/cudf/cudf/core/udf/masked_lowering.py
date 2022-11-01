@@ -18,7 +18,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType
+from cudf.core.udf.masked_typing import MaskedType, NAType
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -62,7 +62,6 @@ def make_arithmetic_op(op):
         result = cgutils.create_struct_proxy(masked_return_type)(
             context, builder
         )
-
         # compute output validity
         valid = builder.and_(m1.valid, m2.valid)
         result.valid = valid

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -306,7 +306,8 @@ TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
   auto const input = list.release();
 
   // Set non-empty list row at index 5 to null.
-  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 5, 6, false);
+  cudf::detail::set_null_mask(
+    input->mutable_view().null_mask(), 5, 6, false, cudf::get_default_stream());
 
   auto const gather_map = LCW<int>{{-1, 2, 1, -4}, {0}, {-2, 1}, {0, 2, 1}, {}, {0}, {1, 2}};
   auto const expected =

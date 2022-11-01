@@ -185,21 +185,21 @@ std::unique_ptr<column> count_characters(strings_column_view const& strings,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_characters(strings, cudf::default_stream_value, mr);
+  return detail::count_characters(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_bytes(strings, cudf::default_stream_value, mr);
+  return detail::count_bytes(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::code_points(strings, cudf::default_stream_value, mr);
+  return detail::code_points(strings, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

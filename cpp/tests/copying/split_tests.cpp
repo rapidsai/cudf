@@ -1360,7 +1360,8 @@ TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
   }
 }
 
-TEST_F(ContiguousSplitUntypedTest, CalculationOverflow)
+// This test requires about 25GB of device memory when used with the arena allocator
+TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTest)
 {
   // tests an edge case where buf.elements * buf.element_size overflows an INT32.
   auto col = cudf::make_fixed_width_column(

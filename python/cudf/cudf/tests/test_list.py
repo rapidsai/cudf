@@ -107,6 +107,51 @@ def test_listdtype_hash():
     assert hash(a) != hash(c)
 
 
+@pytest.fixture(params=["int", "float", "datetime", "timedelta"])
+def leaf_value(request):
+    if request.param == "int":
+        return np.int32(1)
+    elif request.param == "float":
+        return np.float64(1)
+    elif request.param == "datetime":
+        return pd.to_datetime("1900-01-01")
+    elif request.param == "timedelta":
+        return pd.to_timedelta("10d")
+    else:
+        raise ValueError("Unhandled data type")
+
+
+@pytest.fixture(params=["list", "struct"])
+def list_or_struct(request, leaf_value):
+    if request.param == "list":
+        return [[leaf_value], [leaf_value]]
+    elif request.param == "struct":
+        return {"a": leaf_value, "b": [leaf_value], "c": {"d": [leaf_value]}}
+    else:
+        raise ValueError("Unhandled data type")
+
+
+@pytest.fixture(params=["list", "struct"])
+def nested_list(request, list_or_struct, leaf_value):
+    if request.param == "list":
+        return [list_or_struct, list_or_struct]
+    elif request.param == "struct":
+        return [
+            {
+                "a": list_or_struct,
+                "b": leaf_value,
+                "c": {"d": list_or_struct, "e": leaf_value},
+            }
+        ]
+    else:
+        raise ValueError("Unhandled data type")
+
+
+def test_list_dtype_explode(nested_list):
+    sr = cudf.Series([nested_list])
+    assert sr.dtype.element_type == sr.explode().dtype
+
+
 @pytest.mark.parametrize(
     "data",
     [

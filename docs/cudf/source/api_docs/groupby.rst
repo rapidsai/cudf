@@ -53,6 +53,7 @@ Computations / descriptive stats
    GroupBy.mean
    GroupBy.median
    GroupBy.min
+   GroupBy.ngroup
    GroupBy.nth
    GroupBy.pad
    GroupBy.prod

@@ -184,7 +184,7 @@ void percentile_approx_test(column_view const& _keys,
       // result is a scalar, but we want to extract out the underlying column
       auto scalar_result =
         cudf::reduce(values,
-                     cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
+                     *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
                      data_type{type_id::STRUCT});
       auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
       std::vector<std::unique_ptr<cudf::column>> cols;
@@ -234,7 +234,7 @@ void simple_test(data_type input_type, std::vector<std::pair<int, int>> params)
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                keys->mutable_view().template begin<int>(),
                keys->mutable_view().template end<int>(),
                0);
@@ -257,7 +257,7 @@ void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   auto i = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     i,
                     i + values->size(),
                     keys->mutable_view().template begin<int>(),
@@ -271,9 +271,11 @@ void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
 
 std::pair<rmm::device_buffer, size_type> make_null_mask(column_view const& col)
 {
-  return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                                thrust::make_counting_iterator<size_type>(col.size()),
-                                [] __device__(size_type i) { return i % 2 == 0; });
+  return cudf::detail::valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(col.size()),
+    [] __device__(size_type i) { return i % 2 == 0; },
+    cudf::get_default_stream());
 }
 
 void simple_with_nulls_test(data_type input_type, std::vector<std::pair<int, int>> params)
@@ -282,7 +284,7 @@ void simple_with_nulls_test(data_type input_type, std::vector<std::pair<int, int
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                keys->mutable_view().template begin<int>(),
                keys->mutable_view().template end<int>(),
                0);
@@ -304,7 +306,7 @@ void grouped_with_nulls_test(data_type input_type, std::vector<std::pair<int, in
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   auto i = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     i,
                     i + values->size(),
                     keys->mutable_view().template begin<int>(),
@@ -384,7 +386,7 @@ struct PercentileApproxTest : public cudf::test::BaseFixture {
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {
-  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<column_view> input;
@@ -428,11 +430,12 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   auto result = cudf::percentile_approx(tdv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
-  auto expected = cudf::make_lists_column(2,
-                                          offsets.release(),
-                                          cudf::make_empty_column(type_id::FLOAT64),
-                                          2,
-                                          cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
+  auto expected = cudf::make_lists_column(
+    2,
+    offsets.release(),
+    cudf::make_empty_column(type_id::FLOAT64),
+    2,
+    cudf::detail::create_null_mask(2, mask_state::ALL_NULL, cudf::get_default_stream()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

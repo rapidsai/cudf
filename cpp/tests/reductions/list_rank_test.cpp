@@ -27,7 +27,7 @@
 struct ListRankScanTest : public cudf::test::BaseFixture {
   inline void test_ungrouped_rank_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
-                                       std::unique_ptr<cudf::scan_aggregation> const& agg,
+                                       cudf::scan_aggregation const& agg,
                                        cudf::null_policy null_handling)
   {
     auto col_out = cudf::scan(input, agg, cudf::scan_type::INCLUSIVE, null_handling);
@@ -46,7 +46,7 @@ TEST_F(ListRankScanTest, BasicList)
   this->test_ungrouped_rank_scan(
     col,
     expected_dense_vals,
-    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
     cudf::null_policy::INCLUDE);
 }
 
@@ -78,7 +78,7 @@ TEST_F(ListRankScanTest, DeepList)
     this->test_ungrouped_rank_scan(
       col,
       expected_dense_vals,
-      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
       cudf::null_policy::INCLUDE);
   }
 
@@ -89,7 +89,7 @@ TEST_F(ListRankScanTest, DeepList)
     this->test_ungrouped_rank_scan(
       sliced_col,
       expected_dense_vals,
-      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
       cudf::null_policy::INCLUDE);
   }
 }
@@ -145,7 +145,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
     this->test_ungrouped_rank_scan(
       list_column,
       expect,
-      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
       cudf::null_policy::INCLUDE);
   }
 
@@ -157,7 +157,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
     this->test_ungrouped_rank_scan(
       sliced_col,
       expect,
-      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
       cudf::null_policy::INCLUDE);
   }
 }
@@ -201,7 +201,7 @@ TEST_F(ListRankScanTest, ListOfEmptyStruct)
   this->test_ungrouped_rank_scan(
     *list_column,
     expect,
-    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
     cudf::null_policy::INCLUDE);
 }
 
@@ -231,6 +231,6 @@ TEST_F(ListRankScanTest, EmptyDeepList)
   this->test_ungrouped_rank_scan(
     *list_column,
     expect,
-    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    *cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
     cudf::null_policy::INCLUDE);
 }

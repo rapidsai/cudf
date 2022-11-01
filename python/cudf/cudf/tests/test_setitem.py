@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_LE_122
+from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150, PANDAS_LE_122
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -220,23 +220,80 @@ def test_column_set_unequal_length_object_by_mask():
 
 
 def test_categorical_setitem_invalid():
-    # ps = pd.Series([1, 2, 3], dtype="category")
+    ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
 
-    # TODO: After https://github.com/pandas-dev/pandas/issues/46646
-    # is fixed remove the following workaround and
-    # uncomment assert_exceptions_equal
-    # WORKAROUND
-    with pytest.raises(
-        ValueError,
-        match="Cannot setitem on a Categorical with a new category, set the "
-        "categories first",
-    ):
-        gs[0] = 5
+    if PANDAS_GE_150:
+        assert_exceptions_equal(
+            lfunc=ps.__setitem__,
+            rfunc=gs.__setitem__,
+            lfunc_args_and_kwargs=([0, 5], {}),
+            rfunc_args_and_kwargs=([0, 5], {}),
+            compare_error_message=False,
+            expected_error_message="Cannot setitem on a Categorical with a "
+            "new category, set the categories first",
+        )
+    else:
+        # Following workaround is needed because:
+        # https://github.com/pandas-dev/pandas/issues/46646
+        with pytest.raises(
+            ValueError,
+            match="Cannot setitem on a Categorical with a new category, set "
+            "the categories first",
+        ):
+            gs[0] = 5
 
-    # assert_exceptions_equal(
-    #     lfunc=ps.__setitem__,
-    #     rfunc=gs.__setitem__,
-    #     lfunc_args_and_kwargs=([0, 5], {}),
-    #     rfunc_args_and_kwargs=([0, 5], {}),
-    # )
+
+def test_series_slice_setitem_list():
+    actual = cudf.Series([[[1, 2], [2, 3]], [[3, 4]], [[4, 5]], [[6, 7]]])
+    actual[slice(0, 3, 1)] = [[10, 11], [12, 23]]
+    expected = cudf.Series(
+        [
+            [[10, 11], [12, 23]],
+            [[10, 11], [12, 23]],
+            [[10, 11], [12, 23]],
+            [[6, 7]],
+        ]
+    )
+    assert_eq(actual, expected)
+
+    actual = cudf.Series([[[1, 2], [2, 3]], [[3, 4]], [[4, 5]], [[6, 7]]])
+    actual[0:3] = cudf.Scalar([[10, 11], [12, 23]])
+
+    assert_eq(actual, expected)
+
+
+def test_series_slice_setitem_struct():
+    actual = cudf.Series(
+        [
+            {"a": {"b": 10}, "b": 11},
+            {"a": {"b": 100}, "b": 5},
+            {"a": {"b": 50}, "b": 2},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    actual[slice(0, 3, 1)] = {"a": {"b": 5050}, "b": 101}
+    expected = cudf.Series(
+        [
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    assert_eq(actual, expected)
+
+    actual = cudf.Series(
+        [
+            {"a": {"b": 10}, "b": 11},
+            {"a": {"b": 100}, "b": 5},
+            {"a": {"b": 50}, "b": 2},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    actual[0:3] = cudf.Scalar({"a": {"b": 5050}, "b": 101})
+
+    assert_eq(actual, expected)

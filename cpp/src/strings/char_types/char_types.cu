@@ -197,7 +197,7 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
 {
   CUDF_FUNC_RANGE();
   return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::default_stream_value, mr);
+    strings, types, verify_types, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
@@ -208,7 +208,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::default_stream_value, mr);
+    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

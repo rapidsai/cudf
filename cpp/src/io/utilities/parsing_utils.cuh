@@ -43,6 +43,16 @@ namespace cudf {
 namespace io {
 
 /**
+ * @brief Non-owning view for json type inference options
+ */
+struct json_inference_options_view {
+  char quote_char;
+  cudf::detail::trie_view trie_true;
+  cudf::detail::trie_view trie_false;
+  cudf::detail::trie_view trie_na;
+};
+
+/**
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
  */
@@ -78,6 +88,14 @@ struct parse_options {
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
+
+  [[nodiscard]] json_inference_options_view json_view() const
+  {
+    return {quotechar,
+            cudf::detail::make_trie_view(trie_true),
+            cudf::detail::make_trie_view(trie_false),
+            cudf::detail::make_trie_view(trie_na)};
+  }
 
   [[nodiscard]] parse_options_view view() const
   {
@@ -545,12 +563,22 @@ __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
 {
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
 template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
 __inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
+  // If this is a string value, remove quotes
+  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
   return to_duration<T>(begin, end);
 }
 

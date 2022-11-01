@@ -8,11 +8,13 @@ from collections import abc
 from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
@@ -50,9 +52,9 @@ Parameters
 ----------
 by : mapping, function, label, or list of labels
     Used to determine the groups for the groupby. If by is a
-    function, it’s called on each value of the object’s index.
+    function, it's called on each value of the object's index.
     If a dict or Series is passed, the Series or dict VALUES will
-    be used to determine the groups (the Series’ values are first
+    be used to determine the groups (the Series' values are first
     aligned; see .align() method). If an cupy array is passed, the
     values are used as-is determine the groups. A label or list
     of labels may be passed to group by the columns in self.
@@ -63,7 +65,7 @@ level : int, level name, or sequence of such, default None
 as_index : bool, default True
     For aggregated output, return object with group labels as
     the index. Only relevant for DataFrame input.
-    as_index=False is effectively “SQL-style” grouped output.
+    as_index=False is effectively "SQL-style" grouped output.
 sort : bool, default False
     Sort result by group key. Differ from Pandas, cudf defaults to
     ``False`` for better performance. Note this does not influence
@@ -544,6 +546,88 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result[sizes > n]
 
+    def ngroup(self, ascending=True):
+        """
+        Number each group from 0 to the number of groups - 1.
+
+        This is the enumerative complement of cumcount. Note that the
+        numbers given to the groups match the order in which the groups
+        would be seen when iterating over the groupby object, not the
+        order they are first observed.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If False, number in reverse, from number of group - 1 to 0.
+
+        Returns
+        -------
+        Series
+            Unique numbers for each group.
+
+        See Also
+        --------
+        .cumcount : Number the rows in each group.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({"A": list("aaabba")})
+        >>> df
+           A
+        0  a
+        1  a
+        2  a
+        3  b
+        4  b
+        5  a
+        >>> df.groupby('A').ngroup()
+        0    0
+        1    0
+        2    0
+        3    1
+        4    1
+        5    0
+        dtype: int64
+        >>> df.groupby('A').ngroup(ascending=False)
+        0    1
+        1    1
+        2    1
+        3    0
+        4    0
+        5    1
+        dtype: int64
+        >>> df.groupby(["A", [1,1,2,3,2,1]]).ngroup()
+        0    0
+        1    0
+        2    1
+        3    3
+        4    2
+        5    0
+        dtype: int64
+        """
+        num_groups = len(index := self.grouping.keys.unique())
+        _, has_null_group = bitmask_or([*index._columns])
+
+        if ascending:
+            if has_null_group:
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(-1, num_groups - 1)}
+                )
+            else:
+                group_ids = cudf.Series._from_data(
+                    {None: cp.arange(num_groups)}
+                )
+        else:
+            group_ids = cudf.Series._from_data(
+                {None: cp.arange(num_groups - 1, -1, -1)}
+            )
+
+        if has_null_group:
+            group_ids.iloc[0] = cudf.NA
+
+        group_ids._index = index
+        return self._broadcast(group_ids)
+
     def serialize(self):
         header = {}
         frames = []
@@ -633,7 +717,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def pipe(self, func, *args, **kwargs):
         """
         Apply a function `func` with arguments to this GroupBy
-        object and return the function’s result.
+        object and return the function's result.
 
         Parameters
         ----------
@@ -925,6 +1009,29 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def _broadcast(self, values):
+        """
+        Broadcast the results of an aggregation to the group
+
+        Parameters
+        ----------
+        values: Series
+            A Series representing the results of an aggregation.  The
+            index of the Series must be the (unique) values
+            representing the group keys.
+
+        Returns
+        -------
+        A Series of the same size and with the same index as
+        ``self.obj``.
+        """
+        if not values.index.equals(self.grouping.keys):
+            values = values._align_to_index(
+                self.grouping.keys, how="right", allow_non_unique=True
+            )
+            values.index = self.obj.index
+        return values
+
     def transform(self, function):
         """Apply an aggregation, then broadcast the result to the group size.
 
@@ -966,12 +1073,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Currently, `transform()` supports only aggregations."
             ) from e
 
-        if not result.index.equals(self.grouping.keys):
-            result = result._align_to_index(
-                self.grouping.keys, how="right", allow_non_unique=True
-            )
-            result.index = self.obj.index
-        return result
+        return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
@@ -1001,13 +1103,13 @@ class GroupBy(Serializable, Reducible, Scannable):
     def describe(self, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
-        dispersion and shape of a dataset’s distribution, excluding NaN values.
+        dispersion and shape of a dataset's distribution, excluding NaN values.
 
         Analyzes numeric DataFrames only
 
         Parameters
         ----------
-        include: ‘all’, list-like of dtypes or None (default), optional
+        include: 'all', list-like of dtypes or None (default), optional
             list of data types to include in the result.
             Ignored for Series.
 

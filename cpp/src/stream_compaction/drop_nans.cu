@@ -119,7 +119,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_nans(input, keys, keep_threshold, cudf::default_stream_value, mr);
+  return detail::drop_nans(input, keys, keep_threshold, cudf::get_default_stream(), mr);
 }
 /*
  * Filters a table to remove nan elements.
@@ -129,7 +129,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_nans(input, keys, keys.size(), cudf::default_stream_value, mr);
+  return detail::drop_nans(input, keys, keys.size(), cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

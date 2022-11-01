@@ -45,8 +45,11 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
+// Largest number of bits to use for dictionary keys
+constexpr int MAX_DICT_BITS = 24;
+
 // Total number of unsigned 24 bit values
-constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
+constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -54,9 +57,16 @@ constexpr size_type MAX_DICT_SIZE = (1 << 24) - 1;
 struct input_column_info {
   int schema_idx;
   std::string name;
+  bool has_repetition;
   // size == nesting depth. the associated real output
   // buffer index in the dest column for each level of nesting.
   std::vector<int> nesting;
+
+  input_column_info(int _schema_idx, std::string _name, bool _has_repetition)
+    : schema_idx(_schema_idx), name(_name), has_repetition(_has_repetition)
+  {
+  }
+
   auto nesting_depth() const { return nesting.size(); }
 };
 
@@ -118,6 +128,10 @@ struct PageInfo {
                        // decompression
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
+  // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
+  // indicator. instead the lengths for these are stored in the header.
+  int32_t def_lvl_bytes;  // length of the definition levels (V2 header)
+  int32_t rep_lvl_bytes;  // length of the repetition levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -128,6 +142,7 @@ struct PageInfo {
   int32_t num_input_values;
   int32_t chunk_row;       // starting row of this page relative to the start of the chunk
   int32_t num_rows;        // number of rows in this page
+  int32_t num_nulls;       // number of null values (V2 header)
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX
@@ -311,10 +326,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
     } else {
       auto list_col = cudf::detail::lists_column_device_view(col);
       auto child    = list_col.child();
-      if (parquet_col.output_as_byte_array &&
-          (child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8)) {
-        break;
-      }
+      if (parquet_col.output_as_byte_array && child.type().id() == type_id::UINT8) { break; }
       idx = list_col.offset_at(idx);
       col = child;
     }

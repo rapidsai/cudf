@@ -244,7 +244,6 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
     cudf::detail::scatter(table_view({group_labels_view}),
                           scatter_map,
                           table_view({temp_labels->view()}),
-                          false,
                           stream,
                           rmm::mr::get_current_device_resource());
 

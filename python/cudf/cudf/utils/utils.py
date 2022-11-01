@@ -4,6 +4,7 @@ import functools
 import hashlib
 import os
 import traceback
+import warnings
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -13,11 +14,12 @@ from nvtx import annotate
 import rmm
 
 import cudf
+import cudf.api.types
 from cudf.core import column
 from cudf.core.buffer import as_device_buffer_like
 
 # The size of the mask in bytes
-mask_dtype = cudf.dtype(np.int32)
+mask_dtype = cudf.api.types.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
 # Mapping from ufuncs to the corresponding binary operators.
@@ -212,6 +214,15 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
+    warnings.warn(
+        "The cudf.set_allocator function is deprecated and will be removed in "
+        "a future release. Please use rmm.reinitialize "
+        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
+        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
+        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
+        FutureWarning,
+    )
+
     use_managed_memory = allocator == "managed"
 
     rmm.reinitialize(

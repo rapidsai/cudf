@@ -223,8 +223,10 @@ ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
-# * parquet writer chunks benchmark ---------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
+# * parquet writer benchmark ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
@@ -238,11 +240,7 @@ ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reade
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
-
-# ##################################################################################################
-# * parquet writer benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
+ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
@@ -303,7 +301,8 @@ ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
+target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
 add_custom_target(
   run_benchmarks

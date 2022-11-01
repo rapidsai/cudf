@@ -35,6 +35,8 @@ python/cudf_kafka/*/_lib/**/*.cpp
 python/cudf_kafka/*/_lib/**/*.h
 python/custreamz/*/_lib/**/*.cpp
 python/custreamz/*/_lib/**/*.h
+python/strings_udf/strings_udf/_lib/*.cpp
+python/strings_udf/strings_udf/*.ptx
 .Python
 env/
 develop-eggs/
@@ -68,7 +70,6 @@ junit-cudf.xml
 test-results
 
 ## Patching
-*.diff
 *.orig
 *.rej
 
@@ -164,3 +165,5 @@ dask-worker-space/
 # Sphinx docs & build artifacts
 docs/cudf/source/api_docs/generated/*
 docs/cudf/source/api_docs/api/*
+docs/cudf/source/user_guide/example_output/*
+docs/cudf/source/user_guide/cudf.*Dtype.*.rst
