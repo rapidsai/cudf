@@ -1236,7 +1236,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             return _return_sentinel_column()
 
-        order = arange(len(self))
         codes = arange(len(cats), dtype=dtype)
         left_gather_map, right_gather_map = cpp_join(
             [self], [cats], how="left"
@@ -1244,8 +1243,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         codes = codes.take(
             right_gather_map, nullify=True, check_bounds=False
         ).fillna(na_sentinel)
-        order = order.take(left_gather_map, check_bounds=False)
-        codes = codes.take(order.argsort())
+
+        # reorder `codes` so that its values correspond to the
+        # values of `self`:
+        order = arange(len(self))
+        order = order.take(left_gather_map, check_bounds=False).argsort()
+        codes = codes.take(order)
         return codes
 
 
