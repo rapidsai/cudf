@@ -266,7 +266,8 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
     auto results = cudf::detail::gather(source_table,
                                         gather_map,
                                         cudf::out_of_bounds_policy::NULLIFY,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        cudf::get_default_stream());
 
     std::vector<int32_t> expected_validity{1, 0, 0, 1};
     LCW<T> expected{{{{2, 3}, {4, 5}},

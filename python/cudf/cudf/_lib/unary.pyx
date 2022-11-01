@@ -1,32 +1,21 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
 from cudf.api.types import is_decimal_dtype
 
-from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 import numpy as np
 
+cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
-from cudf._lib.cpp.types cimport data_type, size_type, type_id
-
-from cudf._lib.column import (
-    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
-    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
-)
-
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
-from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
+from cudf._lib.types cimport dtype_to_data_type
 
 
 class UnaryOp(IntEnum):
