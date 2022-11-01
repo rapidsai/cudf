@@ -56,7 +56,7 @@ if(NOT cudf_FOUND)
   add_subdirectory(../../cpp cudf-cpp)
 
   # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
-  # library in the _lib directory as a single source of truth and modify the other rpaths
+  # library in the cudf directory as a single source of truth and modify the other rpaths
   # appropriately.
   set(cython_lib_dir cudf)
   install(TARGETS cudf DESTINATION ${cython_lib_dir})
