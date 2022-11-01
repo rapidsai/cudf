@@ -222,10 +222,10 @@ __device__ inline cudf::size_type udf_string::byte_offset(cudf::size_type pos) c
 {
   cudf::size_type offset = 0;
 
-  auto sptr = m_data;
-  auto eptr = sptr + m_bytes;
-  while ((pos > 0) && (sptr < eptr)) {
-    auto const byte       = static_cast<uint8_t>(*sptr++);
+  auto start = m_data;
+  auto end   = start + m_bytes;
+  while ((pos > 0) && (start < end)) {
+    auto const byte       = static_cast<uint8_t>(*start++);
     auto const char_bytes = cudf::strings::detail::bytes_in_utf8_byte(byte);
     if (char_bytes) { --pos; }
     offset += char_bytes;
@@ -366,21 +366,21 @@ __device__ inline udf_string& udf_string::insert(cudf::size_type pos,
 __device__ inline udf_string udf_string::substr(cudf::size_type pos, cudf::size_type count) const
 {
   if (pos < 0) { return udf_string{"", 0}; }
-  auto const spos = byte_offset(pos);
-  if (spos >= m_bytes) { return udf_string{"", 0}; }
-  auto const epos = count < 0 ? m_bytes : std::min(byte_offset(pos + count), m_bytes);
-  return udf_string{data() + spos, epos - spos};
+  auto const start_pos = byte_offset(pos);
+  if (start_pos >= m_bytes) { return udf_string{"", 0}; }
+  auto const end_pos = count < 0 ? m_bytes : std::min(byte_offset(pos + count), m_bytes);
+  return udf_string{data() + start_pos, end_pos - start_pos};
 }
 
 // utility for replace()
-__device__ void udf_string::shift_bytes(cudf::size_type spos,
-                                        cudf::size_type epos,
+__device__ void udf_string::shift_bytes(cudf::size_type start_pos,
+                                        cudf::size_type end_pos,
                                         cudf::size_type nbytes)
 {
   if (nbytes < m_bytes) {
     // shift bytes to the left [...wxyz] -> [wxyzxyz]
-    auto src = epos;
-    auto tgt = spos;
+    auto src = end_pos;
+    auto tgt = start_pos;
     while (tgt < nbytes) {
       m_data[tgt++] = m_data[src++];
     }
@@ -388,7 +388,7 @@ __device__ void udf_string::shift_bytes(cudf::size_type spos,
     // shift bytes to the right [abcd...] -> [abcabcd]
     auto src = m_bytes;
     auto tgt = nbytes;
-    while (src > epos) {
+    while (src > end_pos) {
       m_data[--tgt] = m_data[--src];
     }
   }
@@ -400,19 +400,19 @@ __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
                                                   cudf::size_type in_bytes)
 {
   if (pos < 0 || in_bytes < 0) { return *this; }
-  auto const spos = byte_offset(pos);
-  if (spos > m_bytes) { return *this; }
-  auto const epos = count < 0 ? m_bytes : std::min(byte_offset(pos + count), m_bytes);
+  auto const start_pos = byte_offset(pos);
+  if (start_pos > m_bytes) { return *this; }
+  auto const end_pos = count < 0 ? m_bytes : std::min(byte_offset(pos + count), m_bytes);
 
   // compute new size
-  auto const nbytes = m_bytes + in_bytes - (epos - spos);
+  auto const nbytes = m_bytes + in_bytes - (end_pos - start_pos);
   if (nbytes > m_capacity) { reallocate(2 * nbytes); }
 
   // move bytes -- make room for replacement
-  shift_bytes(spos + in_bytes, epos, nbytes);
+  shift_bytes(start_pos + in_bytes, end_pos, nbytes);
 
   // insert the replacement
-  memcpy(m_data + spos, str, in_bytes);
+  memcpy(m_data + start_pos, str, in_bytes);
 
   m_bytes         = nbytes;
   m_data[m_bytes] = '\0';
@@ -447,9 +447,9 @@ __device__ udf_string& udf_string::erase(cudf::size_type pos, cudf::size_type co
   return replace(pos, count, nullptr, 0);
 }
 
-__device__ inline cudf::size_type udf_string::char_offset(cudf::size_type bytepos) const
+__device__ inline cudf::size_type udf_string::char_offset(cudf::size_type byte_pos) const
 {
-  return cudf::strings::detail::characters_in_string(data(), bytepos);
+  return cudf::strings::detail::characters_in_string(data(), byte_pos);
 }
 
 }  // namespace udf
