@@ -1,9 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 import glob
 import os
-import re
-import subprocess
-import sys
 
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from numba import cuda
@@ -44,7 +41,7 @@ def maybe_patch_numba_linker(driver_version):
             logger.debug("Cannot patch Numba Linker - unsupported version")
 
 
-def get_ptx_file():
+def _get_ptx_file():
     dev = cuda.get_current_device()
 
     # Load the highest compute capability file available that is less than
@@ -56,6 +53,7 @@ def get_ptx_file():
             "This strings_udf installation is missing the necessary PTX "
             "files. Please file an issue reporting this error and how you "
             "installed cudf and strings_udf."
+            "https://github.com/rapidsai/cudf/issues"
         )
 
     regular_sms = []
@@ -84,8 +82,10 @@ def get_ptx_file():
         return regular_result[1]
 
 
+ptxpath = None
 versions = safe_get_versions()
 if not versions == NO_DRIVER:
     driver_version, runtime_version = versions
     maybe_patch_numba_linker(driver_version)
-    ptxpath = get_ptx_file()
+    if "RAPIDS_NO_INITIALIZE" not in os.environ:
+        ptxpath = _get_ptx_file()
