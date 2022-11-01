@@ -24,6 +24,7 @@
 namespace cudf {
 namespace strings {
 namespace udf {
+namespace detail {
 
 /**
  * @brief Split string using given string
@@ -66,6 +67,54 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
 
   return count;
 }
+}  // namespace detail
+
+/**
+ * @brief Count tokens in a string without performing the split
+ *
+ * @code{.cpp}
+ * auto d_str = cudf::string_view{"the best  of times ", 19};
+ * auto tgt = cudf::string_view{" ", 1};
+ * auto token_count = count_tokens(d_str, tgt);
+ * // token_count is 6
+ * @endcode
+ *
+ * @param d_str String to split
+ * @param tgt String to split on
+ * @return Number of tokens returned
+ */
+__device__ inline cudf::size_type count_tokens(cudf::string_view const d_str,
+                                               cudf::string_view const tgt)
+{
+  return detail::split(d_str, tgt, nullptr);
+}
+
+/**
+ * @brief Split string using given string
+ *
+ * The caller must allocate an array of cudf::string_view to be filled
+ * in by this function.
+ *
+ * @code{.cpp}
+ * auto d_str = cudf::string_view{"the best  of times ", 19};
+ * auto tgt = cudf::string_view{" ", 1};
+ * auto token_count = count_tokens(d_str, tgt);
+ * auto result = new cudf::string_view[token_count];
+ * split(d_str, tgt, result);
+ * // result is array like ["the", "best", "", "of", "times", ""]
+ * @endcode
+ *
+ * @param d_str String to split
+ * @param tgt String to split on
+ * @param result Empty array to populate with output objects.
+ * @return Number of tokens returned
+ */
+__device__ inline cudf::size_type split(cudf::string_view const d_str,
+                                        cudf::string_view const tgt,
+                                        cudf::string_view* result)
+{
+  return detail::split(d_str, tgt, result);
+}
 
 /**
  * @brief Split string using given target array
@@ -73,8 +122,7 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
  * @param d_str String to split
  * @param tgt Character array encoded in UTF-8 used for identifying split points
  * @param bytes Number of bytes to read from `tgt`
- * @param result Empty array to populate with output objects.
- *               Pass `nullptr` to just get the token count.
+ * @param result Empty array to populate with output objects
  * @return Number of tokens returned
  */
 __device__ inline cudf::size_type split(cudf::string_view const d_str,
@@ -82,7 +130,7 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
                                         cudf::size_type bytes,
                                         cudf::string_view* result)
 {
-  return split(d_str, cudf::string_view{tgt, bytes}, result);
+  return detail::split(d_str, cudf::string_view{tgt, bytes}, result);
 }
 
 /**
@@ -90,8 +138,7 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
  *
  * @param d_str String to split
  * @param tgt Null-terminated character array encoded in UTF-8 used for identifying split points
- * @param result Empty array to populate with output objects.
- *               Pass `nullptr` to just get the token count.
+ * @param result Empty array to populate with output objects
  * @return Number of tokens returned
  */
 __device__ inline cudf::size_type split(cudf::string_view const d_str,
@@ -101,11 +148,21 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str,
   return split(d_str, tgt, detail::bytes_in_null_terminated_string(tgt), result);
 }
 
+namespace detail {
 /**
  * @brief Split string on whitespace
  *
- * This will create tokens by splitting on one or more consecutive whitespace characters
- * found in `d_str`.
+ * The caller must allocate an array of cudf::string_view to be filled
+ * in by this function. This function can be called with a `result=nullptr`
+ * to compute the number of tokens.
+ *
+ * @code{.cpp}
+ * auto d_str = cudf::string_view{"the best  of times ", 19};
+ * auto token_count = split(d_str, nullptr);
+ * auto result = new cudf::string_view[token_count];
+ * split(d_str, result);
+ * // result is array like ["the", "best", "of", "times"]
+ * @endcode
  *
  * @param d_str String to split
  * @param result Empty array to populate with output objects.
@@ -122,6 +179,39 @@ __device__ inline cudf::size_type split(cudf::string_view const d_str, cudf::str
     ++count;
   }
   return count;
+}
+}  // namespace detail
+
+/**
+ * @brief Count tokens in a string without performing the split on whitespace
+ *
+ * @code{.cpp}
+ * auto d_str = cudf::string_view{"the best  of times ", 19};
+ * auto token_count = count_tokens(d_str);
+ * // token_count is 4
+ * @endcode
+ *
+ * @param d_str String to split
+ * @return Number of tokens returned
+ */
+__device__ inline cudf::size_type count_tokens(cudf::string_view const d_str)
+{
+  return detail::split(d_str, nullptr);
+}
+
+/**
+ * @brief Split string on whitespace
+ *
+ * This will create tokens by splitting on one or more consecutive whitespace characters
+ * found in `d_str`.
+ *
+ * @param d_str String to split
+ * @param result Empty array to populate with output objects.
+ * @return Number of tokens returned
+ */
+__device__ inline cudf::size_type split(cudf::string_view const d_str, cudf::string_view* result)
+{
+  return detail::split(d_str, result);
 }
 
 /**
