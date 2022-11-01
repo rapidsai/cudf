@@ -120,15 +120,15 @@ cpdef read_orc(object filepaths_or_buffers,
         c_result = move(libcudf_read_orc(c_orc_reader_options))
 
     names = [name.decode() for name in c_result.metadata.column_names]
-    actual_index_names, names, is_range_index, reset_index_name, range_idx = \
-        _get_index_from_metadata(c_result.metadata.user_data,
-                                 names,
-                                 skip_rows,
-                                 num_rows)
+    actual_index_names, col_names, is_range_index, reset_index_name, \
+        range_idx = _get_index_from_metadata(c_result.metadata.user_data,
+                                             names,
+                                             skip_rows,
+                                             num_rows)
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
-        names,
+        col_names if columns is None else names,
         actual_index_names
     )
 
@@ -238,9 +238,10 @@ cpdef write_orc(table,
                 object stripe_size_bytes=None,
                 object stripe_size_rows=None,
                 object row_index_stride=None,
-                object cols_as_map_type=None):
+                object cols_as_map_type=None,
+                object index=None):
     """
-    Cython function to call into libcudf API, see `write_orc`.
+    Cython function to call into libcudf API, see `cudf::io::write_orc`.
 
     See Also
     --------
@@ -252,10 +253,12 @@ cpdef write_orc(table,
     cdef unique_ptr[table_input_metadata] tbl_meta
     cdef map[string, string] user_data
     user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(
-        table, None)
+        table, index)
     )
 
-    if not isinstance(table._index, cudf.RangeIndex):
+    if index is True or (
+        index is None and not isinstance(table._index, cudf.RangeIndex)
+    ):
         tv = table_view_from_table(table)
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
