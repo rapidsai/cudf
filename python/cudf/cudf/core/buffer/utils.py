@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any, Union
 
-from cudf.core.buffer.buffer import Buffer
+from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 
 
 def as_buffer(
@@ -52,16 +51,7 @@ def as_buffer(
             raise ValueError(
                 "size must be specified when `data` is an integer"
             )
-        data = SimpleNamespace(
-            __cuda_array_interface__={
-                "data": (data, False),
-                "shape": (size,),
-                "strides": None,
-                "typestr": "|u1",
-                "version": 0,
-            },
-            owner=owner,
-        )
+        data = cuda_array_interface_wrapper(ptr=data, size=size, owner=owner)
     elif size is not None or owner is not None:
         raise ValueError(
             "`size` and `owner` must be None when "

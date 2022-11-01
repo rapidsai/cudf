@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import pickle
+from types import SimpleNamespace
 from typing import Any, Dict, Mapping, Sequence, Tuple, Type, TypeVar
 
 import numpy
@@ -15,6 +16,41 @@ from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
 T = TypeVar("T", bound="Buffer")
+
+
+def cuda_array_interface_wrapper(ptr: int, size: int, owner: object = None):
+    """Wrap device pointer in an object that exposes `__cuda_array_interface__`
+
+    Parameters
+    ----------
+    ptr : int
+        An integer representing a pointer to device memory.
+    size : int, optional
+        Size of device memory in bytes.
+    owner : object, optional
+        Python object to which the lifetime of the memory allocation is tied.
+        A reference to this object is kept in the returned wrapper object.
+
+    Return
+    ------
+    SimpleNamespace
+        An object that exposes `__cuda_array_interface__` and keeps a reference
+        to `owner`.
+    """
+
+    if size < 0:
+        raise ValueError("size cannot be negative")
+
+    return SimpleNamespace(
+        __cuda_array_interface__={
+            "data": (ptr, False),
+            "shape": (size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        },
+        owner=owner,
+    )
 
 
 class Buffer(Serializable):
@@ -38,11 +74,10 @@ class Buffer(Serializable):
     _owner: object
 
     def __init__(self, ptr: int, size: int, owner: object):
-        if size < 0:
-            raise ValueError("size cannot be negative")
-        self._ptr = ptr
-        self._size = size
-        self._owner = owner
+        raise ValueError(
+            f"do not create a {self.__class__} directly, please "
+            "use the factory function `cudf.core.buffer.as_buffer`"
+        )
 
     @classmethod
     def from_device_memory(cls: Type[T], data: Any) -> T:
@@ -61,11 +96,19 @@ class Buffer(Serializable):
             Buffer representing the same device memory as `data`
         """
 
-        if isinstance(data, rmm.DeviceBuffer):
-            return cls(data.ptr, data.size, owner=data)  # Common case shortcut
-
-        ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        return cls(ptr, size, owner=data)
+        # Bypass `__init__` and initialize attributes manually
+        ret = cls.__new__(cls)
+        ret._owner = data
+        if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
+            ret._ptr = data.ptr
+            ret._size = data.size
+        else:
+            ret._ptr, ret._size = get_ptr_and_size(
+                data.__cuda_array_interface__
+            )
+        if ret.size < 0:
+            raise ValueError("size cannot be negative")
+        return ret
 
     @classmethod
     def from_host_memory(cls: Type[T], data: Any) -> T:
@@ -89,9 +132,9 @@ class Buffer(Serializable):
 
         # Extract pointer and size
         ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
-        # And copy to device memory
+        # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
-        # Then we can crate from device memory
+        # Create from device memory
         return cls.from_device_memory(buf)
 
     def _getitem(self, offset: int, size: int) -> Buffer:
@@ -99,8 +142,10 @@ class Buffer(Serializable):
         Sub-classes can overwrite this to implement __getitem__
         without having to handle non-slice inputs.
         """
-        return self.__class__(
-            ptr=self.ptr + offset, size=size, owner=self.owner
+        return self.from_device_memory(
+            cuda_array_interface_wrapper(
+                ptr=self.ptr + offset, size=size, owner=self.owner
+            )
         )
 
     def __getitem__(self, key: slice) -> Buffer:

@@ -107,7 +107,7 @@ def test_buffer_slice_fail(idx, err_type, err_msg):
 
 class SerializeTestBuffer(Buffer):
     def __init__(self, data, extra_arg):
-        super().__init__(data.ptr, data.size, data.owner)
+        self._ptr, self._size, self._owner = data.ptr, data.size, data.owner
         self.extra_arg = extra_arg
 
     def serialize(self):
