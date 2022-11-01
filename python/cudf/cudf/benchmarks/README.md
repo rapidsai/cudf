@@ -30,5 +30,3 @@ pytest --use_buffer True cudf/benchmarks/
 ```
 pytest --dataset_dir directory_path cudf/benchmarks/
 ```
-
-

@@ -23,4 +23,3 @@ Rolling window functions
    Rolling.min
    Rolling.max
    Rolling.apply
-
