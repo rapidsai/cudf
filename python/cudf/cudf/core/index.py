@@ -1062,7 +1062,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Returns
         -------
         out: bool
-            True if “other” is an Index and it has the same elements
+            True if "other" is an Index and it has the same elements
             as calling index; False otherwise.
         """
         if (
@@ -1414,8 +1414,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns
@@ -1853,7 +1853,7 @@ class DatetimeIndex(GenericIndex):
         This is not yet supported
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
-    ambiguous : ‘infer’, bool-ndarray, ‘NaT’, default ‘raise’
+    ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
         This is not yet supported
     name : object
         Name to be stored in the index.
@@ -2547,7 +2547,7 @@ class CategoricalIndex(GenericIndex):
         Whether or not this categorical is treated as an ordered categorical.
         If not given here or in dtype, the resulting categorical will be
         unordered.
-    dtype : CategoricalDtype or “category”, optional
+    dtype : CategoricalDtype or "category", optional
         If CategoricalDtype, cannot be used together with categories or
         ordered.
     copy : bool, default False

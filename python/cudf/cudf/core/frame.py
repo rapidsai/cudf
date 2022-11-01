@@ -1363,12 +1363,12 @@ class Frame(BinaryOperand, Scannable):
         ----------
         value : Frame (Shape must be consistent with self)
             Values to be hypothetically inserted into Self
-        side : str {‘left’, ‘right’} optional, default ‘left‘
-            If ‘left’, the index of the first suitable location found is given
-            If ‘right’, return the last such index
+        side : str {'left', 'right'} optional, default 'left'
+            If 'left', the index of the first suitable location found is given
+            If 'right', return the last such index
         ascending : bool optional, default True
             Sorted Frame is in ascending order (otherwise descending)
-        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+        na_position : str {'last', 'first'} optional, default 'last'
             Position of null values in sorted order
 
         Returns
@@ -1476,8 +1476,8 @@ class Frame(BinaryOperand, Scannable):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns
