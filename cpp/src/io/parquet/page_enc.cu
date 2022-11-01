@@ -1121,8 +1121,7 @@ __global__ void __launch_bounds__(128, 8)
             else
               v = s->col.leaf_column->element<int8_t>(val_idx);
 
-            int32_t ts_scale = s->col.ts_scale;
-            if (ts_scale != 0) { v *= ts_scale; }
+            if (auto const ts_scale = s->col.ts_scale; ts_scale != 0) { v *= ts_scale; }
 
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
