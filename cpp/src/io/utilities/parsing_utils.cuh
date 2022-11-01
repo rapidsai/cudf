@@ -550,13 +550,13 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char 
  *
  * @param begin Pointer to the first character in the parsing range
  * @param end Pointer to the first character after the parsing range
- * @param quotechar The character used to denote quotes; '\0' if none
+ * @param quotechar The character used to denote quotes. Provide '\0' if no quotes should be trimmed.
  *
  * @return Trimmed range
  */
 __inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
                                                                       char const* end,
-                                                                      char quotechar = '\0')
+                                                                      char quotechar)
 {
   if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
        *thrust::prev(end) == quotechar)) {
