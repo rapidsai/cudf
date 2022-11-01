@@ -526,8 +526,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end Pointer to the first character after the parsing range
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
  *
  * @return Trimmed range
  */
