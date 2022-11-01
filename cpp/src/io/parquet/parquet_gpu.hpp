@@ -257,12 +257,6 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
 };
 
-struct chunk_intermediate_data {
-  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
-  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
-};
-
 /**
  * @brief Struct describing an encoder column
  */

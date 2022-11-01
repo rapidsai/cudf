@@ -198,7 +198,6 @@ class reader::impl {
 
   // Variables used for chunked reading:
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-  cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
 
   size_type _skip_rows{0};
   size_type _num_rows{0};
