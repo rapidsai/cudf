@@ -184,70 +184,63 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   )
 
   # TODO: Will this not get set by rapids_cpm_find?
-  set(ARROW_FOUND TRUE)
-  set(ARROW_LIBRARIES "")
+  set(ARROW_FOUND TRUE PARENT_SCOPE)
 
-  # Arrow_ADDED: set if CPM downloaded Arrow from Github
+  if(BUILD_STATIC)
+    set(ARROW_LIBRARIES arrow_static PARENT_SCOPE)
+ else()
+    set(ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+  endif()
+
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
-  if(Arrow_ADDED OR Arrow_DIR)
-    # TODO: We can set the ARROW_LIBRARIES in a single place based on
-    # BUILD_STATIC at the very beginning of this function and then get rid of
-    # the if directly above this one. Then this whole if/else becomes:
-    # if(Arrow_DIR)... elseif(Arrow_ADDED)...else() message(FATAL_ERROR)
-    if(BUILD_STATIC)
-      list(APPEND ARROW_LIBRARIES arrow_static)
-    else()
-      list(APPEND ARROW_LIBRARIES arrow_shared)
-    endif()
-
-    if(Arrow_DIR)
-      # TODO: Under what circumstances do we need a `find_package` _after_ `rapids_cpm_find`??
-      find_package(Arrow REQUIRED QUIET)
-      if(ENABLE_PARQUET)
-        if(NOT Parquet_DIR)
-          # Set this to enable `find_package(Parquet)`
-          set(Parquet_DIR "${Arrow_DIR}")
-        endif()
-        # Set this to enable `find_package(ArrowDataset)`
-        set(ArrowDataset_DIR "${Arrow_DIR}")
-        find_package(ArrowDataset REQUIRED QUIET)
+  if(Arrow_DIR)
+    # TODO: Under what circumstances do we need a `find_package` _after_ `rapids_cpm_find`??
+    find_package(Arrow REQUIRED QUIET)
+    if(ENABLE_PARQUET)
+      if(NOT Parquet_DIR)
+        # Set this to enable `find_package(Parquet)`
+        set(Parquet_DIR "${Arrow_DIR}")
       endif()
-    elseif(Arrow_ADDED)
-      # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
-      # target_include_directories. That defeats ccache.
-      file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
-           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
+      # Set this to enable `find_package(ArrowDataset)`
+      # TODO: Should this be conditional like the Parquet_DIR setting above?
+      set(ArrowDataset_DIR "${Arrow_DIR}")
+      find_package(ArrowDataset REQUIRED QUIET)
+    endif()
+  # Arrow_ADDED: set if CPM downloaded Arrow from Github
+  elseif(Arrow_ADDED)
+    # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
+    # target_include_directories. That defeats ccache.
+    file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
+         DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
+    )
+    if(ENABLE_PARQUET)
+      file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
+           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
       )
-      if(ENABLE_PARQUET)
-        file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
-             DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
-        )
-      endif()
-      #
-      # This shouldn't be necessary!
-      #
-      # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
-      # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
-      #
-      # This only works because we know exactly which components we're using. Don't forget to update
-      # this list if we add more!
-      #
-      foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
-        target_include_directories(
-          ${ARROW_LIBRARY}
-          INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
-        )
-      endforeach()
     endif()
+    #
+    # This shouldn't be necessary!
+    #
+    # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
+    # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
+    #
+    # This only works because we know exactly which components we're using. Don't forget to update
+    # this list if we add more!
+    #
+    foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
+      target_include_directories(
+        ${ARROW_LIBRARY}
+        INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
+      )
+    endforeach()
   else()
-    set(ARROW_FOUND FALSE)
+    set(ARROW_FOUND FALSE PARENT_SCOPE)
     message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
   endif()
 
-  # TODO: This can go into the block above for Arrow_ADDED
   if(Arrow_ADDED)
 
     set(arrow_code_string
@@ -369,15 +362,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     rapids_export_find_package_root(BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
     rapids_export_find_package_root(BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
   endif()
-
-  set(ARROW_FOUND
-      "${ARROW_FOUND}"
-      PARENT_SCOPE
-  )
-  set(ARROW_LIBRARIES
-      "${ARROW_LIBRARIES}"
-      PARENT_SCOPE
-  )
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
