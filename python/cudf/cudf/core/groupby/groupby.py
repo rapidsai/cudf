@@ -1762,7 +1762,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            by=self.grouping,
+            by=self.grouping.keys,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,

@@ -2751,3 +2751,12 @@ def test_groupby_ngroup(by, ascending, df_ngroup):
     expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)
     actual = df_ngroup.groupby(by).ngroup(ascending=ascending)
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_groupby_getitem_count(gdf):
+    pdf = gdf.to_pandas()
+    assert_groupby_results_equal(
+        pdf.groupby("y").y.count(),
+        gdf.groupby("y").y.count(),
+        check_dtype=False,
+    )
