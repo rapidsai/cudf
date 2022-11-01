@@ -2,13 +2,13 @@
 
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.cpp.types cimport data_type
 from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.types cimport dtype_to_data_type
 
@@ -40,16 +40,11 @@ from cudf._lib.cpp.io.types cimport (
     quote_style,
     sink_info,
     source_info,
-    table_metadata,
     table_with_metadata,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.utils cimport (
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
 
@@ -121,8 +116,6 @@ cdef csv_reader_options make_csv_reader_options(
 ) except *:
     cdef source_info c_source_info = make_source_info([datasource])
     cdef compression_type c_compression
-    cdef size_type c_header
-    cdef string c_prefix
     cdef vector[string] c_names
     cdef size_t c_byte_range_offset = (
         byte_range[0] if byte_range is not None else 0
@@ -475,7 +468,7 @@ cpdef write_csv(
     cdef string line_term_c = line_terminator.encode()
     cdef string na_c = na_rep.encode()
     cdef int rows_per_chunk_c = rows_per_chunk
-    cdef table_metadata metadata_ = table_metadata()
+    cdef vector[string] col_names
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
     cdef unique_ptr[data_sink] data_sink_c
@@ -487,26 +480,26 @@ cpdef write_csv(
             all_names = table._index.names + all_names
 
         if len(all_names) > 0:
-            metadata_.column_names.reserve(len(all_names))
+            col_names.reserve(len(all_names))
             if len(all_names) == 1:
                 if all_names[0] in (None, ''):
-                    metadata_.column_names.push_back('""'.encode())
+                    col_names.push_back('""'.encode())
                 else:
-                    metadata_.column_names.push_back(
+                    col_names.push_back(
                         str(all_names[0]).encode()
                     )
             else:
                 for idx, col_name in enumerate(all_names):
                     if col_name is None:
-                        metadata_.column_names.push_back(''.encode())
+                        col_names.push_back(''.encode())
                     else:
-                        metadata_.column_names.push_back(
+                        col_names.push_back(
                             str(col_name).encode()
                         )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
-        .metadata(&metadata_)
+        .names(col_names)
         .na_rep(na_c)
         .include_header(include_header_c)
         .rows_per_chunk(rows_per_chunk_c)

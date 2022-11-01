@@ -149,6 +149,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/json.hpp
         - test -f $PREFIX/include/cudf/io/orc.hpp
         - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
+        - test -f $PREFIX/include/cudf/io/orc_types.hpp
         - test -f $PREFIX/include/cudf/io/parquet.hpp
         - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
         - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
