@@ -6,12 +6,14 @@ from libcpp.utility cimport move
 from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.column.column cimport column, column_view
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from strings_udf._lib.cpp.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
+    free_udf_string_array as cpp_free_udf_string_array,
     to_string_view_array as cpp_to_string_view_array,
+    udf_string,
 )
 
 
@@ -26,12 +28,16 @@ def to_string_view_array(Column strings_col):
 
 
 def from_udf_string_array(DeviceBuffer d_buffer):
-    cdef size_t size = d_buffer.c_size()
-    cdef void* data = d_buffer.c_data()
+    cdef size_t size = d_buffer.c_size() // 16
+    cdef udf_string* data = <udf_string*>d_buffer.c_data()
     cdef unique_ptr[column] c_result
     # data = <void *>
 
     with nogil:
         c_result = move(cpp_column_from_udf_string_array(data, size))
 
-    return Column.from_unique_ptr(move(c_result))
+    result = Column.from_unique_ptr(move(c_result))
+    with nogil:
+        cpp_free_udf_string_array(data, size)
+
+    return result
