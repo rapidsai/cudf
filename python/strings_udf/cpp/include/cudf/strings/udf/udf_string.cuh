@@ -324,17 +324,8 @@ __device__ inline udf_string& udf_string::append(char const* str)
 
 __device__ inline udf_string& udf_string::append(cudf::char_utf8 chr, cudf::size_type count)
 {
-  if (count <= 0) { return *this; }
-  auto const char_bytes = cudf::strings::detail::bytes_in_char_utf8(chr) * count;
-  auto const nbytes     = m_bytes + char_bytes;
-  if (nbytes > m_capacity) { reallocate(2 * nbytes); }
-  auto out_ptr = m_data + m_bytes;
-  for (auto idx = 0; idx < count; ++idx) {
-    out_ptr += cudf::strings::detail::from_char_utf8(chr, out_ptr);
-  }
-  m_bytes         = nbytes;
-  m_data[m_bytes] = '\0';
-  return *this;
+  auto d_str = udf_string(count, chr);
+  return append(d_str);
 }
 
 __device__ inline udf_string& udf_string::append(cudf::string_view in)
@@ -447,29 +438,8 @@ __device__ inline udf_string& udf_string::replace(cudf::size_type pos,
                                                   cudf::size_type chr_count,
                                                   cudf::char_utf8 chr)
 {
-  if (pos < 0 || chr_count < 0) { return *this; }
-  auto const spos = byte_offset(pos);
-  if (spos > m_bytes) { return *this; }
-  auto const epos = count < 0 ? m_bytes : std::min(byte_offset(pos + count), m_bytes);
-
-  // compute input size
-  auto const char_bytes = cudf::strings::detail::bytes_in_char_utf8(chr) * chr_count;
-  // compute new output size
-  auto const nbytes = m_bytes + char_bytes - (epos - spos);
-  if (nbytes > m_capacity) { reallocate(2 * nbytes); }
-
-  // move bytes -- make room for the new character(s)
-  shift_bytes(spos + char_bytes, epos, nbytes);
-
-  // copy chr chr_count times
-  auto out_ptr = m_data + spos;
-  for (auto idx = 0; idx < chr_count; ++idx) {
-    out_ptr += cudf::strings::detail::from_char_utf8(chr, out_ptr);
-  }
-
-  m_bytes         = nbytes;
-  m_data[m_bytes] = '\0';
-  return *this;
+  auto d_str = udf_string(chr_count, chr);
+  return replace(pos, count, d_str);
 }
 
 __device__ udf_string& udf_string::erase(cudf::size_type pos, cudf::size_type count)
