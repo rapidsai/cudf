@@ -63,8 +63,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
          ENABLE_PARQUET
 )
 
-  # TODO: Hardcoding for now.
-  set(USE_LIBARROW_FROM_PYARROW TRUE)
   if(USE_LIBARROW_FROM_PYARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
@@ -92,7 +90,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   # TODO: How would the targets have been created before this function is
-  # called? Is this just to ensure that the function is idempotent?
+  # called? Is this just to ensure that the function is idempotent? If so, why
+  # do we need to set these variables again?
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND TRUE PARENT_SCOPE)

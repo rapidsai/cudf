@@ -31,11 +31,14 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
+option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-  set(USE_LIBARROW_FROM_PYARROW TRUE)
   if(USE_LIBARROW_FROM_PYARROW)
+    # We need to find arrow before libcudf since libcudf requires it but
+    # doesn't bundle it.
     # TODO: These options should probably all become optional since in practice
     # they aren't meaningful except in the case where we actually compile Arrow.
     set(CUDF_USE_ARROW_STATIC OFF)
@@ -46,13 +49,6 @@ if(FIND_CUDF_CPP)
     include(rapids-find)
     include(rapids-export)
     include(../../cpp/cmake/thirdparty/get_arrow.cmake)
-
-    # TODO: We definitely shouldn't be setting these globally for all
-    # compilation, this is just a shortcut for now. Also when compiling against
-    # a static libcudf this shouldn't matter since we'll just get the right ABI
-    # symbols "for free".
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0")
   endif()
 
   find_package(cudf ${cudf_version} REQUIRED)
@@ -78,6 +74,15 @@ if(NOT cudf_FOUND)
   # library in the _lib/cpp directory as a single source of truth and modify the other rpaths
   # appropriately.
   install(TARGETS cudf DESTINATION cudf/_lib/cpp)
+endif()
+
+if(USE_LIBARROW_FROM_PYARROW)
+  # TODO: It would be nice to avoid setting these globally, but we'd need to
+  # manually set this for each of the rapids-cython targets otherwise which
+  # seems undesirable. For now I'm setting this after the
+  # `add_subdirectory(cpp)` call to limit the scope, maybe that's good enough.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0")
 endif()
 
 include(rapids-cython)
