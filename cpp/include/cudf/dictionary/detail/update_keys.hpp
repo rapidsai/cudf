@@ -32,11 +32,10 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> add_keys(
-  dictionary_column_view const& dictionary_column,
-  column_view const& new_keys,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
+                                 column_view const& new_keys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::dictionary::remove_keys(dictionary_column_view const&,column_view
@@ -44,11 +43,10 @@ std::unique_ptr<column> add_keys(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> remove_keys(
-  dictionary_column_view const& dictionary_column,
-  column_view const& keys_to_remove,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
+                                    column_view const& keys_to_remove,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view
@@ -56,10 +54,9 @@ std::unique_ptr<column> remove_keys(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> remove_unused_keys(
-  dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::dictionary::set_keys(dictionary_column_view
@@ -67,11 +64,10 @@ std::unique_ptr<column> remove_unused_keys(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> set_keys(
-  dictionary_column_view const& dictionary_column,
-  column_view const& keys,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
+                                 column_view const& keys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc
@@ -82,7 +78,7 @@ std::unique_ptr<column> set_keys(
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create new dictionaries that have keys merged from dictionary columns
@@ -106,7 +102,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
   std::vector<table_view> tables,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace dictionary

@@ -37,10 +37,9 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> concatenate(
-  host_span<column_view const> columns,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace dictionary

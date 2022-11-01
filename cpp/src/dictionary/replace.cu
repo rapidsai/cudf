@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,8 +123,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   // first add the replacement to the keys so only the indices need to be processed
   auto input_matched = dictionary::detail::add_keys(
     input, make_column_from_scalar(replacement, 1, stream)->view(), stream, mr);
-  auto const input_view   = dictionary_column_view(input_matched->view());
-  auto const scalar_index = get_index(input_view, replacement, stream);
+  auto const input_view = dictionary_column_view(input_matched->view());
+  auto const scalar_index =
+    get_index(input_view, replacement, stream, rmm::mr::get_current_device_resource());
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
