@@ -192,8 +192,6 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     }
   }();
   if (input.has_nulls()) {
-    nullcnt = null_roll_up(input, stream);
-
     auto device_view = column_device_view::create(input);
     auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
     auto data =
@@ -299,7 +297,6 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     properly downweight the previous values. But now but we also need to compute
     the normalization factors and divide the results into them at the end.
     */
-    nullcnt          = null_roll_up(input, stream);
     auto device_view = column_device_view::create(input);
     auto valid_it    = detail::make_validity_iterator(*device_view);
 
@@ -373,10 +370,10 @@ struct ewma_functor {
   }
 };
 
-std::unique_ptr<column> ewma(column_view const& input,
-                             scan_aggregation const& agg,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> exponential_weighted_moving_average(column_view const& input,
+                                                            scan_aggregation const& agg,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(input.type(), ewma_functor{}, agg, input, stream, mr);
 }
