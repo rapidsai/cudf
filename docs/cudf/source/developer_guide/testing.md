@@ -5,17 +5,18 @@ Tests in cuDF are written using [`pytest`](https://docs.pytest.org/en/latest/).
 Test coverage is measured using [`coverage.py`](https://coverage.readthedocs.io/en/6.4.1/),
 specifically the [`pytest-cov`](https://github.com/pytest-dev/pytest-cov) plugin.
 Code coverage reports are uploaded to [Codecov](https://app.codecov.io/gh/rapidsai/cudf).
-Each PR also indicates whether it increases or decreases in test coverage.
+Each PR also indicates whether it increases or decreases test coverage.
 
 ## Test organization
 
 How tests are organized depends on which of the following two groups they fall into:
 
-1. Free functions operating on the above classes like `cudf.merge`.
-2. Methods of classes like `DataFrame` or `Series`.
+1. Free functions such as `cudf.merge` that operate on classes like `DataFrame` or `Series`.
+2. Methods of the above classes.
 
-Tests of free functions should be grouped into files based on the API sections in our documentation.
-This places tests of similar functionality into the same testing module.
+Tests of free functions should be grouped into files based on the
+[API sections in the documentation](https://docs.rapids.ai/api/cudf/stable/api_docs/index.html).
+This places tests of similar functionality in the same module.
 Tests of class methods should be organized in the same way, except that this organization should be within a subdirectory corresponding to the class.
 For instance, tests of `DataFrame` indexing should be placed into `dataframe/test_indexing.py`.
 In cases where tests may be shared by multiple classes sharing a common parent (e.g. `DataFrame` and `Series` both require `IndexedFrame` tests),
@@ -25,7 +26,7 @@ the tests may be placed in a directory corresponding to the parent class.
 
 ### Writing tests
 
-In general, functionality must be tested both for standard use cases and exceptional cases.
+In general, functionality must be tested for both standard and exceptional cases.
 Standard use cases may be covered using parametrization (using `pytest.mark.parametrize`).
 Tests of standard use cases should typically include some coverage of:
 - Different dtypes, including nested dtypes (especially strings)
@@ -49,15 +50,17 @@ Here are some of the most common exceptional cases to test:
 
 Most specific APIs will also include a range of other cases.
 
-In general, it is preferable to write separate tests for different exception cases.
+In general, it is preferable to write separate tests for different exceptional cases.
 Excessive parametrization and branching increases complexity and obfuscates the purpose of a test.
 Typically, exception cases require specific assertions or other special logic, so they are best kept separate.
-The main nexception to this rule is tests based on comparison to pandas.
+The main exception to this rule is tests based on comparison to pandas.
 Such tests may test exceptional cases alongside more typical cases since the logic is generally identical.
 
 ### Parametrization: custom fixtures and `pytest.mark.parametrize`
 
-When it comes to parametrizing tests, the two main options are fixtures and `mark.parametrize`.
+When it comes to parametrizing tests written with `pytest`,
+the two main options are [fixtures](https://docs.pytest.org/en/stable/explanation/fixtures.html)
+and [`mark.parametrize`](https://docs.pytest.org/en/stable/how-to/parametrize.html#pytest-mark-parametrize).
 By virtue of being functions, fixtures are both more verbose and more self-documenting.
 Fixtures also have the significant benefit of being constructed lazily,
 whereas parametrizations are constructed at test collection time.
@@ -99,8 +102,13 @@ Use fixtures when:
           elif request.param == 'b':
               # Some other complex initialization
 
+      @pytest.fixture
       def bar(foo):
          # do something with foo like initialize a cudf object.
+
+      def test_some_property(bar):
+          # will be run for each value of bar that results from each value of foo.
+          assert some_property_of(bar)
   ```
 
 #### Complex parametrizations
@@ -118,7 +126,7 @@ then call it from multiple `test_*` functions that construct the necessary input
 Another possibility is to use functions rather than fixtures to construct inputs, allowing for more flexible input construction:
 ```python
 def get_values(predicate):
-    values = [...]
+    values = range(10)
     yield from filter(predicate, values)
 
 def test_evens():
@@ -131,13 +139,13 @@ def test_odds():
 ```
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
-In general, developers should avoid any approach that involves GPU memory allocations during test collection.
+Developers should avoid performing GPU memory allocations during test collection.
 
 ### Testing utility functions
 
-The `cudf.testing` subpackage provides a handful of public utilities for testing the equality of objects.
+The `cudf.testing` subpackage provides a handful of utilities for testing the equality of objects.
 The internal `cudf.testing._utils` module provides additional helper functions for use in tests.
 In particular:
-- `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any objects.
+- `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any pair of objects.
 - For comparing specific objects, use `testing.testing.assert_[frame|series|index]_equal`.
 - For verifying that the expected assertions are raised, use `testing._utils.assert_exceptions_equal`.
