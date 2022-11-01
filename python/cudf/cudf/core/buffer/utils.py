@@ -59,5 +59,5 @@ def as_buffer(
         )
 
     if hasattr(data, "__cuda_array_interface__"):
-        return Buffer.from_device_memory(data)
-    return Buffer.from_host_memory(data)
+        return Buffer._from_device_memory(data)
+    return Buffer._from_host_memory(data)

@@ -56,31 +56,21 @@ def cuda_array_interface_wrapper(ptr: int, size: int, owner: object = None):
 class Buffer(Serializable):
     """A Buffer represents device memory.
 
-    Usually the factory function `as_buffer` should be used to
-    create a Buffer instance.
-
-    Parameters
-    ----------
-    ptr : int
-        An integer representing a pointer to device memory.
-    size : int
-        Size of device memory in bytes.
-    owner : object
-        Python object to which the lifetime of the memory allocation is tied.
+    Use the factory function `as_buffer` to create a Buffer instance.
     """
 
     _ptr: int
     _size: int
     _owner: object
 
-    def __init__(self, ptr: int, size: int, owner: object):
+    def __init__(self):
         raise ValueError(
             f"do not create a {self.__class__} directly, please "
             "use the factory function `cudf.core.buffer.as_buffer`"
         )
 
     @classmethod
-    def from_device_memory(cls: Type[T], data: Any) -> T:
+    def _from_device_memory(cls: Type[T], data: Any) -> T:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -111,7 +101,7 @@ class Buffer(Serializable):
         return ret
 
     @classmethod
-    def from_host_memory(cls: Type[T], data: Any) -> T:
+    def _from_host_memory(cls: Type[T], data: Any) -> T:
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -135,14 +125,14 @@ class Buffer(Serializable):
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls.from_device_memory(buf)
+        return cls._from_device_memory(buf)
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
         Sub-classes can overwrite this to implement __getitem__
         without having to handle non-slice inputs.
         """
-        return self.from_device_memory(
+        return self._from_device_memory(
             cuda_array_interface_wrapper(
                 ptr=self.ptr + offset, size=size, owner=self.owner
             )
@@ -245,8 +235,8 @@ class Buffer(Serializable):
             return cls(frame, **header["constructor-kwargs"])
 
         if hasattr(frame, "__cuda_array_interface__"):
-            return cls.from_device_memory(frame)
-        return cls.from_host_memory(frame)
+            return cls._from_device_memory(frame)
+        return cls._from_host_memory(frame)
 
     def __repr__(self) -> str:
         klass = self.__class__
