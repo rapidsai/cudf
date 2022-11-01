@@ -270,7 +270,8 @@ int96_timestamps : bool, default False
     If ``False``, timestamps will not be altered.
 row_group_size_bytes: integer, default {row_group_size_bytes_val}
     Maximum size of each stripe of the output.
-    If None, {row_group_size_bytes_val} ({row_group_size_bytes_val/1024/1024} MB) will be used.
+    If None, {row_group_size_bytes_val}
+    ({row_group_size_bytes_val_in_mb} MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -301,7 +302,8 @@ See Also
 --------
 cudf.read_parquet
 """.format(
-    row_group_size_bytes_val=_ROW_GROUP_SIZE_BYTES_DEFAULT
+    row_group_size_bytes_val=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes_val_in_mb=_ROW_GROUP_SIZE_BYTES_DEFAULT / 1024 / 1024,
 )
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
