@@ -201,7 +201,6 @@ class Buffer(Serializable):
         """
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
-        header["constructor-kwargs"] = {}
         header["frame_count"] = 1
         frames = [self]
         return header, frames
@@ -227,12 +226,6 @@ class Buffer(Serializable):
         frame = frames[0]
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
-
-        # TODO: remove handling of "constructor-kwargs" used by cuML's
-        #       `CumlArray`, which will require `CumlArray` to implement
-        #       its own deserialize.
-        if header["constructor-kwargs"]:
-            return cls(frame, **header["constructor-kwargs"])
 
         if hasattr(frame, "__cuda_array_interface__"):
             return cls._from_device_memory(frame)

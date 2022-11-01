@@ -103,24 +103,3 @@ def test_buffer_slice_fail(idx, err_type, err_msg):
 
     with pytest.raises(err_type, match=err_msg):
         buf[idx]
-
-
-class SerializeTestBuffer(Buffer):
-    def __init__(self, data, extra_arg):
-        self._ptr, self._size, self._owner = data.ptr, data.size, data.owner
-        self.extra_arg = extra_arg
-
-    def serialize(self):
-        header, frames = super().serialize()
-        header["constructor-kwargs"] = {"extra_arg", self.extra_arg}
-        return header, frames
-
-
-def test_serialize_constructor_kwargs():
-    ary = cp.arange(arr_len, dtype="uint8")
-    buf = SerializeTestBuffer(as_buffer(ary), extra_arg="my-extra-argument")
-    out = SerializeTestBuffer.deserialize(*buf.serialize())
-    assert out.ptr == buf.ptr
-    assert out.size == buf.size
-    assert out.owner is buf.owner
-    assert out.extra_arg == buf.extra_arg
