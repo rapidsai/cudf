@@ -249,6 +249,9 @@ struct ColumnChunkDesc {
   int32_t src_col_schema;  // my schema index in the file
 };
 
+/**
+ * @brief The struct to store raw/intermediate file data before parsing.
+ */
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
   rmm::device_buffer decomp_page_data;
