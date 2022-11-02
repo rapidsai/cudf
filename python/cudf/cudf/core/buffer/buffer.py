@@ -18,8 +18,17 @@ from cudf.utils.string import format_bytes
 T = TypeVar("T", bound="Buffer")
 
 
-def cuda_array_interface_wrapper(ptr: int, size: int, owner: object = None):
+def cuda_array_interface_wrapper(
+    ptr: int,
+    size: int,
+    owner: object = None,
+    readonly=False,
+    typestr="|u1",
+    version=0,
+):
     """Wrap device pointer in an object that exposes `__cuda_array_interface__`
+
+    See <https://numba.readthedocs.io/en/stable/cuda/cuda_array_interface.html>
 
     Parameters
     ----------
@@ -30,6 +39,14 @@ def cuda_array_interface_wrapper(ptr: int, size: int, owner: object = None):
     owner : object, optional
         Python object to which the lifetime of the memory allocation is tied.
         A reference to this object is kept in the returned wrapper object.
+    readonly: bool, optional
+        Mark the interface read-only.
+    typestr: str, optional
+        The type string of the interface. By default this is "|u1", which
+        means "an unsigned integer with a not relevant byteorder". See:
+        <https://numpy.org/doc/stable/reference/arrays.interface.html>
+    version : bool, optional
+        The version of the interface.
 
     Return
     ------
@@ -43,11 +60,11 @@ def cuda_array_interface_wrapper(ptr: int, size: int, owner: object = None):
 
     return SimpleNamespace(
         __cuda_array_interface__={
-            "data": (ptr, False),
+            "data": (ptr, readonly),
             "shape": (size,),
             "strides": None,
-            "typestr": "|u1",
-            "version": 0,
+            "typestr": typestr,
+            "version": version,
         },
         owner=owner,
     )

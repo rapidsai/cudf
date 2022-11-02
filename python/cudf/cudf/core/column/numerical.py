@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
@@ -36,7 +35,7 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, as_buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -175,19 +174,16 @@ class NumericalColumn(NumericalBaseColumn):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
 
         return output
 
