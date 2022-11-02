@@ -126,7 +126,7 @@ class reader::impl {
 
  private:
   /**
-   * @brief Perform the necessary data preprocessing for reading columns later on.
+   * @brief Perform the necessary data preprocessing for parsing file later on.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read, or `-1` to read all rows
@@ -137,7 +137,7 @@ class reader::impl {
   void prepare_data(size_type skip_rows,
                     size_type num_rows,
                     bool uses_custom_row_bounds,
-                    const std::vector<std::vector<size_type>>& row_group_indices);
+                    std::vector<std::vector<size_type>> const& row_group_indices);
 
   /**
    * @brief Load and decompress the input file(s) into memory.
@@ -221,7 +221,7 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    */
-  void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+  void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                         hostdevice_vector<gpu::PageInfo>& pages,
                         gpu::chunk_intermediate_data const& id,
                         size_t skip_rows,

@@ -1406,7 +1406,7 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
                        : std::vector<gpu::chunk_read_info>{{skip_rows, num_rows}};
 }
 
-void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                                     hostdevice_vector<gpu::PageInfo>& pages,
                                     gpu::chunk_intermediate_data const& id,
                                     size_t skip_rows,
