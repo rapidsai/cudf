@@ -2219,6 +2219,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                      ('col2', OrderedDict([('row1', 0.5), ('row2', 0.75)]))])
 
         If you want a `defaultdict`, you need to initialize it:
+
         >>> dd = defaultdict(list)
         >>> df.to_dict('records', into=dd)
         [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
