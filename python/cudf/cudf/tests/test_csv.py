@@ -767,10 +767,10 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
 
 
 def test_csv_reader_bools_custom():
-    names = ["text", "int"]
-    dtypes = ["str", "int"]
-    trues = ["foo"]
-    falses = ["bar"]
+    names = ["text", "bool"]
+    dtypes = {"text": "str", "bool": "bool"}
+    trues = ["foo", "1"]
+    falses = ["bar", "0"]
     lines = [
         ",".join(names),
         "true,true",
@@ -778,6 +778,7 @@ def test_csv_reader_bools_custom():
         "foo,foo",
         "bar,bar",
         "0,0",
+        "1,1",
     ]
     buffer = "\n".join(lines)
 
@@ -789,6 +790,9 @@ def test_csv_reader_bools_custom():
         true_values=trues,
         false_values=falses,
     )
+
+    # Note: bool literals give parsing errors as int
+    # "0" and "1" give parsing errors as bool in pandas
     expected = pd.read_csv(
         StringIO(buffer),
         names=names,
