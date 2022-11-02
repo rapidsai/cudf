@@ -244,6 +244,36 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
+    @_check_groupby_supported
+    def cumsum(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            self._make_groupby_method_aggs("cumsum"),
+            split_every=split_every,
+            split_out=split_out,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+            **self.dropna,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    @_check_groupby_supported
+    def cumcount(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            self._make_groupby_method_aggs("cumcount"),
+            split_every=split_every,
+            split_out=split_out,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+            **self.dropna,
+        )
+
+    @_dask_cudf_nvtx_annotate
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if arg == "size":
             return self.size()
@@ -428,6 +458,36 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             self.obj,
             self.by,
             {self._slice: "last"},
+            split_every=split_every,
+            split_out=split_out,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+            **self.dropna,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    @_check_groupby_supported
+    def cumsum(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "cumsum"},
+            split_every=split_every,
+            split_out=split_out,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+            **self.dropna,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    @_check_groupby_supported
+    def cumcount(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "cumcount"},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
