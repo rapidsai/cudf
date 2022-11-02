@@ -15,21 +15,16 @@
  */
 
 #include "reader_impl.hpp"
-#include "reader_impl_helpers.cuh"
 
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/fill.h>
-#include <thrust/iterator/iterator_categories.h>
 #include <thrust/logical.h>
 
 namespace cudf::io::detail::parquet {

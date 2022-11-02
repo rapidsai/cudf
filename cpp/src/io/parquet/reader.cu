@@ -15,15 +15,12 @@
  */
 
 #include "reader_impl.hpp"
-#include "reader_impl_helpers.cuh"
-
-#include <cudf/io/detail/parquet.hpp>
 
 namespace cudf::io::detail::parquet {
 
 reader::reader() = default;
 
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
                parquet_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
