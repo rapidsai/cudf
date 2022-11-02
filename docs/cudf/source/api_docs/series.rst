@@ -367,6 +367,7 @@ Serialization / IO / conversion
 
    Series.to_arrow
    Series.to_cupy
+   Series.to_dict
    Series.to_dlpack
    Series.to_frame
    Series.to_hdf

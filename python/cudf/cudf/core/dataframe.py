@@ -1993,6 +1993,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return operands, index
 
     @classmethod
+    @_cudf_nvtx_annotate
     def from_dict(
         cls,
         data: dict,
@@ -2125,6 +2126,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns = create_index(data["columns"], data["column_names"], pd)
             return cls(realdata, index=index, columns=columns, dtype=dtype)
 
+    @_cudf_nvtx_annotate
     def to_dict(
         self,
         orient: str = "dict",
