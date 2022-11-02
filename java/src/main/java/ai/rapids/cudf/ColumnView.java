@@ -3282,7 +3282,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * The like pattern expects only 2 wildcard special characters
    * - `%` any number of any character (including no characters)
-   * `_` any single character
+   * - `_` any single character
    *
    * ```
    * cv = ["azaa", "ababaabba", "aaxa"]
