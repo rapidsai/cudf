@@ -44,11 +44,10 @@ namespace detail {
  * d2 is now {[a, b, c, d, e, f], [5, 0, 3, 1, 2, 2, 2, 5, 0]}
  * ```
  */
-std::unique_ptr<column> add_keys(
-  dictionary_column_view const& dictionary_column,
-  column_view const& new_keys,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
+                                 column_view const& new_keys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]

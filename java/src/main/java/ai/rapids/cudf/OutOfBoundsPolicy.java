@@ -32,7 +32,7 @@ package ai.rapids.cudf;
  */
 public enum OutOfBoundsPolicy {
   /* Output values corresponding to out-of-bounds indices are null */
-  NULLIFY,  
+  NULLIFY,
 
   /* No bounds checking is performed, better performance */
   DONT_CHECK

@@ -33,6 +33,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
@@ -43,6 +44,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <fstream>
+#include <random>
 #include <type_traits>
 
 template <typename T, typename SourceElementT = T>
@@ -462,7 +464,70 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
+template <typename mask_op_t>
+void test_durations(mask_op_t mask_op)
+{
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> distribution_d(0, 30);
+  auto sequence_d = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return distribution_d(generator); });
+
+  std::uniform_int_distribution<int> distribution_s(0, 86400);
+  auto sequence_s = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return distribution_s(generator); });
+
+  std::uniform_int_distribution<int> distribution(0, 86400 * 1000);
+  auto sequence = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return distribution(generator); });
+
+  auto mask = cudf::detail::make_counting_transform_iterator(0, mask_op);
+
+  constexpr auto num_rows = 100;
+  // Durations longer than a day are not exactly valid, but cudf should be able to round trip
+  auto durations_d = cudf::test::fixed_width_column_wrapper<cudf::duration_D, int64_t>(
+    sequence_d, sequence_d + num_rows, mask);
+  auto durations_s = cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t>(
+    sequence_s, sequence_s + num_rows, mask);
+  auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
+    sequence, sequence + num_rows, mask);
+  auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
+    sequence, sequence + num_rows, mask);
+  auto durations_ns = cudf::test::fixed_width_column_wrapper<cudf::duration_ns, int64_t>(
+    sequence, sequence + num_rows, mask);
+
+  auto expected = table_view{{durations_d, durations_s, durations_ms, durations_us, durations_ns}};
+
+  auto filepath = temp_env->get_temp_filepath("Durations.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  auto durations_d_got =
+    cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
+
+  auto durations_s_got =
+    cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ms, result.tbl->view().column(2));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_us, result.tbl->view().column(3));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ns, result.tbl->view().column(4));
+}
+
+TEST_F(ParquetWriterTest, Durations)
+{
+  test_durations([](auto i) { return true; });
+  test_durations([](auto i) { return (i % 2) != 0; });
+  test_durations([](auto i) { return (i % 3) != 0; });
+  test_durations([](auto i) { return false; });
+}
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
@@ -474,7 +539,7 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 
   auto expected = table_view{{col}};
 
-  auto filepath = temp_env->get_temp_filepath("Chronos.parquet");
+  auto filepath = temp_env->get_temp_filepath("Timestamps.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
@@ -487,7 +552,7 @@ TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
@@ -500,7 +565,7 @@ TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
 
   auto expected = table_view{{col}};
 
-  auto filepath = temp_env->get_temp_filepath("ChronosWithNulls.parquet");
+  auto filepath = temp_env->get_temp_filepath("TimestampsWithNulls.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);

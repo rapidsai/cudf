@@ -16,11 +16,10 @@
 
 #pragma once
 
-#include "orc_common.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <io/comp/io_uncomp.hpp>
 
@@ -37,6 +36,9 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+static constexpr uint32_t block_header_size = 3;
+
 struct PostScript {
   uint64_t footerLength       = 0;     // the length of the footer section in bytes
   CompressionKind compression = NONE;  // the kind of generic compression used
