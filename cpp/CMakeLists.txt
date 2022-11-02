@@ -689,7 +689,7 @@ add_library(cudf::cudf ALIAS cudf)
 add_library(
   cudftestutil STATIC
   tests/io/metadata_utilities.cpp
-  tests/quantiles/tdigest_utilities.cu
+  tests/utilities/tdigest_utilities.cu
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu

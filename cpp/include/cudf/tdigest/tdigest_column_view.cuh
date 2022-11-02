@@ -23,24 +23,6 @@ namespace cudf {
 namespace tdigest {
 
 /**
- * @brief Functor to compute the size of each tdigest of a column.
- *
- */
-struct tdigest_size {
-  size_type const* offsets;  ///< Offsets of the t-digest column
-  /**
-   * @brief Returns size of the each tdigest in the column
-   *
-   * @param tdigest_index Index of the tdigest in the column
-   * @return Size of the tdigest
-   */
-  __device__ size_type operator()(size_type tdigest_index)
-  {
-    return offsets[tdigest_index + 1] - offsets[tdigest_index];
-  }
-};
-
-/**
  * @brief Given a column_view containing tdigest data, an instance of this class
  * provides a wrapper on the compound column for tdigest operations.
  *
@@ -128,6 +110,22 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] column_view weights() const;
 
   /**
+   * @brief Functor to compute the size of each tdigest of a column.
+   */
+  struct tdigest_size_fn {
+    size_type const* offsets;  ///< Offsets of the t-digest column
+    /**
+     * @brief Returns size of the each tdigest in the column
+     *
+     * @param tdigest_index Index of the tdigest in the column
+     * @return Size of the tdigest
+     */
+    __device__ size_type operator()(size_type tdigest_index)
+    {
+      return offsets[tdigest_index + 1] - offsets[tdigest_index];
+    }
+  };
+  /**
    * @brief Returns an iterator that returns the size of each tdigest
    * in the column (each row is 1 digest)
    *
@@ -136,7 +134,7 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] auto size_begin() const
   {
     return cudf::detail::make_counting_transform_iterator(
-      0, tdigest_size{centroids().offsets_begin()});
+      0, tdigest_size_fn{centroids().offsets_begin()});
   }
 
   /**

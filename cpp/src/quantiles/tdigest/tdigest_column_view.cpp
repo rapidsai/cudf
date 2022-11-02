@@ -22,8 +22,6 @@
 namespace cudf {
 namespace tdigest {
 
-using namespace cudf;
-
 tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(col)
 {
   // sanity check that this is actually tdigest data
