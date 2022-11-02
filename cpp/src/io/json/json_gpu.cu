@@ -274,7 +274,6 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
 
     using string_index_pair = thrust::pair<const char*, size_type>;
 
-    // Empty fields are not legal values
     if (!serialized_trie_contains(opts.trie_na,
                                   {desc.value_begin - is_quoted, value_len + is_quoted * 2})) {
       // Type dispatcher does not handle strings

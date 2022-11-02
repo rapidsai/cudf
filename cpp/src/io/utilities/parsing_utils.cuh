@@ -503,9 +503,9 @@ __inline__ __device__ It skip_character(It const& it, char ch)
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end Pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
@@ -550,7 +550,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char 
  *
  * @param begin Pointer to the first character in the parsing range
  * @param end Pointer to the first character after the parsing range
- * @param quotechar The character used to denote quotes. Provide '\0' if no quotes should be trimmed.
+ * @param quotechar The character used to denote quotes. Provide '\0' if no quotes should be
+ * trimmed.
  *
  * @return Trimmed range
  */
