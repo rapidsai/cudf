@@ -69,6 +69,7 @@ For the purpose of this discussion,
 we define a parametrization as "simple" if it is composed of a list (possibly nested) of primitive objects.
 Examples include a list of integers or a list of list of strings.
 This _does not_ include e.g. cuDF or pandas objects.
+In particular, developers should avoid performing GPU memory allocations during test collection.
 
 With that in mind, here are some ground rules for how to parametrize.
 
@@ -138,7 +139,6 @@ def test_odds():
 ```
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
-Developers should avoid performing GPU memory allocations during test collection.
 
 ### Testing utility functions
 
