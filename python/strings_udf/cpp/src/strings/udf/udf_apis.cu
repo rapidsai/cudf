@@ -15,18 +15,44 @@
  */
 
 #include <cudf/strings/udf/udf_apis.hpp>
+#include <cudf/strings/udf/udf_string.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
 namespace udf {
 namespace detail {
+namespace {
 
+/**
+ * @brief Functor wraps string_view objects around udf_string objects
+ *
+ * No string data is copied.
+ */
+struct udf_string_to_string_view_transform_fn {
+  __device__ cudf::string_view operator()(cudf::strings::udf::udf_string const& dstr)
+  {
+    return cudf::string_view{dstr.data(), dstr.size_bytes()};
+  }
+};
+
+}  // namespace
+
+/**
+ * @copydoc to_string_view_array
+ *
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input,
                                                          rmm::cuda_stream_view stream)
 {
@@ -36,11 +62,59 @@ std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const
                 .release()));
 }
 
+/**
+ * @copydoc column_from_udf_string_array
+ *
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
+std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
+                                                           cudf::size_type size,
+                                                           rmm::cuda_stream_view stream)
+{
+  // create string_views of the udf_strings
+  auto indices = rmm::device_uvector<cudf::string_view>(size, stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    d_strings,
+                    d_strings + size,
+                    indices.data(),
+                    udf_string_to_string_view_transform_fn{});
+
+  return cudf::make_strings_column(indices, cudf::string_view(nullptr, 0), stream);
+}
+
+/**
+ * @copydoc free_udf_string_array
+ *
+ * @param stream CUDA stream used for allocating/copying device memory and launching kernels
+ */
+void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
+                           cudf::size_type size,
+                           rmm::cuda_stream_view stream)
+{
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator(0),
+                     size,
+                     [d_strings] __device__(auto idx) { d_strings[idx].clear(); });
+}
+
 }  // namespace detail
+
+// external APIs
 
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
   return detail::to_string_view_array(input, cudf::get_default_stream());
+}
+
+std::unique_ptr<cudf::column> column_from_udf_string_array(udf_string* d_strings,
+                                                           cudf::size_type size)
+{
+  return detail::column_from_udf_string_array(d_strings, size, cudf::get_default_stream());
+}
+
+void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
+{
+  detail::free_udf_string_array(d_strings, size, cudf::get_default_stream());
 }
 
 }  // namespace udf

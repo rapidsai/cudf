@@ -15,7 +15,7 @@ Developers are strongly recommended to set up `pre-commit` prior to any developm
 The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth linting.
 Specifically, cuDF uses the following tools:
 
-- [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance. 
+- [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance.
 - [`black`](https://github.com/psf/black) is an automatic code formatter.
 - [`isort`](https://pycqa.github.io/isort/) ensures imports are sorted consistently.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.

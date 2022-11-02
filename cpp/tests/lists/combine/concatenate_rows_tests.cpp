@@ -547,9 +547,9 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
   // list<list<string>>
 
   // clang-format off
-  
-  // col 0  
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+
+  // col 0
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l0{ {
           {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}},
           {{}},
@@ -559,23 +559,23 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
         }, nulls_at({3, 4}) };
 
   // col1
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l1{ {
           {{}},
           {{"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
           {{{{"", "hhh"}, nulls_at({0})}, {"www"}},                               nulls_at({1})},
           {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
-          {{}} 
+          {{}}
         }, nulls_at({4}) };
 
   // col2
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l2{ {
           {{"monitor", "sugar"}},
           {{"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
           {{"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
           {{}, {"ram", "cpu", "disk"}, {}},
-          {{"round"}, {"square"}} 
+          {{"round"}, {"square"}}
         }, nulls_at({0, 4}) };
 
   // concatenate_policy::IGNORE_NULLS
@@ -584,39 +584,39 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
     cudf::table_view t({l0, l1, l2});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::IGNORE);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ {        
+      expected{ {
                   {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}, {}},
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}, {"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
-                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
-                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},                           
+                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
+                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
                       nulls_at({0, 2, 4}) },
                   {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}, {}, {"ram", "cpu", "disk"}, {}},
                   {{}}
                 }, nulls_at({4}) };
-        
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
-  
+
   // concatenate_policy::NULLIFY_OUTPUT_ROW
   {
     // perform the concatenate
     cudf::table_view t({l0, l1, l2});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ {        
+      expected{ {
                   {{}},
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}, {"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
-                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
-                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},                           
+                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
+                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
                       nulls_at({0, 2, 4}) },
                   {{}},
                   {{}}
-                }, nulls_at({0, 3, 4}) };    
-        
+                }, nulls_at({0, 3, 4}) };
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
@@ -628,9 +628,9 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
   // list<list<string>>
 
   // clang-format off
-  
-  // col 0  
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+
+  // col 0
+  cudf::test::lists_column_wrapper<cudf::string_view>
     unsliced_l0{ {
           {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}},
           {{}},
@@ -641,13 +641,13 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
   auto l0 = cudf::split(unsliced_l0, {2})[1];
 
   // col1
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     unsliced_l1{ {
           {{}},
           {{"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
           {{{{"", "hhh"}, nulls_at({0})}, {"www"}},                               nulls_at({1})},
           {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
-          {{}} 
+          {{}}
         }, nulls_at({4}) };
   auto l1 = cudf::split(unsliced_l1, {2})[1];
 
@@ -657,14 +657,14 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
     cudf::table_view t({l0, l1});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::IGNORE);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
+      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
                     {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
                   {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
                   {{}}
                 }, nulls_at({2}) };
-        
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
@@ -674,14 +674,14 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
     cudf::table_view t({l0, l1});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
+      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
                     {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
                   {{}},
-                  {{}} 
-                }, nulls_at({1, 2}) };    
-        
+                  {{}}
+                }, nulls_at({1, 2}) };
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
