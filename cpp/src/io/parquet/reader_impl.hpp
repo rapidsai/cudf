@@ -110,14 +110,8 @@ class reader::impl {
    *
    * Note that this gets called even in the flat schema case so that we have a
    * consistent place to store common information such as value counts, etc.
-   *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param page_nesting_info The allocated nesting info structs.
    */
-  void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                             hostdevice_vector<gpu::PageInfo>& pages,
-                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
+  void allocate_nesting_info();
 
   /**
    * @brief Read a chunk of data and return an output table.
