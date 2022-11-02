@@ -46,4 +46,3 @@ index 5d486789..b42fb5f0 100644
      for (int j = 1 & i; j < ITEMS_PER_THREAD - 1; j += 2)
      {
        if (compare_op(keys[j + 1], keys[j]))
-       
