@@ -19,12 +19,9 @@
 #include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
-#include <io/comp/gpuinflate.hpp>
-
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <tuple>
 #include <vector>

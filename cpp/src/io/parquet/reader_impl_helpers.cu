@@ -16,8 +16,6 @@
 
 #include "reader_impl_helpers.cuh"
 
-#include <cudf/io/datasource.hpp>
-
 #include <regex>
 
 namespace cudf::io::detail::parquet {
