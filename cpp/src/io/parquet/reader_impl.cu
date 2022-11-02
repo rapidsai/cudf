@@ -25,12 +25,12 @@
 
 namespace cudf::io::detail::parquet {
 
-void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                                    size_t skip_rows,
-                                    size_t num_rows)
+void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
+  auto& chunks       = _file_itm_data.chunks;
+  auto& pages        = _file_itm_data.pages_info;
+  auto& page_nesting = _file_itm_data.page_nesting_info;
+
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc& chunk) {
     return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
   };
@@ -267,17 +267,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   if (_num_rows == 0) { return finalize_output(out_metadata, out_columns); }
 
-  allocate_columns(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _skip_rows,
-                   _num_rows,
-                   uses_custom_row_bounds);
+  allocate_columns(_skip_rows, _num_rows, uses_custom_row_bounds);
 
-  decode_page_data(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _file_itm_data.page_nesting_info,
-                   _skip_rows,
-                   _num_rows);
+  decode_page_data(_skip_rows, _num_rows);
 
   // Create the final output cudf columns
   for (size_t i = 0; i < _output_buffers.size(); ++i) {

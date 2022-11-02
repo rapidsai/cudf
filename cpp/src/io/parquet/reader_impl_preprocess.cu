@@ -774,12 +774,11 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   }
 }
 
-void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    size_t min_row,
-                                    size_t total_rows,
-                                    bool uses_custom_row_bounds)
+void reader::impl::allocate_columns(size_t min_row, size_t total_rows, bool uses_custom_row_bounds)
 {
+  auto const& chunks = _file_itm_data.chunks;
+  auto& pages        = _file_itm_data.pages_info;
+
   // iterate over all input columns and allocate any associated output
   // buffers if they are not part of a list hierarchy. mark down
   // if we have any list columns that need further processing.
