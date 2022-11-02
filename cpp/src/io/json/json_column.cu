@@ -722,15 +722,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
-table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
+table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
@@ -739,7 +736,8 @@ table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
-  print_tree(input, gpu_tree, stream);
+  auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
+  print_tree(h_input, gpu_tree, stream);
 #endif
 
   auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(d_input, gpu_tree, stream);
@@ -841,5 +839,17 @@ table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
                              {{}, out_column_names}};
 }
 
+table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
+                                             cudf::io::json_reader_options const& options,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Allocate device memory for the JSON input & copy over to device
+  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
+
+  return device_parse_nested_json(device_span<SymbolT const>{d_input}, options, stream, mr);
+}
 }  // namespace detail
 }  // namespace cudf::io::json

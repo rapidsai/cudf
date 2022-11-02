@@ -279,21 +279,21 @@ struct column_to_strings_fn {
 //
 void write_chunked_begin(data_sink* out_sink,
                          table_view const& table,
-                         table_metadata const* metadata,
+                         host_span<std::string const> user_column_names,
                          csv_writer_options const& options,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
 {
   if (options.is_enabled_include_header()) {
-    // need to generate column names if metadata is not provided
+    // need to generate column names if names are not provided
     std::vector<std::string> generated_col_names;
-    if (metadata == nullptr) {
+    if (user_column_names.empty()) {
       generated_col_names.resize(table.num_columns());
       thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
         return std::to_string(idx);
       });
     }
-    auto const& column_names = (metadata == nullptr) ? generated_col_names : metadata->column_names;
+    auto const& column_names = user_column_names.empty() ? generated_col_names : user_column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
@@ -346,7 +346,6 @@ void write_chunked_begin(data_sink* out_sink,
 
 void write_chunked(data_sink* out_sink,
                    strings_column_view const& str_column_view,
-                   table_metadata const* metadata,
                    csv_writer_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
@@ -399,7 +398,7 @@ void write_chunked(data_sink* out_sink,
 
 void write_csv(data_sink* out_sink,
                table_view const& table,
-               table_metadata const* metadata,
+               host_span<std::string const> user_column_names,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
@@ -407,7 +406,7 @@ void write_csv(data_sink* out_sink,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(out_sink, table, metadata, options, stream, mr);
+  write_chunked_begin(out_sink, table, user_column_names, options, stream, mr);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -476,7 +475,7 @@ void write_csv(data_sink* out_sink,
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(out_sink, str_concat_col->view(), metadata, options, stream, mr);
+      write_chunked(out_sink, str_concat_col->view(), options, stream, mr);
     }
   }
 }

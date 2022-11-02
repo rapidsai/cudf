@@ -40,7 +40,7 @@ requirements:
     - numba >=0.54
     - libcudf ={{ version }}
     - cudf ={{ version }}
-    - cudatoolkit ={{ cuda_version }}
+    - cudatoolkit {{ cuda_version }}.*
   run:
     - python
     - typing_extensions

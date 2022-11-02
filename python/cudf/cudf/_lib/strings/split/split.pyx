@@ -19,7 +19,6 @@ from cudf._lib.cpp.strings.split.split cimport (
     split_record_re as cpp_split_record_re,
 )
 from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr

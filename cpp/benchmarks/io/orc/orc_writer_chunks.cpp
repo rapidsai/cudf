@@ -29,8 +29,8 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
 
 void nvbench_orc_write(nvbench::state& state)
