@@ -279,12 +279,8 @@ void reader::impl::prepare_data(size_type skip_rows,
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
 
-    compute_chunk_read_info(_file_itm_data.chunks,
-                            _file_itm_data.pages_info,
-                            skip_rows_corrected,
-                            num_rows_corrected,
-                            uses_custom_row_bounds,
-                            _chunk_read_limit);
+    compute_chunk_read_info(
+      skip_rows_corrected, num_rows_corrected, uses_custom_row_bounds, _chunk_read_limit);
 
     if (_chunk_read_limit == 0) {  // read the whole file at once
       CUDF_EXPECTS(_chunk_read_info.size() == 1,

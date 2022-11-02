@@ -155,8 +155,6 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
    *
-   * @param chunks All chunks to be decoded
-   * @param pages All pages to be decoded
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
@@ -164,9 +162,7 @@ class reader::impl {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
    *        is no limit
    */
-  void compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                               hostdevice_vector<gpu::PageInfo>& pages,
-                               size_t skip_rows,
+  void compute_chunk_read_info(size_t skip_rows,
                                size_t num_rows,
                                bool uses_custom_row_bounds,
                                size_t chunk_read_limit);
