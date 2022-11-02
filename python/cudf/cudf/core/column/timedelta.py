@@ -13,7 +13,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -40,13 +40,13 @@ class TimeDeltaColumn(ColumnBase):
     """
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
         The Timedelta values
     dtype : np.dtype
         The data type
     size : int
         Size of memory allocation.
-    mask : DeviceBufferLike; optional
+    mask : Buffer; optional
         The validity mask
     offset : int
         Data offset
@@ -78,19 +78,17 @@ class TimeDeltaColumn(ColumnBase):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: Dtype,
         size: int = None,  # TODO: make non-optional
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         offset: int = 0,
         null_count: int = None,
     ):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset

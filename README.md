@@ -50,7 +50,7 @@ For additional examples, browse our complete [API documentation](https://docs.ra
 
 ## Quick Start
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you're running. This provides a ready to run Docker container with example notebooks and data, showcasing how you can utilize cuDF.
 
 ## Installation
 
@@ -65,32 +65,21 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-For `cudf version == 22.06` :
 ```bash
-# for CUDA 11.0
-conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=22.06 python=3.9 cudatoolkit=11.0
-
-# or, for CUDA 11.2
-conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=22.06 python=3.9 cudatoolkit=11.2
-
+# for CUDA 11.5
+conda install -c rapidsai -c conda-forge -c nvidia \
+    cudf=22.10 python=3.9 cudatoolkit=11.5
+# for CUDA 11.2
+conda install -c rapidsai -c conda-forge -c nvidia \
+    cudf=22.10 python=3.9 cudatoolkit=11.2
 ```
 
-For the nightly version of `cudf` :
-```bash
-# for CUDA 11.0
-conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.9 cudatoolkit=11.0
-
-# or, for CUDA 11.2
-conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.9 cudatoolkit=11.2
-```
+We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
+of our latest development branch.
 
 Note: cuDF is supported only on Linux, and with Python versions 3.8 and later.
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
 
 ## Build/Install from Source
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).

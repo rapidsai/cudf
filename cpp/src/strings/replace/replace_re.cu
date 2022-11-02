@@ -106,7 +106,7 @@ std::unique_ptr<column> replace_re(
   string_scalar const& replacement,
   std::optional<size_type> max_replace_count,
   regex_flags const flags,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);

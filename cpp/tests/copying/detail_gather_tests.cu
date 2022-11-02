@@ -96,7 +96,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     cudf::detail::gather(source_table,
                          gather_map,
                          cudf::out_of_bounds_policy::NULLIFY,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED);
+                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         cudf::get_default_stream());
 
   auto expect_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });

@@ -38,7 +38,7 @@ namespace detail {
  */
 std::unique_ptr<column> create_chars_child_column(
   size_type bytes,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -51,7 +51,7 @@ std::unique_ptr<column> create_chars_child_column(
  */
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

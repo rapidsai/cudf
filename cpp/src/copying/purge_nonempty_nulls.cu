@@ -104,7 +104,10 @@ bool may_have_nonempty_nulls(column_view const& input)
 /**
  * @copydoc cudf::has_nonempty_nulls
  */
-bool has_nonempty_nulls(column_view const& input) { return detail::has_nonempty_nulls(input); }
+bool has_nonempty_nulls(column_view const& input)
+{
+  return detail::has_nonempty_nulls(input, cudf::get_default_stream());
+}
 
 /**
  * @copydoc cudf::purge_nonempty_nulls(lists_column_view const&, rmm::mr::device_memory_resource*)

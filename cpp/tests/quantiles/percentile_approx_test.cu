@@ -271,9 +271,11 @@ void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
 
 std::pair<rmm::device_buffer, size_type> make_null_mask(column_view const& col)
 {
-  return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                                thrust::make_counting_iterator<size_type>(col.size()),
-                                [] __device__(size_type i) { return i % 2 == 0; });
+  return cudf::detail::valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(col.size()),
+    [] __device__(size_type i) { return i % 2 == 0; },
+    cudf::get_default_stream());
 }
 
 void simple_with_nulls_test(data_type input_type, std::vector<std::pair<int, int>> params)
@@ -384,7 +386,7 @@ struct PercentileApproxTest : public cudf::test::BaseFixture {
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {
-  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<column_view> input;
@@ -428,11 +430,12 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   auto result = cudf::percentile_approx(tdv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
-  auto expected = cudf::make_lists_column(2,
-                                          offsets.release(),
-                                          cudf::make_empty_column(type_id::FLOAT64),
-                                          2,
-                                          cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
+  auto expected = cudf::make_lists_column(
+    2,
+    offsets.release(),
+    cudf::make_empty_column(type_id::FLOAT64),
+    2,
+    cudf::detail::create_null_mask(2, mask_state::ALL_NULL, cudf::get_default_stream()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

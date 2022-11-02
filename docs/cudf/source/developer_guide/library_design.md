@@ -27,24 +27,24 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class RangeIndex
 % class DataFrame
 % class Series
-% 
+%
 % Frame <|-- IndexedFrame
-% 
+%
 % Frame <|-- SingleColumnFrame
-% 
+%
 % SingleColumnFrame <|-- Series
 % IndexedFrame <|-- Series
-% 
+%
 % IndexedFrame <|-- DataFrame
-% 
+%
 % BaseIndex <|-- RangeIndex
-% 
+%
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
-% 
+%
 % BaseIndex <|-- GenericIndex
 % SingleColumnFrame <|-- GenericIndex
-% 
+%
 % @enduml
 
 
@@ -278,7 +278,7 @@ copied_buf._weak_ref = current_buf._get_weakref()
 current_buf._weak_ref = copied_buf._get_weakref()
 ```
 
-2. If the current `Buffer`(call it `current_buf`) already holds a weak-reference, this means there exists at-least one 
+2. If the current `Buffer`(call it `current_buf`) already holds a weak-reference, this means there exists at-least one
 copy of this `Buffer` already somewhere. So when we are trying to generate a copy of `current_buf`(call it `copied_buf`),
 we will be storing the weak-reference that `current_buf` already has into the `copied_buf`. Next, we will generate a
 weak-reference of `copied_buf` and store it in `current_buf`. This will ensure we keep the weak-references of all the
