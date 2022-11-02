@@ -1831,8 +1831,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    3
         3    4
         dtype: int64
-        >>> series.data
-        <cudf.core.buffer.Buffer ...>
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)

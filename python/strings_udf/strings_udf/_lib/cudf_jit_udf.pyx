@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column_view
@@ -21,4 +21,4 @@ def to_string_view_array(Column strings_col):
         c_buffer = move(cpp_to_string_view_array(input_view))
 
     device_buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    return Buffer(device_buffer)
+    return as_buffer(device_buffer)
