@@ -18,6 +18,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -26,7 +27,6 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/sequence.h>
 
 #include <cub/cub.cuh>
 
@@ -53,16 +53,56 @@ struct column_fast_sort_fn {
   }
 
   /**
-   * @brief Compile-time check for supporting radix sort for column type
+   * @brief Compile-time check for supporting fast sort for a specific type
    */
   template <typename T>
-  static constexpr bool is_radix_sort_supported()
+  static constexpr bool is_fast_sort_supported()
   {
     return std::is_integral<T>();
   }
 
   template <typename KeyT, typename ValueT, typename OffsetIteratorT>
-  void radix_sort_ascending(KeyT const* keys_in,
+  void fast_sort_ascending(KeyT const* keys_in,
+                           KeyT* keys_out,
+                           ValueT const* values_in,
+                           ValueT* values_out,
+                           int num_items,
+                           int num_segments,
+                           OffsetIteratorT begin_offsets,
+                           OffsetIteratorT end_offsets,
+                           rmm::cuda_stream_view stream)
+  {
+    rmm::device_buffer d_temp_storage;
+    size_t temp_storage_bytes = 0;
+    // DeviceSegmentedSort is faster then DeviceSegmentedRadixSort at this time
+    cub::DeviceSegmentedSort::SortPairs(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        keys_in,
+                                        keys_out,
+                                        values_in,
+                                        values_out,
+                                        num_items,
+                                        num_segments,
+                                        begin_offsets,
+                                        end_offsets,
+                                        stream.value());
+    d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+
+    cub::DeviceSegmentedSort::SortPairs(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        keys_in,
+                                        keys_out,
+                                        values_in,
+                                        values_out,
+                                        num_items,
+                                        num_segments,
+                                        begin_offsets,
+                                        end_offsets,
+                                        stream.value());
+  }
+
+  template <typename KeyT, typename ValueT, typename OffsetIteratorT>
+  void fast_sort_descending(KeyT const* keys_in,
                             KeyT* keys_out,
                             ValueT const* values_in,
                             ValueT* values_out,
@@ -74,93 +114,58 @@ struct column_fast_sort_fn {
   {
     rmm::device_buffer d_temp_storage;
     size_t temp_storage_bytes = 0;
-    cub::DeviceSegmentedRadixSort::SortPairs(d_temp_storage.data(),
-                                             temp_storage_bytes,
-                                             keys_in,
-                                             keys_out,
-                                             values_in,
-                                             values_out,
-                                             num_items,
-                                             num_segments,
-                                             begin_offsets,
-                                             end_offsets,
-                                             0,
-                                             sizeof(KeyT) * 8,
-                                             stream.value());
+    // DeviceSegmentedSort is faster then DeviceSegmentedRadixSort at this time
+    cub::DeviceSegmentedSort::SortPairsDescending(d_temp_storage.data(),
+                                                  temp_storage_bytes,
+                                                  keys_in,
+                                                  keys_out,
+                                                  values_in,
+                                                  values_out,
+                                                  num_items,
+                                                  num_segments,
+                                                  begin_offsets,
+                                                  end_offsets,
+                                                  stream.value());
     d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
-    cub::DeviceSegmentedRadixSort::SortPairs(d_temp_storage.data(),
-                                             temp_storage_bytes,
-                                             keys_in,
-                                             keys_out,
-                                             values_in,
-                                             values_out,
-                                             num_items,
-                                             num_segments,
-                                             begin_offsets,
-                                             end_offsets,
-                                             0,
-                                             sizeof(KeyT) * 8,
-                                             stream.value());
-  }
-
-  template <typename KeyT, typename ValueT, typename OffsetIteratorT>
-  void radix_sort_descending(KeyT const* keys_in,
-                             KeyT* keys_out,
-                             ValueT const* values_in,
-                             ValueT* values_out,
-                             int num_items,
-                             int num_segments,
-                             OffsetIteratorT begin_offsets,
-                             OffsetIteratorT end_offsets,
-                             rmm::cuda_stream_view stream)
-  {
-    rmm::device_buffer d_temp_storage;
-    size_t temp_storage_bytes = 0;
-    cub::DeviceSegmentedRadixSort::SortPairsDescending(d_temp_storage.data(),
-                                                       temp_storage_bytes,
-                                                       keys_in,
-                                                       keys_out,
-                                                       values_in,
-                                                       values_out,
-                                                       num_items,
-                                                       num_segments,
-                                                       begin_offsets,
-                                                       end_offsets,
-                                                       0,
-                                                       sizeof(KeyT) * 8,
-                                                       stream.value());
-    d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
-
-    cub::DeviceSegmentedRadixSort::SortPairsDescending(d_temp_storage.data(),
-                                                       temp_storage_bytes,
-                                                       keys_in,
-                                                       keys_out,
-                                                       values_in,
-                                                       values_out,
-                                                       num_items,
-                                                       num_segments,
-                                                       begin_offsets,
-                                                       end_offsets,
-                                                       0,
-                                                       sizeof(KeyT) * 8,
-                                                       stream.value());
+    cub::DeviceSegmentedSort::SortPairsDescending(d_temp_storage.data(),
+                                                  temp_storage_bytes,
+                                                  keys_in,
+                                                  keys_out,
+                                                  values_in,
+                                                  values_out,
+                                                  num_items,
+                                                  num_segments,
+                                                  begin_offsets,
+                                                  end_offsets,
+                                                  stream.value());
   }
 
   template <typename T>
-  void radix_sort(column_view const& input,
-                  column_view const& segment_offsets,
-                  mutable_column_view& indices,
-                  bool ascending,
-                  rmm::cuda_stream_view stream)
+  void fast_sort(column_view const& input,
+                 column_view const& segment_offsets,
+                 mutable_column_view& indices,
+                 bool ascending,
+                 rmm::cuda_stream_view stream)
   {
-    // CUB's radix sort requires an output, typed buffer; it will not accept a discard iterator
+    // CUB's segmented sort functions cannot accept iterators.
+    // We create a temporary column here for it to use.
     auto temp_col =
       cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
     mutable_column_view output_view = temp_col->mutable_view();
 
     if (ascending) {
-      radix_sort_ascending(input.begin<T>(),
+      fast_sort_ascending(input.begin<T>(),
+                          output_view.begin<T>(),
+                          indices.begin<size_type>(),
+                          indices.begin<size_type>(),
+                          input.size(),
+                          segment_offsets.size() - 1,
+                          segment_offsets.begin<size_type>(),
+                          segment_offsets.begin<size_type>() + 1,
+                          stream);
+    } else {
+      fast_sort_descending(input.begin<T>(),
                            output_view.begin<T>(),
                            indices.begin<size_type>(),
                            indices.begin<size_type>(),
@@ -169,34 +174,24 @@ struct column_fast_sort_fn {
                            segment_offsets.begin<size_type>(),
                            segment_offsets.begin<size_type>() + 1,
                            stream);
-    } else {
-      radix_sort_descending(input.begin<T>(),
-                            output_view.begin<T>(),
-                            indices.begin<size_type>(),
-                            indices.begin<size_type>(),
-                            input.size(),
-                            segment_offsets.size() - 1,
-                            segment_offsets.begin<size_type>(),
-                            segment_offsets.begin<size_type>() + 1,
-                            stream);
     }
   }
 
-  template <typename T, std::enable_if_t<is_radix_sort_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_fast_sort_supported<T>()>* = nullptr>
   void operator()(column_view const& input,
                   column_view const& segment_offsets,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
   {
-    radix_sort<T>(input, segment_offsets, indices, ascending, stream);
+    fast_sort<T>(input, segment_offsets, indices, ascending, stream);
   }
 
-  template <typename T, std::enable_if_t<!is_radix_sort_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!is_fast_sort_supported<T>()>* = nullptr>
   void operator()(
     column_view const&, column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
   {
-    CUDF_FAIL("Column type is not fast sortable");
+    CUDF_FAIL("Column type cannot be used with fast-sort function");
   }
 };
 
@@ -217,13 +212,12 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  auto sorted_indices = cudf::make_numeric_column(
-    data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view indices_view = sorted_indices->mutable_view();
-  // Unfortunately, CUB's radix sort requires a buffer for the indices and will not accept
-  // a counting iterator in its place so we must pre-fill it here.
-  thrust::sequence(
-    rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
+  // Unfortunately, CUB's segmented sort functions cannot accept iterators.
+  // We have to build a pre-filled sequence of indices as input.
+  auto sorted_indices =
+    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0}, stream, mr);
+  auto indices_view = sorted_indices->mutable_view();
+
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
                                                column_fast_sort_fn{},
                                                input,
@@ -289,6 +283,10 @@ std::unique_ptr<column> segmented_sorted_order_common(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  if (keys.num_rows() == 0 || keys.num_columns() == 0) {
+    return cudf::make_empty_column(type_to_id<size_type>());
+  }
+
   CUDF_EXPECTS(segment_offsets.type() == data_type(type_to_id<size_type>()),
                "segment offsets should be size_type");
 
@@ -302,14 +300,21 @@ std::unique_ptr<column> segmented_sorted_order_common(
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // the average list size at which to prefer fast sort
-  constexpr cudf::size_type MIN_AVG_LIST_SIZE_FOR_FAST_SORT{100};
+  // the average row size for which to prefer fast sort
+  constexpr cudf::size_type MAX_AVG_LIST_SIZE_FOR_FAST_SORT{100};
+  // the maximum row count for which to prefer fast sort
+  constexpr cudf::size_type MAX_LIST_SIZE_FOR_FAST_SORT{1 << 18};
 
-  // fast-path for single column sort
-  if (keys.num_columns() == 1 and sorting == sort_method::UNSTABLE and
+  // fast-path for single column sort:
+  // - single-column table
+  // - not stable-sort
+  // - no nulls and allowable fixed-width type
+  // - size and width are limited -- based on benchmark results
+  if (keys.num_columns() == 0 and sorting == sort_method::UNSTABLE and
       column_fast_sort_fn::is_fast_sort_supported(keys.column(0)) and
       (segment_offsets.size() > 0) and
-      ((keys.column(0).size() / segment_offsets.size()) > MIN_AVG_LIST_SIZE_FOR_FAST_SORT)) {
+      (((keys.num_rows() / segment_offsets.size()) < MAX_AVG_LIST_SIZE_FOR_FAST_SORT) or
+       (keys.num_rows() < MAX_LIST_SIZE_FOR_FAST_SORT))) {
     auto const col_order = column_order.empty() ? order::ASCENDING : column_order.front();
     return fast_segmented_sorted_order(keys.column(0), segment_offsets, col_order, stream, mr);
   }
