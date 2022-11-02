@@ -18,16 +18,6 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
-
 namespace cudf::io::detail::parquet {
 
 namespace {

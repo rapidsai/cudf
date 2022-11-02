@@ -15,7 +15,6 @@
  */
 
 #include "reader_impl.hpp"
-#include "reader_impl_helpers.cuh"
 
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
@@ -25,7 +24,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -38,6 +36,7 @@
 #include <thrust/logical.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>

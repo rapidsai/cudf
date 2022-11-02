@@ -21,22 +21,20 @@
 
 #pragma once
 
-#include "parquet.hpp"
 #include "parquet_gpu.hpp"
 #include "reader_impl_helpers.cuh"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
-#include <string>
-#include <utility>
+#include <optional>
 #include <vector>
 
 namespace cudf::io::detail::parquet {
