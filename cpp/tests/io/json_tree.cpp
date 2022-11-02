@@ -735,6 +735,26 @@ TEST_F(JsonTest, TreeRepresentation3)
   if (std::getenv("NJP_DEBUG_DUMP") != nullptr) { print_tree_representation(input, cpu_tree); }
 }
 
+TEST_F(JsonTest, TreeRepresentationError)
+{
+  auto const stream       = cudf::get_default_stream();
+  std::string const input = R"([ {}, }{])";
+  // Prepare input & output buffers
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input = cudf::device_span<cuio_json::SymbolT const>{
+    d_scalar.data(), static_cast<size_t>(d_scalar.size())};
+  cudf::io::json_reader_options const options{};
+
+  // Parse the JSON and get the token stream
+  const auto [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input, options, stream);
+
+  // Get the JSON's tree representation
+  CUDF_EXPECT_THROW_MESSAGE(
+    cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream),
+    "JSON Parser encountered an invalid format at location 6");
+}
+
 /**
  * @brief Test fixture for parametrized JSON tree traversal tests
  */

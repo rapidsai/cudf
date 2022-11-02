@@ -57,7 +57,7 @@ set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}"
+  LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
@@ -67,10 +67,6 @@ find_package(Python REQUIRED COMPONENTS Development NumPy)
 set(targets_using_numpy interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
-endforeach()
-
-foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/cpp")
 endforeach()
 
 add_subdirectory(io)

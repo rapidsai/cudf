@@ -39,11 +39,10 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column with null rows replaced.
  */
-std::unique_ptr<column> replace_nulls(
-  dictionary_column_view const& input,
-  dictionary_column_view const& replacement,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
+                                      dictionary_column_view const& replacement,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Create a new dictionary column by replacing nulls with a
@@ -57,11 +56,10 @@ std::unique_ptr<column> replace_nulls(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column with null rows replaced.
  */
-std::unique_ptr<column> replace_nulls(
-  dictionary_column_view const& input,
-  scalar const& replacement,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
+                                      scalar const& replacement,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace dictionary
