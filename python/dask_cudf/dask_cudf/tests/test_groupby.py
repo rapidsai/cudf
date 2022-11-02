@@ -55,7 +55,7 @@ def test_groupby_basic(series, aggregation, pdf):
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    check_dtype = False if aggregation == "count" else True
+    check_dtype = aggregation != "count"
 
     expect = getattr(gdf_grouped, aggregation)()
     actual = getattr(ddf_grouped, aggregation)()
