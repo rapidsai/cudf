@@ -26,8 +26,8 @@ def assert_cudf_groupby_layers(ddf):
             )
 
 
-@pytest.fixture
-def pdf():
+@pytest.fixture(params=["non_null", "null"])
+def pdf(request):
     np.random.seed(0)
 
     # note that column name "x" is a substring of the groupby key;
@@ -39,13 +39,17 @@ def pdf():
             "y": np.random.normal(size=10000),
         }
     )
+
+    # insert nulls into dataframe at random
+    if request.param == "null":
+        pdf = pdf.mask(np.random.choice([True, False], size=pdf.shape))
+
     return pdf
 
 
 @pytest.mark.parametrize("aggregation", AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
-
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_grouped = gdf.groupby("xx")
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
@@ -98,22 +102,15 @@ def test_groupby_cumulative(aggregation, pdf, series):
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df, agg: df.groupby("x").agg({"y": agg}),
-        lambda df, agg: df.groupby("x").y.agg({"y": agg}),
-        lambda df, agg: df.groupby("x").agg([agg]),
-        lambda df, agg: df.groupby("x").y.agg([agg]),
-        lambda df, agg: df.groupby("x").agg(agg),
-        lambda df, agg: df.groupby("x").y.agg(agg),
+        lambda df, agg: df.groupby("xx").agg({"y": agg}),
+        lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
+        lambda df, agg: df.groupby("xx").agg([agg]),
+        lambda df, agg: df.groupby("xx").y.agg([agg]),
+        lambda df, agg: df.groupby("xx").agg(agg),
+        lambda df, agg: df.groupby("xx").y.agg(agg),
     ],
 )
-def test_groupby_agg(func, aggregation):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
+def test_groupby_agg(func, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
@@ -121,7 +118,7 @@ def test_groupby_agg(func, aggregation):
     actual = func(ddf, aggregation)
     expect = func(gdf, aggregation)
 
-    check_dtype = False if aggregation == "count" else True
+    check_dtype = aggregation != "count"
 
     assert_cudf_groupby_layers(actual)
 
