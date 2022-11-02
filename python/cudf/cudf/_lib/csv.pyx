@@ -297,7 +297,7 @@ cdef csv_reader_options make_csv_reader_options(
 
     if false_values is not None:
         c_false_values.reserve(len(false_values))
-        for fv in c_false_values:
+        for fv in false_values:
             c_false_values.push_back(fv.encode())
         csv_reader_options_c.set_false_values(c_false_values)
 

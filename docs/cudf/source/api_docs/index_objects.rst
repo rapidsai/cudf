@@ -270,7 +270,7 @@ Time/date components
    DatetimeIndex.weekday
    DatetimeIndex.quarter
    DatetimeIndex.is_leap_year
-   
+
    DatetimeIndex.isocalendar
 
 Time-specific operations

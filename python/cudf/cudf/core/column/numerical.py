@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
@@ -36,7 +35,7 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -66,10 +65,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
     dtype : np.dtype
-        The dtype associated with the data DeviceBufferLike
-    mask : DeviceBufferLike, optional
+        The dtype associated with the data Buffer
+    mask : Buffer, optional
     """
 
     _nan_count: Optional[int]
@@ -77,9 +76,9 @@ class NumericalColumn(NumericalBaseColumn):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: DtypeObj,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
@@ -87,9 +86,7 @@ class NumericalColumn(NumericalBaseColumn):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         self._nan_count = None
@@ -177,19 +174,16 @@ class NumericalColumn(NumericalBaseColumn):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
 
         return output
 
@@ -306,7 +300,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=as_device_buffer_like(ary),
+                    data=as_buffer(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

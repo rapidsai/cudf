@@ -8,7 +8,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -39,9 +39,9 @@ cdef class Column:
     A Column stores columnar data in device memory.
     A Column may be composed of:
 
-    * A *data* DeviceBufferLike
+    * A *data* Buffer
     * One or more (optional) *children* Columns
-    * An (optional) *mask* DeviceBufferLike representing the nullmask
+    * An (optional) *mask* Buffer representing the nullmask
 
     The *dtype* indicates the Column's element type.
     """
@@ -106,9 +106,9 @@ cdef class Column:
             return self.data.ptr
 
     def set_base_data(self, value):
-        if value is not None and not isinstance(value, DeviceBufferLike):
+        if value is not None and not isinstance(value, Buffer):
             raise TypeError(
-                "Expected a DeviceBufferLike or None for data, "
+                "Expected a Buffer or None for data, "
                 f"got {type(value).__name__}"
             )
 
@@ -155,9 +155,9 @@ cdef class Column:
         modify size or offset in any way, so the passed mask is expected to be
         compatible with the current offset.
         """
-        if value is not None and not isinstance(value, DeviceBufferLike):
+        if value is not None and not isinstance(value, Buffer):
             raise TypeError(
-                "Expected a DeviceBufferLike or None for mask, "
+                "Expected a Buffer or None for mask, "
                 f"got {type(value).__name__}"
             )
 
@@ -165,7 +165,7 @@ cdef class Column:
             required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
-                    "The DeviceBufferLike for mask is smaller than expected, "
+                    "The Buffer for mask is smaller than expected, "
                     f"got {value.size} bytes, expected {required_size} bytes."
                 )
                 if self.offset > 0 or self.size < self.base_size:
@@ -210,30 +210,30 @@ cdef class Column:
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
-            mask = as_device_buffer_like(value)
+            mask = as_buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             if mask.size < mask_size:
                 dbuf = rmm.DeviceBuffer(size=mask_size)
                 dbuf.copy_from_device(value)
-                mask = as_device_buffer_like(dbuf)
+                mask = as_buffer(dbuf)
         elif hasattr(value, "__array_interface__"):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = as_device_buffer_like(dbuf)
+            mask = as_buffer(dbuf)
         elif PyObject_CheckBuffer(value):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = as_device_buffer_like(dbuf)
+            mask = as_buffer(dbuf)
         else:
             raise TypeError(
-                "Expected a DeviceBufferLike object or None for mask, "
+                "Expected a Buffer object or None for mask, "
                 f"got {type(value).__name__}"
             )
 
@@ -432,11 +432,11 @@ cdef class Column:
         cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = as_device_buffer_like(data)
+        data = as_buffer(data)
 
         if null_count > 0:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = as_device_buffer_like(mask)
+            mask = as_buffer(mask)
         else:
             mask = None
 
@@ -461,8 +461,8 @@ cdef class Column:
         Given a ``cudf::column_view``, constructs a ``cudf.Column`` from it,
         along with referencing an ``owner`` Python object that owns the memory
         lifetime. If ``owner`` is a ``cudf.Column``, we reach inside of it and
-        make the owner of each newly created ``DeviceBufferLike`` the
-        respective ``DeviceBufferLike`` from the ``owner`` ``cudf.Column``.
+        make the owner of each newly created ``Buffer`` the respective
+        ``Buffer`` from the ``owner`` ``cudf.Column``.
         If ``owner`` is ``None``, we allocate new memory for the resulting
         ``cudf.Column``.
         """
@@ -487,18 +487,18 @@ cdef class Column:
 
         if data_ptr:
             if data_owner is None:
-                data = as_device_buffer_like(
+                data = as_buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype.itemsize)
                 )
             else:
-                data = Buffer(
+                data = as_buffer(
                     data=data_ptr,
                     size=(base_size) * dtype.itemsize,
                     owner=data_owner
                 )
         else:
-            data = as_device_buffer_like(
+            data = as_buffer(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
             )
 
@@ -528,14 +528,14 @@ cdef class Column:
                     # result:
                     mask = None
                 else:
-                    mask = as_device_buffer_like(
+                    mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
                             size=bitmask_allocation_size_bytes(size+offset)
                         )
                     )
             else:
-                mask = Buffer(
+                mask = as_buffer(
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner
