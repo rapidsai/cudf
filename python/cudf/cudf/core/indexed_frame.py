@@ -562,8 +562,8 @@ class IndexedFrame(Frame):
             * dict:
                 - Dicts can be used to specify different replacement values
                   for different existing values. For example, {'a': 'b',
-                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
-                  ‘y’ with ‘z’.
+                  'y': 'z'} replaces the value 'a' with 'b' and
+                  'y' with 'z'.
                   To use a dict in this way the ``value`` parameter should
                   be ``None``.
         value : scalar, dict, list-like, str, default None
@@ -1865,7 +1865,7 @@ class IndexedFrame(Frame):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.

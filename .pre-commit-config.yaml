@@ -1,6 +1,14 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 repos:
+      - repo: https://github.com/pre-commit/pre-commit-hooks
+        rev: v4.3.0
+        hooks:
+              - id: end-of-file-fixer
+                exclude: |
+                  (?x)^(
+                    ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
+                  )
       - repo: https://github.com/PyCQA/isort
         rev: 5.10.1
         hooks:
@@ -52,6 +60,16 @@ repos:
               - id: clang-format
                 types_or: [c, c++, cuda]
                 args: ["-fallback-style=none", "-style=file", "-i"]
+      - repo: https://github.com/sirosen/texthooks
+        rev: 0.4.0
+        hooks:
+              - id: fix-smartquotes
+                exclude: |
+                  (?x)^(
+                    ^cpp/include/cudf_test/cxxopts.hpp|
+                    ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
+                    ^python/cudf/cudf/tests/test_text.py
+                  )
       - repo: local
         hooks:
               - id: no-deprecationwarning
