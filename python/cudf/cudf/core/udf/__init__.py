@@ -30,30 +30,30 @@ try:
     if ptxpath:
         utils.ptx_files.append(ptxpath)
 
-    from strings_udf._lib.cudf_jit_udf import to_string_view_array
-    from strings_udf._typing import str_view_arg_handler, string_view
+        from strings_udf._lib.cudf_jit_udf import to_string_view_array
+        from strings_udf._typing import str_view_arg_handler, string_view
 
-    from . import strings_typing  # isort: skip
-    from . import strings_lowering  # isort: skip
+        from . import strings_typing  # isort: skip
+        from . import strings_lowering  # isort: skip
 
-    cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
-        masked_lowering.masked_constructor
-    )
+        cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
+            masked_lowering.masked_constructor
+        )
 
-    # add an overload of pack_return(string_view)
-    cuda_lower(api.pack_return, strings_typing.string_view)(
-        masked_lowering.pack_return_scalar_impl
-    )
+        # add an overload of pack_return(string_view)
+        cuda_lower(api.pack_return, strings_typing.string_view)(
+            masked_lowering.pack_return_scalar_impl
+        )
 
-    _supported_masked_types |= {strings_typing.string_view}
-    utils.launch_arg_getters[dtype("O")] = to_string_view_array
-    utils.masked_array_types[dtype("O")] = string_view
-    utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
+        _supported_masked_types |= {strings_typing.string_view}
+        utils.launch_arg_getters[dtype("O")] = to_string_view_array
+        utils.masked_array_types[dtype("O")] = string_view
+        utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
 
-    utils.arg_handlers.append(str_view_arg_handler)
-    row_function.itemsizes[dtype("O")] = string_view.size_bytes
+        utils.arg_handlers.append(str_view_arg_handler)
+        row_function.itemsizes[dtype("O")] = string_view.size_bytes
 
-    _STRING_UDFS_ENABLED = True
+        _STRING_UDFS_ENABLED = True
 
 except ImportError as e:
     # allow cuDF to work without strings_udf
