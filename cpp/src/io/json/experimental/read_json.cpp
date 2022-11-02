@@ -15,8 +15,6 @@
  */
 
 #include "read_json.hpp"
-#include "cudf/io/json.hpp"
-#include "rmm/device_vector.hpp"
 
 #include <io/comp/io_uncomp.hpp>
 #include <io/json/nested_json.hpp>
@@ -27,48 +25,15 @@
 
 namespace cudf::io::detail::json::experimental {
 
-std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
-                                      compression_type compression,
-                                      size_t range_offset,
-                                      size_t range_size);
+size_type find_first_delimiter(device_span<char const> d_data,
+                               char const delimiter,
+                               rmm::cuda_stream_view stream);
 
 // function to extract first delimiter in the string in each chunk
 // share
 // collate together and form byte_range for each chunk.
 // parse separately.
 // join together.
-// rmm::device_scalar<thrust::pair<size_type, size_type>> find_first_and_last_delimiter(
-//   device_span<char const> d_data,
-//   char const delimiter,
-//   rmm::cuda_stream_view stream,
-//   rmm::mr::device_memory_resource* mr);
-
-size_type find_first_delimiter(device_span<char const> d_data,
-                               char const delimiter,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
-
-// rmm::device_scalar<size_type>
-size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<datasource>> sources,
-                                        json_reader_options const& reader_opts,
-                                        char const delimiter,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-{
-  auto const buffer = ingest_raw_input(sources,
-                                       reader_opts.get_compression(),
-                                       reader_opts.get_byte_range_offset(),
-                                       reader_opts.get_byte_range_size());
-  // auto data = host_span<char const>(reinterpret_cast<char const*>(buffer.data()), buffer.size());
-  auto d_data = rmm::device_uvector<char>(buffer.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
-                                buffer.data(),
-                                buffer.size() * sizeof(decltype(buffer)::value_type),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
-  return find_first_delimiter(d_data, delimiter, stream, mr);
-}
-
 std::vector<table_with_metadata> skeleton_for_parellel_chunk_reader(
   host_span<std::unique_ptr<datasource>> sources,
   json_reader_options const& reader_opts,
@@ -90,7 +55,7 @@ std::vector<table_with_metadata> skeleton_for_parellel_chunk_reader(
     reader_opts_chunk.set_byte_range_offset(chunk_start);
     reader_opts_chunk.set_byte_range_size(chunk_size);
     first_delimiter_index[i] =
-      find_first_delimiter_in_chunk(sources, reader_opts_chunk, '\n', stream, mr);
+      find_first_delimiter_in_chunk(sources, reader_opts_chunk, '\n', stream);
     if (first_delimiter_index[i] != no_min_value) { first_delimiter_index[i] += chunk_start; }
   }
   for (auto i : first_delimiter_index) {
@@ -160,6 +125,24 @@ std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sou
   }
 
   return (compression == compression_type::NONE) ? buffer : decompress(compression, buffer);
+}
+
+size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
+                                        json_reader_options const& reader_opts,
+                                        char const delimiter,
+                                        rmm::cuda_stream_view stream)
+{
+  auto const buffer = ingest_raw_input(sources,
+                                       reader_opts.get_compression(),
+                                       reader_opts.get_byte_range_offset(),
+                                       reader_opts.get_byte_range_size());
+  auto d_data       = rmm::device_uvector<char>(buffer.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
+                                buffer.data(),
+                                buffer.size() * sizeof(decltype(buffer)::value_type),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
+  return find_first_delimiter(d_data, delimiter, stream);
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,

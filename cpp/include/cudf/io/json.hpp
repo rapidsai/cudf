@@ -484,6 +484,15 @@ table_with_metadata read_json(
   json_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Returns position of the first delimiter in the given chunk of the input string
+ *
+ * @param options Settings for controlling reading behavior (data sources, chunk offset, chunk size)
+ * @param delimiter Delimiter to search for
+ * @return
+ */
+size_type find_first_delimiter_in_chunk(json_reader_options options, char delimiter);
+
 /** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

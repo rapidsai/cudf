@@ -32,6 +32,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/json/experimental/read_json.hpp>
 #include <io/orc/orc.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -201,6 +202,19 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_size_with_padding());
 
   return detail::json::read_json(datasources, options, cudf::get_default_stream(), mr);
+}
+
+size_type find_first_delimiter_in_chunk(json_reader_options options, char delimiter)
+{
+  CUDF_FUNC_RANGE();
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(
+    options.get_source(), options.get_byte_range_offset(), options.get_byte_range_size());
+
+  return detail::json::experimental::find_first_delimiter_in_chunk(
+    datasources, options, delimiter, cudf::get_default_stream());
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
