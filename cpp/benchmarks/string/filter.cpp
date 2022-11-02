@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "string_bench_args.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -27,7 +29,6 @@
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <limits>
 #include <vector>
 
 enum FilterAPI { filter, filter_chars, strip };
@@ -39,18 +40,17 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile table_profile;
-  table_profile.set_distribution_params(
+  data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
-  cudf::strings_column_view input(table->view().column(0));
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+  cudf::strings_column_view input(column->view());
 
   auto const types = cudf::strings::string_character_types::SPACE;
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
     {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (api) {
       case filter: cudf::strings::filter_characters_of_type(input, types); break;
       case filter_chars: cudf::strings::filter_characters(input, filter_table); break;
@@ -63,21 +63,14 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
 {
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
-  for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
-    for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
-      // avoid generating combinations that exceed the cudf column limit
-      size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < static_cast<size_t>(std::numeric_limits<cudf::size_type>::max())) {
-        b->Args({row_count, rowlen});
-      }
-    }
-  }
+  int const min_rows          = 1 << 12;
+  int const max_rows          = 1 << 24;
+  int const row_multiplier    = 8;
+  int const min_length        = 1 << 5;
+  int const max_length        = 1 << 13;
+  int const length_multiplier = 2;
+  generate_string_bench_args(
+    b, min_rows, max_rows, row_multiplier, min_length, max_length, length_multiplier);
 }
 
 #define STRINGS_BENCHMARK_DEFINE(name)                                \

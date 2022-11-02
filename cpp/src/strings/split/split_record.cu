@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/split/split_utils.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -269,7 +268,7 @@ std::unique_ptr<column> split_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -305,7 +304,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Dir::FORWARD>(
-    strings, delimiter, maxsplit, cudf::default_stream_value, mr);
+    strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
@@ -315,7 +314,7 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Dir::BACKWARD>(
-    strings, delimiter, maxsplit, cudf::default_stream_value, mr);
+    strings, delimiter, maxsplit, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

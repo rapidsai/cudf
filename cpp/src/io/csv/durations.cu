@@ -18,13 +18,12 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <strings/convert/utilities.cuh>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>

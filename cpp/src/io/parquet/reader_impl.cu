@@ -39,6 +39,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
@@ -57,10 +58,6 @@ namespace parquet {
 // Import functionality that's independent of legacy code
 using namespace cudf::io::parquet;
 using namespace cudf::io;
-
-// bit space we are reserving in column_buffer::user_data
-constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
-constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 
 namespace {
 
@@ -133,12 +130,8 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::UINT_32: return type_id::UINT32;
     case parquet::UINT_64: return type_id::UINT64;
     case parquet::DATE: return type_id::TIMESTAMP_DAYS;
-    case parquet::TIME_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MILLISECONDS;
-    case parquet::TIME_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MICROSECONDS;
+    case parquet::TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
+    case parquet::TIME_MICROS: return type_id::DURATION_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
@@ -174,6 +167,11 @@ type_id to_type_id(SchemaElement const& schema,
       logical_type.TIMESTAMP.unit.isset.NANOS) {
     return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                  : type_id::TIMESTAMP_NANOSECONDS;
+  }
+
+  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
+      logical_type.TIME.unit.isset.NANOS) {
+    return type_id::DURATION_NANOSECONDS;
   }
 
   // is it simply a struct?
@@ -244,19 +242,21 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      not cudf::is_fixed_point(column_type_id)) {
+      not cudf::is_fixed_point(data_type{column_type_id})) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
 
-inline void decompress_check(device_span<decompress_status const> stats,
+inline void decompress_check(device_span<compression_result const> results,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
+                              results.begin(),
+                              results.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
                "Error during decompression");
 }
 }  // namespace
@@ -630,10 +630,11 @@ class aggregate_reader_metadata {
     // Return true if column path is valid. e.g. if the path is {"struct1", "child1"}, then it is
     // valid if "struct1.child1" exists in this file's schema. If "struct1" exists but "child1" is
     // not a child of "struct1" then the function will return false for "struct1"
-    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&)> build_column =
-      [&](column_name_info const* col_name_info,
-          int schema_idx,
-          std::vector<column_buffer>& out_col_array) {
+    std::function<bool(column_name_info const*, int, std::vector<column_buffer>&, bool)>
+      build_column = [&](column_name_info const* col_name_info,
+                         int schema_idx,
+                         std::vector<column_buffer>& out_col_array,
+                         bool has_list_parent) {
         if (schema_idx < 0) { return false; }
         auto const& schema_elem = get_schema(schema_idx);
 
@@ -643,7 +644,8 @@ class aggregate_reader_metadata {
           // is this legit?
           CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
           auto child_col_name_info = (col_name_info) ? &col_name_info->children[0] : nullptr;
-          return build_column(child_col_name_info, schema_elem.children_idx[0], out_col_array);
+          return build_column(
+            child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
         }
 
         // if we're at the root, this is a new output column
@@ -654,6 +656,7 @@ class aggregate_reader_metadata {
         auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
+        if (has_list_parent) { output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT; }
         // store the index of this element if inserted in out_col_array
         nesting.push_back(static_cast<int>(out_col_array.size()));
         output_col.name = schema_elem.name;
@@ -664,23 +667,26 @@ class aggregate_reader_metadata {
           // add all children of schema_elem.
           // At this point, we can no longer pass a col_name_info to build_column
           for (int idx = 0; idx < schema_elem.num_children; idx++) {
-            path_is_valid |=
-              build_column(nullptr, schema_elem.children_idx[idx], output_col.children);
+            path_is_valid |= build_column(nullptr,
+                                          schema_elem.children_idx[idx],
+                                          output_col.children,
+                                          has_list_parent || col_type == type_id::LIST);
           }
         } else {
           for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
             path_is_valid |=
               build_column(&col_name_info->children[idx],
                            find_schema_child(schema_elem, col_name_info->children[idx].name),
-                           output_col.children);
+                           output_col.children,
+                           has_list_parent || col_type == type_id::LIST);
           }
         }
 
         // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
         // data stored) so add me to the list.
         if (schema_elem.num_children == 0) {
-          input_column_info& input_col =
-            input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+          input_column_info& input_col = input_columns.emplace_back(
+            input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
 
           // set up child output column for one-level encoding list
           if (schema_elem.is_one_level_list()) {
@@ -690,6 +696,9 @@ class aggregate_reader_metadata {
             auto const element_dtype = to_data_type(element_type, schema_elem);
 
             column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            if (has_list_parent || col_type == type_id::LIST) {
+              element_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT;
+            }
             // store the index of this element
             nesting.push_back(static_cast<int>(output_col.children.size()));
             // TODO: not sure if we should assign a name or leave it blank
@@ -736,7 +745,7 @@ class aggregate_reader_metadata {
     auto const& root = get_schema(0);
     if (not use_names.has_value()) {
       for (auto const& schema_idx : root.children_idx) {
-        build_column(nullptr, schema_idx, output_columns);
+        build_column(nullptr, schema_idx, output_columns, false);
         output_column_schemas.push_back(schema_idx);
       }
     } else {
@@ -840,7 +849,7 @@ class aggregate_reader_metadata {
       }
       for (auto& col : selected_columns) {
         auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
-        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns);
+        bool valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
         if (valid_column) output_column_schemas.push_back(top_level_col_schema_idx);
       }
     }
@@ -1143,26 +1152,41 @@ rmm::device_buffer reader::impl::decompress_page_data(
   std::vector<device_span<uint8_t>> comp_out;
   comp_out.reserve(num_comp_pages);
 
-  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, _stream);
+  // vectors to save v2 def and rep level data, if any
+  std::vector<device_span<uint8_t const>> copy_in;
+  copy_in.reserve(num_comp_pages);
+  std::vector<device_span<uint8_t>> copy_out;
+  copy_out.reserve(num_comp_pages);
+
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, _stream);
   thrust::fill(rmm::exec_policy(_stream),
-               comp_stats.begin(),
-               comp_stats.end(),
-               decompress_status{0, static_cast<uint32_t>(-1000), 0});
+               comp_res.begin(),
+               comp_res.end(),
+               compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
   for (const auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
-    for_each_codec_page(codec.compression_type, [&](size_t page) {
-      auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
-      comp_in.emplace_back(pages[page].page_data,
-                           static_cast<size_t>(pages[page].compressed_page_size));
-      comp_out.emplace_back(dst_base + decomp_offset,
-                            static_cast<size_t>(pages[page].uncompressed_page_size));
-
-      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
-      decomp_offset += comp_out.back().size();
+    for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
+      auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
+      auto& page          = pages[page_idx];
+      // offset will only be non-zero for V2 pages
+      auto const offset = page.def_lvl_bytes + page.rep_lvl_bytes;
+      // for V2 need to copy def and rep level info into place, and then offset the
+      // input and output buffers. otherwise we'd have to keep both the compressed
+      // and decompressed data.
+      if (offset != 0) {
+        copy_in.emplace_back(page.page_data, offset);
+        copy_out.emplace_back(dst_base, offset);
+      }
+      comp_in.emplace_back(page.page_data + offset,
+                           static_cast<size_t>(page.compressed_page_size - offset));
+      comp_out.emplace_back(dst_base + offset,
+                            static_cast<size_t>(page.uncompressed_page_size - offset));
+      page.page_data = dst_base;
+      decomp_offset += page.uncompressed_page_size;
     });
 
     host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
@@ -1171,31 +1195,30 @@ rmm::device_buffer reader::impl::decompress_page_data(
     host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
                                                         codec.num_pages);
     auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, _stream);
-    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
-                                                     codec.num_pages);
+    device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case parquet::GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, _stream);
+        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, _stream);
         break;
       case parquet::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      d_comp_in,
                                      d_comp_out,
-                                     d_comp_stats_view,
+                                     d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      _stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, _stream);
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, _stream);
         }
         break;
       case parquet::ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    d_comp_in,
                                    d_comp_out,
-                                   d_comp_stats_view,
+                                   d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    _stream);
@@ -1203,7 +1226,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,
                      d_comp_out,
-                     d_comp_stats_view,
+                     d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      _stream);
@@ -1213,7 +1236,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
     start_pos += codec.num_pages;
   }
 
-  decompress_check(comp_stats, _stream);
+  decompress_check(comp_res, _stream);
+
+  // now copy the uncompressed V2 def and rep level data
+  if (not copy_in.empty()) {
+    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, _stream);
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, _stream);
+
+    gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, _stream);
+    _stream.synchronize();
+  }
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
@@ -1346,26 +1378,39 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
-                                      bool uses_custom_row_bounds,
-                                      bool has_lists)
+                                      bool uses_custom_row_bounds)
 {
-  // TODO : we should be selectively preprocessing only columns that have
-  // lists in them instead of doing them all if even one contains lists.
+  // iterate over all input columns and allocate any associated output
+  // buffers if they are not part of a list hierarchy. mark down
+  // if we have any list columns that need further processing.
+  bool has_lists = false;
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    auto const& input_col  = _input_columns[idx];
+    size_t const max_depth = input_col.nesting_depth();
 
-  // if there are no lists, simply allocate every allocate every output
-  // column to be of size num_rows
-  if (!has_lists) {
-    std::function<void(std::vector<column_buffer>&)> create_columns =
-      [&](std::vector<column_buffer>& cols) {
-        for (size_t idx = 0; idx < cols.size(); idx++) {
-          auto& col = cols[idx];
-          col.create(total_rows, _stream, _mr);
-          create_columns(col.children);
-        }
-      };
-    create_columns(_output_columns);
-  } else {
-    // preprocess per-nesting level sizes by page
+    auto* cols = &_output_columns;
+    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
+      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
+
+      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
+      // to know how big this buffer actually is.
+      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
+        has_lists = true;
+      }
+      // if we haven't already processed this column because it is part of a struct hierarchy
+      else if (out_buf.size == 0) {
+        // add 1 for the offset if this is a list column
+        out_buf.create(
+          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
+          _stream,
+          _mr);
+      }
+    }
+  }
+
+  // if we have columns containing lists, further preprocessing is necessary.
+  if (has_lists) {
     gpu::PreprocessColumnData(pages,
                               chunks,
                               _input_columns,
@@ -1588,6 +1633,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
+  // Binary columns can be read as binary or strings
+  _reader_column_schema = options.get_column_schema();
+
   // Select only columns required by the options
   std::tie(_input_columns, _output_columns, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
@@ -1626,9 +1674,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Keep track of column chunk file offsets
     std::vector<size_t> column_chunk_offsets(num_chunks);
 
-    // if there are lists present, we need to preprocess
-    bool has_lists = false;
-
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows            = num_rows;
@@ -1647,16 +1692,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
         auto& schema   = _metadata->get_schema(col.schema_idx);
 
-        // this column contains repetition levels and will require a preprocess
-        if (schema.max_repetition_level > 0) { has_lists = true; }
-
-        // Spec requires each row group to contain exactly one chunk for every
-        // column. If there are too many or too few, continue with best effort
-        if (chunks.size() >= chunks.max_size()) {
-          std::cerr << "Detected too many column chunks" << std::endl;
-          continue;
-        }
-
         auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
@@ -1669,25 +1704,25 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             ? std::min(col_meta.data_page_offset, col_meta.dictionary_page_offset)
             : col_meta.data_page_offset;
 
-        chunks.insert(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
-                                           nullptr,
-                                           col_meta.num_values,
-                                           schema.type,
-                                           type_width,
-                                           row_group_start,
-                                           row_group_rows,
-                                           schema.max_definition_level,
-                                           schema.max_repetition_level,
-                                           _metadata->get_output_nesting_depth(col.schema_idx),
-                                           required_bits(schema.max_definition_level),
-                                           required_bits(schema.max_repetition_level),
-                                           col_meta.codec,
-                                           converted_type,
-                                           schema.logical_type,
-                                           schema.decimal_scale,
-                                           clock_rate,
-                                           i,
-                                           col.schema_idx));
+        chunks.push_back(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
+                                              nullptr,
+                                              col_meta.num_values,
+                                              schema.type,
+                                              type_width,
+                                              row_group_start,
+                                              row_group_rows,
+                                              schema.max_definition_level,
+                                              schema.max_repetition_level,
+                                              _metadata->get_output_nesting_depth(col.schema_idx),
+                                              required_bits(schema.max_definition_level),
+                                              required_bits(schema.max_repetition_level),
+                                              col_meta.codec,
+                                              converted_type,
+                                              schema.logical_type,
+                                              schema.decimal_scale,
+                                              clock_rate,
+                                              i,
+                                              col.schema_idx));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;
@@ -1752,7 +1787,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds, has_lists);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, uses_custom_row_bounds);
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows);
@@ -1760,7 +1795,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // create the final output cudf columns
       for (size_t i = 0; i < _output_columns.size(); ++i) {
         column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-        out_columns.emplace_back(make_column(_output_columns[i], &col_name, _stream, _mr));
+        auto const metadata =
+          _reader_column_schema.has_value()
+            ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+            : std::nullopt;
+        out_columns.emplace_back(
+          make_column(_output_columns[i], &col_name, metadata, _stream, _mr));
       }
     }
   }

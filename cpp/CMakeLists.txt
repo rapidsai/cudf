@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
 include(../fetch_rapids.cmake)
 include(rapids-cmake)
@@ -25,9 +25,15 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.08.00
+  VERSION 22.12.00
   LANGUAGES C CXX CUDA
 )
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
+  message(
+    FATAL_ERROR
+      "libcudf requires CUDA Toolkit 11.5+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+  )
+endif()
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
@@ -47,19 +53,20 @@ option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
-option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
+option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" OFF)
 option(
   CUDF_USE_PER_THREAD_DEFAULT_STREAM
   "Build cuDF with per-thread default stream, including passing the per-thread default
          stream to external libraries."
   OFF
 )
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
 )
+option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
@@ -73,7 +80,7 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
+  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
@@ -117,12 +124,6 @@ rapids_find_package(
   INSTALL_EXPORT_SET cudf-exports
 )
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
-
-# ctest cuda memcheck
-find_program(CUDA_SANITIZER compute-sanitizer)
-set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
-set(MEMORYCHECK_TYPE CudaSanitizer)
-set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 # ##################################################################################################
 # * dependencies ----------------------------------------------------------------------------------
@@ -299,6 +300,7 @@ add_library(
   src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmur_hash.cu
+  src/hash/spark_murmur_hash.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
@@ -320,8 +322,12 @@ add_library(
   src/io/csv/reader_impl.cu
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
+  src/io/json/json_column.cu
   src/io/json/json_gpu.cu
+  src/io/json/json_tree.cu
+  src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -343,6 +349,9 @@ add_library(
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
+  src/io/text/data_chunk_source_factories.cpp
+  src/io/text/bgzip_data_chunk_source.cu
+  src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -378,6 +387,7 @@ add_library(
   src/lists/copying/segmented_gather.cu
   src/lists/copying/scatter_helper.cu
   src/lists/count_elements.cu
+  src/lists/dremel.cu
   src/lists/explode.cu
   src/lists/extract.cu
   src/lists/interleave_columns.cu
@@ -439,8 +449,8 @@ add_library(
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains_column.cu
+  src/search/contains_scalar.cu
   src/search/contains_table.cu
-  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -485,6 +495,7 @@ add_library(
   src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
+  src/strings/like.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
@@ -495,7 +506,6 @@ add_library(
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
   src/strings/search/findall.cu
-  src/strings/search/findall_record.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
@@ -546,7 +556,21 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
+  src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+)
+
+# Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
+# in how conda builds glibc
+set_source_files_properties(
+  src/binaryop/binaryop.cpp
+  src/jit/cache.cpp
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
+  src/rolling/grouped_rolling.cu
+  src/rolling/rolling.cu
+  src/transform/transform.cpp
+  PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
 
 set_target_properties(
@@ -588,9 +612,15 @@ target_compile_definitions(
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
 target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 
-# Instruct jitify to use the kernel JIT cache
 if(JITIFY_USE_CACHE)
-  target_compile_definitions(cudf PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${PROJECT_VERSION}")
+  # Instruct src/jit/cache what version of cudf we are building so it can compute a cal-ver cache
+  # directory. We isolate this definition to the single source so it doesn't effect compiling
+  # caching for all of libcudf
+  set_property(
+    SOURCE src/jit/cache.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
+  )
 endif()
 
 # Per-thread default stream
@@ -636,16 +666,6 @@ else()
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
-
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
   [=[
@@ -674,7 +694,6 @@ add_library(
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu
-  tests/strings/utilities.cpp
 )
 
 set_target_properties(
@@ -695,7 +714,11 @@ target_compile_options(
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 
-target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
 target_include_directories(
   cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
@@ -710,6 +733,13 @@ add_library(cudf::cudftestutil ALIAS cudftestutil)
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+
+  # ctest cuda memcheck
+  find_program(CUDA_SANITIZER compute-sanitizer)
+  set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+  set(MEMORYCHECK_TYPE CudaSanitizer)
+  set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
+
   # Always print verbose output when tests fail if run using `make test`.
   list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
@@ -720,13 +750,8 @@ endif()
 
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
-  rapids_cpm_find(
-    benchmark 1.5.2
-    GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.5.2
-    GIT_SHALLOW TRUE
-    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
-  )
+  include(${rapids-cmake-dir}/cpm/gbench.cmake)
+  rapids_cpm_gbench()
 
   # Find or install NVBench
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
@@ -897,3 +922,11 @@ add_custom_target(
   DEPENDS CUDF_DOXYGEN
   COMMENT "Custom command for building cudf doxygen docs."
 )
+
+# ##################################################################################################
+# * make gdb helper scripts ------------------------------------------------------------------------
+
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
+endif()

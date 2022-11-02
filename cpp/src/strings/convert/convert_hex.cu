@@ -151,8 +151,10 @@ struct integer_to_hex_fn {
       return;
     }
 
-    auto const value = d_column.element<IntegerType>(idx);        // ex. 123456
-    auto value_bytes = reinterpret_cast<uint8_t const*>(&value);  // 0x40E20100
+    // Reinterpret an integer value as a little-endian byte sequence.
+    // For example, 123456 becomes 0x40E2'0100
+    auto const value = d_column.element<IntegerType>(idx);
+    auto value_bytes = reinterpret_cast<uint8_t const*>(&value);
 
     // compute the number of output bytes
     int bytes      = sizeof(IntegerType);
@@ -282,21 +284,21 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, cudf::default_stream_value, mr);
+  return detail::hex_to_integers(strings, output_type, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, cudf::default_stream_value, mr);
+  return detail::is_hex(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_hex(input, cudf::default_stream_value, mr);
+  return detail::integers_to_hex(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

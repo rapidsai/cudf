@@ -22,6 +22,7 @@
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
 //       Jitify is needed for several algorithms (binaryop, rolling, etc)
+#include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>  // add cuda namespace
 

@@ -32,11 +32,9 @@ void BM_group_shift(benchmark::State& state)
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const int num_groups = 100;
 
-  data_profile profile;
-  profile.set_null_frequency(0.01);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
-    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, num_groups);
+  data_profile const profile =
+    data_profile_builder().cardinality(0).null_probability(0.01).distribution(
+      cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, num_groups);
 
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);

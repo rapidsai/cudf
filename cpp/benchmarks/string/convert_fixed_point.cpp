@@ -26,9 +26,9 @@ namespace {
 
 std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 {
-  std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_id::FLOAT32}, row_count{static_cast<cudf::size_type>(rows)});
-  return cudf::strings::from_floats(result->release().front()->view());
+  auto result =
+    create_random_column(cudf::type_id::FLOAT32, row_count{static_cast<cudf::size_type>(rows)});
+  return cudf::strings::from_floats(result->view());
 }
 
 }  // anonymous namespace

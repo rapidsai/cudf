@@ -56,7 +56,7 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
 
   cudf::size_type warp_valid_count{0};
 
-  auto active_threads = __ballot_sync(0xffffffff, i < nrows);
+  auto active_threads = __ballot_sync(0xffff'ffffu, i < nrows);
   while (i < nrows) {
     // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
     // for CUDA 10.0 and below (fixed in CUDA 10.1)

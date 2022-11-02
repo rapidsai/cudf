@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
+from typing import Any, Dict
 
 import numpy as np
 from numba import cuda
@@ -7,13 +8,13 @@ from numba.np import numpy_support
 from numba.types import Record
 
 from cudf.core.udf.api import Masked, pack_return
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
     row_initializer_template,
     row_kernel_template,
     unmasked_input_initializer_template,
 )
-from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
     _construct_signature,
@@ -24,6 +25,8 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
+itemsizes: Dict[Any, int] = {}
+
 
 def _get_frame_row_type(dtype):
     """
@@ -31,12 +34,10 @@ def _get_frame_row_type(dtype):
     Models each column and its mask as a MaskedType and
     models the row as a dictionary like data structure
     containing these MaskedTypes.
-
     Large parts of this function are copied with comments
     from the Numba internals and slightly modified to
     account for validity bools to be present in the final
     struct.
-
     See numba.np.numpy_support.from_struct_dtype for details.
     """
 
@@ -45,7 +46,9 @@ def _get_frame_row_type(dtype):
     fields = []
     offset = 0
 
-    sizes = [val[0].itemsize for val in dtype.fields.values()]
+    sizes = [
+        itemsizes.get(val[0], val[0].itemsize) for val in dtype.fields.values()
+    ]
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
@@ -62,7 +65,8 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        offset += elemdtype.itemsize + 1
+        itemsize = itemsizes.get(elemdtype, elemdtype.itemsize)
+        offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the
         # memory access size, per PTX ISA 7.4/5.4.5
@@ -127,10 +131,8 @@ def _get_row_kernel(frame, func, args):
         np.dtype(list(_all_dtypes_from_frame(frame).items()))
     )
     scalar_return_type = _get_udf_return_type(row_type, func, args)
-
     # this is the signature for the final full kernel compilation
     sig = _construct_signature(frame, scalar_return_type, args)
-
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
     np_field_types = np.dtype(

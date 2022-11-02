@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <tests/strings/utilities.h>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/reshape.hpp>
 
 using namespace cudf::test::iterators;
@@ -195,7 +194,7 @@ TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
   cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0}});
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(InterleaveStringsColumnsTest, SingleColumn)

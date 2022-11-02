@@ -98,7 +98,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   int num_partitions,
   hash_id hash_function               = hash_id::HASH_MURMUR3,
   uint32_t seed                       = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

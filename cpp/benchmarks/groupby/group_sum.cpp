@@ -31,24 +31,16 @@ void BM_basic_sum(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
-  auto keys_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  auto vals_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
+  auto keys = create_random_column(cudf::type_to_id<int64_t>(), row_count{column_size}, profile);
+  auto vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{column_size}, profile);
 
-  cudf::column_view keys(keys_table->get_column(0));
-  cudf::column_view vals(vals_table->get_column(0));
-
-  cudf::groupby::groupby gb_obj(cudf::table_view({keys, keys, keys}));
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys->view(), keys->view(), keys->view()}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals;
+  requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {
@@ -72,18 +64,12 @@ void BM_pre_sorted_sum(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  data_profile profile;
-  profile.set_null_frequency(std::nullopt);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
+  data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table =
     create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-  profile.set_null_frequency(0.1);
-  auto vals_table =
-    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
-
-  cudf::column_view vals(vals_table->get_column(0));
+  profile.set_null_probability(0.1);
+  auto vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{column_size}, profile);
 
   auto sort_order  = cudf::sorted_order(*keys_table);
   auto sorted_keys = cudf::gather(*keys_table, *sort_order);
@@ -93,7 +79,7 @@ void BM_pre_sorted_sum(benchmark::State& state)
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals;
+  requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {

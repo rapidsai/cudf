@@ -61,17 +61,15 @@ std::unique_ptr<table> quantiles(table_view const& input,
                         mr);
 }
 
-}  // namespace detail
-
 std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<double> const& q,
                                  interpolation interp,
                                  cudf::sorted is_input_sorted,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   if (q.empty()) { return empty_like(input); }
 
   CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
@@ -85,13 +83,34 @@ std::unique_ptr<table> quantiles(table_view const& input,
                              thrust::make_counting_iterator<size_type>(0),
                              q,
                              interp,
-                             cudf::default_stream_value,
+                             cudf::get_default_stream(),
                              mr);
   } else {
     auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
     return detail::quantiles(
-      input, sorted_idx->view().data<size_type>(), q, interp, cudf::default_stream_value, mr);
+      input, sorted_idx->view().data<size_type>(), q, interp, cudf::get_default_stream(), mr);
   }
+}
+
+}  // namespace detail
+
+std::unique_ptr<table> quantiles(table_view const& input,
+                                 std::vector<double> const& q,
+                                 interpolation interp,
+                                 cudf::sorted is_input_sorted,
+                                 std::vector<order> const& column_order,
+                                 std::vector<null_order> const& null_precedence,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::quantiles(input,
+                           q,
+                           interp,
+                           is_input_sorted,
+                           column_order,
+                           null_precedence,
+                           cudf::get_default_stream(),
+                           mr);
 }
 
 }  // namespace cudf

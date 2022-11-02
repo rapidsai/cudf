@@ -24,7 +24,6 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -74,7 +73,7 @@ std::unique_ptr<column> all_characters_of_type(
                       for (auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr) {
                         auto code_point = detail::utf8_to_codepoint(*itr);
                         // lookup flags in table by code-point
-                        auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+                        auto flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
                         if ((verify_types & flag) ||                   // should flag be verified
                             (flag == 0 && verify_types == ALL_TYPES))  // special edge case
                         {
@@ -115,7 +114,7 @@ struct filter_chars_fn {
   __device__ bool replace_char(char_utf8 ch)
   {
     auto const code_point = detail::utf8_to_codepoint(ch);
-    auto const flag       = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
+    auto const flag       = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
     if (flag == 0)  // all types pass unless specifically identified
       return (types_to_remove == ALL_TYPES);
     if (types_to_keep == ALL_TYPES)  // filter case
@@ -198,7 +197,7 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
 {
   CUDF_FUNC_RANGE();
   return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::default_stream_value, mr);
+    strings, types, verify_types, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
@@ -209,7 +208,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::default_stream_value, mr);
+    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

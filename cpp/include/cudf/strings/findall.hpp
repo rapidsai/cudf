@@ -30,39 +30,6 @@ namespace strings {
  */
 
 /**
- * @brief Returns a table of strings columns for each matching occurrence of the
- * regex pattern within each string.
- *
- * The number of output columns is determined by the string with the most
- * matches.
- *
- * @code{.pseudo}
- * Example:
- * s = ["bunny","rabbit"]
- * r = findall(s, "[ab]"")
- * r is now a table of 3 columns:
- *   ["b","a"]
- *   [null,"b"]
- *   [null,"b"]
- * @endcode
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param input Strings instance for this operation.
- * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned table's device memory.
- * @return New table of strings columns.
- */
-std::unique_ptr<table> findall(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags             = regex_flags::DEFAULT,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Returns a lists column of strings for each matching occurrence of the
  * regex pattern within each string.
  *
@@ -72,7 +39,7 @@ std::unique_ptr<table> findall(
  * @code{.pseudo}
  * Example:
  * s = ["bunny", "rabbit", "hare", "dog"]
- * r = findall_record(s, "[ab]")
+ * r = findall(s, "[ab]")
  * r is now a lists column like:
  *  [ ["b"]
  *    ["a","b","b"]
@@ -90,7 +57,7 @@ std::unique_ptr<table> findall(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New lists column of strings.
  */
-std::unique_ptr<column> findall_record(
+std::unique_ptr<column> findall(
   strings_column_view const& input,
   std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,

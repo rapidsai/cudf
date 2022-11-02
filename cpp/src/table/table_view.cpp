@@ -134,5 +134,11 @@ template bool is_relationally_comparable<table_view>(table_view const& lhs, tabl
 template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
                                                              mutable_table_view const& rhs);
 
+bool has_nested_columns(table_view const& table)
+{
+  return std::any_of(
+    table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
+}
+
 }  // namespace detail
 }  // namespace cudf

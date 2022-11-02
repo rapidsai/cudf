@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import Dtype, NotImplementedType, ScalarLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -302,7 +302,7 @@ class SingleColumnFrame(Frame, NotIterable):
         **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-        Type[NotImplemented],
+        NotImplementedType,
     ]:
         """Generate the dictionary of operands used for a binary operation.
 

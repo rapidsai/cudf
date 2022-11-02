@@ -1,12 +1,11 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import numpy as np
 from numba.np import numpy_support
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -31,9 +30,7 @@ from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
-    table_view_from_table,
 )
 
 
@@ -45,14 +42,13 @@ def bools_to_mask(Column col):
     cdef column_view col_view = col.view()
     cdef pair[unique_ptr[device_buffer], size_type] cpp_out
     cdef unique_ptr[device_buffer] up_db
-    cdef size_type null_count
 
     with nogil:
         cpp_out = move(libcudf_transform.bools_to_mask(col_view))
         up_db = move(cpp_out.first)
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = Buffer(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
@@ -88,7 +84,7 @@ def nans_to_nulls(Column input):
         return None
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = Buffer(buffer)
+    buffer = as_buffer(buffer)
     return buffer
 
 

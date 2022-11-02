@@ -220,7 +220,7 @@ public final class RollingAggregation {
 
   /**
    * Select the nth element from a specified window.
-   * 
+   *
    * @param n          Indicates the index of the element to be selected from the window
    * @param nullPolicy Indicates whether null elements are to be skipped, or not
    */

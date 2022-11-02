@@ -503,7 +503,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                      binary_predicate,
                                                      compare_nulls,
                                                      detail::join_kind::LEFT_SEMI_JOIN,
-                                                     cudf::default_stream_value,
+                                                     cudf::get_default_stream(),
                                                      mr);
 }
 
@@ -526,7 +526,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  compare_nulls,
                                  detail::join_kind::LEFT_SEMI_JOIN,
                                  output_size_data,
-                                 cudf::default_stream_value,
+                                 cudf::get_default_stream(),
                                  mr);
 }
 
@@ -547,7 +547,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                      binary_predicate,
                                                      compare_nulls,
                                                      detail::join_kind::LEFT_ANTI_JOIN,
-                                                     cudf::default_stream_value,
+                                                     cudf::get_default_stream(),
                                                      mr);
 }
 
@@ -570,7 +570,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  compare_nulls,
                                  detail::join_kind::LEFT_ANTI_JOIN,
                                  output_size_data,
-                                 cudf::default_stream_value,
+                                 cudf::get_default_stream(),
                                  mr);
 }
 

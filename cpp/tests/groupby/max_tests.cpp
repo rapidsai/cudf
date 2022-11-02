@@ -24,6 +24,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 
+#include <limits>
+
 using namespace cudf::test::iterators;
 
 namespace cudf {
@@ -428,6 +430,58 @@ TEST_F(groupby_max_struct_test, values_with_null_child)
     auto agg = cudf::make_max_aggregation<groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
   }
+}
+
+template <typename V>
+struct groupby_max_floating_point_test : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_SUITE(groupby_max_floating_point_test, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(groupby_max_floating_point_test, values_with_infinity)
+{
+  using T          = TypeParam;
+  using int32s_col = fixed_width_column_wrapper<int32_t>;
+  using floats_col = fixed_width_column_wrapper<T, int32_t>;
+
+  auto constexpr inf = std::numeric_limits<T>::infinity();
+
+  auto const keys = int32s_col{1, 2, 1, 2};
+  auto const vals = floats_col{static_cast<T>(1), static_cast<T>(1), inf, static_cast<T>(2)};
+
+  auto const expected_keys = int32s_col{1, 2};
+  auto const expected_vals = floats_col{inf, static_cast<T>(2)};
+
+  // Related issue: https://github.com/rapidsai/cudf/issues/11352
+  // The issue only occurs in sort-based aggregation.
+  auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(
+    keys, vals, expected_keys, expected_vals, std::move(agg), force_use_sort_impl::YES);
+}
+
+TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
+{
+  using T          = TypeParam;
+  using int32s_col = fixed_width_column_wrapper<int32_t>;
+  using floats_col = fixed_width_column_wrapper<T, int32_t>;
+
+  auto constexpr nan = std::numeric_limits<T>::quiet_NaN();
+
+  auto const keys = int32s_col{1, 1};
+  auto const vals = floats_col{nan, nan};
+
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = vals;
+  requests[0].aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+
+  // Without properly handling NaN, this will hang forever in hash-based aggregate (which is the
+  // default back-end for min/max in groupby context).
+  // This test is just to verify that the aggregate operation does not hang.
+  auto gb_obj       = groupby::groupby(table_view({keys}));
+  auto const result = gb_obj.aggregate(requests);
+
+  EXPECT_EQ(result.first->num_rows(), 1);
 }
 
 }  // namespace test

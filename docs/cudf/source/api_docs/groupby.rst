@@ -53,6 +53,7 @@ Computations / descriptive stats
    GroupBy.mean
    GroupBy.median
    GroupBy.min
+   GroupBy.ngroup
    GroupBy.nth
    GroupBy.pad
    GroupBy.prod
@@ -62,7 +63,7 @@ Computations / descriptive stats
    GroupBy.var
    GroupBy.corr
    GroupBy.cov
-   
+
 The following methods are available in both ``SeriesGroupBy`` and
 ``DataFrameGroupBy`` objects, but may differ slightly, usually in that
 the ``DataFrameGroupBy`` version usually permits the specification of an

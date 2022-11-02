@@ -405,6 +405,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
   // Struct child column type and structure mismatches are caught within the two_table_comparator
   switch (op) {
     case binary_operator::EQUAL: [[fallthrough]];
+    case binary_operator::NULL_EQUALS: [[fallthrough]];
     case binary_operator::NOT_EQUAL:
       detail::apply_struct_equality_op(
         out,

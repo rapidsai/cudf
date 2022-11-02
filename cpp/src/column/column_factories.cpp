@@ -157,7 +157,7 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
   else if (is_duration   (type)) return make_duration_column   (type, size, state, stream, mr);
   else if (is_fixed_point(type)) return make_fixed_point_column(type, size, state, stream, mr);
   else                           return make_numeric_column    (type, size, state, stream, mr);
-  /// clang-format on
+  // clang-format on
 }
 
 std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,

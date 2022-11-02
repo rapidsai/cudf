@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/convert/convert_ipv4.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/strings/convert/convert_ipv4.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -75,7 +75,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
   cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());
   EXPECT_EQ(0, results->size());
 }

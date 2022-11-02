@@ -132,20 +132,6 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 }
 
 /**
- * @brief Checks if `id` is fixed_point (DECIMAL32/64/128)
- *
- * @param id The `data_type::id` to check
- * @return    `true` if `id` is `DECIMAL32`, `DECIMAL64` or `DECIMAL128`
- * @return    `false` otherwise
- */
-constexpr bool is_fixed_point(cudf::type_id id)
-{
-  return id == type_id::DECIMAL32 or  //
-         id == type_id::DECIMAL64 or  //
-         id == type_id::DECIMAL128;
-}
-
-/**
  * @brief Macro used to define a mapping between a concrete C++ type and a
  *`cudf::type_id` enum.
 

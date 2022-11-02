@@ -6,7 +6,6 @@ import datetime
 import locale
 import re
 from locale import nl_langinfo
-from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
@@ -23,7 +22,7 @@ from cudf._typing import (
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
@@ -289,20 +288,16 @@ class DatetimeColumn(column.ColumnBase):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
-
         return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:

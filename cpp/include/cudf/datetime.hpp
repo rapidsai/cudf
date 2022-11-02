@@ -36,7 +36,7 @@ namespace datetime {
  */
 
 /**
- * @brief  Extracts year from any date time type and returns an int16_t
+ * @brief  Extracts year from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -50,7 +50,7 @@ std::unique_ptr<cudf::column> extract_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts month from any date time type and returns an int16_t
+ * @brief  Extracts month from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> extract_month(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts day from any date time type and returns an int16_t
+ * @brief  Extracts day from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> extract_day(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts day from any date time type and returns an int16_t
+ * @brief  Extracts day from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -92,7 +92,7 @@ std::unique_ptr<cudf::column> extract_weekday(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts hour from any date time type and returns an int16_t
+ * @brief  Extracts hour from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -106,7 +106,7 @@ std::unique_ptr<cudf::column> extract_hour(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts minute from any date time type and returns an int16_t
+ * @brief  Extracts minute from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -120,7 +120,7 @@ std::unique_ptr<cudf::column> extract_minute(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Extracts second from any date time type and returns an int16_t
+ * @brief  Extracts second from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -133,6 +133,57 @@ std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Extracts millisecond fraction from any datetime type and returns an int16_t
+ * cudf::column.
+ *
+ * A millisecond fraction is only the 3 digits that make up the millisecond portion of a duration.
+ * For example, the millisecond fraction of 1.234567890 seconds is 234.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t milliseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_millisecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts microsecond fraction from any datetime type and returns an int16_t
+ * cudf::column.
+ *
+ * A microsecond fraction is only the 3 digits that make up the microsecond portion of a duration.
+ * For example, the microsecond fraction of 1.234567890 seconds is 567.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t microseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_microsecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Extracts nanosecond fraction from any datetime type and returns an int16_t
+ * cudf::column.
+ *
+ * A nanosecond fraction is only the 3 digits that make up the nanosecond portion of a duration.
+ * For example, the nanosecond fraction of 1.234567890 seconds is 890.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t nanoseconds
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_nanosecond_fraction(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 /**
  * @addtogroup datetime_compute
@@ -141,7 +192,7 @@ std::unique_ptr<cudf::column> extract_second(
  */
 
 /**
- * @brief  Computes the last day of the month in date time type and returns a TIMESTAMP_DAYS
+ * @brief  Computes the last day of the month in datetime type and returns a TIMESTAMP_DAYS
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
@@ -169,7 +220,7 @@ std::unique_ptr<cudf::column> day_of_year(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Adds or subtracts a number of months from the date time type and returns a
+ * @brief  Adds or subtracts a number of months from the datetime type and returns a
  * timestamp column that is of the same type as the input `timestamps` column.
  *
  * For a given row, if the `timestamps` or the `months` column value is null,
@@ -204,7 +255,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Adds or subtracts a number of months from the date time type and returns a
+ * @brief  Adds or subtracts a number of months from the datetime type and returns a
  * timestamp column that is of the same type as the input `timestamps` column.
  *
  * For a given row, if the `timestamps` value is null, the output for that row is null.

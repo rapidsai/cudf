@@ -16,11 +16,10 @@
 
 #pragma once
 
-#include "orc_common.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <io/comp/io_uncomp.hpp>
 
@@ -37,13 +36,16 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+static constexpr uint32_t block_header_size = 3;
+
 struct PostScript {
-  uint64_t footerLength         = 0;           // the length of the footer section in bytes
-  CompressionKind compression   = NONE;        // the kind of generic compression used
-  uint32_t compressionBlockSize = 256 * 1024;  // the maximum size of each compression chunk
-  std::vector<uint32_t> version;               // the version of the writer [major, minor]
-  uint64_t metadataLength = 0;                 // the length of the metadata section in bytes
-  std::string magic       = "";                // the fixed string "ORC"
+  uint64_t footerLength       = 0;     // the length of the footer section in bytes
+  CompressionKind compression = NONE;  // the kind of generic compression used
+  uint32_t compressionBlockSize{};     // the maximum size of each compression chunk
+  std::vector<uint32_t> version;       // the version of the writer [major, minor]
+  uint64_t metadataLength = 0;         // the length of the metadata section in bytes
+  std::string magic       = "";        // the fixed string "ORC"
 };
 
 struct StripeInformation {
@@ -122,7 +124,7 @@ struct column_statistics {
   std::optional<date_statistics> date_stats;
   std::optional<binary_statistics> binary_stats;
   std::optional<timestamp_statistics> timestamp_stats;
-  // TODO: hasNull (issue #7087)
+  std::optional<bool> has_null;
 };
 
 struct StripeStatistics {
@@ -421,6 +423,12 @@ template <>
 inline uint8_t ProtobufReader::get<uint8_t>()
 {
   return (m_cur < m_end) ? *m_cur++ : 0;
+};
+
+template <>
+inline bool ProtobufReader::get<bool>()
+{
+  return static_cast<bool>(get<uint8_t>());
 };
 
 template <>

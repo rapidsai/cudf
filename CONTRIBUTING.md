@@ -73,7 +73,7 @@ Compilers:
 
 * `gcc` version 9.3+
 * `nvcc` version 11.5+
-* `cmake` version 3.20.1+
+* `cmake` version 3.23.1+
 
 CUDA/GPU:
 
@@ -379,6 +379,13 @@ pre-commit install
 Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
+
+## Developer Guidelines
+
+The [C++ Developer Guide](cpp/docs/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
+
+The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
+
 
 ## Attribution
 

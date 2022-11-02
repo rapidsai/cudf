@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,4 +22,10 @@ namespace cudf::test {
 void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
                            cudf::io::table_metadata out_meta);
 
-}
+/**
+ * @brief Ensures that the metadata of two tables matches for the root columns as well as for all
+ * descendents (recursively)
+ */
+void expect_metadata_equal(cudf::io::table_metadata lhs_meta, cudf::io::table_metadata rhs_meta);
+
+}  // namespace cudf::test

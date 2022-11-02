@@ -827,14 +827,20 @@ def test_read_text_byte_range(datadir):
 
 
 def test_read_text_byte_range_large(tmpdir):
-    content = str([["\n" if x % 5 == 0 else "x"] for x in range(0, 3000)])
-    delimiter = "1."
+    content = "".join(("\n" if x % 5 == 4 else "x") for x in range(0, 3000))
+    delimiter = "\n"
     temp_file = str(tmpdir) + "/temp.txt"
 
     with open(temp_file, "w") as f:
         f.write(content)
 
-    cudf.read_text(temp_file, delimiter=delimiter)
+    expected = cudf.Series(["xxxx\n" for i in range(0, 200)])
+
+    actual = cudf.read_text(
+        temp_file, delimiter=delimiter, byte_range=[1000, 1000]
+    )
+
+    assert_eq(expected, actual)
 
 
 def test_read_text_in_memory(datadir):
@@ -843,5 +849,68 @@ def test_read_text_in_memory(datadir):
     expected = cudf.Series(["x::", "y::", "z"])
 
     actual = cudf.read_text(StringIO("x::y::z"), delimiter="::")
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_in_memory_strip_delimiter(datadir):
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x", "y", "z"])
+
+    actual = cudf.read_text(
+        StringIO("x::y::z"), delimiter="::", strip_delimiters=True
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_bgzip(datadir):
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read().split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file_compressed, compression="bgzip", delimiter=delimiter
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_bgzip_offsets(datadir):
+    chess_file_compressed = str(datadir) + "/chess.pgn.gz"
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file) as f:
+        content = f.read()[29:695].split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(
+        chess_file_compressed,
+        compression="bgzip",
+        compression_offsets=[58 * 2**16 + 2, 781 * 2**16 + 7],
+        delimiter=delimiter,
+    )
 
     assert_eq(expected, actual)

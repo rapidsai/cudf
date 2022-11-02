@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
@@ -147,8 +147,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
+            nbuf = pa.py_buffer(self.mask.memoryview())
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -164,6 +163,11 @@ class ListColumn(ColumnBase):
             )
         else:
             super().set_base_data(value)
+
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+        super().set_base_children(value)
+        _, values = value
+        self._dtype = cudf.ListDtype(element_type=values.dtype)
 
     @property
     def __cuda_array_interface__(self):

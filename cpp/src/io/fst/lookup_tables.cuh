@@ -142,7 +142,8 @@ class SingleSymbolSmemLUT {
   constexpr CUDF_HOST_DEVICE int32_t operator()(SymbolT const symbol) const
   {
     // Look up the symbol group for given symbol
-    return temp_storage.sym_to_sgid[min(symbol, num_valid_entries - 1)];
+    return temp_storage
+      .sym_to_sgid[min(static_cast<SymbolGroupIdT>(symbol), num_valid_entries - 1U)];
   }
 };
 
@@ -170,19 +171,21 @@ class TransitionTable {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
   };
 
-  template <typename StateIdT, typename = std::void_t<decltype(ItemT{std::declval<StateIdT>()})>>
-  static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
-                                        std::vector<std::vector<StateIdT>> const& translation_table,
-                                        rmm::cuda_stream_view stream)
+  template <typename StateIdT>
+  static void InitDeviceTransitionTable(
+    hostdevice_vector<KernelParameter>& transition_table_init,
+    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table,
+    rmm::cuda_stream_view stream)
   {
     // translation_table[state][symbol] -> new state
     for (std::size_t state = 0; state < translation_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < translation_table[state].size(); ++symbol) {
         CUDF_EXPECTS(
-          translation_table[state][symbol] <= std::numeric_limits<ItemT>::max(),
+          static_cast<int64_t>(translation_table[state][symbol]) <=
+            std::numeric_limits<ItemT>::max(),
           "Target state index value exceeds value representable by the transition table's type");
         transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
-          translation_table[state][symbol];
+          static_cast<ItemT>(translation_table[state][symbol]);
       }
     }
 
@@ -319,7 +322,8 @@ class TransducerLookupTable {
    */
   static void InitDeviceTranslationTable(
     hostdevice_vector<KernelParameter>& translation_table_init,
-    std::vector<std::vector<std::vector<OutSymbolT>>> const& translation_table,
+    std::array<std::array<std::vector<OutSymbolT>, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const&
+      translation_table,
     rmm::cuda_stream_view stream)
   {
     std::vector<OutSymbolT> out_symbols;
@@ -476,8 +480,8 @@ class Dfa {
    */
   template <typename StateIdT, typename SymbolGroupIdItT>
   Dfa(SymbolGroupIdItT const& symbol_vec,
-      std::vector<std::vector<StateIdT>> const& tt_vec,
-      std::vector<std::vector<std::vector<OutSymbolT>>> const& out_tt_vec,
+      std::array<std::array<StateIdT, NUM_SYMBOLS>, NUM_STATES> const& tt_vec,
+      std::array<std::array<std::vector<OutSymbolT>, NUM_SYMBOLS>, NUM_STATES> const& out_tt_vec,
       cudaStream_t stream)
   {
     constexpr std::size_t single_item = 1;

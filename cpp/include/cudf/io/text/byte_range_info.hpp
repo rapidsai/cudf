@@ -67,12 +67,20 @@ class byte_range_info {
    * @return Offset in bytes
    */
   [[nodiscard]] constexpr int64_t offset() { return _offset; }
+
   /**
    * @brief Get the size in bytes
    *
    * @return Size in bytes
    */
   [[nodiscard]] constexpr int64_t size() { return _size; }
+
+  /**
+   * @brief Returns whether the span is empty.
+   *
+   * @return true iff the span is empty, i.e. `size() == 0`
+   */
+  [[nodiscard]] constexpr bool empty() { return size() == 0; }
 };
 
 /**

@@ -1,9 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pandas as pd
-
-import cudf
-
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 

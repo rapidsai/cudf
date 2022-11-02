@@ -35,7 +35,7 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls h
     data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::hash(data->view(), hid);
   }
 }
@@ -54,11 +54,9 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls h
 #define HASH_BENCHMARK_DEFINE(hid, n) H_BENCHMARK_DEFINE(concat(hid, _, n), hid, n)
 
 HASH_BENCHMARK_DEFINE(HASH_MURMUR3, nulls)
-HASH_BENCHMARK_DEFINE(HASH_SERIAL_MURMUR3, nulls)
 HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, nulls)
 HASH_BENCHMARK_DEFINE(HASH_MD5, nulls)
 
 HASH_BENCHMARK_DEFINE(HASH_MURMUR3, no_nulls)
-HASH_BENCHMARK_DEFINE(HASH_SERIAL_MURMUR3, no_nulls)
 HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, no_nulls)
 HASH_BENCHMARK_DEFINE(HASH_MD5, no_nulls)

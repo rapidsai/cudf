@@ -181,6 +181,16 @@ def make_all_numeric_extremes_dataframe():
 
 
 @pytest.fixture
+def pandas_extreme_numeric_dataframe():
+    return make_all_numeric_extremes_dataframe()[0]
+
+
+@pytest.fixture
+def cudf_extreme_numeric_dataframe(pandas_extreme_numeric_dataframe):
+    return cudf.from_pandas(pandas_extreme_numeric_dataframe)
+
+
+@pytest.fixture
 def path_or_buf(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
     df = make_numeric_dataframe(10, np.int32)
@@ -754,6 +764,81 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     )
 
     assert_eq(df_out, out)
+
+
+def test_csv_reader_bools_custom():
+    names = ["text", "bool"]
+    dtypes = {"text": "str", "bool": "bool"}
+    trues = ["foo", "1"]
+    falses = ["bar", "0"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "0,0",
+        "1,1",
+    ]
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+
+    # Note: bool literals give parsing errors as int
+    # "0" and "1" give parsing errors as bool in pandas
+    expected = pd.read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert_eq(df, expected, check_dtype=True)
+
+
+def test_csv_reader_bools_NA():
+    names = ["text", "int"]
+    dtypes = ["str", "int"]
+    trues = ["foo"]
+    falses = ["bar"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "qux,qux",
+    ]
+
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert len(df.columns) == 2
+    assert df["text"].dtype == np.dtype("object")
+    assert df["int"].dtype == np.dtype("int64")
+    expected = pd.DataFrame(
+        {
+            "text": ["true", "false", "foo", "bar", "qux"],
+            "int": [1, 0, 1, 0, 0],
+        }
+    )
+    # breaking behaviour is np.nan for qux
+    assert_eq(df, expected)
 
 
 def test_csv_quotednumbers(tmpdir):
@@ -2054,3 +2139,69 @@ def test_empty_df_no_index():
     result = cudf.read_csv(buffer)
 
     assert_eq(actual, result)
+
+
+def test_default_integer_bitwidth(
+    cudf_mixed_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+    assert read["Integer"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
+
+
+def test_default_integer_bitwidth_partial(
+    cudf_mixed_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf, dtype={"Integer": "int64"})
+    assert read["Integer"].dtype == np.dtype("i8")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
+
+
+def test_default_integer_bitwidth_extremes(
+    cudf_extreme_numeric_dataframe, default_integer_bitwidth
+):
+    # Test that integer columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_extreme_numeric_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+
+    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["uint64"].dtype == np.dtype(f"u{default_integer_bitwidth//8}")
+
+
+def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
+    # Test that float columns in csv are _inferred_ as user specified
+    # bitwidth
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_default_float_bitwidth_partial(default_float_bitwidth):
+    # Test that float columns in csv are _inferred_ as user specified
+    # bitwidth
+    read = cudf.read_csv(
+        StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
+        dtype={"float2": "float64"},
+    )
+    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["float2"].dtype == np.dtype("f8")

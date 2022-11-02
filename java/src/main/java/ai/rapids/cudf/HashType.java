@@ -24,9 +24,8 @@ package ai.rapids.cudf;
 public enum HashType {
   IDENTITY(0),
   MURMUR3(1),
-  HASH_SERIAL_MURMUR3(2),
-  HASH_SPARK_MURMUR3(3),
-  HASH_MD5(4);
+  HASH_SPARK_MURMUR3(2),
+  HASH_MD5(3);
 
   private static final HashType[] HASH_TYPES = HashType.values();
   final int nativeId;

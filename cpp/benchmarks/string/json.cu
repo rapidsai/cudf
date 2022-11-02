@@ -161,10 +161,7 @@ struct json_benchmark_row_builder {
 
 auto build_json_string_column(int desired_bytes, int num_rows)
 {
-  data_profile profile;
-  profile.set_cardinality(0);
-  profile.set_null_frequency(std::nullopt);
-  profile.set_distribution_params<float>(
+  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
     cudf::type_id::FLOAT32, distribution_id::UNIFORM, 0.0, 1.0);
   auto float_2bool_columns =
     create_random_table({cudf::type_id::FLOAT32, cudf::type_id::BOOL8, cudf::type_id::BOOL8},
@@ -180,7 +177,8 @@ auto build_json_string_column(int desired_bytes, int num_rows)
   auto d_store_order = cudf::column_device_view::create(float_2bool_columns->get_column(2));
   json_benchmark_row_builder jb{
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
-  auto children = cudf::strings::detail::make_strings_children(jb, num_rows);
+  auto children =
+    cudf::strings::detail::make_strings_children(jb, num_rows, cudf::get_default_stream());
   return cudf::make_strings_column(
     num_rows, std::move(children.first), std::move(children.second), 0, {});
 }

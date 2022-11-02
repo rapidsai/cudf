@@ -332,3 +332,42 @@ def test_nested_struct_from_pandas_empty():
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(pdf, gdf)
+
+
+def _nested_na_replace(struct_scalar):
+    """
+    Replace `cudf.NA` with `None` in the dict
+    """
+    for key, value in struct_scalar.items():
+        if value is cudf.NA:
+            struct_scalar[key] = None
+    return struct_scalar
+
+
+@pytest.mark.parametrize(
+    "data, idx, expected",
+    [
+        (
+            [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}],
+            0,
+            {"f1": "a", "f2": {"a": "sf21"}},
+        ),
+        (
+            [
+                {"f2": {"a": "sf21"}},
+                {"f1": "sf12", "f2": None},
+            ],
+            0,
+            {"f1": cudf.NA, "f2": {"a": "sf21"}},
+        ),
+        (
+            [{"a": "123"}, {"a": "sf12", "b": {"a": {"b": "c"}}}],
+            1,
+            {"a": "sf12", "b": {"a": {"b": "c"}}},
+        ),
+    ],
+)
+def test_nested_struct_extract_host_scalars(data, idx, expected):
+    series = cudf.Series(data)
+
+    assert _nested_na_replace(series[idx]) == _nested_na_replace(expected)

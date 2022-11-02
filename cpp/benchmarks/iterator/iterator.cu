@@ -32,6 +32,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
+#include <thrust/reduce.h>
 
 #include <random>
 
@@ -55,7 +56,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
     nullptr, temp_storage_bytes, d_in, result, num_items, cudf::DeviceSum{}, init);
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::default_stream_value);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, cudf::get_default_stream());
 
   // Run reduction
   cub::DeviceReduce::Reduce(
@@ -139,7 +140,8 @@ void BM_iterator(benchmark::State& state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1);
+  auto dev_result =
+    cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1, cudf::get_default_stream());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
@@ -207,7 +209,8 @@ void BM_pair_iterator(benchmark::State& state)
   cudf::column_view hasnull_T = wrap_hasnull_T;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(1);
+  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(
+    1, cudf::get_default_stream());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {

@@ -33,15 +33,14 @@ static void BM_replace_nans(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, row_count{n_rows});
-  if (!include_nulls) { table->get_column(0).set_null_mask(rmm::device_buffer{}, 0); }
-  cudf::column_view input(table->view().column(0));
+  auto const input = create_random_column(dtype, row_count{n_rows});
+  if (!include_nulls) input->set_null_mask(rmm::device_buffer{}, 0);
 
   auto zero = cudf::make_fixed_width_scalar<type>(0);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::replace_nans(input, *zero);
+    auto result = cudf::replace_nans(*input, *zero);
   }
 }
 

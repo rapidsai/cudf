@@ -47,9 +47,7 @@ class StructColumn(ColumnBase):
         )
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
-            buffers = (nbuf,)
+            buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
 

@@ -3260,12 +3260,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Extracts all strings that match the given regular expression and corresponds to the 
+   * Extracts all strings that match the given regular expression and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
-   * 
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
-   
    * @param pattern The regex pattern
    * @param idx The regex group index
    * @return A new column vector of extracted matches
@@ -3313,7 +3312,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   private static void assertIsSupportedMapKeyType(DType keyType) {
-    boolean isSupportedKeyType = 
+    boolean isSupportedKeyType =
       !keyType.equals(DType.EMPTY) && !keyType.equals(DType.LIST) && !keyType.equals(DType.STRUCT);
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
@@ -3331,7 +3330,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
   }
 
-  /** 
+  /**
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
@@ -3540,6 +3539,88 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  /**
+   * For each pair of lists from the input lists columns, check if they have any common non-null
+   * elements.
+   *
+   * A null input row in any of the input columns will result in a null output row. During checking
+   * for common elements, nulls within each list are considered as different values while
+   * floating-point NaN values are considered as equal.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A column of type BOOL8 containing the check result
+   */
+  public static ColumnVector listsHaveOverlap(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsHaveOverlap(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the intersection without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list intersection, nulls and floating-point NaN values within each list are
+   * considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the intersection result
+   */
+  public static ColumnVector listsIntersectDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsIntersectDistinct(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the union without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list union, nulls and floating-point NaN values within each list are considered as
+   * equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the union result
+   */
+  public static ColumnVector listsUnionDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsUnionDistinct(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the difference of lists of the left column against lists of the right column.
+   * Specifically, find the elements (without duplicates) from each list of the left column that
+   * do not exist in the corresponding list of the right column.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding, nulls and floating-point NaN values within each list are considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the difference result
+   */
+  public static ColumnVector listsDifferenceDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsDifferenceDistinct(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -4088,6 +4169,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long listIndexOfColumn(long nativeView, long keyColumnHandle, boolean isFindFirst);
 
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
+
+  private static native long listsHaveOverlap(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsIntersectDistinct(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsUnionDistinct(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsDifferenceDistinct(long lhsViewHandle, long rhsViewHandle);
 
   private static native long getElement(long nativeView, int index);
 

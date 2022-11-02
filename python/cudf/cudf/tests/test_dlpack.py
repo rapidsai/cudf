@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -6,6 +6,7 @@ from contextlib import ExitStack as does_not_raise
 import cupy
 import numpy as np
 import pytest
+from packaging import version
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -19,14 +20,21 @@ ncols = [0, 1, 2]
 params_2d = itertools.product(ncols, nelems, dtype, nulls)
 
 
+if version.parse(cupy.__version__) < version.parse("10"):
+    # fromDlpack deprecated in cupy version 10, replaced by from_dlpack
+    cupy_from_dlpack = cupy.fromDlpack
+else:
+    cupy_from_dlpack = cupy.from_dlpack
+
+
 def data_size_expectation_builder(data, nan_null_param=False):
     if nan_null_param and np.isnan(data).any():
         return pytest.raises((ValueError,))
 
-    if data.size > 0:
-        return does_not_raise()
-    else:
+    if len(data.shape) == 2 and data.size == 0:
         return pytest.raises((ValueError, IndexError))
+    else:
+        return does_not_raise()
 
 
 @pytest.fixture(params=params_1d)
@@ -107,7 +115,7 @@ def test_to_dlpack_cupy_1d(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy_from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -121,7 +129,7 @@ def test_to_dlpack_cupy_2d(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy_from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -157,7 +165,7 @@ def test_to_dlpack_cupy_2d_null(data_2d):
         cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy_from_dlpack(dlt)
         cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -171,7 +179,7 @@ def test_to_dlpack_cupy_1d_null(data_1d):
         cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs.to_dlpack()
 
-        cupy_array = cupy.fromDlpack(dlt)
+        cupy_array = cupy_from_dlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
@@ -183,7 +191,26 @@ def test_to_dlpack_mixed_dtypes():
     cudf_host_array = df.to_numpy()
     dlt = df.to_dlpack()
 
-    cupy_array = cupy.fromDlpack(dlt)
+    cupy_array = cupy_from_dlpack(dlt)
     cupy_host_array = cupy_array.get()
 
     assert_eq(cudf_host_array, cupy_host_array)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, 3),
+        pytest.param(
+            (3, 0),
+            marks=pytest.mark.xfail(
+                reason="Index information not available via from_dlpack"
+            ),
+        ),
+        (0, 0),
+    ],
+)
+def test_from_dlpack_zero_sizes(shape):
+    arr = cupy.empty(shape, dtype=float)
+    df = cudf.io.dlpack.from_dlpack(arr.__dlpack__())
+    assert_eq(df, cudf.DataFrame(arr))

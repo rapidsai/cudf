@@ -84,7 +84,7 @@ bool is_sorted(cudf::table_view const& in,
   }
 
   return detail::is_sorted(
-    in, column_order, has_nulls(in), null_precedence, cudf::default_stream_value);
+    in, column_order, has_nulls(in), null_precedence, cudf::get_default_stream());
 }
 
 }  // namespace cudf

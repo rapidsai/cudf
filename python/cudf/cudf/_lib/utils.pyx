@@ -6,7 +6,6 @@ import pyarrow as pa
 import cudf
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move

@@ -16,12 +16,9 @@ for DIRNAME in ${DIRNAMES[@]}; do
     LIB_RETVAL=$?
 
     if [ "$LIB_RETVAL" != "0" ]; then
-        echo -e "\n\n>>>> FAILED: lib${LIBNAME} header existence conda/recipes/lib${LIBNAME}/meta.yaml check; begin output\n\n"
+        echo -e ">>>> FAILED: lib${LIBNAME} has different headers in include/${DIRNAME}/ and conda/recipes/lib${LIBNAME}/meta.yaml. The diff is shown below:"
         echo -e "$HEADER_DIFF"
-        echo -e "\n\n>>>> FAILED: lib${LIBNAME} header existence conda/recipes/lib${LIBNAME}/meta.yaml check; end output\n\n"
         RETVAL=1
-    else
-        echo -e "\n\n>>>> PASSED: lib${LIBNAME} header existence conda/recipes/lib${LIBNAME}/meta.yaml check\n\n"
     fi
 done
 
