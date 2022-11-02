@@ -197,7 +197,7 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
 }
 
 std::vector<std::unordered_map<std::string, std::string>>
-aggregate_reader_metadata::collect_keyval_metadata()
+aggregate_reader_metadata::collect_keyval_metadata() const
 {
   std::vector<std::unordered_map<std::string, std::string>> kv_maps;
   std::transform(per_file_metadata.cbegin(),

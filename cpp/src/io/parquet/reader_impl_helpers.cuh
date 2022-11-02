@@ -79,13 +79,14 @@ class aggregate_reader_metadata {
   /**
    * @brief Create a metadata object from each element in the source vector
    */
-  std::vector<metadata> metadatas_from_sources(
+  static std::vector<metadata> metadatas_from_sources(
     std::vector<std::unique_ptr<datasource>> const& sources);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
    */
-  [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata();
+  [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata()
+    const;
 
   /**
    * @brief Sums up the number of rows of each source
