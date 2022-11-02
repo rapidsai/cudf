@@ -5,7 +5,7 @@ from numba.np import numpy_support
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -37,7 +37,7 @@ from cudf._lib.utils cimport (
 def bools_to_mask(Column col):
     """
     Given an int8 (boolean) column, compress the data from booleans to bits and
-    return a DeviceBufferLike
+    return a Buffer
     """
     cdef column_view col_view = col.view()
     cdef pair[unique_ptr[device_buffer], size_type] cpp_out
@@ -48,7 +48,7 @@ def bools_to_mask(Column col):
         up_db = move(cpp_out.first)
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
@@ -57,9 +57,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    if not isinstance(mask_buffer, cudf.core.buffer.DeviceBufferLike):
+    if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
-                        "cudf.core.buffer.DeviceBufferLike")
+                        "cudf.core.buffer.Buffer")
     cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
 
     cdef unique_ptr[column] result
@@ -84,7 +84,7 @@ def nans_to_nulls(Column input):
         return None
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_device_buffer_like(buffer)
+    buffer = as_buffer(buffer)
     return buffer
 
 

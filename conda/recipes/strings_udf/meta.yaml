@@ -50,7 +50,7 @@ requirements:
     - cudf ={{ version }}
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - cachetools
-    - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
+    - ptxcompiler >=0.7.0  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
