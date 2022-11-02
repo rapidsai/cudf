@@ -104,8 +104,8 @@ class chunked_reader : reader {
    * If `chunk_read_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
    * whole file and return a table containing all rows.
    *
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
-   *        is no limit
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.

@@ -424,8 +424,8 @@ class chunked_parquet_reader {
    * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
    * output table for each reading.
    *
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
-   *        is no limit
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    * @param options The options used to read Parquet file
    * @param mr Device memory resource to use for device memory allocation
    */

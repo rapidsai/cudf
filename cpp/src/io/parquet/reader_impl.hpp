@@ -98,11 +98,11 @@ class reader::impl {
    * ```
    *
    * Reading the whole given file at once through `read()` function is still supported if
-   * `chunk_read_limit == 0` (i.e., no reading limit). In such case, `read_chunk()` will also return
-   * rows of the entire file.
+   * `chunk_read_limit == 0` (i.e., no reading limit).
+   * In such case, `read_chunk()` will also return rows of the entire file.
    *
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
-   *        is no limit
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -159,8 +159,8 @@ class reader::impl {
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read, or `0` if there
-   *        is no limit
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    */
   void compute_chunk_read_info(size_t skip_rows,
                                size_t num_rows,
