@@ -202,17 +202,21 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 /**
  * @brief Reads compressed page data to device memory
  *
+ * @param sources Dataset sources
  * @param page_data Buffers to hold compressed page data for each chunk
  * @param chunks List of column chunk descriptors
  * @param begin_chunk Index of first column chunk to read
  * @param end_chunk Index after the last column chunk to read
  * @param column_chunk_offsets File offset for all chunks
+ * @param chunk_source_map Association between each column chunk and its source
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
+ * @return A future object for reading synchronization
  */
 std::future<void> read_column_chunks_async(
   std::vector<std::unique_ptr<datasource>> const& sources,
   std::vector<std::unique_ptr<datasource::buffer>>& page_data,
-  hostdevice_vector<gpu::ColumnChunkDesc>& chunks,  // TODO const?
+  hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   size_t begin_chunk,
   size_t end_chunk,
   const std::vector<size_t>& column_chunk_offsets,
@@ -270,9 +274,10 @@ std::future<void> read_column_chunks_async(
 }
 
 /**
- * @brief Returns the number of total pages from the given column chunks.
+ * @brief Return the number of total pages from the given column chunks.
  *
  * @param chunks List of column chunk descriptors
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
  */
@@ -293,10 +298,11 @@ size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 }
 
 /**
- * @brief Returns the page information from the given column chunks.
+ * @brief Decode the page information from the given column chunks.
  *
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                          hostdevice_vector<gpu::PageInfo>& pages,
@@ -320,6 +326,7 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
  *
  * @param chunks List of column chunk descriptors
  * @param pages List of page information
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Device buffer to decompressed page data
  */
@@ -514,7 +521,7 @@ rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>&
  * @param pages List of page information
  * @param page_nesting_info The allocated nesting info structs.
  * @param metadata File metadata
- * @param stream TODO
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                            hostdevice_vector<gpu::PageInfo>& pages,
