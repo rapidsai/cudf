@@ -32,6 +32,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
       case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
       case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
+      case cudf::io::statistics_freq::STATISTICS_COLUMN: return "STATISTICS_COLUMN";
       default: return "Unknown";
     }
   },
@@ -201,6 +202,7 @@ using compression_list =
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
+                                           cudf::io::STATISTICS_COLUMN,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
