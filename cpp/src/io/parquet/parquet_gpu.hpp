@@ -255,6 +255,9 @@ struct ColumnChunkDesc {
   int32_t src_col_schema;  // my schema index in the file
 };
 
+/**
+ * @brief Struct to store raw/intermediate file data before parsing.
+ */
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
   rmm::device_buffer decomp_page_data;
@@ -263,12 +266,18 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
 };
 
+/**
+ * @brief Struct to store intermediate page data for parsing each chunk of rows in chunked reading.
+ */
 struct chunk_intermediate_data {
   rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
   rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
   rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
 };
 
+/**
+ * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
+ */
 struct chunk_read_info {
   size_t skip_rows;
   size_t num_rows;
