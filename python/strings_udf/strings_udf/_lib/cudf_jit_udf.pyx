@@ -28,10 +28,9 @@ def to_string_view_array(Column strings_col):
 
 
 def from_udf_string_array(DeviceBuffer d_buffer):
-    cdef size_t size = d_buffer.c_size() // 16
+    cdef size_t size = int(d_buffer.c_size() / sizeof(udf_string))
     cdef udf_string* data = <udf_string*>d_buffer.c_data()
     cdef unique_ptr[column] c_result
-    # data = <void *>
 
     with nogil:
         c_result = move(cpp_column_from_udf_string_array(data, size))
