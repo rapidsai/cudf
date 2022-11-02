@@ -501,36 +501,51 @@ rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>&
   return decomp_pages;
 }
 
-}  // namespace
-
-void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                                         hostdevice_vector<gpu::PageInfo>& pages,
-                                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info)
+/**
+ * @brief Allocate nesting information storage for all pages and set pointers to it.
+ *
+ * One large contiguous buffer of PageNestingInfo structs is allocated and
+ * distributed among the PageInfo structs.
+ *
+ * Note that this gets called even in the flat schema case so that we have a
+ * consistent place to store common information such as value counts, etc.
+ *
+ * @param chunks List of column chunk descriptors
+ * @param pages List of page information
+ * @param page_nesting_info The allocated nesting info structs.
+ * @param metadata File metadata
+ * @param stream TODO
+ */
+void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
+                           hostdevice_vector<gpu::PageInfo>& pages,
+                           hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info,
+                           std::unique_ptr<aggregate_reader_metadata> const& metadata,
+                           rmm::cuda_stream_view stream)
 {
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
   size_t const total_page_nesting_infos = std::accumulate(
     chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto& chunk) {
       // the schema of the input column
-      auto const& schema                    = _metadata->get_schema(chunk.src_col_schema);
+      auto const& schema                    = metadata->get_schema(chunk.src_col_schema);
       auto const per_page_nesting_info_size = max(
-        schema.max_definition_level + 1, _metadata->get_output_nesting_depth(chunk.src_col_schema));
+        schema.max_definition_level + 1, metadata->get_output_nesting_depth(chunk.src_col_schema));
       return total + (per_page_nesting_info_size * chunk.num_data_pages);
     });
 
-  page_nesting_info = hostdevice_vector<gpu::PageNestingInfo>{total_page_nesting_infos, _stream};
+  page_nesting_info = hostdevice_vector<gpu::PageNestingInfo>{total_page_nesting_infos, stream};
 
   // retrieve from the gpu so we can update
-  pages.device_to_host(_stream, true);
+  pages.device_to_host(stream, true);
 
   // update pointers in the PageInfos
   int target_page_index = 0;
   int src_info_index    = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int src_col_schema                    = chunks[idx].src_col_schema;
-    auto& schema                          = _metadata->get_schema(src_col_schema);
-    auto const per_page_nesting_info_size = std::max(
-      schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
+    int src_col_schema = chunks[idx].src_col_schema;
+    auto& schema       = metadata->get_schema(src_col_schema);
+    auto const per_page_nesting_info_size =
+      std::max(schema.max_definition_level + 1, metadata->get_output_nesting_depth(src_col_schema));
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -544,7 +559,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   }
 
   // copy back to the gpu
-  pages.host_to_device(_stream);
+  pages.host_to_device(stream);
 
   // fill in
   int nesting_info_index = 0;
@@ -553,9 +568,9 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     int src_col_schema = chunks[idx].src_col_schema;
 
     // schema of the input column
-    auto& schema = _metadata->get_schema(src_col_schema);
+    auto& schema = metadata->get_schema(src_col_schema);
     // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
-    int max_depth = _metadata->get_output_nesting_depth(src_col_schema);
+    int max_depth = metadata->get_output_nesting_depth(src_col_schema);
 
     // # of nesting infos stored per page for this column
     auto const per_page_nesting_info_size = std::max(schema.max_definition_level + 1, max_depth);
@@ -563,12 +578,12 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     // if this column has lists, generate depth remapping
     std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
     if (schema.max_repetition_level > 0) {
-      generate_depth_remappings(depth_remapping, src_col_schema, *_metadata);
+      generate_depth_remappings(depth_remapping, src_col_schema, *metadata);
     }
 
     // fill in host-side nesting info
     int schema_idx  = src_col_schema;
-    auto cur_schema = _metadata->get_schema(schema_idx);
+    auto cur_schema = metadata->get_schema(schema_idx);
     int cur_depth   = max_depth - 1;
     while (schema_idx > 0) {
       // stub columns (basically the inner field of a list scheme element) are not real columns.
@@ -607,15 +622,17 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
 
       // next schema
       schema_idx = cur_schema.parent_idx;
-      cur_schema = _metadata->get_schema(schema_idx);
+      cur_schema = metadata->get_schema(schema_idx);
     }
 
     nesting_info_index += (per_page_nesting_info_size * chunks[idx].num_data_pages);
   }
 
   // copy nesting info to the device
-  page_nesting_info.host_to_device(_stream);
+  page_nesting_info.host_to_device(stream);
 }
+
+}  // namespace
 
 void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
                                             size_type num_rows)
@@ -749,8 +766,11 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
     // nesting information (sizes, etc) stored -per page-
     // note : even for flat schemas, we allocate 1 level of "nesting" info
 
-    allocate_nesting_info(
-      _file_itm_data.chunks, _file_itm_data.pages_info, _file_itm_data.page_nesting_info);
+    allocate_nesting_info(_file_itm_data.chunks,
+                          _file_itm_data.pages_info,
+                          _file_itm_data.page_nesting_info,
+                          _metadata,
+                          _stream);
   }
 }
 
