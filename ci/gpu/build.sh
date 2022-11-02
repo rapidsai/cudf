@@ -197,7 +197,7 @@ else
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
-    
+
     gpuci_logger "Check current conda environment"
     conda list --show-channel-urls
 
