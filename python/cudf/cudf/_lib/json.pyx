@@ -16,6 +16,7 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.cpp.io.json cimport (
+    find_first_delimiter_in_chunk as libcudf_find_first_delimiter_in_chunk,
     json_reader_options,
     read_json as libcudf_read_json,
     schema_element,
@@ -26,20 +27,15 @@ from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
-cpdef read_json(object filepaths_or_buffers,
-                object dtype,
-                bool lines,
-                object compression,
-                object byte_range,
-                bool experimental,
-                bool keep_quotes):
+cdef json_reader_options make_json_reader_options(object filepaths_or_buffers,
+                                                  object dtype,
+                                                  bool lines,
+                                                  object compression,
+                                                  object byte_range,
+                                                  bool experimental,
+                                                  bool keep_quotes):
     """
-    Cython function to call into libcudf API, see `read_json`.
-
-    See Also
-    --------
-    cudf.io.json.read_json
-    cudf.io.json.to_json
+    Cython function construct json_reader_options from arguments
     """
 
     # If input data is a JSON string (or StringIO), hold a reference to
@@ -108,6 +104,36 @@ cpdef read_json(object filepaths_or_buffers,
         opts.set_dtypes(c_dtypes_schema_map)
 
     opts.enable_keep_quotes(keep_quotes)
+    return move(opts)
+
+
+cpdef read_json(object filepaths_or_buffers,
+                object dtype,
+                bool lines,
+                object compression,
+                object byte_range,
+                bool experimental,
+                bool keep_quotes):
+    """
+    Cython function to call into libcudf API, see `read_json`.
+
+    See Also
+    --------
+    cudf.io.json.read_json
+    cudf.io.json.to_json
+    """
+
+    # construct the options
+    cdef json_reader_options opts = make_json_reader_options(
+        filepaths_or_buffers,
+        dtype,
+        lines,
+        compression,
+        byte_range,
+        experimental,
+        keep_quotes
+    )
+
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
@@ -123,6 +149,34 @@ cpdef read_json(object filepaths_or_buffers,
     update_struct_field_names(df, c_result.metadata.schema_info)
 
     return df
+
+
+cpdef find_first_delimiter_in_chunk(object filepaths_or_buffers,
+                                    bool lines,
+                                    object compression,
+                                    object byte_range,
+                                    bool experimental,
+                                    char delimiter):
+    """
+    Cython function to call into libcudf API, see `first_delimiter_in_chunk`.
+    """
+
+    # construct the options
+    cdef json_reader_options opts = make_json_reader_options(
+        filepaths_or_buffers,
+        True,  # dtype not used
+        lines,
+        compression,
+        byte_range,
+        experimental,
+        False  # keep_quotes not used
+    )
+
+    cdef size_type c_result
+    with nogil:
+        c_result = libcudf_find_first_delimiter_in_chunk(opts, delimiter)
+
+    return c_result
 
 
 cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
