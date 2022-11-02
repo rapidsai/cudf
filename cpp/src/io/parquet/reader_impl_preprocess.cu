@@ -1406,13 +1406,11 @@ void reader::impl::compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDes
                        : std::vector<gpu::chunk_read_info>{{skip_rows, num_rows}};
 }
 
-void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    gpu::chunk_intermediate_data const& id,
-                                    size_t skip_rows,
-                                    size_t num_rows,
-                                    bool uses_custom_row_bounds)
+void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds)
 {
+  auto const& chunks = _file_itm_data.chunks;
+  auto& pages        = _file_itm_data.pages_info;
+
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
   // PageInfo::skipped_values, which tells us where to start decoding in the input to respect the

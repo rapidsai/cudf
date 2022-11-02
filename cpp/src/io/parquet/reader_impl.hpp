@@ -213,35 +213,20 @@ class reader::impl {
   /**
    * @brief Allocate data bufers for the output columns.
    *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param id The chunk intermediate data
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    */
-  void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                        hostdevice_vector<gpu::PageInfo>& pages,
-                        gpu::chunk_intermediate_data const& id,
-                        size_t skip_rows,
-                        size_t num_rows,
-                        bool uses_custom_row_bounds);
+  void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
 
   /**
    * @brief Converts the page data and outputs to columns.
    *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param page_nesting Page nesting array
    * @param skip_rows Minimum number of rows from start
    * @param num_rows Number of rows to output
    */
-  void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                        hostdevice_vector<gpu::PageInfo>& pages,
-                        hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                        size_t skip_rows,
-                        size_t num_rows);
+  void decode_page_data(size_t skip_rows, size_t num_rows);
 
  private:
   rmm::cuda_stream_view _stream;

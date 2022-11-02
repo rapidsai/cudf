@@ -52,12 +52,12 @@ void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
 
 }  // namespace
 
-void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                                    size_t skip_rows,
-                                    size_t num_rows)
+void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
+  auto& chunks       = _file_itm_data.chunks;
+  auto& pages        = _file_itm_data.pages_info;
+  auto& page_nesting = _file_itm_data.page_nesting_info;
+
   // TODO (dm): hd_vec should have begin and end iterator members
   size_t sum_max_depths =
     std::accumulate(chunks.host_ptr(),
@@ -310,25 +310,13 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   auto const& read_info = _chunk_read_info[_current_read_chunk++];
 
-  // allocate outgoing columns
-  allocate_columns(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _chunk_itm_data,
-                   read_info.skip_rows,
-                   read_info.num_rows,
-                   uses_custom_row_bounds);
+  // Allocate memory buffers for the output columns.
+  allocate_columns(read_info.skip_rows, read_info.num_rows, uses_custom_row_bounds);
 
-  //  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows,
-  //  (int)read_info.num_rows);
+  // Parse data into the output buffers.
+  decode_page_data(read_info.skip_rows, read_info.num_rows);
 
-  // decoding column data
-  decode_page_data(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _file_itm_data.page_nesting_info,
-                   read_info.skip_rows,
-                   read_info.num_rows);
-
-  // create the final output cudf columns
+  // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
     auto const metadata = _reader_column_schema.has_value()
                             ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
@@ -342,6 +330,7 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     }
   }
 
+  // Add empty columns if needed.
   return finalize_output(out_metadata, out_columns);
 }
 
