@@ -34,7 +34,7 @@ package ai.rapids.cudf;
  * Instances should be associated with a single thread to avoid pushing an NVTX range in
  * one thread and then trying to pop the range in a different thread.
  *
- * Push/pop ranges show a stacking behavior in tools such as Nsight, where newly pushed 
+ * Push/pop ranges show a stacking behavior in tools such as Nsight, where newly pushed
  * ranges are correlated and enclosed by the prior pushed range (in the example above,
  * "b" is enclosed by "a").
  */

@@ -299,10 +299,12 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 inline uint32_t __device__ int32_logical_len(type_id id)
 {
   switch (id) {
-    case cudf::type_id::INT8:
+    case cudf::type_id::INT8: [[fallthrough]];
     case cudf::type_id::UINT8: return 1;
-    case cudf::type_id::INT16:
+    case cudf::type_id::INT16: [[fallthrough]];
     case cudf::type_id::UINT16: return 2;
+    case cudf::type_id::DURATION_SECONDS: [[fallthrough]];
+    case cudf::type_id::DURATION_MILLISECONDS: return 8;
     default: return 4;
   }
 }
