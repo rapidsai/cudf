@@ -42,16 +42,20 @@ def maybe_patch_numba_linker(driver_version):
 
 
 def _get_ptx_file():
-    dev = cuda.get_current_device()
+    if "RAPIDS_NO_INITIALIZE" in os.environ:
+        cc = int(os.environ.get("STRINGS_UDF_CC", "52"))
+    else:
+        dev = cuda.get_current_device()
 
-    # Load the highest compute capability file available that is less than
-    # the current device's.
-    cc = int("".join(str(x) for x in dev.compute_capability))
+        # Load the highest compute capability file available that is less than
+        # the current device's.
+        cc = int("".join(str(x) for x in dev.compute_capability))
     files = glob.glob(os.path.join(os.path.dirname(__file__), "shim_*.ptx"))
     if len(files) == 0:
         raise RuntimeError(
             "This strings_udf installation is missing the necessary PTX "
-            "files. Please file an issue reporting this error and how you "
+            f"files for compute capability {cc}. "
+            "Please file an issue reporting this error and how you "
             "installed cudf and strings_udf."
             "https://github.com/rapidsai/cudf/issues"
         )
@@ -87,5 +91,4 @@ versions = safe_get_versions()
 if versions != NO_DRIVER:
     driver_version, runtime_version = versions
     maybe_patch_numba_linker(driver_version)
-    if "RAPIDS_NO_INITIALIZE" not in os.environ:
-        ptxpath = _get_ptx_file()
+    ptxpath = _get_ptx_file()

@@ -23,6 +23,7 @@ _supported_masked_types = (
     | {types.boolean}
 )
 _STRING_UDFS_ENABLED = False
+
 try:
     import strings_udf
     from strings_udf import ptxpath
