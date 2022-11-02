@@ -21,6 +21,10 @@ def as_buffer(
     **not** copied, instead the new buffer keeps a reference to `data` in order
     to retain its lifetime.
 
+    If `data` is an integer, it is assumed to point to device memory.
+
+    Raises ValueError if data isn't C-contiguous.
+
     Parameters
     ----------
     data : int or buffer-like or array-like

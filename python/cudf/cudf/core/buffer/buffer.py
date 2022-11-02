@@ -122,13 +122,15 @@ class Buffer(Serializable):
         """Create a Buffer from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.asarray()`
+        be convertible to a buffer object using `numpy.array()`
 
         The host memory is copied to a new device allocation.
 
+        Raises ValueError if array isn't C-contiguous.
+
         Parameters
         ----------
-        data : array-like or buffer-like
+        data : Any
             An object that represens host memory.
 
         Returns
@@ -137,8 +139,10 @@ class Buffer(Serializable):
             Buffer representing a copy of `data`.
         """
 
+        # Convert to numpy array, this will not copy data in most cases.
+        ary = numpy.array(data, copy=False, subok=True)
         # Extract pointer and size
-        ptr, size = get_ptr_and_size(numpy.asarray(data).__array_interface__)
+        ptr, size = get_ptr_and_size(ary.__array_interface__)
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
