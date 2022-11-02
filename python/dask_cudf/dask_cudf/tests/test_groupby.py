@@ -15,16 +15,15 @@ import dask_cudf
 from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
 
 
-def check_groupby_result(ddf):
-    """Assert that groupby result is using dask-cudf's codepath"""
-
-    try:
-        hlg_layer(ddf.dask, "cudf-aggregate-chunk")
-        hlg_layer(ddf.dask, "cudf-aggregate-agg")
-    except KeyError:
-        raise AssertionError(
-            "Dask dataframe does not contain dask-cudf groupby layer"
-        )
+def assert_cudf_groupby_layers(ddf):
+    for prefix in ("cudf-aggregate-chunk", "cudf-aggregate-agg"):
+        try:
+            hlg_layer(ddf.dask, prefix)
+        except KeyError:
+            raise AssertionError(
+                "Expected Dask dataframe to contain groupby layer with "
+                f"prefix {prefix}"
+            )
 
 
 @pytest.fixture
@@ -60,14 +59,14 @@ def test_groupby_basic(series, aggregation, pdf):
     expect = getattr(gdf_grouped, aggregation)()
     actual = getattr(ddf_grouped, aggregation)()
 
-    check_groupby_result(actual)
+    assert_cudf_groupby_layers(actual)
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
     expect = gdf_grouped.agg({"xx": aggregation})
     actual = ddf_grouped.agg({"xx": aggregation})
 
-    check_groupby_result(actual)
+    assert_cudf_groupby_layers(actual)
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
@@ -124,7 +123,7 @@ def test_groupby_agg(func, aggregation):
 
     check_dtype = False if aggregation == "count" else True
 
-    check_groupby_result(actual)
+    assert_cudf_groupby_layers(actual)
 
     dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
