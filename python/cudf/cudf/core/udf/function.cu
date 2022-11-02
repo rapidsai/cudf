@@ -81,15 +81,10 @@ __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_sum(T const* data, int const items_per_thread, size_type size) {
-  __shared__ T sum;
+__device__ void device_sum(T const* data, int const items_per_thread, size_type size, T* sum) {
   int tid = threadIdx.x;
   int tb_size = blockDim.x;
   T local_sum = 0;
-
-  if (tid == 0) sum = 0;
-
-  __syncthreads();
 
 // Calculate local sum for each thread
 #pragma unroll
@@ -100,26 +95,28 @@ __device__ T device_sum(T const* data, int const items_per_thread, size_type siz
     }
   }
 
-  atomicAdd(&sum, local_sum);
+  atomicAdd(sum, local_sum);
 
   __syncthreads();
 
-  return sum;
 }
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_var(T const* data, int const items_per_thread, size_type size) {
+__device__ void device_var(T const* data, int const items_per_thread, size_type size, T* sum, double* var) {
 
-  int tid = threadIdx.x;
+  int tid     = threadIdx.x;
   int tb_size = blockDim.x;
-
+  // Calculate how many elements each thread is working on
+  T local_sum           = 0;
   double local_var            = 0;
-  __shared__ double var;
-  if (tid == 0) var = 0;
+  double mean;
 
-  T sum = device_sum<T>(data, items_per_thread, size);
-  double mean = sum / static_cast<double>(size);
+  device_sum<T>(data, items_per_thread, size, sum);
+
+  __syncthreads();
+
+  mean = (*sum) / static_cast<double>(size);
 
 // Calculate local sum for each thread
 #pragma unroll
@@ -132,26 +129,23 @@ __device__ T device_var(T const* data, int const items_per_thread, size_type siz
     }
   }
 
-  atomicAdd(&var, local_var);
+  atomicAdd(var, local_var);
 
   __syncthreads();
 
-  return (var / (size - 1));
+  *var = *var / (size - 1);
+
+  __syncthreads();
 }
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_max(T const* data, int const items_per_thread, size_type size, T init_val) {
+__device__ void device_max(T const* data, int const items_per_thread, size_type size, T init_val, T* smax) {
 
   int tid = threadIdx.x;
   int tb_size = blockDim.x;
 
   T local_max            = init_val;
-  __shared__ T smax;
-
-  if (tid == 0) smax = init_val;
-
-  __syncthreads();
 
 // Calculate local max for each thread
 #pragma unroll
@@ -165,26 +159,19 @@ __device__ T device_max(T const* data, int const items_per_thread, size_type siz
   __syncthreads();
 
   // Calculate local max for each group
-  atomicMax((&smax), local_max);
+  atomicMax(smax, local_max);
 
   __syncthreads();
-
-  return smax;
 }
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_min(T const* data, int const items_per_thread, size_type size, T init_val) {
+__device__ void device_min(T const* data, int const items_per_thread, size_type size, T init_val, T* smin) {
 
   int tid = threadIdx.x;
   int tb_size = blockDim.x;
 
   T local_min           = init_val;
-  __shared__ T smin;
-
-  if (tid == 0) smin = init_val;
-
-  __syncthreads();
 
 // Calculate local min for each thread
 #pragma unroll
@@ -198,16 +185,14 @@ __device__ T device_min(T const* data, int const items_per_thread, size_type siz
   __syncthreads();
 
   // Calculate local min for each group
-  atomicMin((&smin), local_min);
+  atomicMin(smin, local_min);
 
   __syncthreads();
-
-  return smin;
 }
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_idxmax(T const* data, int const items_per_thread, int64_t const* index, size_type size, T init_val) {
+__device__ void device_idxmax(T const* data, int const items_per_thread, int64_t const* index, size_type size, T init_val, T* smax, int64_t* sidx) {
 
   int tid     = threadIdx.x;
   int tb_size = blockDim.x;
@@ -215,16 +200,6 @@ __device__ T device_idxmax(T const* data, int const items_per_thread, int64_t co
   // Calculate how many elements each thread is working on
   T local_max            = init_val;
   int64_t local_idx           = -1;
-
-  __shared__ T smax;
-  __shared__ int64_t sidx;
-
-  if (tid == 0) {
-    smax = init_val;
-    sidx = INT64_MAX;
-  }
-
-  __syncthreads();
 
 // Calculate local max for each thread
 #pragma unroll
@@ -241,36 +216,24 @@ __device__ T device_idxmax(T const* data, int const items_per_thread, int64_t co
   __syncthreads();
 
   // Calculate local max for each group
-  atomicMax((&smax), local_max);
+  atomicMax(smax, local_max);
 
   __syncthreads();
 
-  if (local_max == smax) { atomicMin((&sidx),local_idx); }
+  if (local_max == (*smax)) { atomicMin(sidx,local_idx); }
 
   __syncthreads();
-
-  return sidx;
 }
 
 // Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
-__device__ T device_idxmin(T const* data, int const items_per_thread, int64_t const* index, size_type size, T init_val) {
+__device__ void device_idxmin(T const* data, int const items_per_thread, int64_t const* index, size_type size, T init_val, T* smin, int64_t* sidx) {
 
   int tid = threadIdx.x;
   int tb_size = blockDim.x;
 
   T local_min            = init_val;
   int64_t local_idx           = -1;
-
-  __shared__ T smin;
-  __shared__ int64_t sidx;
-
-  if (tid == 0) {
-    smin = init_val;
-    sidx = INT64_MAX;
-  }
-
-  __syncthreads();
 
 // Calculate local max for each thread
 #pragma unroll
@@ -287,15 +250,13 @@ __device__ T device_idxmin(T const* data, int const items_per_thread, int64_t co
   __syncthreads();
 
   // Calculate local max for each group
-  atomicMin((&smin), local_min);
+  atomicMin(smin, local_min);
 
   __syncthreads();
 
-  if (local_min == smin) { atomicMin((&sidx), local_idx); }
+  if (local_min == (*smin)) { atomicMin(sidx, local_idx); }
 
   __syncthreads();
-
-  return sidx;
 }
 
 extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
@@ -305,8 +266,15 @@ extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
   int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
+
+  __shared__ int64_t sum;
+  if (threadIdx.x == 0) {
+    sum = 0;
+  }
+
+  __syncthreads();
   
-  int64_t sum = device_sum<int64_t>(data, items_per_thread, size);
+  device_sum<int64_t>(data, items_per_thread, size, &sum);
 
   *numba_return_value = sum;
 
@@ -321,7 +289,14 @@ extern "C" __device__ int BlockSum_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double sum = device_sum<double>(data, items_per_thread, size);
+  __shared__ double sum;
+  if (threadIdx.x == 0) {
+    sum = 0;
+  }
+
+  __syncthreads();
+
+  device_sum<double>(data, items_per_thread, size, &sum);
 
   *numba_return_value = sum;
 
@@ -336,7 +311,14 @@ extern "C" __device__ int BlockMean_int64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t sum = device_sum<int64_t>(data, items_per_thread, size);
+  __shared__ int64_t sum;
+  if (threadIdx.x == 0) {
+    sum = 0;
+  }
+
+  __syncthreads();
+
+  device_sum<int64_t>(data, items_per_thread, size, &sum);
 
   double mean = sum / static_cast<double>(size);
 
@@ -353,7 +335,14 @@ extern "C" __device__ int BlockMean_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double sum = device_sum<double>(data, items_per_thread, size);
+  __shared__ double sum;
+  if (threadIdx.x == 0) {
+    sum = 0;
+  }
+
+  __syncthreads();
+
+  device_sum<double>(data, items_per_thread, size, &sum);
 
   double mean = sum / static_cast<double>(size);
 
@@ -370,7 +359,17 @@ extern "C" __device__ int BlockStd_int64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double var = device_var<int64_t>(data, items_per_thread, size);
+  __shared__ int64_t sum;
+  __shared__ double var;
+
+  if (threadIdx.x == 0) {
+    sum = 0;
+    var = 0;
+  }
+
+  __syncthreads();
+
+  device_var<int64_t>(data, items_per_thread, size, &sum, &var);
 
   *numba_return_value = sqrt(var);
 
@@ -385,7 +384,17 @@ extern "C" __device__ int BlockStd_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double var = device_var<double>(data, items_per_thread, size);
+  __shared__ double sum;
+  __shared__ double var;
+
+  if (threadIdx.x == 0) {
+    sum = 0;
+    var = 0;
+  }
+
+  __syncthreads();
+
+  device_var<double>(data, items_per_thread, size, &sum, &var);
 
   *numba_return_value = sqrt(var);
 
@@ -400,7 +409,17 @@ extern "C" __device__ int BlockVar_int64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double var = device_var<int64_t>(data, items_per_thread, size);
+  __shared__ int64_t sum;
+  __shared__ double var;
+
+  if (threadIdx.x == 0) {
+    sum = 0;
+    var = 0;
+  }
+
+  __syncthreads();
+
+  device_var<int64_t>(data, items_per_thread, size, &sum, &var);
 
   *numba_return_value = var;
 
@@ -415,7 +434,17 @@ extern "C" __device__ int BlockVar_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double var = device_var<double>(data, items_per_thread, size);
+  __shared__ double sum;
+  __shared__ double var;
+
+  if (threadIdx.x == 0) {
+    sum = 0;
+    var = 0;
+  }
+
+  __syncthreads();
+
+  device_var<double>(data, items_per_thread, size, &sum, &var);
 
   *numba_return_value = var;
 
@@ -431,9 +460,17 @@ extern "C" __device__ int BlockMax_int64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t max_val = device_max<int64_t>(data, items_per_thread, size, INT64_MIN);
+  __shared__ int64_t smax;
 
-  *numba_return_value = max_val;
+  if (threadIdx.x == 0) {
+    smax = INT64_MIN;
+  }
+
+  __syncthreads();
+
+  device_max<int64_t>(data, items_per_thread, size, INT64_MIN, &smax);
+
+  *numba_return_value = smax;
 
   return 0;
 }
@@ -447,9 +484,17 @@ extern "C" __device__ int BlockMax_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double max_val = device_max<double>(data, items_per_thread, size, -DBL_MAX);
+  __shared__ double smax;
 
-  *numba_return_value = max_val;
+  if (threadIdx.x == 0) {
+    smax = -DBL_MAX;
+  }
+
+  __syncthreads();
+
+  device_max<double>(data, items_per_thread, size, -DBL_MAX, &smax);
+
+  *numba_return_value = smax;
 
   return 0;
 }
@@ -463,9 +508,17 @@ extern "C" __device__ int BlockMin_int64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t min_val = device_min<int64_t>(data, items_per_thread, size, INT64_MAX);
+  __shared__ int64_t smin;
 
-  *numba_return_value = min_val;
+  if (threadIdx.x == 0) {
+    smin = INT64_MAX;
+  }
+
+  __syncthreads();
+
+  device_min<int64_t>(data, items_per_thread, size, INT64_MAX, &smin);
+
+  *numba_return_value = smin;
 
   return 0;
 }
@@ -479,9 +532,17 @@ extern "C" __device__ int BlockMin_float64(double* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  double min_val = device_min<double>(data, items_per_thread, size, DBL_MAX);
+  __shared__ double smin;
 
-  *numba_return_value = min_val;
+  if (threadIdx.x == 0) {
+    smin = DBL_MAX;
+  }
+
+  __syncthreads();
+
+  device_min<double>(data, items_per_thread, size, DBL_MAX, &smin);
+
+  *numba_return_value = smin;
 
   return 0;
 }
@@ -496,9 +557,19 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t idxmax = device_idxmax<int64_t>(data, items_per_thread, index, size, INT64_MIN);
+  __shared__ int64_t smax;
+  __shared__ int64_t sidx;
 
-  *numba_return_value = idxmax;
+  if (threadIdx.x == 0) {
+    smax = INT64_MIN;
+    sidx = INT64_MAX;
+  }
+
+  __syncthreads();
+
+  device_idxmax<int64_t>(data, items_per_thread, index, size, INT64_MIN, &smax, &sidx);
+
+  *numba_return_value = sidx;
 
   return 0;
 }
@@ -513,9 +584,19 @@ extern "C" __device__ int BlockIdxMax_float64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t idxmax = device_idxmax<double>(data, items_per_thread, index, size, -DBL_MAX);
+  __shared__ double smax;
+  __shared__ int64_t sidx;
 
-  *numba_return_value = idxmax;
+  if (threadIdx.x == 0) {
+    smax = -DBL_MAX;
+    sidx = INT64_MAX;
+  }
+
+  __syncthreads();
+
+  device_idxmax<double>(data, items_per_thread, index, size, -DBL_MAX, &smax, &sidx);
+
+  *numba_return_value = smax;
 
   return 0;
 }
@@ -530,9 +611,19 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t idxmin = device_idxmin<int64_t>(data, items_per_thread, index, size, INT64_MAX);
+  __shared__ int64_t smin;
+  __shared__ int64_t sidx;
 
-  *numba_return_value = idxmin;
+  if (threadIdx.x == 0) {
+    smin = INT64_MAX;
+    sidx = INT64_MAX;
+  }
+
+  __syncthreads();
+
+  device_idxmin<int64_t>(data, items_per_thread, index, size, INT64_MAX, &smin, &sidx);
+
+  *numba_return_value = sidx;
 
   return 0;
 }
@@ -547,9 +638,19 @@ extern "C" __device__ int BlockIdxMin_float64(int64_t* numba_return_value,
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + tb_size - 1) / tb_size;
 
-  int64_t idxmin = device_idxmin<double>(data, items_per_thread, index, size, DBL_MAX);
+  __shared__ double smin;
+  __shared__ int64_t sidx;
 
-  *numba_return_value = idxmin;
+  if (threadIdx.x == 0) {
+    smin = DBL_MAX;
+    sidx = INT64_MAX;
+  }
+
+  __syncthreads();
+
+  device_idxmin<double>(data, items_per_thread, index, size, DBL_MAX, &smin, &sidx);
+
+  *numba_return_value = sidx;
 
   return 0;
 }
