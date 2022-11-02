@@ -520,10 +520,12 @@ rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>&
 
 }  // namespace
 
-void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                                         hostdevice_vector<gpu::PageInfo>& pages,
-                                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info)
+void reader::impl::allocate_nesting_info()
 {
+  auto const& chunks      = _file_itm_data.chunks;
+  auto& pages             = _file_itm_data.pages_info;
+  auto& page_nesting_info = _file_itm_data.page_nesting_info;
+
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
   size_t const total_page_nesting_infos = std::accumulate(
@@ -644,11 +646,10 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   // This function should never be called if `num_rows == 0`.
   CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
 
-  auto& raw_page_data     = _file_itm_data.raw_page_data;
-  auto& decomp_page_data  = _file_itm_data.decomp_page_data;
-  auto& chunks            = _file_itm_data.chunks;
-  auto& pages_info        = _file_itm_data.pages_info;
-  auto& page_nesting_info = _file_itm_data.page_nesting_info;
+  auto& raw_page_data    = _file_itm_data.raw_page_data;
+  auto& decomp_page_data = _file_itm_data.decomp_page_data;
+  auto& chunks           = _file_itm_data.chunks;
+  auto& pages_info       = _file_itm_data.pages_info;
 
   // Descriptors for all the chunks that make up the selected columns
   const auto num_input_columns = _input_columns.size();
@@ -773,8 +774,7 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
 
     // nesting information (sizes, etc) stored -per page-
     // note : even for flat schemas, we allocate 1 level of "nesting" info
-
-    allocate_nesting_info(chunks, pages_info, page_nesting_info);
+    allocate_nesting_info();
   }
 }
 
