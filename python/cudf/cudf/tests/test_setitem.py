@@ -315,7 +315,7 @@ def test_series_setitem_upcasting(dtype, indices):
     if PANDAS_GE_150:
         assert_eq(sr, cr)
     else:
-        # pandas bug, incorrectly fails to upcasting from float32 to float64
+        # pandas bug, incorrectly fails to upcast from float32 to float64
         assert_eq(sr.values, cr.values)
     if dtype == np.float64:
         # no-op type cast should not modify backing column
