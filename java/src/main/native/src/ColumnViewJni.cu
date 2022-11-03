@@ -52,10 +52,10 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   auto validity_begin = cudf::detail::make_optional_iterator<bool>(
       *validity_device_view, cudf::nullate::DYNAMIC{validity_column.has_nulls()});
   auto validity_end = validity_begin + validity_device_view->size();
-  auto [null_mask, null_count] =
-      cudf::detail::valid_if(validity_begin, validity_end, [] __device__(auto optional_bool) {
-        return optional_bool.value_or(false);
-      });
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+      validity_begin, validity_end,
+      [] __device__(auto optional_bool) { return optional_bool.value_or(false); },
+      cudf::get_default_stream());
   auto const exemplar_without_null_mask = cudf::column_view{
       exemplar.type(),
       exemplar.size(),
@@ -152,8 +152,8 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
                    });
 
   // Create a new nullmask from the validity data.
-  auto [new_null_mask, new_null_count] =
-      cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{});
+  auto [new_null_mask, new_null_count] = cudf::detail::valid_if(
+      validity.begin(), validity.end(), thrust::identity{}, cudf::get_default_stream());
 
   if (new_null_count > 0) {
     // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the

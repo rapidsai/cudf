@@ -17,6 +17,7 @@
 #include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -436,15 +437,13 @@ struct copy_block_partitions_dispatcher {
                                          grid_size,
                                          stream);
 
-    // Use gather instead for non-fixed width types
-    return type_dispatcher(input.type(),
-                           detail::column_gatherer{},
-                           input,
-                           gather_map.begin(),
-                           gather_map.end(),
-                           false,
-                           stream,
-                           mr);
+    auto gather_table = cudf::detail::gather(cudf::table_view({input}),
+                                             gather_map,
+                                             out_of_bounds_policy::DONT_CHECK,
+                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             stream,
+                                             mr);
+    return std::move(gather_table->release().front());
   }
 };
 
@@ -610,7 +609,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Use the resulting scatter map to materialize the output
     auto output = detail::scatter(
-      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
+      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::pair(std::move(output), std::move(partition_offsets));
@@ -698,7 +697,7 @@ struct dispatch_map_type {
 
     // Scatter the rows into their partitions
     auto scattered =
-      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, stream, mr);
+      cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, stream, mr);
 
     return std::pair(std::move(scattered), std::move(partition_offsets));
   }
@@ -728,7 +727,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::pair(empty_like(input), std::vector<size_type>{});
+    return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
   if (has_nulls(table_to_hash)) {
@@ -753,7 +752,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
-    return std::pair(empty_like(t), std::vector<size_type>{});
+    // The output offsets vector must have size `num_partitions + 1` as per documentation.
+    return std::pair(empty_like(t), std::vector<size_type>(num_partitions + 1, 0));
   }
 
   return cudf::type_dispatcher(
@@ -796,7 +796,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, cudf::default_stream_value, mr);
+  return detail::partition(t, partition_map, num_partitions, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -273,7 +273,7 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
   auto got     = cudf::apply_boolean_mask(input, boolean_mask);
   auto out_col = got->get_column(0).view();
   auto expected_null_count =
-    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), cudf::default_stream_value);
+    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), cudf::get_default_stream());
 
   ASSERT_EQ(out_col.null_count(), expected_null_count);
 }

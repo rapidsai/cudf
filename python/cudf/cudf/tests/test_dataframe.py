@@ -4286,26 +4286,26 @@ def test_series_values_property(data):
         pytest.param(
             {"A": [1, None, 3], "B": [1, 2, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
     ],

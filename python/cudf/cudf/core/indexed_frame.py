@@ -562,8 +562,8 @@ class IndexedFrame(Frame):
             * dict:
                 - Dicts can be used to specify different replacement values
                   for different existing values. For example, {'a': 'b',
-                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
-                  ‘y’ with ‘z’.
+                  'y': 'z'} replaces the value 'a' with 'b' and
+                  'y' with 'z'.
                   To use a dict in this way the ``value`` parameter should
                   be ``None``.
         value : scalar, dict, list-like, str, default None
@@ -1621,6 +1621,9 @@ class IndexedFrame(Frame):
         )
 
     def _split(self, splits, keep_index=True):
+        if self._num_rows == 0:
+            return []
+
         columns_split = libcudf.copying.columns_split(
             [
                 *(self._index._data.columns if keep_index else []),
@@ -1862,7 +1865,7 @@ class IndexedFrame(Frame):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -4716,10 +4719,12 @@ def _drop_rows_by_labels(
     level: Union[int, str],
     errors: str,
 ) -> DataFrameOrSeries:
-    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
-    if some items in `labels` do not exist in `obj._index`.
+    """Remove rows specified by `labels`.
 
-    Will raise if level(int) is greater or equal to index nlevels
+    If `errors="raise"`, an error is raised if some items in `labels` do not
+    exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels.
     """
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")

@@ -407,7 +407,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::percentile_approx(input, percentiles, cudf::default_stream_value, mr);
+  return detail::percentile_approx(input, percentiles, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

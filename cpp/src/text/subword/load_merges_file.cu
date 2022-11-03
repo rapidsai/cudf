@@ -159,7 +159,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(std::string const& filena
                                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_merge_pairs_file(filename_merges, cudf::default_stream_value, mr);
+  return detail::load_merge_pairs_file(filename_merges, cudf::get_default_stream(), mr);
 }
 
 bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(

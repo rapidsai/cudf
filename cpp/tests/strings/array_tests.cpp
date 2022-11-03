@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -53,7 +51,7 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::sort(cudf::table_view({zero_size_strings_column}));
-  cudf::test::expect_strings_empty(results->view().column(0));
+  cudf::test::expect_column_empty(results->view().column(0));
 }
 
 class SliceParmsTest : public StringsColumnTest,
@@ -123,7 +121,7 @@ TEST_F(StringsColumnTest, SliceZeroSizeStringsColumn)
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::detail::copy_slice(strings_view, 1, 2);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsColumnTest, Gather)
@@ -151,7 +149,7 @@ TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   cudf::column_view map_view(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::gather(cudf::table_view{{zero_size_strings_column}}, map_view)->release();
-  cudf::test::expect_strings_empty(results.front()->view());
+  cudf::test::expect_column_empty(results.front()->view());
 }
 
 TEST_F(StringsColumnTest, GatherTooBig)
@@ -204,12 +202,12 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
   cudf::column_view scatter_map(cudf::data_type{cudf::type_id::INT8}, 0, nullptr, nullptr, 0);
 
   auto results = cudf::scatter(cudf::table_view({source}), scatter_map, cudf::table_view({target}));
-  cudf::test::expect_strings_empty(results->view().column(0));
+  cudf::test::expect_column_empty(results->view().column(0));
 
   cudf::string_scalar scalar("");
   auto scalar_source = std::vector<std::reference_wrapper<const cudf::scalar>>({scalar});
   results            = cudf::scatter(scalar_source, scatter_map, cudf::table_view({target}));
-  cudf::test::expect_strings_empty(results->view().column(0));
+  cudf::test::expect_column_empty(results->view().column(0));
 }
 
 TEST_F(StringsColumnTest, OffsetsBeginEnd)

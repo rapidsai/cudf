@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,11 +159,11 @@ TYPED_TEST(SegmentedGatherTest, GatherNested)
                                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {-17, -18}}};
     auto const gather_map = LCW<int>{{0, -2, -2}, {1}, {1, 0, -1, -5}};
     auto const results    = segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
-    auto const expected   = LCW<T>{{{2, 3}, {2, 3}, {2, 3}}, 
-                                   {{9, 10, 11}}, 
+    auto const expected   = LCW<T>{{{2, 3}, {2, 3}, {2, 3}},
+                                   {{9, 10, 11}},
                                    {{17, 18}, {15, 16}, {-17, -18}, {15, 16}}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-    // clang-format on 
+    // clang-format on
   }
 
   // List<List<T>>, with out-of-bounds gather indices.
@@ -286,7 +286,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNegatives)
                                    {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
                                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
     auto const gather_map = LCW<int>{{-1, 0}, {-2, -1, -4}, {-6, -4, -3, -2, -1, 0}};
-    auto const results    = 
+    auto const results    =
       segmented_gather(lists_column_view{list}, lists_column_view{gather_map}, NULLIFY);
     auto const expected   = LCW<T>{{{4, 5}, {2, 3}},
                                    {{{9, 10, 11}, {12, 13, 14}, LCW<T>{}}, null_at(2)},
@@ -306,7 +306,8 @@ TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
   auto const input = list.release();
 
   // Set non-empty list row at index 5 to null.
-  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 5, 6, false);
+  cudf::detail::set_null_mask(
+    input->mutable_view().null_mask(), 5, 6, false, cudf::get_default_stream());
 
   auto const gather_map = LCW<int>{{-1, 2, 1, -4}, {0}, {-2, 1}, {0, 2, 1}, {}, {0}, {1, 2}};
   auto const expected =

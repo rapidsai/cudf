@@ -74,7 +74,7 @@ struct tdigest_groupby_simple_op {
     // make a simple set of matching keys.
     auto keys = cudf::make_fixed_width_column(
       data_type{type_id::INT32}, values.size(), mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  keys->mutable_view().template begin<int>(),
                  keys->mutable_view().template end<int>(),
                  0);
@@ -100,7 +100,7 @@ struct tdigest_groupby_simple_merge_op {
     // make a simple set of matching keys.
     auto merge_keys = cudf::make_fixed_width_column(
       data_type{type_id::INT32}, merge_values.size(), mask_state::UNALLOCATED);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  merge_keys->mutable_view().template begin<int>(),
                  merge_keys->mutable_view().template end<int>(),
                  0);
@@ -272,7 +272,7 @@ TEST_F(TDigestMergeTest, Grouped)
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
   // 3 groups. 0-250000 in group 0.  250000-500000 in group 1 and 500000-750000 in group 1
   auto key_iter = cudf::detail::make_counting_transform_iterator(0, key_groups{});
-  thrust::copy(rmm::exec_policy(cudf::default_stream_value),
+  thrust::copy(rmm::exec_policy(cudf::get_default_stream()),
                key_iter,
                key_iter + keys->size(),
                keys->mutable_view().template begin<int>());
@@ -466,13 +466,13 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
   int const delta = 1000;
 
-  auto a = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto a = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
   auto b = cudf::type_dispatcher(
     static_cast<column_view>(values_b).type(), tdigest_gen_grouped{}, keys, values_b, delta);
-  auto c = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto c = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
   auto d = cudf::type_dispatcher(
     static_cast<column_view>(values_d).type(), tdigest_gen_grouped{}, keys, values_d, delta);
-  auto e = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto e = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
 
   std::vector<column_view> cols;
   cols.push_back(*a);

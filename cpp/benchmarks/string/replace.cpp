@@ -48,7 +48,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   cudf::test::strings_column_wrapper repls({"", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;

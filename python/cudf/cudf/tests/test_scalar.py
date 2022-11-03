@@ -443,3 +443,10 @@ def test_default_float_bitwidth_scalar(default_float_bitwidth):
     # Test that float scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128.0)
     assert slr.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_scalar_numpy_casting():
+    # binop should upcast to wider type
+    s1 = cudf.Scalar(1, dtype=np.int32)
+    s2 = np.int64(2)
+    assert s1 < s2

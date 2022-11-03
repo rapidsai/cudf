@@ -92,7 +92,7 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(input, targets, cudf::default_stream_value, mr);
+  return detail::find_multiple(input, targets, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

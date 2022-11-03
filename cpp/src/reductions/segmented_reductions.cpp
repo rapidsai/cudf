@@ -133,7 +133,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                   output_dtype,
                                   null_handling,
                                   std::nullopt,
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 
@@ -152,7 +152,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                   output_dtype,
                                   null_handling,
                                   init,
-                                  cudf::default_stream_value,
+                                  cudf::get_default_stream(),
                                   mr);
 }
 

@@ -589,7 +589,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import pandas as pd
         >>> import numpy as np
         >>> data = [10, 20, 30, np.nan]
-        >>> pds = pd.Series(data)
+        >>> pds = pd.Series(data, dtype='float64')
         >>> cudf.Series.from_pandas(pds)
         0    10.0
         1    20.0
@@ -815,7 +815,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy : boolean, default True
         level: Not Supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit: Not Supported
         tolerance: Not Supported
 
@@ -889,7 +889,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",
+""",  # noqa: E501
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -1206,7 +1206,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             and not is_decimal_dtype(preprocess.dtype)
             and not is_struct_dtype(preprocess.dtype)
         ) or isinstance(
-            preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
+            preprocess._column,
+            cudf.core.column.timedelta.TimeDeltaColumn,
         ):
             output = repr(
                 preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
@@ -1604,7 +1605,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
-        of duplicated entries. Setting the value of ‘inplace’ to
+        of duplicated entries. Setting the value of 'inplace' to
         `True` performs the operation inplace and returns `None`.
 
         >>> s.drop_duplicates(keep=False, inplace=True)
@@ -1830,8 +1831,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    3
         3    4
         dtype: int64
-        >>> series.data
-        <cudf.core.buffer.Buffer ...>
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1880,7 +1879,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -2251,6 +2250,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
+        Support for use of string data within UDFs is provided through the
+        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
+        RAPIDS library. Supported operations on strings include the subset of
+        functions and string methods that expect an input string but do not
+        return a string. Refer to caveats in the UDF guide referenced above.
+
         Parameters
         ----------
         func : function
@@ -2332,6 +2337,43 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
+
+        UDFs manipulating string data are allowed, as long as
+        they neither modify strings in place nor create new strings.
+        For example, the following UDF is allowed:
+
+        >>> def f(st):
+        ...     if len(st) == 0:
+        ...             return -1
+        ...     elif st.startswith('a'):
+        ...             return 1
+        ...     elif 'example' in st:
+        ...             return 2
+        ...     else:
+        ...             return 3
+        ...
+        >>> sr = cudf.Series(['', 'abc', 'some_example'])
+        >>> sr.apply(f)  # doctest: +SKIP
+        0   -1
+        1    1
+        2    2
+        dtype: int64
+
+        However, the following UDF is not allowed since it includes an
+        operation that requires the creation of a new string: a call to the
+        ``upper`` method. Methods that are not supported in this manner
+        will raise an ``AttributeError``.
+
+        >>> def f(st):
+        ...     new = st.upper()
+        ...     return 'ABC' in new
+        ...
+        >>> sr.apply(f)  # doctest: +SKIP
+
+        For a complete list of supported functions and methods that may be
+        used to manipulate string data, see the the UDF guide,
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
+
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
@@ -2719,7 +2761,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             only works with numeric data.
 
         dropna : bool, default True
-            Don’t include counts of NaN and None.
+            Don't include counts of NaN and None.
 
         Returns
         -------
@@ -2842,7 +2884,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
-        interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
         columns : list of str
@@ -2954,7 +2996,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def digitize(self, bins, right=False):
-        """Return the indices of the bins to which each value in series belongs.
+        """Return the indices of the bins to which each value belongs.
 
         Notes
         -----
@@ -3560,6 +3602,64 @@ class DatetimeProperties:
         dtype: int16
         """
         return self._get_dt_field("second")
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def microsecond(self):
+        """
+        The microseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="us"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000
+        1    2000-01-01 00:00:00.000001
+        2    2000-01-01 00:00:00.000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.microsecond
+        0    0
+        1    1
+        2    2
+        dtype: int32
+        """
+        return Series(
+            data=(
+                self.series._column.get_dt_field("millisecond")
+                * cudf.Scalar(1000, dtype="int32")
+            )
+            + self.series._column.get_dt_field("microsecond"),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def nanosecond(self):
+        """
+        The nanoseconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="ns"))
+        >>> datetime_series
+        0    2000-01-01 00:00:00.000000000
+        1    2000-01-01 00:00:00.000000001
+        2    2000-01-01 00:00:00.000000002
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.nanosecond
+        0    0
+        1    1
+        2    2
+        dtype: int16
+        """
+        return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -4263,7 +4363,7 @@ class DatetimeProperties:
         Parameters
         ----------
         date_format : str
-            Date format string (e.g. “%Y-%m-%d”).
+            Date format string (e.g. "%Y-%m-%d").
 
         Returns
         -------

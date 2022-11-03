@@ -19,6 +19,7 @@ from strings_udf.lowering import (
     isdigit_impl,
     islower_impl,
     isspace_impl,
+    istitle_impl,
     isupper_impl,
     len_impl,
     rfind_impl,
@@ -123,3 +124,4 @@ create_masked_unary_identifier_func("MaskedType.isupper", isupper_impl)
 create_masked_unary_identifier_func("MaskedType.islower", islower_impl)
 create_masked_unary_identifier_func("MaskedType.isspace", isspace_impl)
 create_masked_unary_identifier_func("MaskedType.isdecimal", isdecimal_impl)
+create_masked_unary_identifier_func("MaskedType.istitle", istitle_impl)

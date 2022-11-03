@@ -53,7 +53,14 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   auto const buffer = ingest_raw_input(sources, reader_opts.get_compression());
   auto data = host_span<char const>(reinterpret_cast<char const*>(buffer.data()), buffer.size());
 
-  return cudf::io::json::detail::parse_nested_json(data, reader_opts, stream, mr);
+  try {
+    return cudf::io::json::detail::device_parse_nested_json(data, reader_opts, stream, mr);
+  } catch (cudf::logic_error const& err) {
+#ifdef NJP_DEBUG_PRINT
+    std::cout << "Fall back to host nested json parser" << std::endl;
+#endif
+    return cudf::io::json::detail::host_parse_nested_json(data, reader_opts, stream, mr);
+  }
 }
 
 }  // namespace cudf::io::detail::json::experimental

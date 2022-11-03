@@ -15,9 +15,6 @@ import strings_udf
 from strings_udf._lib.cudf_jit_udf import to_string_view_array
 from strings_udf._typing import str_view_arg_handler, string_view
 
-if not strings_udf.ENABLED:
-    pytest.skip("Strings UDF not enabled.", allow_module_level=True)
-
 
 def get_kernel(func, dtype):
     """
@@ -89,6 +86,11 @@ def data():
         "cudf",
         "cuda",
         "gpu",
+        "This Is A Title",
+        "This is Not a Title",
+        "Neither is This a Title",
+        "NoT a TiTlE",
+        "123 Title Works",
     ]
 
 
@@ -224,6 +226,13 @@ def test_string_udf_isspace(data):
 def test_string_udf_isupper(data):
     def func(st):
         return st.isupper()
+
+    run_udf_test(data, func, "bool")
+
+
+def test_string_udf_istitle(data):
+    def func(st):
+        return st.istitle()
 
     run_udf_test(data, func, "bool")
 

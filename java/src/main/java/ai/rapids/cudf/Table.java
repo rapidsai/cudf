@@ -706,10 +706,10 @@ public final class Table implements AutoCloseable {
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] scatterTable(long srcTableHandle, long scatterView,
-                                            long targetTableHandle, boolean checkBounds)
+                                            long targetTableHandle)
                                             throws CudfException;
   private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
-                                             long targetTableHandle, boolean checkBounds)
+                                             long targetTableHandle)
                                              throws CudfException;
 
   private static native long[] convertToRows(long nativeHandle);
@@ -723,8 +723,7 @@ public final class Table implements AutoCloseable {
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
-                                                 long columnHandle,
-                                                 boolean checkCount);
+                                                 long columnHandle);
 
   private static native long rowBitCount(long tableHandle) throws CudfException;
 
@@ -1686,22 +1685,7 @@ public final class Table implements AutoCloseable {
    * @throws CudfException on any error.
    */
   public Table repeat(ColumnView counts) {
-    return repeat(counts, true);
-  }
-
-  /**
-   * Create a new table by repeating each row of this table. The number of
-   * repetitions of each row is defined by the corresponding value in counts.
-   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
-   *               Integer type, and must have one entry for each row in the table.
-   * @param checkCount should counts be checked for errors before processing. Be careful if you
-   *                   disable this because if you pass in bad data you might just get back an
-   *                   empty table or bad data.
-   * @return the new Table.
-   * @throws CudfException on any error.
-   */
-  public Table repeat(ColumnView counts, boolean checkCount) {
-    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView()));
   }
 
   /**
@@ -2349,14 +2333,11 @@ public final class Table implements AutoCloseable {
    *
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
    * @param target The table into which rows from the current table are to be scattered out-of-place.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
-   *                    an exception if any of its values are out of bounds.
    * @return A new table which is the result of out-of-place scattering the source table into the
    *         target table.
    */
-  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
-    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
-        checkBounds));
+  public Table scatter(ColumnView scatterMap, Table target) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView()));
   }
 
   /**
@@ -2376,20 +2357,17 @@ public final class Table implements AutoCloseable {
    * @param source The input scalars containing values to be scattered into the target table.
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
    * @param target The table into which the values from source are to be scattered out-of-place.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
-   *                    an exception if any of its values are out of bounds.
    * @return A new table which is the result of out-of-place scattering the source values into the
    *         target table.
    */
-  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
-                              boolean checkBounds) {
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target) {
     long[] srcScalarHandles = new long[source.length];
     for(int i = 0; i < source.length; ++i) {
       assert source[i] != null : "Scalar vectors passed in should not contain null";
       srcScalarHandles[i] = source[i].getScalarHandle();
     }
     return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
-        target.getNativeView(), checkBounds));
+        target.getNativeView()));
   }
 
   private static GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {

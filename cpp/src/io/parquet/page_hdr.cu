@@ -307,10 +307,11 @@ struct gpuParseDataPageHeaderV2 {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldInt32(2, bs->page.num_nulls),
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
-                                 ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
+                                 ParquetFieldInt32(5, bs->page.def_lvl_bytes),
+                                 ParquetFieldInt32(6, bs->page.rep_lvl_bytes));
     return parse_header(op, bs);
   }
 };
@@ -382,18 +383,30 @@ __global__ void __launch_bounds__(128)
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
+        // zero out V2 info
+        bs->page.num_nulls     = 0;
+        bs->page.def_lvl_bytes = 0;
+        bs->page.rep_lvl_bytes = 0;
         if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
+              index_out = num_dict_pages + data_page_count;
+              data_page_count++;
+              bs->page.flags = 0;
               // this computation is only valid for flat schemas. for nested schemas,
               // they will be recomputed in the preprocess step by examining repetition and
               // definition levels
               bs->page.num_rows = bs->page.num_input_values;
+              values_found += bs->page.num_input_values;
+              break;
             case PageType::DATA_PAGE_V2:
               index_out = num_dict_pages + data_page_count;
               data_page_count++;
               bs->page.flags = 0;
               values_found += bs->page.num_input_values;
+              // V2 only uses RLE, so it was removed from the header
+              bs->page.definition_level_encoding = Encoding::RLE;
+              bs->page.repetition_level_encoding = Encoding::RLE;
               break;
             case PageType::DICTIONARY_PAGE:
               index_out = dictionary_page_count;

@@ -17,6 +17,23 @@ import cudf
 import dask_cudf as dgd
 
 
+@pytest.mark.skipif(
+    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
+)
+def test_from_dict_backend_dispatch():
+    # Test ddf.from_dict cudf-backend dispatch
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    expect = cudf.DataFrame(data)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict(data, npartitions=2)
+    assert isinstance(ddf, dgd.DataFrame)
+    dd.assert_eq(expect, ddf)
+
+
 def test_from_cudf():
     np.random.seed(0)
 
@@ -471,6 +488,15 @@ def test_repartition_hash(by, npartitions, max_branch):
         ignore_index=True,
     ).sort_values(by)
     dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
+def test_repartition_no_extra_row():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    gdf = cudf.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    ddf = dgd.from_cudf(gdf, npartitions=1)
+    ddf_new = ddf.repartition([0, 5, 10, 30], force=True)
+    dd.assert_eq(ddf, ddf_new)
+    dd.assert_eq(gdf, ddf_new)
 
 
 @pytest.fixture

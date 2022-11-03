@@ -139,7 +139,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, pattern, flags, cudf::default_stream_value, mr);
+  return detail::findall(input, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

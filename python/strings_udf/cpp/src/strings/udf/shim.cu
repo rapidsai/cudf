@@ -198,6 +198,15 @@ extern "C" __device__ int pyisalpha(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
+extern "C" __device__ int pyistitle(bool* nb_retval, void const* str, std::int64_t chars_table)
+{
+  auto str_view = reinterpret_cast<cudf::string_view const*>(str);
+
+  *nb_retval = is_title(
+    reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(chars_table), *str_view);
+  return 0;
+}
+
 extern "C" __device__ int pycount(int* nb_retval, void const* str, void const* substr)
 {
   auto str_view    = reinterpret_cast<cudf::string_view const*>(str);

@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -357,7 +357,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return len(self) - self.null_count
 
     @property
-    def nullmask(self) -> DeviceBufferLike:
+    def nullmask(self) -> Buffer:
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
@@ -518,7 +518,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        if step == 1:
+        if step == 1 and not isinstance(
+            self, (cudf.core.column.StructColumn, cudf.core.column.ListColumn)
+        ):
+            # NOTE: List & Struct dtypes aren't supported by both
+            # inplace & out-of-place fill. Hence we need to use scatter for
+            # these two types.
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
@@ -566,21 +571,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         self._check_scatter_key_length(num_keys, value)
 
-        try:
-            if is_bool_dtype(key.dtype):
-                return libcudf.copying.boolean_mask_scatter(
-                    [value], [self], key
-                )[0]._with_type_metadata(self.dtype)
-            else:
-                return libcudf.copying.scatter([value], key, [self])[
-                    0
-                ]._with_type_metadata(self.dtype)
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+        if is_bool_dtype(key.dtype):
+            return libcudf.copying.boolean_mask_scatter([value], [self], key)[
+                0
+            ]._with_type_metadata(self.dtype)
+        else:
+            return libcudf.copying.scatter([value], key, [self])[
+                0
+            ]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
         self, num_keys: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
@@ -763,12 +761,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         return res._data["bool"].fillna(False)
 
-    def as_mask(self) -> DeviceBufferLike:
+    def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
 
         Returns
         -------
-        DeviceBufferLike
+        Buffer
         """
 
         if self.has_nulls():
@@ -1283,7 +1281,7 @@ def column_empty(
         data = None
         children = (
             build_column(
-                data=as_device_buffer_like(
+                data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count * cudf.dtype("int32").itemsize
                     )
@@ -1296,7 +1294,7 @@ def column_empty(
         children = (
             full(row_count + 1, 0, dtype="int32"),
             build_column(
-                data=as_device_buffer_like(
+                data=as_buffer(
                     rmm.DeviceBuffer(
                         size=row_count * cudf.dtype("int8").itemsize
                     )
@@ -1305,9 +1303,7 @@ def column_empty(
             ),
         )
     else:
-        data = as_device_buffer_like(
-            rmm.DeviceBuffer(size=row_count * dtype.itemsize)
-        )
+        data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
     if masked:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
@@ -1320,11 +1316,11 @@ def column_empty(
 
 
 def build_column(
-    data: Union[DeviceBufferLike, None],
+    data: Union[Buffer, None],
     dtype: Dtype,
     *,
     size: int = None,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
     children: Tuple[ColumnBase, ...] = (),
@@ -1334,12 +1330,12 @@ def build_column(
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
         The data buffer (can be None if constructing certain Column
         types like StringColumn, ListColumn, or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
-    mask : DeviceBufferLike, optional
+    mask : Buffer, optional
         The mask buffer
     size : int, optional
     offset : int, optional
@@ -1484,7 +1480,7 @@ def build_column(
 def build_categorical_column(
     categories: ColumnBase,
     codes: ColumnBase,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1500,7 +1496,7 @@ def build_categorical_column(
     codes : Column
         Column of codes, the size of the resulting Column will be
         the size of `codes`
-    mask : DeviceBufferLike
+    mask : Buffer
         Null mask
     size : int, optional
     offset : int, optional
@@ -1544,7 +1540,7 @@ def build_interval_column(
         Column of values representing the left of the interval
     right_col : Column
         Column of representing the right of the interval
-    mask : DeviceBufferLike
+    mask : Buffer
         Null mask
     size : int, optional
     offset : int, optional
@@ -1575,7 +1571,7 @@ def build_interval_column(
 def build_list_column(
     indices: ColumnBase,
     elements: ColumnBase,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1589,7 +1585,7 @@ def build_list_column(
         Column of list indices
     elements : ColumnBase
         Column of list elements
-    mask: DeviceBufferLike
+    mask: Buffer
         Null mask
     size: int, optional
     offset: int, optional
@@ -1621,7 +1617,7 @@ def build_struct_column(
     names: Sequence[str],
     children: Tuple[ColumnBase, ...],
     dtype: Optional[Dtype] = None,
-    mask: DeviceBufferLike = None,
+    mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
@@ -1635,7 +1631,7 @@ def build_struct_column(
         Field names to map to children dtypes, must be strings.
     children : tuple
 
-    mask: DeviceBufferLike
+    mask: Buffer
         Null mask
     size: int, optional
     offset: int, optional
@@ -1671,9 +1667,7 @@ def _make_copy_replacing_NaT_with_null(column):
     out_col = cudf._lib.replace.replace(
         column,
         build_column(
-            as_device_buffer_like(
-                np.array([na_value], dtype=column.dtype).view("|u1")
-            ),
+            as_buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
             dtype=column.dtype,
         ),
         null,
@@ -1768,7 +1762,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_device_buffer_like(arbitrary)
+        data = as_buffer(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1916,7 +1910,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("datetime64[s]"))
 
-            buffer = as_device_buffer_like(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -1934,7 +1928,7 @@ def as_column(
             if cast_dtype:
                 arbitrary = arbitrary.astype(cudf.dtype("timedelta64[s]"))
 
-            buffer = as_device_buffer_like(arbitrary.view("|u1"))
+            buffer = as_buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
@@ -2213,7 +2207,7 @@ def _construct_array(
     return arbitrary
 
 
-def _mask_from_cuda_array_interface_desc(obj) -> Union[DeviceBufferLike, None]:
+def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -2225,7 +2219,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[DeviceBufferLike, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = Buffer(data=ptr, size=mask_size, owner=obj)
+            mask = as_buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)

@@ -419,7 +419,7 @@ class column_in_metadata {
    * @param name Name of the column
    * @return this for chaining
    */
-  column_in_metadata& set_name(std::string const& name)
+  column_in_metadata& set_name(std::string const& name) noexcept
   {
     _name = name;
     return *this;
@@ -433,7 +433,7 @@ class column_in_metadata {
    * @param nullable Whether this column is nullable
    * @return this for chaining
    */
-  column_in_metadata& set_nullability(bool nullable)
+  column_in_metadata& set_nullability(bool nullable) noexcept
   {
     _nullable = nullable;
     return *this;
@@ -446,7 +446,7 @@ class column_in_metadata {
    *
    * @return this for chaining
    */
-  column_in_metadata& set_list_column_as_map()
+  column_in_metadata& set_list_column_as_map() noexcept
   {
     _list_column_is_map = true;
     return *this;
@@ -460,7 +460,7 @@ class column_in_metadata {
    * @param req True = use int96 physical type. False = use int64 physical type
    * @return this for chaining
    */
-  column_in_metadata& set_int96_timestamps(bool req)
+  column_in_metadata& set_int96_timestamps(bool req) noexcept
   {
     _use_int96_timestamp = req;
     return *this;
@@ -473,7 +473,7 @@ class column_in_metadata {
    * @param precision The integer precision to set for this decimal column
    * @return this for chaining
    */
-  column_in_metadata& set_decimal_precision(uint8_t precision)
+  column_in_metadata& set_decimal_precision(uint8_t precision) noexcept
   {
     _decimal_precision = precision;
     return *this;
@@ -485,7 +485,7 @@ class column_in_metadata {
    * @param field_id The parquet field id to set
    * @return this for chaining
    */
-  column_in_metadata& set_parquet_field_id(int32_t field_id)
+  column_in_metadata& set_parquet_field_id(int32_t field_id) noexcept
   {
     _parquet_field_id = field_id;
     return *this;
@@ -499,7 +499,7 @@ class column_in_metadata {
    * @param binary True = use binary data type. False = use string data type
    * @return this for chaining
    */
-  column_in_metadata& set_output_as_binary(bool binary)
+  column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
     return *this;
@@ -511,7 +511,7 @@ class column_in_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  column_in_metadata& child(size_type i) { return children[i]; }
+  column_in_metadata& child(size_type i) noexcept { return children[i]; }
 
   /**
    * @brief Get const reference to a child of this column
@@ -519,21 +519,21 @@ class column_in_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  [[nodiscard]] column_in_metadata const& child(size_type i) const { return children[i]; }
+  [[nodiscard]] column_in_metadata const& child(size_type i) const noexcept { return children[i]; }
 
   /**
    * @brief Get the name of this column
    *
    * @return The name of this column
    */
-  [[nodiscard]] std::string get_name() const { return _name; }
+  [[nodiscard]] std::string get_name() const noexcept { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.
    *
    * @return Boolean indicating whether nullability has been explicitly set for this column
    */
-  [[nodiscard]] bool is_nullability_defined() const { return _nullable.has_value(); }
+  [[nodiscard]] bool is_nullability_defined() const noexcept { return _nullable.has_value(); }
 
   /**
    * @brief Gets the explicitly set nullability for this column.
@@ -549,7 +549,7 @@ class column_in_metadata {
    *
    * @return Boolean indicating whether this column is to be encoded as a map
    */
-  [[nodiscard]] bool is_map() const { return _list_column_is_map; }
+  [[nodiscard]] bool is_map() const noexcept { return _list_column_is_map; }
 
   /**
    * @brief Get whether to encode this timestamp column using deprecated int96 physical type
@@ -557,14 +557,17 @@ class column_in_metadata {
    * @return Boolean indicating whether to encode this timestamp column using deprecated int96
    *         physical type
    */
-  [[nodiscard]] bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+  [[nodiscard]] bool is_enabled_int96_timestamps() const noexcept { return _use_int96_timestamp; }
 
   /**
    * @brief Get whether precision has been set for this decimal column
    *
    * @return Boolean indicating whether precision has been set for this decimal column
    */
-  [[nodiscard]] bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+  [[nodiscard]] bool is_decimal_precision_set() const noexcept
+  {
+    return _decimal_precision.has_value();
+  }
 
   /**
    * @brief Get the decimal precision that was set for this column.
@@ -580,7 +583,10 @@ class column_in_metadata {
    *
    * @return Boolean indicating whether parquet field id has been set for this column
    */
-  [[nodiscard]] bool is_parquet_field_id_set() const { return _parquet_field_id.has_value(); }
+  [[nodiscard]] bool is_parquet_field_id_set() const noexcept
+  {
+    return _parquet_field_id.has_value();
+  }
 
   /**
    * @brief Get the parquet field id that was set for this column.
@@ -596,14 +602,14 @@ class column_in_metadata {
    *
    * @return The number of children of this column
    */
-  [[nodiscard]] size_type num_children() const { return children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return children.size(); }
 
   /**
    * @brief Get whether to encode this column as binary or string data
    *
    * @return Boolean indicating whether to encode this column as binary data
    */
-  [[nodiscard]] bool is_enabled_output_as_binary() const { return _output_as_binary; }
+  [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
 };
 
 /**

@@ -70,14 +70,99 @@ public class RmmTest {
       RmmAllocationMode.CUDA_DEFAULT,
       RmmAllocationMode.POOL,
       RmmAllocationMode.ARENA})
+  public void testMaxOutstanding(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024)) {
+      assertEquals(1024, Rmm.getMaximumTotalBytesAllocated());
+    }
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+    assertEquals(1024, Rmm.getMaximumTotalBytesAllocated());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
+  public void testScopedMaxOutstanding(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
+    }
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+    assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
+
+    Rmm.resetScopedMaximumBytesAllocated();
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
+
+    DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+    ignored.close();
+    assertEquals(1024, Rmm.getScopedMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
+    assertEquals(0, Rmm.getTotalBytesAllocated());
+
+    // a non-zero value is the new minimum
+    DeviceMemoryBuffer ignored2 = Rmm.alloc(1024);
+    ignored2.close();
+    Rmm.resetScopedMaximumBytesAllocated(10000);
+    assertEquals(10000, Rmm.getScopedMaximumBytesAllocated());
+    assertEquals(2048, Rmm.getMaximumTotalBytesAllocated());
+
+    try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
+      Rmm.resetScopedMaximumBytesAllocated(1024);
+      try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
+        assertEquals(20480, Rmm.getScopedMaximumBytesAllocated());
+        assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
+  public void testScopedMaxOutstandingNegative(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getMaximumTotalBytesAllocated());
+    try (DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+         DeviceMemoryBuffer ignored2 = Rmm.alloc(1024)) {
+      assertEquals(2048, Rmm.getScopedMaximumBytesAllocated());
+      Rmm.resetScopedMaximumBytesAllocated();
+      assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
+    }
+    // because we allocated a net -2048 Bytes since reset
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
+    DeviceMemoryBuffer ignored = Rmm.alloc(1024);
+    ignored.close();
+    assertEquals(0, Rmm.getScopedMaximumBytesAllocated());
+
+    // if we allocate 2KB and then 256B we start seeing a positive local maximum
+    try (DeviceMemoryBuffer ignored2 = Rmm.alloc(2048);
+         DeviceMemoryBuffer ignored3 = Rmm.alloc(256)) {
+      assertEquals(256, Rmm.getScopedMaximumBytesAllocated());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {
+      RmmAllocationMode.CUDA_DEFAULT,
+      RmmAllocationMode.POOL,
+      RmmAllocationMode.ARENA})
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
+    AtomicInteger timesRetried = new AtomicInteger();
 
     RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         int count = invokedCount.incrementAndGet();
+        timesRetried.set(retryCount);
         amountRequested.set(sizeRequested);
         return count != 3;
       }
@@ -100,6 +185,7 @@ public class RmmTest {
     }
 
     assertEquals(3, invokedCount.get());
+    assertEquals(2, timesRetried.get());
     assertEquals(requested, amountRequested.get());
 
     // verify after a failure we can still allocate something more reasonable
@@ -114,7 +200,7 @@ public class RmmTest {
     // installing an event handler the first time should not be an error
     Rmm.setEventHandler(new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
     });
@@ -122,7 +208,7 @@ public class RmmTest {
     // installing a second event handler is an error
     RmmEventHandler otherHandler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return true;
       }
     };
@@ -138,7 +224,7 @@ public class RmmTest {
     // create an event handler that will always retry
     RmmEventHandler retryHandler = new BaseRmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return true;
       }
     };
@@ -165,7 +251,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
 
@@ -228,7 +314,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         return false;
       }
 
@@ -308,7 +394,7 @@ public class RmmTest {
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
-      public boolean onAllocFailure(long sizeRequested) {
+      public boolean onAllocFailure(long sizeRequested, int retryCount) {
         throw new AllocFailException();
       }
 

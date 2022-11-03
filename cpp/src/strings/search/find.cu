@@ -107,7 +107,7 @@ std::unique_ptr<column> find(
   string_scalar const& target,
   size_type start                     = 0,
   size_type stop                      = -1,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(
@@ -127,7 +127,7 @@ std::unique_ptr<column> rfind(
   string_scalar const& target,
   size_type start                     = 0,
   size_type stop                      = -1,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(
@@ -153,7 +153,7 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find(strings, target, start, stop, cudf::default_stream_value, mr);
+  return detail::find(strings, target, start, stop, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> rfind(strings_column_view const& strings,
@@ -163,7 +163,7 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rfind(strings, target, start, stop, cudf::default_stream_value, mr);
+  return detail::rfind(strings, target, start, stop, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -463,7 +463,7 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, target, cudf::default_stream_value, mr);
+  return detail::contains(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
@@ -471,7 +471,7 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, targets, cudf::default_stream_value, mr);
+  return detail::contains(strings, targets, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
@@ -479,7 +479,7 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, target, cudf::default_stream_value, mr);
+  return detail::starts_with(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
@@ -487,7 +487,7 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, targets, cudf::default_stream_value, mr);
+  return detail::starts_with(strings, targets, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -495,7 +495,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, target, cudf::default_stream_value, mr);
+  return detail::ends_with(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -503,7 +503,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, targets, cudf::default_stream_value, mr);
+  return detail::ends_with(strings, targets, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

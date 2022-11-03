@@ -4,6 +4,7 @@ import functools
 import hashlib
 import os
 import traceback
+import warnings
 from functools import partial
 from typing import FrozenSet, Set, Union
 
@@ -15,7 +16,7 @@ import rmm
 import cudf
 import cudf.api.types
 from cudf.core import column
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 
 # The size of the mask in bytes
 mask_dtype = cudf.api.types.dtype(np.int32)
@@ -213,6 +214,15 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
+    warnings.warn(
+        "The cudf.set_allocator function is deprecated and will be removed in "
+        "a future release. Please use rmm.reinitialize "
+        "(https://docs.rapids.ai/api/rmm/stable/api.html#rmm.reinitialize) "
+        'instead. Note that `cudf.set_allocator(allocator="managed")` is '
+        "equivalent to `rmm.reinitialize(managed_memory=True)`.",
+        FutureWarning,
+    )
+
     use_managed_memory = allocator == "managed"
 
     rmm.reinitialize(
@@ -283,8 +293,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return as_device_buffer_like(dbuf)
-    return as_device_buffer_like(mask_buf)
+        return as_buffer(dbuf)
+    return as_buffer(mask_buf)
 
 
 def _isnat(val):

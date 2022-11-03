@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/pinned_allocator.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -24,7 +25,6 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/system/cuda/experimental/pinned_allocator.h>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -40,7 +40,7 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  hostdevice_vector() : hostdevice_vector(0, cudf::default_stream_value) {}
+  hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
     : hostdevice_vector(size, size, stream)
@@ -126,7 +126,7 @@ class hostdevice_vector {
   }
 
  private:
-  thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>> h_data;
+  thrust::host_vector<T, cudf::detail::pinned_allocator<T>> h_data;
   rmm::device_uvector<T> d_data;
 };
 
