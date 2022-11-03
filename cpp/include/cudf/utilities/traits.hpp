@@ -271,7 +271,7 @@ constexpr inline bool is_signed_iterator()
 template <typename T>
 constexpr inline bool is_integral()
 {
-  return std::is_integral_v<T>;
+  return cuda::std::is_integral_v<T>;
 }
 
 /**
