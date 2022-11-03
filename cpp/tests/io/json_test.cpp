@@ -29,14 +29,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <io/json/experimental/read_json.hpp>
-
-#include <thrust/iterator/constant_iterator.h>
-
 #include <arrow/io/api.h>
 
 #include <fstream>
-#include <limits>
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
