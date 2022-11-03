@@ -804,38 +804,50 @@ def test_json_dtypes_nested_data():
     assert df.to_arrow().equals(pa_table_pdf)
 
 
-@pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
+@pytest.mark.parametrize("chunk_size", [0, 10, 100, 1024, 1024 * 1024])
 @pytest.mark.parametrize(
-    "data",
+    "tag, data",
     [
-        """\
+        (
+            "normal",
+            """\
 {"a": 1, "b": 2}
 {"a": 3, "b": 4}""",
-        """\
+        ),
+        (
+            "multiple",
+            """\
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
     { "a": { "y" : 6}, "b" : [7      ], "c": 14 }""",
-        """\
+        ),
+        (
+            "reordered",
+            """\
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "c": 12 , "b" : [4, 5   ]}
     { "b" : [6      ],  "a": { "y" : 6}, "c": 13}
     { "c" : 14, "a": { "y" : 6}, "b" : [7      ]}
 """,
-        # """
-        #     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
-        #     { "a": { "y" : 6}, "b" : [4, 5   ]}
-        #     { "a": { "y" : 6}, "c": 13 }
-        #     { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
-        # """
+        ),
+        (
+            "missing",
+            """
+            { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+            { "a": { "y" : 6}, "b" : [4, 5   ]}
+            { "a": { "y" : 6}, "c": 13 }
+            { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
+        """,
+        ),
     ],
     # TODO failing test cases
 )
-def test_chunked_nested_json_reader(chunk_size, data):
+def test_chunked_nested_json_reader(chunk_size, tag, data):
     # print(data)
-    # target = cudf.read_json(StringIO(data),
-    #  engine="cudf_experimental",  lines=True)
     expected = cudf.read_json(StringIO(data), engine="pandas", lines=True)
+    # target = cudf.read_json(StringIO(data),
+    # engine="cudf_experimental",  lines=True)
     # print(expected)
     # print(target)
 
@@ -848,4 +860,5 @@ def test_chunked_nested_json_reader(chunk_size, data):
     )
     # print(expected)
     # print(df)
-    assert df.to_arrow().equals(expected.to_arrow())
+    assert_eq(df, expected, check_dtype=False)
+    # assert df.to_arrow().equals(expected.to_arrow())
