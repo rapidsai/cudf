@@ -1,15 +1,8 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
-import cupy as cp
-import numpy as np
-from numba import cuda, types
-from numba.cuda.cudaimpl import (
-    lower as cuda_lower,
-    registry as cuda_lowering_registry,
-)
 
-import rmm
+from numba import types
+from numba.cuda.cudaimpl import lower as cuda_lower
 
-from cudf.core.column import as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf import api, row_function, utils
 from cudf.utils.dtypes import STRING_TYPES
@@ -39,11 +32,7 @@ try:
             column_from_udf_string_array,
             column_to_string_view_array,
         )
-        from strings_udf._typing import (
-            str_view_arg_handler,
-            string_view,
-            udf_string,
-        )
+        from strings_udf._typing import str_view_arg_handler, string_view
 
         from . import strings_typing  # isort: skip
         from . import strings_lowering  # isort: skip
