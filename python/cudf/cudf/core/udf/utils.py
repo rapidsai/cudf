@@ -226,13 +226,6 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
         else scalar_return_type.np_dtype
     )
 
-    # try:
-    #    np_return_type = numpy_support.as_dtype(scalar_return_type)
-    # except numba.core.errors.NumbaNotImplementedError:
-    #    # TODO: fix
-    #    np_return_type = np.dtype("object")
-    # np_return_type = numpy_support.as_dtype(scalar_return_type)
-
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
