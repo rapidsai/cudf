@@ -391,10 +391,13 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
         return;
       }
 
+      // If this is a string value, remove quotes
+      auto [in_begin, in_end] = trim_quotes(in.first, in.first + in.second, options.quotechar);
+
       auto const is_parsed = cudf::type_dispatcher(col_type,
                                                    ConvertFunctor{},
-                                                   in.first,
-                                                   in.first + in.second,
+                                                   in_begin,
+                                                   in_end,
                                                    col.data<char>(),
                                                    row,
                                                    col_type,
