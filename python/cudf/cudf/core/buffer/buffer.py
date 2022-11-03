@@ -332,7 +332,7 @@ class Buffer(Serializable):
         -------
         Buffer
         """
-        if deep:
+        if not deep:
             if (
                 cudf.get_option("copy_on_write")
                 and not self._is_cai_zero_copied()
@@ -361,20 +361,20 @@ class Buffer(Serializable):
 
                 return copied_buf
             else:
-                owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
-                return self._from_device_memory(
-                    cuda_array_interface_wrapper(
-                        ptr=owner_copy.ptr,
-                        size=owner_copy.size,
-                        owner=owner_copy,
-                    )
-                )
+                shallow_copy = Buffer.__new__(Buffer)
+                shallow_copy._ptr = self._ptr
+                shallow_copy._size = self._size
+                shallow_copy._owner = self._owner
+                return shallow_copy
         else:
-            shallow_copy = Buffer.__new__(Buffer)
-            shallow_copy._ptr = self._ptr
-            shallow_copy._size = self._size
-            shallow_copy._owner = self._owner
-            return shallow_copy
+            owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
+            return self._from_device_memory(
+                cuda_array_interface_wrapper(
+                    ptr=owner_copy.ptr,
+                    size=owner_copy.size,
+                    owner=owner_copy,
+                )
+            )
 
     @property
     def size(self) -> int:

@@ -417,6 +417,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         copies the references of the data and mask.
         """
         if deep:
+            return self.force_deep_copy()
+        else:
             if (
                 cudf.get_option("copy_on_write")
                 and not self._is_cai_zero_copied()
@@ -440,19 +442,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 )
                 return copied_col
             else:
-                return self.force_deep_copy()
-        else:
-            return cast(
-                T,
-                build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
-                    size=self.size,
-                    offset=self.offset,
-                    children=self.base_children,
-                ),
-            )
+                return cast(
+                    T,
+                    build_column(
+                        self.base_data,
+                        self.dtype,
+                        mask=self.base_mask,
+                        size=self.size,
+                        offset=self.offset,
+                        children=self.base_children,
+                    ),
+                )
 
     def view(self, dtype: Dtype) -> ColumnBase:
         """
