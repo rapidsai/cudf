@@ -371,6 +371,9 @@ public:
       : java_event_handler_memory_resource(env, jhandler, jalloc_thresholds, jdealloc_thresholds,
                                            resource_to_wrap) {
     jclass cls = env->GetObjectClass(jhandler);
+    if (cls == nullptr) {
+      throw cudf::jni::jni_exception("class not found");
+    }
 
     on_allocated_method = env->GetMethodID(cls, "onAllocated", "(J)V");
     if (on_allocated_method == nullptr) {
