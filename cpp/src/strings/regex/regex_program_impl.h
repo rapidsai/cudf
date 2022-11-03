@@ -34,15 +34,12 @@ struct regex_program::regex_program_impl {
 
   // TODO: There will be other options added here in the future to handle issues
   // 10852 and possibly others like 11979
+};
 
-  /**
-   * @brief Return device instance of reprog object
-   *
-   * @param stream CUDA stream to use for device memory allocations and copies
-   */
-  auto create_prog_device(rmm::cuda_stream_view stream) const
+struct regex_device_builder {
+  static auto create_prog_device(regex_program const& p, rmm::cuda_stream_view stream)
   {
-    return detail::reprog_device::create(prog, stream);
+    return detail::reprog_device::create(p._impl->prog, stream);
   }
 };
 

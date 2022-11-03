@@ -92,7 +92,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
                                rmm::mr::device_memory_resource* mr)
 {
   // create device object from regex_program
-  auto d_prog = prog.get_impl()->create_prog_device(stream);
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");

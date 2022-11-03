@@ -105,13 +105,6 @@ struct regex_program {
   int32_t groups_count() const;
 
   /**
-   * @brief Return implementation object
-   *
-   * @return impl object instance
-   */
-  regex_program_impl* get_impl() const;
-
-  /**
    * @brief Return the pattern used to create this instance
    *
    * @param num_strings Number of strings for computation
@@ -130,7 +123,14 @@ struct regex_program {
 
   std::unique_ptr<regex_program_impl> _impl;
 
+  /**
+   * @brief Constructor
+   *
+   * Called by create()
+   */
   regex_program(std::string_view pattern, regex_flags flags, capture_groups capture);
+
+  friend struct regex_device_builder;
 };
 
 /** @} */  // end of doxygen group

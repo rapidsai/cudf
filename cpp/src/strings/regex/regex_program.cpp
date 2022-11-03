@@ -58,7 +58,5 @@ std::size_t regex_program::compute_working_memory_size(int32_t num_strings) cons
   return detail::compute_working_memory_size(num_strings, instructions_count());
 }
 
-regex_program::regex_program_impl* regex_program::get_impl() const { return _impl.get(); }
-
 }  // namespace strings
 }  // namespace cudf

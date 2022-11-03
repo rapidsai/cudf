@@ -106,7 +106,7 @@ std::unique_ptr<column> extract_all_record(
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // create device object from regex_program
-  auto d_prog = prog.get_impl()->create_prog_device(stream);
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();

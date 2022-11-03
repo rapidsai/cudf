@@ -147,7 +147,7 @@ std::unique_ptr<column> replace_re(
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
       auto h_prog = regex_program::create(ptn, flags, capture_groups::NON_CAPTURE);
-      return h_prog->get_impl()->create_prog_device(stream);
+      return regex_device_builder::create_prog_device(*h_prog, stream);
     });
 
   // get the longest regex for the dispatcher
