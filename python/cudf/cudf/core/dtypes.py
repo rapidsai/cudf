@@ -4,6 +4,7 @@ import decimal
 import operator
 import pickle
 import textwrap
+from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
@@ -626,6 +627,13 @@ class StructDtype(_BaseDtype):
             else:
                 fields[k] = pickle.loads(dtype)
         return cls(fields)
+
+    @cached_property
+    def itemsize(self):
+        return sum(
+            cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
+            for field in self._typ
+        )
 
 
 decimal_dtype_template = textwrap.dedent(
