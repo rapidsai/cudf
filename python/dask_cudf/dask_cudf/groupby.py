@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from functools import wraps
 from typing import Set
 
 import numpy as np
@@ -38,6 +39,7 @@ def _check_groupby_optimized(func):
     reverting to the upstream Dask method
     """
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
         gb = args[0]
         if _groupby_optimized(gb):
