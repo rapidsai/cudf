@@ -227,14 +227,6 @@ public:
     if (on_dealloc_threshold_method == nullptr) {
       throw cudf::jni::jni_exception("onDeallocThreshold method");
     }
-    on_allocated_method = env->GetMethodID(cls, "onAllocated", "(J)V");
-    if (on_allocated_method == nullptr) {
-      throw cudf::jni::jni_exception("onAllocated method");
-    }
-    on_deallocated_method = env->GetMethodID(cls, "onDeallocated", "(J)V");
-    if (on_deallocated_method == nullptr) {
-      throw cudf::jni::jni_exception("onDeallocated method");
-    }
 
     update_thresholds(env, alloc_thresholds, jalloc_thresholds);
     update_thresholds(env, dealloc_thresholds, jdealloc_thresholds);
@@ -260,14 +252,10 @@ public:
 
 private:
   device_memory_resource *const resource;
-  JavaVM *jvm;
-  jobject handler_obj;
   jmethodID on_alloc_fail_method;
   bool use_old_alloc_fail_interface;
   jmethodID on_alloc_threshold_method;
   jmethodID on_dealloc_threshold_method;
-  jmethodID on_allocated_method;
-  jmethodID on_deallocated_method;
 
   // sorted memory thresholds to trigger callbacks
   std::vector<std::size_t> alloc_thresholds{};
@@ -320,6 +308,7 @@ private:
       }
     }
   }
+
   bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
 
   std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
@@ -329,6 +318,9 @@ private:
   bool supports_streams() const noexcept override { return resource->supports_streams(); }
 
 protected:
+  JavaVM *jvm;
+  jobject handler_obj;
+
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
@@ -368,6 +360,32 @@ protected:
     check_for_threshold_callback(total_after, total_before, dealloc_thresholds,
                                  on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
+};
+
+class java_debug_event_handler_memory_resource final : public java_event_handler_memory_resource {
+public:
+  java_debug_event_handler_memory_resource(JNIEnv *env, jobject jhandler,
+                                           jlongArray jalloc_thresholds,
+                                           jlongArray jdealloc_thresholds,
+                                           device_memory_resource *resource_to_wrap)
+      : java_event_handler_memory_resource(env, jhandler, jalloc_thresholds, jdealloc_thresholds,
+                                           resource_to_wrap) {
+    jclass cls = env->GetObjectClass(jhandler);
+
+    on_allocated_method = env->GetMethodID(cls, "onAllocated", "(J)V");
+    if (on_allocated_method == nullptr) {
+      throw cudf::jni::jni_exception("onAllocated method");
+    }
+
+    on_deallocated_method = env->GetMethodID(cls, "onDeallocated", "(J)V");
+    if (on_deallocated_method == nullptr) {
+      throw cudf::jni::jni_exception("onDeallocated method");
+    }
+  }
+
+private:
+  jmethodID on_allocated_method;
+  jmethodID on_deallocated_method;
 
   void on_allocated_callback(std::size_t num_bytes, rmm::cuda_stream_view stream) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
@@ -380,23 +398,8 @@ protected:
   void on_deallocated_callback(void *p, std::size_t size, rmm::cuda_stream_view stream) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     env->CallVoidMethod(handler_obj, on_deallocated_method, size);
-    if (env->ExceptionCheck()) {
-      env->ExceptionDescribe();
-      throw std::runtime_error("onDeallocated handler threw an exception");
-    }
   }
-};
 
-class java_debug_event_handler_memory_resource final : public java_event_handler_memory_resource {
-public:
-  java_debug_event_handler_memory_resource(JNIEnv *env, jobject jhandler,
-                                           jlongArray jalloc_thresholds,
-                                           jlongArray jdealloc_thresholds,
-                                           device_memory_resource *resource_to_wrap)
-      : java_event_handler_memory_resource(env, jhandler, jalloc_thresholds, jdealloc_thresholds,
-                                           resource_to_wrap) {}
-
-private:
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     void *result = java_event_handler_memory_resource::do_allocate(num_bytes, stream);
     on_allocated_callback(num_bytes, stream);

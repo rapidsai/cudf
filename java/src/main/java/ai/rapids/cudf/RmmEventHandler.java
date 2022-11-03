@@ -33,13 +33,13 @@ public interface RmmEventHandler {
   }
 
   /**
-   * Invoked on every memory allocation when installed with debug mode enabled.
+   * Invoked after every memory allocation when debug mode is enabled.
    * @param size number of bytes allocated
    */
   default void onAllocated(long size) {}
 
   /**
-   * Invoked on every memory deallocation when installed with debug mode enabled.
+   * Invoked after every memory deallocation when debug mode is enabled.
    * @param size number of bytes deallocated
    */
   default void onDeallocated(long size) {}

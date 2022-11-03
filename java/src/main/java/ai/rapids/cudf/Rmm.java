@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,7 +192,7 @@ public class Rmm {
    * Sets the event handler to be called on RMM events (e.g.: allocation failure) and
    * optionally enable debug mode (callbacks on every allocate and deallocate)
    *
-   * NOTE: Only use this while debugging, code will run slower!
+   * NOTE: Only enable debug mode when necessary, as code will run much slower!
    *
    * @param handler event handler to invoke on RMM events or null to clear an existing handler
    * @param enableDebug if true enable debug callbacks in RmmEventHandler
