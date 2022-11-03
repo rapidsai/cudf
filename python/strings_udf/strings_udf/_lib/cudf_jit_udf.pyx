@@ -17,7 +17,7 @@ from strings_udf._lib.cpp.strings_udf cimport (
 )
 
 
-def to_string_view_array(Column strings_col):
+def column_to_string_view_array(Column strings_col):
     cdef unique_ptr[device_buffer] c_buffer
     cdef column_view input_view = strings_col.view()
     with nogil:
@@ -27,7 +27,7 @@ def to_string_view_array(Column strings_col):
     return as_buffer(device_buffer)
 
 
-def from_udf_string_array(DeviceBuffer d_buffer):
+def column_from_udf_string_array(DeviceBuffer d_buffer):
     cdef size_t size = int(d_buffer.c_size() / sizeof(udf_string))
     cdef udf_string* data = <udf_string*>d_buffer.c_data()
     cdef unique_ptr[column] c_result

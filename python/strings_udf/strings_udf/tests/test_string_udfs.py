@@ -14,8 +14,8 @@ from cudf.testing._utils import assert_eq
 
 import strings_udf
 from strings_udf._lib.cudf_jit_udf import (
-    from_udf_string_array,
-    to_string_view_array,
+    column_from_udf_string_array,
+    column_to_string_view_array,
 )
 from strings_udf._typing import str_view_arg_handler, string_view, udf_string
 
@@ -65,13 +65,13 @@ def run_udf_test(data, func, dtype):
         output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
 
     cudf_column = cudf.core.column.as_column(data)
-    str_view_ary = to_string_view_array(cudf_column)
+    str_view_ary = column_to_string_view_array(cudf_column)
 
     kernel = get_kernel(func, dtype, len(data))
     kernel.forall(len(data))(str_view_ary, output_ary)
 
     if dtype == "str":
-        output_ary = from_udf_string_array(output_ary)
+        output_ary = column_from_udf_string_array(output_ary)
 
     got = cudf.Series(output_ary, dtype=dtype)
     expect = pd.Series(data).apply(func)

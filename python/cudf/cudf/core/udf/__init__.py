@@ -36,8 +36,8 @@ try:
         utils.ptx_files.append(ptxpath)
 
         from strings_udf._lib.cudf_jit_udf import (
-            from_udf_string_array,
-            to_string_view_array,
+            column_from_udf_string_array,
+            column_to_string_view_array,
         )
         from strings_udf._typing import (
             str_view_arg_handler,
@@ -53,8 +53,8 @@ try:
         )
 
         _supported_masked_types |= {string_view}
-        utils.launch_arg_getters[cudf_str_dtype] = to_string_view_array
-        utils.output_col_getters[cudf_str_dtype] = from_udf_string_array
+        utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
+        utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
         utils.masked_array_types[cudf_str_dtype] = string_view
         row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes
 
