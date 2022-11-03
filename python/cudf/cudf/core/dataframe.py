@@ -2598,9 +2598,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         level=None,
         errors="raise",
     ):
-        import pdb
-
-        pdb.set_trace()
         if axis not in {None, "index", 0}:
             raise NotImplementedError(
                 f"axis=1/'columns' not yet implemented for DataFrame, "
