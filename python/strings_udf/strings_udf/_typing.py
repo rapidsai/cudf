@@ -3,6 +3,7 @@
 import operator
 
 import llvmlite.binding as ll
+import numpy as np
 from numba import types
 from numba.core.datamodel import default_manager
 from numba.core.extending import models, register_model
@@ -24,17 +25,31 @@ target_data = ll.create_target_data(data_layout)
 
 # String object definitions
 class UDFString(types.Type):
+
+    np_dtype = np.dtype("object")
+
     def __init__(self):
         super().__init__(name="udf_string")
         llty = default_manager[self].get_value_type()
         self.size_bytes = llty.get_abi_size(target_data)
 
+    @property
+    def return_type(self):
+        return self
+
 
 class StringView(types.Type):
+
+    np_dtype = np.dtype("object")
+
     def __init__(self):
         super().__init__(name="string_view")
         llty = default_manager[self].get_value_type()
         self.size_bytes = llty.get_abi_size(target_data)
+
+    @property
+    def return_type(self):
+        return UDFString()
 
 
 @register_model(StringView)

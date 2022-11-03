@@ -51,17 +51,15 @@ try:
         cuda_lower(api.Masked, string_view, types.boolean)(
             masked_lowering.masked_constructor
         )
-
+        utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
         _supported_masked_types |= {string_view}
+
         utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
         utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
         utils.masked_array_types[cudf_str_dtype] = string_view
         row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes
 
-        utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
-
         utils.arg_handlers.append(str_view_arg_handler)
-        utils.udf_return_type_map[string_view] = udf_string
         _STRING_UDFS_ENABLED = True
 
 except ImportError as e:
