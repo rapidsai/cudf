@@ -89,5 +89,7 @@ cdef extern from "cudf/io/json.hpp" \
     cdef cudf_io_types.table_with_metadata read_json(
         json_reader_options &options) except +
 
+    cdef size_type sources_size(json_reader_options &options) except +
+
     cdef size_type find_first_delimiter_in_chunk(
         json_reader_options &options, char delimiter) except +

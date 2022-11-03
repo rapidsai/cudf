@@ -63,32 +63,24 @@ std::vector<table_with_metadata> skeleton_for_parellel_chunk_reader(
   }
   // process and allocate record start, end for each worker.
   using record_range = std::pair<size_type, size_type>;
-  std::vector<record_range> record_ranges(num_chunks, record_range{-1, -1});
+  std::vector<record_range> record_ranges;
+  record_ranges.reserve(num_chunks);
   first_delimiter_index[0] = 0;
-  // record_ranges.back().second = total_source_size;
-  for (size_t i = 0; i < num_chunks;) {
-    record_ranges[i].first    = first_delimiter_index[i];
-    auto next_delimiter_chunk = i + 1;
-    while (next_delimiter_chunk < num_chunks and
-           first_delimiter_index[next_delimiter_chunk] == no_min_value) {
-      next_delimiter_chunk++;
-    }
-    if (next_delimiter_chunk < num_chunks) {
-      record_ranges[i].second = first_delimiter_index[next_delimiter_chunk];
-    } else {
-      record_ranges[i].second = total_source_size;
-    }
-    i = next_delimiter_chunk;
+  auto prev                = first_delimiter_index[0];
+  for (size_t i = 1; i < num_chunks; i++) {
+    if (first_delimiter_index[i] == no_min_value) continue;
+    record_ranges.push_back({prev, first_delimiter_index[i]});
+    prev = first_delimiter_index[i];
   }
+  record_ranges.push_back({prev, total_source_size});
 
   for (auto range : record_ranges) {
     std::cout << "[" << range.first << "," << range.second << "]" << std::endl;
   }
 
-  std::vector<table_with_metadata> tables;  //(num_chunks);
+  std::vector<table_with_metadata> tables;
   // process each chunk in parallel.
-  for (size_t i = 0; i < num_chunks; i++) {
-    auto const [chunk_start, chunk_end] = record_ranges[i];
+  for (auto const [chunk_start, chunk_end] : record_ranges) {
     if (chunk_start == -1 or chunk_end == -1) continue;
     reader_opts_chunk.set_byte_range_offset(chunk_start);
     reader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
@@ -99,19 +91,25 @@ std::vector<table_with_metadata> skeleton_for_parellel_chunk_reader(
   return tables;
 }
 
+size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
+                    size_t range_offset,
+                    size_t range_size)
+{
+  return std::accumulate(sources.begin(), sources.end(), 0ul, [=](size_t sum, auto& source) {
+    auto const size = source->size();
+    // TODO take care of 0, 0, or *, 0 case.
+    return sum +
+           (range_size == 0 or range_offset + range_size > size ? size - range_offset : range_size);
+  });
+}
+
 std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                       compression_type compression,
                                       size_t range_offset,
                                       size_t range_size)
 {
-  auto const total_source_size =
-    std::accumulate(sources.begin(), sources.end(), 0ul, [=](size_t sum, auto& source) {
-      auto const size = source->size();
-      // TODO take care of 0, 0, or *, 0 case.
-      return sum + (range_size == 0 or range_offset + range_size > size ? size - range_offset
-                                                                        : range_size);
-    });
-  auto buffer = std::vector<uint8_t>(total_source_size);
+  auto const total_source_size = sources_size(sources, range_offset, range_size);
+  auto buffer                  = std::vector<uint8_t>(total_source_size);
 
   size_t bytes_read = 0;
   for (const auto& source : sources) {

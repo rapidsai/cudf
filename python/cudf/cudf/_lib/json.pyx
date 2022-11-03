@@ -20,6 +20,7 @@ from cudf._lib.cpp.io.json cimport (
     json_reader_options,
     read_json as libcudf_read_json,
     schema_element,
+    sources_size as libcudf_sources_size,
 )
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
@@ -151,6 +152,27 @@ cpdef read_json(object filepaths_or_buffers,
     return df
 
 
+cpdef sources_size(object filepaths_or_buffers,
+                   object compression,
+                   object byte_range):
+
+    # construct the options
+    cdef json_reader_options opts = make_json_reader_options(
+        filepaths_or_buffers,
+        True,   # dtype not used
+        False,  # lines not used
+        compression,
+        byte_range,
+        False,  # experimental not used
+        False   # keep_quotes not used
+    )
+    cdef size_type c_result
+    with nogil:
+        c_result = libcudf_sources_size(opts)
+
+    return c_result
+
+
 cpdef find_first_delimiter_in_chunk(object filepaths_or_buffers,
                                     bool lines,
                                     object compression,
@@ -176,7 +198,7 @@ cpdef find_first_delimiter_in_chunk(object filepaths_or_buffers,
     with nogil:
         c_result = libcudf_find_first_delimiter_in_chunk(opts, delimiter)
 
-    return c_result
+    return None if c_result == 2147483647 else c_result
 
 
 cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:

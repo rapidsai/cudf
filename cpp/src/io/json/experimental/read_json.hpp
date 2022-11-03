@@ -33,6 +33,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
 
+size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
+                    size_t range_offset,
+                    size_t range_size);
+
 size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
                                         json_reader_options const& reader_opts,
                                         char const delimiter,

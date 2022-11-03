@@ -217,6 +217,19 @@ size_type find_first_delimiter_in_chunk(json_reader_options options, char delimi
     datasources, options, delimiter, cudf::get_default_stream());
 }
 
+size_type sources_size(json_reader_options options)
+{
+  CUDF_FUNC_RANGE();
+
+  options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
+
+  auto datasources = make_datasources(
+    options.get_source(), options.get_byte_range_offset(), options.get_byte_range_size());
+
+  return detail::json::experimental::sources_size(
+    datasources, options.get_byte_range_offset(), options.get_byte_range_size());
+}
+
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
