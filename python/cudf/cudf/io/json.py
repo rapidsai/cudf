@@ -25,6 +25,7 @@ def read_json(
     byte_range=None,
     keep_quotes=False,
     storage_options=None,
+    chunk_size=1024,
     *args,
     **kwargs,
 ):
@@ -95,13 +96,13 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        if engine == "cudf_experimental_chunked":
+        if engine == "cudf_experimental_chunked" and chunk_size != 0:
             df = chunked_read_json(
                 filepaths_or_buffers,
                 dtype,
                 lines,
                 compression,
-                byte_range,
+                chunk_size,
                 engine == "cudf_experimental_chunked",
                 keep_quotes,
             )
@@ -181,7 +182,7 @@ def chunked_read_json(
     dtype,
     lines,
     compression,
-    byte_range,
+    chunk_size,
     is_experimental,
     keep_quotes,
 ):
@@ -191,13 +192,10 @@ def chunked_read_json(
     # compute record ranges
     # read record ranges
     # concat
-    if byte_range is not None:
-        chunk_size = byte_range[1] - byte_range[0]
-    else:
-        chunk_size = 10
     total_source_size = libjson.sources_size(
         filepaths_or_buffers, compression, [0, 0]
     )
+    # print("total_source_size", total_source_size)
     num_chunks = (total_source_size + chunk_size - 1) // chunk_size
     delimiter_positions_in_chunks = [
         libjson.find_first_delimiter_in_chunk(
@@ -211,8 +209,6 @@ def chunked_read_json(
         for chunk_index in range(num_chunks)
     ]
     delimiter_positions_in_chunks[0] = 0
-    delimiter_positions_in_chunks.append(total_source_size)
-    # print(delimiter_positions_in_chunks)
     delimiter_positions_in_chunks = [
         pos + chunk_index * chunk_size
         for chunk_index, pos in zip(
@@ -220,6 +216,8 @@ def chunked_read_json(
         )
         if pos is not None
     ]
+    delimiter_positions_in_chunks.append(total_source_size)
+    # print(delimiter_positions_in_chunks)
     record_ranges = list(
         zip(delimiter_positions_in_chunks, delimiter_positions_in_chunks[1:])
     )
@@ -239,9 +237,10 @@ def chunked_read_json(
         for chunk_start, chunk_end in record_ranges
     ]
 
-    for i, df in enumerate(dfs):
-        print("i=", i)
-        print(df.columns, "\n", df.dtypes)
+    # for i, df in enumerate(dfs):
+    #     print("i=", i)
+    #     print(df.columns, "\n", df.dtypes)
+    #     print(df)
     # concat
     return cudf.concat(dfs, ignore_index=True)
 
