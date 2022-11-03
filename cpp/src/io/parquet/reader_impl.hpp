@@ -22,7 +22,7 @@
 #pragma once
 
 #include "parquet_gpu.hpp"
-#include "reader_impl_helpers.cuh"
+#include "reader_impl_helpers.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 

@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
 
 #include "compact_protocol_reader.hpp"

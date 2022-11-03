@@ -27,6 +27,8 @@
 #include <thrust/fill.h>
 #include <thrust/logical.h>
 
+#include <numeric>
+
 namespace cudf::io::detail::parquet {
 
 namespace {

@@ -18,6 +18,8 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 
+#include <numeric>
+
 namespace cudf::io::detail::parquet {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)

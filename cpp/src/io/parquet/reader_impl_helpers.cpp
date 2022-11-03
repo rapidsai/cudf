@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "reader_impl_helpers.cuh"
+#include "reader_impl_helpers.hpp"
 
+#include <numeric>
 #include <regex>
 
 namespace cudf::io::detail::parquet {
