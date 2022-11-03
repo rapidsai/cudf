@@ -19,9 +19,6 @@ from strings_udf._lib.cudf_jit_udf import (
 )
 from strings_udf._typing import str_view_arg_handler, string_view, udf_string
 
-if not strings_udf.ENABLED:
-    pytest.skip("Strings UDF not enabled.", allow_module_level=True)
-
 
 def get_kernel(func, dtype, size):
     """
