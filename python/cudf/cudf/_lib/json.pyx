@@ -198,7 +198,7 @@ cpdef find_first_delimiter_in_chunk(object filepaths_or_buffers,
     with nogil:
         c_result = libcudf_find_first_delimiter_in_chunk(opts, delimiter)
 
-    return None if c_result == 2147483647 else c_result
+    return None if c_result == -1 else c_result
 
 
 cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:

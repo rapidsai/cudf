@@ -55,7 +55,8 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
                                rmm::cuda_stream_view stream)
 {
-  size_type result{std::numeric_limits<size_type>::max()};
+  constexpr size_type no_min_value_sentinel = std::numeric_limits<size_type>::max();
+  size_type result{no_min_value_sentinel};
   rmm::device_scalar<size_type> d_result(result, stream);
   auto const is_delimiter = [delimiter] __device__(char c) { return c == delimiter; };
 
@@ -77,7 +78,8 @@ size_type find_first_delimiter(device_span<char const> d_data,
       d_data.data(), is_delimiter, d_result.data(), d_data.size());
   }
 
-  return d_result.value(stream);
+  auto index = d_result.value(stream);
+  return index == no_min_value_sentinel ? -1 : index;
 }
 
 }  // namespace cudf::io::detail::json::experimental
