@@ -16,12 +16,7 @@ from dask.utils import funcname
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-CUMULATIVE_AGGS = (
-    "cumsum",
-    "cumcount",
-)
-
-AGGS = (
+SUPPORTED_AGGS = (
     "count",
     "mean",
     "std",
@@ -33,8 +28,6 @@ AGGS = (
     "first",
     "last",
 )
-
-SUPPORTED_AGGS = (*AGGS, *CUMULATIVE_AGGS)
 
 
 def _check_groupby_supported(func):

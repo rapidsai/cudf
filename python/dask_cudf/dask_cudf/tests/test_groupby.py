@@ -12,7 +12,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
+from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -47,7 +47,7 @@ def pdf(request):
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", AGGS)
+@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -77,7 +77,7 @@ def test_groupby_basic(series, aggregation, pdf):
 
 # TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
-@pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
+@pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
@@ -106,7 +106,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
         dd.assert_eq(a, b)
 
 
-@pytest.mark.parametrize("aggregation", AGGS)
+@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
 @pytest.mark.parametrize(
     "func",
     [
@@ -706,7 +706,7 @@ def test_groupby_agg_redirect(aggregations):
     ],
 )
 def test_is_supported(arg, supported):
-    assert _aggs_supported(arg, AGGS) is supported
+    assert _aggs_supported(arg, SUPPORTED_AGGS) is supported
 
 
 def test_groupby_unique_lists():
