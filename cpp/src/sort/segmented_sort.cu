@@ -45,19 +45,27 @@ enum class sort_method { STABLE, UNSTABLE };
 struct column_fast_sort_fn {
   /**
    * @brief Run-time check for faster sort on an eligible column
+   *
+   * Fast segmented sort can handle integral types including
+   * decimal types if dispatch_storage_type is used but it does not support int128.
    */
   static bool is_fast_sort_supported(column_view const& col)
   {
-    return !col.has_nulls() and cudf::is_integral(col.type());
+    return !col.has_nulls() and
+           (cudf::is_integral(col.type()) ||
+            (cudf::is_fixed_point(col.type()) and (col.type().id() != type_id::DECIMAL128)));
   }
 
   /**
    * @brief Compile-time check for supporting fast sort for a specific type
+   *
+   * The dispatch_storage_type means we can check for integral types to
+   * include fixed-point types but the CUB limitation means we need to exclude int128.
    */
   template <typename T>
   static constexpr bool is_fast_sort_supported()
   {
-    return std::is_integral<T>();
+    return cudf::is_integral<T>() and !std::is_same_v<__int128, T>;
   }
 
   template <typename T>
