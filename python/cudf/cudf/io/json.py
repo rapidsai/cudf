@@ -186,6 +186,36 @@ def chunked_read_json(
     is_experimental,
     keep_quotes,
 ):
+    total_source_size = libjson.sources_size(
+        filepaths_or_buffers, compression, [0, 0]
+    )
+    # print("total_source_size", total_source_size)
+    num_chunks = (total_source_size + chunk_size - 1) // chunk_size
+    # launch individual read_json chunked reads
+    dfs = [
+        libjson.read_json(
+            filepaths_or_buffers,
+            dtype,
+            lines,
+            compression,
+            [chunk_index * chunk_size, chunk_size],
+            is_experimental,
+            keep_quotes,
+        )
+        for chunk_index in range(num_chunks)
+    ]
+    return cudf.concat(dfs, ignore_index=True)
+
+
+def chunked_read_json2(
+    filepaths_or_buffers,
+    dtype,
+    lines,
+    compression,
+    chunk_size,
+    is_experimental,
+    keep_quotes,
+):
     # find size of sources
     # compute num chunks
     # find first delim of each chunk.
