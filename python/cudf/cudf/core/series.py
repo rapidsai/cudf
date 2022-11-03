@@ -3335,6 +3335,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "axis can be either 0 or 'index' for object type Series"
             )
 
+        if errors != "raise":
+            raise NotImplementedError(
+                "Only errors='raise' is supported for Series, " f"got {errors}"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not yet supported.")
+
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
             self._from_data_like_self({self.name: result_col}),

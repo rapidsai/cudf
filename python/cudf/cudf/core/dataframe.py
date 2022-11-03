@@ -2600,9 +2600,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         if axis not in {None, "index", 0}:
             raise NotImplementedError(
-                f"axis=1/'columns' not yet implemented for DataFrame, "
+                "axis=1/'columns' not yet implemented for DataFrame, "
                 f"got {axis}"
             )
+
+        if errors != "raise":
+            raise NotImplementedError(
+                "Only errors='raise' is supported for DataFrame, "
+                f"got {errors}"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not yet supported.")
 
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
