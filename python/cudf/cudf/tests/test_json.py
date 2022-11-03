@@ -940,7 +940,7 @@ def test_json_dtypes_nested_data():
 class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [0, 10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
-        expected = cudf.read_json(StringIO(data), engine="pandas", lines=True)
+        expected = pd.read_json(StringIO(data), lines=True)
 
         df = cudf.read_json(
             StringIO(data),
@@ -952,7 +952,7 @@ class TestNestedJsonReaderCommon:
         # assert df.to_arrow().equals(expected.to_arrow())
 
     def test_order_nested_json_reader(self, tag, data):
-        expected = cudf.read_json(StringIO(data), engine="pandas", lines=True)
+        expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(
             StringIO(data), engine="cudf_experimental", lines=True
         )
