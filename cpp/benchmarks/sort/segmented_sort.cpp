@@ -59,6 +59,3 @@ NVBENCH_BENCH(nvbench_segmented_sort)
   .add_int64_power_of_two_axis("size_bytes", {16, 18, 20, 22, 24, 28})
   .add_float64_axis("null_frequency", {0, 0.1})
   .add_int64_axis("row_width", {16, 128, 1024});
-//.add_int64_power_of_two_axis("size_bytes", {28})
-//.add_float64_axis("null_frequency", {0})
-//.add_int64_axis("row_width", {128});
