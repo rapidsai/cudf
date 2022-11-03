@@ -598,14 +598,13 @@ struct ConvertFunctor {
                                                       bool as_hex)
   {
     // TODO what's invalid input
-    bool all_digits_valid = true;
     static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
-      [&opts, &all_digits_valid, output_type, begin, end]() -> device_storage_type_t<T> {
+      [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
       return strings::detail::parse_decimal<device_storage_type_t<T>>(
         begin, end, output_type.scale());
     }();
 
-    return all_digits_valid;
+    return true;
   }
 
   /**
