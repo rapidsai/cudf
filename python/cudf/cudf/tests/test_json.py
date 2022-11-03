@@ -740,6 +740,49 @@ def test_json_quoted_values_with_schema(col_type, json_str):
 
 
 @pytest.mark.parametrize(
+    "col_type,json_str,expected",
+    [
+        # with quotes, mixed
+        ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
+        # with quotes, null, mixed
+        (
+            "int",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
+        # with quotes, mixed
+        (
+            "str",
+            '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]',
+            ["1", "2", "3", "4"],
+        ),
+        # with quotes, null, mixed
+        (
+            "str",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            ["1", "2", None, "4"],
+        ),
+    ],
+)
+def test_json_quoted_values(col_type, json_str, expected):
+    experimental_df = cudf.read_json(
+        StringIO(json_str),
+        engine="cudf_experimental",
+        orient="records",
+        dtype={"k": col_type},
+    )
+    cudf_df = cudf.read_json(
+        StringIO(json_str.replace(",", "\n")[1:-1]),
+        engine="cudf",
+        orient="records",
+        lines=True,
+        dtype={"k": col_type},
+    )
+    assert_eq(expected, experimental_df.k.to_arrow().to_pylist())
+    assert_eq(expected, cudf_df.k.to_arrow().to_pylist())
+
+
+@pytest.mark.parametrize(
     "keep_quotes,result",
     [
         (
