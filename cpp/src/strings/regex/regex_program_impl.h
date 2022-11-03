@@ -32,6 +32,9 @@ namespace strings {
 struct regex_program::regex_program_impl {
   detail::reprog prog;
 
+  regex_program_impl(detail::reprog const& p) : prog(p) {}
+  regex_program_impl(detail::reprog&& p) : prog(p) {}
+
   // TODO: There will be other options added here in the future to handle issues
   // 10852 and possibly others like 11979
 };

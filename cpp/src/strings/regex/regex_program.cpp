@@ -37,10 +37,11 @@ regex_program::regex_program(regex_program&& other) = default;
 regex_program& regex_program::operator=(regex_program&& other) = default;
 
 regex_program::regex_program(std::string_view pattern, regex_flags flags, capture_groups capture)
-  : _pattern(pattern), _flags(flags)
+  : _pattern(pattern),
+    _flags(flags),
+    _impl(
+      std::make_unique<regex_program_impl>(detail::reprog::create_from(pattern, flags, capture)))
 {
-  auto p = new regex_program_impl{detail::reprog::create_from(pattern, flags, capture)};
-  _impl  = std::unique_ptr<regex_program_impl>(p);
 }
 
 std::string regex_program::pattern() const { return _pattern; }
