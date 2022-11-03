@@ -75,13 +75,21 @@ def test_groupby_basic(series, aggregation, pdf):
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
+# TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
 @pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    gdf_grouped = gdf.groupby("xx")
+    if pdf.isna().sum().any():
+        with pytest.xfail(
+            reason="https://github.com/rapidsai/cudf/issues/12055"
+        ):
+            gdf_grouped = gdf.groupby("xx")
+    else:
+        gdf_grouped = gdf.groupby("xx")
+
     ddf_grouped = ddf.groupby("xx")
 
     if series:
@@ -89,7 +97,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
         ddf_grouped = ddf_grouped.xx
 
     a = getattr(gdf_grouped, aggregation)()
-    b = getattr(ddf_grouped, aggregation)().compute()
+    b = getattr(ddf_grouped, aggregation)()
 
     if aggregation == "cumsum" and series:
         with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
