@@ -66,4 +66,4 @@ Nightly:
 conda install -c rapidsai-nightly cudf_kafka custreamz
 ```
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.
