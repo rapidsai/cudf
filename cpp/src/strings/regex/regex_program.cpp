@@ -32,7 +32,6 @@ std::unique_ptr<regex_program> regex_program::create(std::string_view pattern,
   return std::unique_ptr<regex_program>(p);
 }
 
-regex_program::regex_program()                      = default;
 regex_program::~regex_program()                     = default;
 regex_program::regex_program(regex_program&& other) = default;
 regex_program& regex_program::operator=(regex_program&& other) = default;
@@ -56,7 +55,7 @@ int32_t regex_program::groups_count() const { return _impl->prog.groups_count();
 
 std::size_t regex_program::compute_working_memory_size(int32_t num_strings) const
 {
-  return detail::compute_working_memory_size(instructions_count(), num_strings);
+  return detail::compute_working_memory_size(num_strings, instructions_count());
 }
 
 regex_program::regex_program_impl* regex_program::get_impl() const { return _impl.get(); }

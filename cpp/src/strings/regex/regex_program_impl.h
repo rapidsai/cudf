@@ -40,7 +40,7 @@ struct regex_program::regex_program_impl {
    *
    * @param stream CUDA stream to use for device memory allocations and copies
    */
-  auto create_prog_device(rmm::cuda_stream_view stream)
+  auto create_prog_device(rmm::cuda_stream_view stream) const
   {
     return detail::reprog_device::create(prog, stream);
   }

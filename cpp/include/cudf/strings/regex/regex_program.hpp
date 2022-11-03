@@ -122,7 +122,7 @@ struct regex_program {
   ~regex_program();
 
  private:
-  regex_program();
+  regex_program() = delete;
 
   std::string _pattern;
   regex_flags _flags;
