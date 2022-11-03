@@ -254,7 +254,7 @@ outputs:
         - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
         - test -f $PREFIX/include/cudf/table/table.hpp
         - test -f $PREFIX/include/cudf/table/table_view.hpp
-        - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh
+        - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.hpp
         - test -f $PREFIX/include/cudf/transform.hpp
         - test -f $PREFIX/include/cudf/transpose.hpp
         - test -f $PREFIX/include/cudf/types.hpp
