@@ -144,7 +144,8 @@ class reader::impl {
                                 size_type num_rows);
 
   /**
-   * @brief Compute the split locations {skip_rows, num_rows} for the output chunks.
+   * @brief Perform some preprocessing for page data and also compute the split locations
+   * {skip_rows, num_rows} for chunked reading.
    *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas:
@@ -160,10 +161,10 @@ class reader::impl {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
-  void compute_chunk_read_info(size_t skip_rows,
-                               size_t num_rows,
-                               bool uses_custom_row_bounds,
-                               size_t chunk_read_limit);
+  void preprocess_pages(size_t skip_rows,
+                        size_t num_rows,
+                        bool uses_custom_row_bounds,
+                        size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.

@@ -1261,10 +1261,10 @@ struct start_offset_output_iterator {
 
 }  // anonymous namespace
 
-void reader::impl::compute_chunk_read_info(size_t skip_rows,
-                                           size_t num_rows,
-                                           bool uses_custom_row_bounds,
-                                           size_t chunk_read_limit)
+void reader::impl::preprocess_pages(size_t skip_rows,
+                                    size_t num_rows,
+                                    bool uses_custom_row_bounds,
+                                    size_t chunk_read_limit)
 {
   auto& chunks = _file_itm_data.chunks;
   auto& pages  = _file_itm_data.pages_info;
