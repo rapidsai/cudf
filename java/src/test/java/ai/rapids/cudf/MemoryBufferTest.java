@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -167,5 +169,48 @@ public class MemoryBufferTest extends CudfTestBase {
     byte[] bytes = new byte[16];
     out.getBytes(bytes, 0, 0, 16);
     assertArrayEquals(EXPECTED, bytes);
+  }
+
+  @Test
+  public void testEventHandlerIsCalledForEachClose() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
+      b.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+    }
+    assertEquals(1, onClosedWasCalled.get());
+    onClosedWasCalled.set(0);
+
+    try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
+      b.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      DeviceMemoryBuffer sliced = b.slice(0, b.getLength());
+      sliced.close();
+    }
+    assertEquals(2, onClosedWasCalled.get());
+  }
+
+  @Test
+  public void testEventHandlerIsNotCalledIfNotSet() {
+    final AtomicInteger onClosedWasCalled = new AtomicInteger(0);
+    try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
+      assertNull(b.getEventHandler());
+    }
+    assertEquals(0, onClosedWasCalled.get());
+    try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
+      b.setEventHandler(refCount -> onClosedWasCalled.incrementAndGet());
+      b.setEventHandler(null);
+    }
+    assertEquals(0, onClosedWasCalled.get());
+  }
+
+  @Test
+  public void testEventHandlerDisallowsResetting() {
+    try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
+      b.setEventHandler(refCount -> {});
+      b.setEventHandler(null); // ok - unsets it
+
+      b.setEventHandler(refCount -> {}); // ok - resets it because it was null before
+      // we cannot reset the handler without having set it to null first
+      assertThrows(IllegalStateException.class, () -> b.setEventHandler(refCount -> {}));
+    }
   }
 }
