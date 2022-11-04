@@ -360,23 +360,26 @@ void batched_compress(compression_type compression,
 }
 
 std::optional<std::string> is_compression_disabled(compression_type compression,
-                                                   std::optional<library_version> target_version)
+                                                   std::optional<library_version> target_version,
+                                                   bool is_all_enabled,
+                                                   bool is_stable_enabled)
 {
   auto const version = target_version.value_or(
     library_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
+
   switch (compression) {
     case compression_type::DEFLATE: {
       if (not NVCOMP_HAS_DEFLATE(version.major, version.minor, version.patch)) {
         return "nvCOMP 2.5 or newer is required for Deflate compression";
       }
-      if (not detail::nvcomp_integration::is_all_enabled()) {
+      if (not is_all_enabled) {
         return "DEFLATE compression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
     }
     case compression_type::SNAPPY: {
-      if (not detail::nvcomp_integration::is_stable_enabled()) {
+      if (not is_stable_enabled) {
         return "Snappy compression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
                "environment variable.";
       }
@@ -386,7 +389,7 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
       if (not NVCOMP_HAS_ZSTD_COMP(version.major, version.minor, version.patch)) {
         return "nvCOMP 2.3 or newer is required for Zstandard compression";
       }
-      if (not cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+      if (not is_stable_enabled) {
         return "Zstandard compression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
@@ -398,6 +401,8 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
 }
 
 std::optional<std::string> is_zstd_decomp_disabled(library_version version,
+                                                   bool is_all_enabled,
+                                                   bool is_stable_enabled,
                                                    std::optional<int> compute_capability)
 {
   if (not NVCOMP_HAS_ZSTD_DECOMP(version.major, version.minor, version.patch)) {
@@ -405,11 +410,11 @@ std::optional<std::string> is_zstd_decomp_disabled(library_version version,
   }
 
   if (NVCOMP_ZSTD_DECOMP_IS_STABLE(version.major, version.minor, version.patch)) {
-    if (not detail::nvcomp_integration::is_stable_enabled()) {
+    if (not is_stable_enabled) {
       return "Zstandard decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
              "environment variable.";
     }
-  } else if (!cudf::io::detail::nvcomp_integration::is_all_enabled()) {
+  } else if (not is_all_enabled) {
     return "Zstandard decompression is experimental, you can enable it through "
            "`LIBCUDF_NVCOMP_POLICY` environment variable.";
   }
@@ -429,6 +434,8 @@ std::optional<std::string> is_zstd_decomp_disabled(library_version version,
 
 std::optional<std::string> is_decompression_disabled(compression_type compression,
                                                      std::optional<library_version> target_version,
+                                                     bool is_all_enabled,
+                                                     bool is_stable_enabled,
                                                      std::optional<int> compute_capability)
 {
   auto const version = target_version.value_or(
@@ -439,20 +446,22 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
       if (not NVCOMP_HAS_DEFLATE(version.major, version.minor, version.patch)) {
         return "nvCOMP 2.5 or newer is required for Deflate decompression";
       }
-      if (not detail::nvcomp_integration::is_all_enabled()) {
+      if (not is_all_enabled) {
         return "DEFLATE decompression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
     }
     case compression_type::SNAPPY: {
-      if (not detail::nvcomp_integration::is_stable_enabled()) {
+      if (not is_stable_enabled) {
         return "Snappy decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
                "environment variable.";
       }
       return std::nullopt;
     }
-    case compression_type::ZSTD: return is_zstd_decomp_disabled(version, compute_capability);
+    case compression_type::ZSTD:
+      return is_zstd_decomp_disabled(
+        version, is_all_enabled, is_stable_enabled, compute_capability);
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";

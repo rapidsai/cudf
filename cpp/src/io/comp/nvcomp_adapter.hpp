@@ -18,6 +18,8 @@
 
 #include "gpuinflate.hpp"
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -45,7 +47,10 @@ struct library_version {
  * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
 [[nodiscard]] std::optional<std::string> is_compression_disabled(
-  compression_type compression, std::optional<library_version> target_version = std::nullopt);
+  compression_type compression,
+  std::optional<library_version> target_version = std::nullopt,
+  bool is_all_enabled                           = detail::nvcomp_integration::is_all_enabled(),
+  bool is_stable_enabled                        = detail::nvcomp_integration::is_stable_enabled());
 
 /**
  * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
@@ -60,6 +65,8 @@ struct library_version {
 [[nodiscard]] std::optional<std::string> is_decompression_disabled(
   compression_type compression,
   std::optional<library_version> target_version = std::nullopt,
+  bool is_all_enabled                           = detail::nvcomp_integration::is_all_enabled(),
+  bool is_stable_enabled                        = detail::nvcomp_integration::is_stable_enabled(),
   std::optional<int> compute_capability         = std::nullopt);
 
 /**
