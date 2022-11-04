@@ -37,7 +37,7 @@ TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
 
 TEST(CudaTryTest, TryCatch)
 {
-  EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorMemoryAllocation), cudf::cuda_error;
+  EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorMemoryAllocation), cudf::cuda_error);
 }
 
 TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
