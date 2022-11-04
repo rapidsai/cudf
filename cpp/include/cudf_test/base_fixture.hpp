@@ -287,6 +287,13 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
+/**
+ * @brief Get the default stream to use for tests.
+ *
+ * @return The default stream to use for tests.
+ */
+rmm::cuda_stream_view const get_default_stream();
+
 }  // namespace test
 }  // namespace cudf
 

@@ -23,14 +23,79 @@
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 
+namespace cudf {
+
+// When the option is ON we overload cudf::test::get_default_stream so that it
+// returns the stream provided by calling cudf::test::set_default_stream. Then,
+// we overload CUDA APIs to only expect that stream and no other stream. This
+// is a necessary and sufficient condition to ensure that libcudf is properly
+// passing streams through all of its (tested) APIs.
+#ifdef ENABLE_SPECIFIC_STREAM
+
+namespace test {
+
+std::optional<rmm::cuda_stream_view> _default_stream;
+
 /**
- * @brief Print a backtrace and raise an error if stream is a default stream.
+ * @brief Get the default stream to use for tests.
+ *
+ * @return The default stream to use for tests.
  */
-void check_stream_and_error(cudaStream_t stream)
+rmm::cuda_stream_view const get_default_stream()
 {
+  if (!_default_stream.has_value()) {
+    throw std::runtime_error(
+      "You must set the default stream to use when leveraging identify_stream_usage built with "
+      "ENABLE_SPECIFIC_STREAM=ON.");
+  }
+  return *_default_stream;
+}
+
+/**
+ * @brief get the default stream to use for tests.
+ *
+ * @param The stream to use for tests.
+ */
+void const set_default_stream(rmm::cuda_stream_view stream) { _default_stream = stream; }
+
+}  // namespace test
+
+// When the option is OFF we overload cudf::get_default_stream so that it is no
+// longer CUDA's default stream and then raise errors whenever we find the CUDA
+// default stream in use. This check is sufficient to ensure that cudf is using
+// cudf::get_default_stream everywhere internally rather than implicitly using
+// stream 0, cudaStreamDefault, cudaStreamLegacy, thrust execution policies,
+// etc. It is not sufficient to guarantee a stream-ordered API because it will
+// not identify places in the code that use cudf::get_default_stream instead of
+// properly forwarding along a user-provided stream.
+#else
+
+/**
+ * @brief Get the current default stream
+ *
+ * Overload the default function to return a new stream here.
+ *
+ * @return The current default stream.
+ */
+rmm::cuda_stream_view const get_default_stream()
+{
+  static rmm::cuda_stream stream{};
+  return {stream};
+}
+
+#endif
+
+}  // namespace cudf
+
+bool stream_is_invalid(cudaStream_t stream)
+{
+#ifdef ENABLE_SPECIFIC_STREAM
+  return (stream != cudf::test::get_default_stream().value());
+#else
   // We explicitly list the possibilities rather than using
   // `cudf::get_default_stream().value()` for two reasons:
   // 1. There is no guarantee that `thrust::device` and the default value of
@@ -39,8 +104,17 @@ void check_stream_and_error(cudaStream_t stream)
   // 2. Using the cudf default stream would require linking against cudf, which
   //    adds unnecessary complexity to the build process (especially in CI)
   //    when this simple approach is sufficient.
-  if (stream == cudaStreamDefault || (stream == cudaStreamLegacy) ||
-      (stream == cudaStreamPerThread)) {
+  return (stream == cudaStreamDefault) || (stream == cudaStreamLegacy) ||
+         (stream == cudaStreamPerThread);
+#endif
+}
+
+/**
+ * @brief Print a backtrace and raise an error if stream is a default stream.
+ */
+void check_stream_and_error(cudaStream_t stream)
+{
+  if (stream_is_invalid(stream)) {
 #ifdef __GNUC__
     // If we're on the wrong stream, print the stack trace from the current frame.
     // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
@@ -288,23 +362,6 @@ DEFINE_OVERLOAD(cudaMallocAsync,
 DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
                 ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                 ARG(ptr, size, memPool, stream));
-
-namespace cudf {
-
-/**
- * @brief Get the current default stream
- *
- * Overload the default function to return a new stream here.
- *
- * @return The current default stream.
- */
-rmm::cuda_stream_view const get_default_stream()
-{
-  static rmm::cuda_stream stream{};
-  return {stream};
-}
-
-}  // namespace cudf
 
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,9 @@
  */
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <cudf_test/base_fixture.hpp>
 
 namespace cudf {
 namespace test {
@@ -28,6 +31,8 @@ uint64_t random_generator_incrementing_seed()
   static uint64_t seed = 0;
   return ++seed;
 }
+
+rmm::cuda_stream_view const get_default_stream() { return cudf::get_default_stream(); }
 
 }  // namespace detail
 }  // namespace test

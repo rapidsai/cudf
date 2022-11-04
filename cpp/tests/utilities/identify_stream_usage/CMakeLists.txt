@@ -27,6 +27,16 @@ project(
   LANGUAGES CXX CUDA
 )
 
+# Option for whether the default stream is an error or whether we should search for a specific
+# stream.
+option(
+  ENABLE_SPECIFIC_STREAM
+  "Enable APIs to expect only a specific stream rather than just overriding cudf's default stream"
+  OFF
+)
+# set(ENABLE_SPECIFIC_STREAM OFF CACHE STRING "Enable APIs to expect only a specific stream rather
+# than just overriding cudf's default stream")
+
 include(rapids-cpm)
 include(${rapids-cmake-dir}/cpm/rmm.cmake)
 rapids_cpm_init()
@@ -47,6 +57,10 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
 )
+
+if(ENABLE_SPECIFIC_STREAM)
+  target_compile_definitions(identify_stream_usage PUBLIC ENABLE_SPECIFIC_STREAM)
+endif()
 
 # Add the test file.
 include(CTest)
