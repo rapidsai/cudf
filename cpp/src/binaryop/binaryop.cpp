@@ -194,7 +194,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
-    CUDF_EXPECTS(lhs.size() == rhs.size(), std::runtime_error, "Column sizes don't match");
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
       output_type.id() == type_id::STRING and
@@ -202,7 +202,7 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
     return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
-    CUDF_FAIL("Unsupported operator for these types", std::runtime_error);
+    CUDF_FAIL("Unsupported operator for these types");
 
   if (cudf::is_fixed_point(lhs.type()) or cudf::is_fixed_point(rhs.type())) {
     cudf::binops::compiled::fixed_point_binary_operation_validation(
