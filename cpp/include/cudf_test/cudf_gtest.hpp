@@ -136,15 +136,6 @@ struct TypeList<Types<TYPES...>> {
   } while (0)
 
 /**
- * @brief test macro to be expected to throw cudf::fatal_logic_error with a message
- *
- * @param x The statement to be tested
- * @param msg The message associated with the exception
- */
-#define FATAL_CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::fatal_cuda_error, "Fatal CUDA error encountered at:", msg)
-
-/**
  * @brief test macro to be expected as no exception.
  *
  * The testing is same with EXPECT_NO_THROW() in gtest.
