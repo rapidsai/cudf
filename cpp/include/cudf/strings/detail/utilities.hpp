@@ -36,10 +36,9 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The chars child column for a strings column.
  */
-std::unique_ptr<column> create_chars_child_column(
-  size_type bytes,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> create_chars_child_column(size_type bytes,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Creates a string_view vector from a strings column.
@@ -52,7 +51,7 @@ std::unique_ptr<column> create_chars_child_column(
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

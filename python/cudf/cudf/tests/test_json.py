@@ -897,3 +897,49 @@ def test_json_dtypes_nested_data():
         pdf, schema=df.to_arrow().schema, safe=False
     )
     assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "tag, data",
+    [
+        (
+            "normal",
+            """\
+{"a": 1, "b": 2}
+{"a": 3, "b": 4}""",
+        ),
+        (
+            "multiple",
+            """\
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+    { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14 }""",
+        ),
+        (
+            "reordered",
+            """\
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "c": 12 , "b" : [4, 5   ]}
+    { "b" : [6      ],  "a": { "y" : 6}, "c": 13}
+    { "c" : 14, "a": { "y" : 6}, "b" : [7      ]}
+""",
+        ),
+        (
+            "missing",
+            """
+            { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+            { "a": { "y" : 6}, "b" : [4, 5   ]}
+            { "a": { "y" : 6}, "c": 13 }
+            { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
+        """,
+        ),
+    ],
+)
+def test_order_nested_json_reader(tag, data):
+    expected = cudf.read_json(StringIO(data), engine="pandas", lines=True)
+    target = cudf.read_json(
+        StringIO(data), engine="cudf_experimental", lines=True
+    )
+
+    assert_eq(expected, target, check_dtype=True)
