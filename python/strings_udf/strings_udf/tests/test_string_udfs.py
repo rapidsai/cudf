@@ -59,21 +59,21 @@ def run_udf_test(data, func, dtype):
     comparing it with the equivalent pandas result
     """
     if dtype == "str":
-        output_ary = rmm.DeviceBuffer(size=len(data) * udf_string.size_bytes)
+        output = rmm.DeviceBuffer(size=len(data) * udf_string.size_bytes)
     else:
         dtype = np.dtype(dtype)
-        output_ary = cudf.core.column.column_empty(len(data), dtype=dtype)
+        output = cudf.core.column.column_empty(len(data), dtype=dtype)
 
     cudf_column = cudf.core.column.as_column(data)
-    str_view_ary = column_to_string_view_array(cudf_column)
+    str_views = column_to_string_view_array(cudf_column)
 
     kernel = get_kernel(func, dtype, len(data))
-    kernel.forall(len(data))(str_view_ary, output_ary)
+    kernel.forall(len(data))(str_views, output)
 
     if dtype == "str":
-        output_ary = column_from_udf_string_array(output_ary)
+        output = column_from_udf_string_array(output)
 
-    got = cudf.Series(output_ary, dtype=dtype)
+    got = cudf.Series(output, dtype=dtype)
     expect = pd.Series(data).apply(func)
     assert_eq(expect, got, check_dtype=False)
 

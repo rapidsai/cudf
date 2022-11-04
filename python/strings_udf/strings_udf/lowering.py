@@ -18,17 +18,11 @@ from strings_udf._typing import size_type, string_view, udf_string
 
 character_flags_table_ptr = get_character_flags_table_ptr()
 
-
-# read-only functions
-# We will provide only one overload for this set of functions, which will
-# expect a string_view. When a literal is encountered, numba will promote it to
-# a string_view whereas when a dstring is encountered, numba will convert it to
-# a view via its native view() method.
-
 _STR_VIEW_PTR = types.CPointer(string_view)
 
 
 # CUDA function declarations
+# read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
 
 
