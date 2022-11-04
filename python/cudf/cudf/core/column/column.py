@@ -502,7 +502,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if other is NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
+            # Try and maintain the dtype
+            other = other.dtype.type(other.item())
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(

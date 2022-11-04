@@ -35,7 +35,7 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, as_buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -274,7 +274,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> Union[ColumnBase, cudf.Scalar]:
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalColumn):
                 return NotImplemented
@@ -285,25 +285,20 @@ class NumericalColumn(NumericalBaseColumn):
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
-        other_dtype = np.min_scalar_type(other)
+        try:
+            # Try and use the dtype of the incoming object
+            other_dtype = other.dtype
+        except AttributeError:
+            # Otherwise fall back to numpy's type deduction scheme.
+            other_dtype = np.result_type(other)
+
         if other_dtype.kind in {"b", "i", "u", "f"}:
-            if isinstance(other, cudf.Scalar):
-                return other
-            other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype("float16"):
-                other_dtype = cudf.dtype("float32")
-                other = other_dtype.type(other)
+            common_dtype = np.promote_types(self.dtype, other_dtype)
+            if common_dtype == np.dtype("float16"):
+                common_dtype = cudf.dtype("float32")
             if self.dtype.kind == "b":
-                other_dtype = min_signed_type(other)
-            if np.isscalar(other):
-                return cudf.dtype(other_dtype).type(other)
-            else:
-                ary = full(len(self), other, dtype=other_dtype)
-                return column.build_column(
-                    data=as_buffer(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
-                )
+                common_dtype = min_signed_type(other)
+            return cudf.Scalar(other, dtype=common_dtype)
         else:
             return NotImplemented
 
