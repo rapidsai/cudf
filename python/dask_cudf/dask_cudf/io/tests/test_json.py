@@ -10,7 +10,6 @@ import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
-from dask_cudf.io.json import read_json_experimental
 
 
 @pytest.mark.skipif(
@@ -72,17 +71,3 @@ def test_read_json_lines(lines):
         actual = dask_cudf.read_json(f, orient="records", lines=lines)
         actual_pd = pd.read_json(f, orient="records", lines=lines)
         dd.assert_eq(actual, actual_pd)
-
-
-@pytest.mark.parametrize("chunk_size", [100, 1024, 1024 * 1024])
-def test_chunked_nested_read_json_lines(chunk_size):
-    df = pd.DataFrame(
-        {"x": ["a", "b", "c", "d"] * 1000, "y": [1, 2, 3, 4] * 1000}
-    )
-    with tmpfile("json") as f:
-        df.to_json(f, orient="records", lines=True)
-        actual = read_json_experimental(
-            f, blocksize=chunk_size, orient="records", lines=True
-        )
-        actual_pd = pd.read_json(f, orient="records", lines=True)
-        dd.assert_eq(actual, actual_pd, check_index=False)
