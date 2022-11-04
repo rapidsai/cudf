@@ -474,10 +474,9 @@ try:
 
             if orient != "columns":
                 raise ValueError(f"orient={orient} is not supported")
-            # TODO: Use cudf.from_dict
-            # (See: https://github.com/rapidsai/cudf/issues/11934)
+
             return from_cudf(
-                cudf.DataFrame(data),
+                cudf.DataFrame.from_dict(data, orient=orient, **kwargs),
                 npartitions=npartitions,
             )
 
