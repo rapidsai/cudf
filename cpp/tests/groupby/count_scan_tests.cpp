@@ -53,6 +53,7 @@ TYPED_TEST(groupby_count_scan_test, basic)
   result_wrapper expect_vals{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
   // clang-format on
 
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
   EXPECT_THROW(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
                cudf::logic_error);
@@ -181,6 +182,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
   auto const expect_vals = result_wrapper{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
   // clang-format on
 
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
   EXPECT_THROW(test_single_scan(keys,
                                 vals,
                                 expect_keys,
@@ -208,6 +210,7 @@ TEST_F(groupby_dictionary_count_scan_test, basic)
   result_wrapper expect_vals{0, 0, 0, 1, 0, 1};
   // clang-format on
 
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
   EXPECT_THROW(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
                cudf::logic_error);

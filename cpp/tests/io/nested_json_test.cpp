@@ -588,6 +588,7 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
     R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}] )",
     R"( [{"a":[123, "123"], "b":1.0}, {"b":1.1}, {"b":2.1}] )"};
 
+  // We do not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
     EXPECT_THROW(auto const cudf_table = json_parser(
                    cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr),

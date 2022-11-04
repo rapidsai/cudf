@@ -576,6 +576,8 @@ TEST_F(SegmentedGatherTestFloat, Fails)
   cudf::test::strings_column_wrapper nonlist_map1{"1", "2", "0", "1"};
   LCW<cudf::string_view> nonlist_map2{{"1", "2", "0", "1"}};
 
+  // Input must be a list of integer indices. It should fail for integers,
+  // strings, or lists containing anything other than integers.
   EXPECT_THROW(
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{nonlist_map0}),
     cudf::logic_error);
@@ -591,10 +593,13 @@ TEST_F(SegmentedGatherTestFloat, Fails)
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   LCW<int8_t> nulls_map{{{3, 2, 1, 0}, {0}, {0}, {0, 1}}, valids};
+
+  // Nulls are not supported in the gather map.
   EXPECT_THROW(
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{nulls_map}),
     cudf::logic_error);
 
+  // Gather map and list column sizes must be the same.
   EXPECT_THROW(cudf::lists::detail::segmented_gather(lists_column_view{list},
                                                      lists_column_view{size_mismatch_map}),
                cudf::logic_error);

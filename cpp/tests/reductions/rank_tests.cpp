@@ -316,6 +316,7 @@ TEST(RankScanTest, ExclusiveScan)
 {
   auto const vals = input<uint32_t>{3, 4, 5};
 
+  // Only inclusive scans are supported, so these should all raise exceptions.
   EXPECT_THROW(cudf::scan(vals, *dense_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
                cudf::logic_error);
   EXPECT_THROW(cudf::scan(vals, *rank, scan_type::EXCLUSIVE, INCLUDE_NULLS), cudf::logic_error);

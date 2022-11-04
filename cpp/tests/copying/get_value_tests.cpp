@@ -81,6 +81,7 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
 {
   fixed_width_column_wrapper<TypeParam, int32_t> col({9, 8, 7, 6}, {0, 1, 0, 1});
 
+  // Test for out of bounds indexes in both directions.
   EXPECT_THROW(get_element(col, -1), cudf::logic_error);
   EXPECT_THROW(get_element(col, 4), cudf::logic_error);
 }

@@ -508,6 +508,7 @@ TEST_F(groupby_rank_scan_test_failures, DISABLED_test_exception_triggers)
   auto const keys = input<T>{{1, 2, 3}, null_at(2)};
   auto const col  = input<T>{3, 3, 1};
 
+  // All of these aggregations raise exceptions unless provided presorted keys
   EXPECT_THROW(test_single_scan(keys,
                                 col,
                                 keys,

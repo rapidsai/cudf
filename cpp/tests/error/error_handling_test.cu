@@ -29,16 +29,9 @@ TEST(ExpectsTest, FalseCondition)
 
 TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
 
-TEST(ExpectsTest, TryCatch) { EXPECT_THROW(CUDF_EXPECTS(false, "test reason"), cudf::logic_error); }
-
 TEST(CudaTryTest, Error) { EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorLaunchFailure), cudf::cuda_error); }
 
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
-
-TEST(CudaTryTest, TryCatch)
-{
-  EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorMemoryAllocation), cudf::cuda_error);
-}
 
 TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
