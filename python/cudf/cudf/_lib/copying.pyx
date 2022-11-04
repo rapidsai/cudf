@@ -144,7 +144,7 @@ def copy_range(Column input_column,
     target_column from target_begin to target_end
     """
 
-    if abs(target_end - target_begin) <= 1:
+    if abs(target_end - target_begin) < 1:
         return target_column
 
     if target_begin < 0:
