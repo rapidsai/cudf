@@ -288,12 +288,11 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
  * @return New strings column containing the gathered strings.
  */
 template <bool NullifyOutOfBounds, typename MapIterator>
-std::unique_ptr<cudf::column> gather(
-  strings_column_view const& strings,
-  MapIterator begin,
-  MapIterator end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
+                                     MapIterator begin,
+                                     MapIterator end,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   auto const output_count  = std::distance(begin, end);
   auto const strings_count = strings.size();
@@ -372,13 +371,12 @@ std::unique_ptr<cudf::column> gather(
  * @return New strings column containing the gathered strings.
  */
 template <typename MapIterator>
-std::unique_ptr<cudf::column> gather(
-  strings_column_view const& strings,
-  MapIterator begin,
-  MapIterator end,
-  bool nullify_out_of_bounds,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
+                                     MapIterator begin,
+                                     MapIterator end,
+                                     bool nullify_out_of_bounds,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   if (nullify_out_of_bounds) return gather<true>(strings, begin, end, stream, mr);
   return gather<false>(strings, begin, end, stream, mr);

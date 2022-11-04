@@ -56,13 +56,12 @@ namespace detail {
  * @return New strings column.
  */
 template <typename StringIterLeft, typename StringIterRight, typename Filter>
-std::unique_ptr<cudf::column> copy_if_else(
-  StringIterLeft lhs_begin,
-  StringIterLeft lhs_end,
-  StringIterRight rhs_begin,
-  Filter filter_fn,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
+                                           StringIterLeft lhs_end,
+                                           StringIterRight rhs_begin,
+                                           Filter filter_fn,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);

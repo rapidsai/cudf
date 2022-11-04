@@ -43,14 +43,12 @@ enum class replace_algorithm {
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 template <replace_algorithm alg = replace_algorithm::AUTO>
-std::unique_ptr<column> replace(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  string_scalar const& repl,
-  int32_t maxrepl = -1,
-  // Move before maxrepl?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace(strings_column_view const& strings,
+                                string_scalar const& target,
+                                string_scalar const& repl,
+                                int32_t maxrepl,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
@@ -58,14 +56,12 @@ std::unique_ptr<column> replace(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> replace_slice(
-  strings_column_view const& strings,
-  string_scalar const& repl = string_scalar(""),
-  size_type start           = 0,
-  size_type stop            = -1,
-  // Move before repl?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace_slice(strings_column_view const& strings,
+                                      string_scalar const& repl,
+                                      size_type start,
+                                      size_type stop,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
@@ -73,12 +69,11 @@ std::unique_ptr<column> replace_slice(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> replace(
-  strings_column_view const& strings,
-  strings_column_view const& targets,
-  strings_column_view const& repls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace(strings_column_view const& strings,
+                                strings_column_view const& targets,
+                                strings_column_view const& repls,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Replaces any null string entries with the given string.
@@ -98,12 +93,10 @@ std::unique_ptr<column> replace(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_nulls(
-  strings_column_view const& strings,
-  string_scalar const& repl = string_scalar(""),
-  // Move before repl?
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
+                                      string_scalar const& repl,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings
