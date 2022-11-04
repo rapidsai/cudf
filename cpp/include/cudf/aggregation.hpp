@@ -249,7 +249,7 @@ class segmented_reduce_aggregation : public virtual aggregation {
 enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
-/// Type of treatment of EWM input values first value
+/// Type of treatment of EWM input values' first value
 enum class ewm_history : int32_t { INFINITE, FINITE };
 
 /// Factory to create a SUM aggregation
@@ -415,7 +415,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * sequence. Let these values be known as the y_i.
  *
  * EWMA aggregations are parameterized by a center of mass (`com`) which
- * affects the contribution of the previous values (y_{i-1} ... y_0) in
+ * affects the contribution of the previous values (y_0 ... y_{i-1}) in
  * computing the y_i.
  *
  * EWMA aggregations are also parameterized by a history `cudf::ewm_history`.

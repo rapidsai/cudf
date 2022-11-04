@@ -85,7 +85,7 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
         }
       }();
       if (valid and (exp != 0)) {
-        // The value is non-null, but nulls preceeded it
+        // The value is non-null, but nulls preceding it
         // must adjust the second element of the pair
 
         return {beta * (pow(beta, exp)), second};
@@ -130,10 +130,10 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
         return {beta, input};
       } else {
         if (is_valid and nullcnt == 0) {
-          // preceeding value is valid, return normal pair
+          // preceding value is valid, return normal pair
           return {beta, (1.0 - beta) * input};
         } else if (is_valid and nullcnt != 0) {
-          // one or more preceeding values is null, adjust by how many
+          // one or more preceding values is null, adjust by how many
           T const factor = (1.0 - beta) + pow(beta, nullcnt + 1);
           return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
         } else {
@@ -270,7 +270,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
       return rmm::device_uvector<cudf::size_type>(input.size(), stream);
     }
   }();
-  // denominators are all 1 so dont need to be computed
+  // denominators are all 1 and do not need to be computed
   // pairs are all (beta, 1-beta x_i) except for the first one
 
   if (!input.has_nulls()) {
@@ -370,7 +370,7 @@ struct ewma_functor {
   }
 };
 
-std::unique_ptr<column> exponential_weighted_moving_average(column_view const& input,
+std::unique_ptr<column> exponentially_weighted_moving_average(column_view const& input,
                                                             scan_aggregation const& agg,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr)
