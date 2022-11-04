@@ -283,6 +283,10 @@ class _SeriesLocIndexer(_FrameIndexer):
         self._frame.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        if isinstance(arg, tuple) and arg and isinstance(arg[0], slice):
+            if len(arg) > 1:
+                raise IndexError("Too many Indexers")
+            arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
@@ -671,6 +675,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Truncate a Series before and after some index value.
         This is a useful shorthand for boolean indexing based on index
         values above or below certain thresholds.
+
         Parameters
         ----------
         before : date, str, int

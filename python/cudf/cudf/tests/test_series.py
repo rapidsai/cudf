@@ -1625,8 +1625,7 @@ def test_series_truncate():
 
 def test_series_truncate_invalid_axis():
     csr = cudf.Series([1, 2, 3, 4])
-    msg = "No axis named 1 for object type Series"
-    with pytest.raises(ValueError, match=msg):
+    with pytest.raises(ValueError):
         csr.truncate(axis=1)
 
 
