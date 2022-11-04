@@ -117,13 +117,8 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - black=22.3.0
-          - cmakelang=0.6.13
-          - flake8=3.8.3
           - gcovr>=5.0
-          - isort=5.10.1
           - pre-commit
-          - pydocstyle=6.1.1
       - output_types: conda
         packages:
           - clang=11.1.0  # Are these clang packages needed? For what?
