@@ -503,9 +503,9 @@ __inline__ __device__ It skip_character(It const& it, char ch)
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
@@ -521,6 +521,50 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
                                         not_whitespace);
 
   return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
+}
+
+/**
+ * @brief Adjusts the range to ignore starting/trailing whitespace characters.
+ *
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                           char const* end)
+{
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
+
+  return {trim_begin, trim_end.base()};
+}
+
+/**
+ * @brief Adjusts the range to ignore starting/trailing quotation characters.
+ *
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes. Provide '\0' if no quotes should be
+ * trimmed.
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                      char const* end,
+                                                                      char quotechar)
+{
+  if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
+       *thrust::prev(end) == quotechar)) {
+    thrust::advance(begin, 1);
+    thrust::advance(end, -1);
+  }
+  return {begin, end};
 }
 
 /**

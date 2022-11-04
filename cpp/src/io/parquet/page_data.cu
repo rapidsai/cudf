@@ -876,15 +876,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
           break;
-        case INT32:
+        case INT32: [[fallthrough]];
         case FLOAT: s->dtype_len = 4; break;
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            if (s->col.converted_type == TIME_MILLIS or s->col.converted_type == TIMESTAMP_MILLIS) {
+            // Duration types are not included because no scaling is done when reading
+            if (s->col.converted_type == TIMESTAMP_MILLIS) {
               units = cudf::timestamp_ms::period::den;
-            } else if (s->col.converted_type == TIME_MICROS or
-                       s->col.converted_type == TIMESTAMP_MICROS) {
+            } else if (s->col.converted_type == TIMESTAMP_MICROS) {
               units = cudf::timestamp_us::period::den;
             } else if (s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
               units = cudf::timestamp_ns::period::den;
@@ -894,7 +894,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                                            : (s->col.ts_clock_rate / units);
             }
           }
-          // Fall through to DOUBLE
+          [[fallthrough]];
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
         case BYTE_ARRAY: s->dtype_len = sizeof(string_index_pair); break;
@@ -910,8 +910,16 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
                        : s->dtype_len <= sizeof(int64_t) ? sizeof(int64_t)
                                                          : sizeof(__int128_t);
       } else if (data_type == INT32) {
-        if (dtype_len_out == 1) s->dtype_len = 1;  // INT8 output
-        if (dtype_len_out == 2) s->dtype_len = 2;  // INT16 output
+        if (dtype_len_out == 1) {
+          // INT8 output
+          s->dtype_len = 1;
+        } else if (dtype_len_out == 2) {
+          // INT16 output
+          s->dtype_len = 2;
+        } else if (s->col.converted_type == TIME_MILLIS) {
+          // INT64 output
+          s->dtype_len = 8;
+        }
       } else if (data_type == BYTE_ARRAY && dtype_len_out == 4) {
         s->dtype_len = 4;  // HASH32 output
       } else if (data_type == INT96) {
@@ -1670,7 +1678,12 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
         } else if (dtype == INT96) {
           gpuOutputInt96Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
-          if (s->ts_scale) {
+          if (s->dtype_len_in == 4) {
+            // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+            // TIME_MILLIS is the only duration type stored as int32:
+            // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+            gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst));
+          } else if (s->ts_scale) {
             gpuOutputInt64Timestamp(s, val_src_pos, static_cast<int64_t*>(dst));
           } else {
             gpuOutputFast(s, val_src_pos, static_cast<uint2*>(dst));

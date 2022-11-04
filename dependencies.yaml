@@ -52,7 +52,7 @@ dependencies:
         - matrix:
             cuda: "11.5"
           packages:
-            - cuda-python>=11.5,<11.7.1  # TODO: Check this, it should be updated very soon for the hotfix
+            - cuda-python>=11.7.1,<12.0
       - output_types: conda
         matrices:
         - matrix:

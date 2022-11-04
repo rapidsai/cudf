@@ -2293,7 +2293,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Return a new object, even if the passed indexes are the same.
         level : Not supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit : Not supported
         tolerance : Not supported
 
@@ -2358,7 +2358,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         IE10               404       <NA>
         Konqueror          301       <NA>
 
-        Or we can use “axis-style” keyword arguments
+        Or we can use "axis-style" keyword arguments
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
         Firefox            200       <NA>
@@ -3028,7 +3028,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
-        a dict / Series will be left as-is. Extra labels listed don’t throw an
+        a dict / Series will be left as-is. Extra labels listed don't throw an
         error.
 
         ``DataFrame.rename`` supports two calling conventions:
@@ -3635,8 +3635,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {‘left’, ‘outer’, ‘inner’, 'leftsemi', 'leftanti'}, \
-            default ‘inner’
+        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+            default 'inner'
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
@@ -5363,7 +5363,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ----------
         values : iterable, Series, DataFrame or dict
             The result will only be true at a location if all
-            the labels match. If values is a Series, that’s the index.
+            the labels match. If values is a Series, that's the index.
             If values is a dict, the keys must be the column names,
             which must match. If values is a DataFrame, then both the
             index and column labels must match.
@@ -6019,11 +6019,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @ioutils.doc_to_parquet()
-    def to_parquet(self, path, *args, **kwargs):
+    def to_parquet(
+        self,
+        path,
+        engine="cudf",
+        compression="snappy",
+        index=None,
+        partition_cols=None,
+        partition_file_name=None,
+        partition_offsets=None,
+        statistics="ROWGROUP",
+        metadata_file_path=None,
+        int96_timestamps=False,
+        row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+        row_group_size_rows=None,
+        max_page_size_bytes=None,
+        max_page_size_rows=None,
+        storage_options=None,
+        return_metadata=False,
+        *args,
+        **kwargs,
+    ):
         """{docstring}"""
         from cudf.io import parquet
 
-        return parquet.to_parquet(self, path, *args, **kwargs)
+        return parquet.to_parquet(
+            self,
+            path=path,
+            engine=engine,
+            compression=compression,
+            index=index,
+            partition_cols=partition_cols,
+            partition_file_name=partition_file_name,
+            partition_offsets=partition_offsets,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
+            storage_options=storage_options,
+            return_metadata=return_metadata,
+            *args,
+            **kwargs,
+        )
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
@@ -6066,11 +6106,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, compression="snappy", *args, **kwargs):
+    def to_orc(
+        self,
+        fname,
+        compression="snappy",
+        statistics="ROWGROUP",
+        stripe_size_bytes=None,
+        stripe_size_rows=None,
+        row_index_stride=None,
+        cols_as_map_type=None,
+        storage_options=None,
+        index=None,
+    ):
         """{docstring}"""
         from cudf.io import orc
 
-        orc.to_orc(self, fname, compression, *args, **kwargs)
+        return orc.to_orc(
+            df=self,
+            fname=fname,
+            compression=compression,
+            statistics=statistics,
+            stripe_size_bytes=stripe_size_bytes,
+            stripe_size_rows=stripe_size_rows,
+            row_index_stride=row_index_stride,
+            cols_as_map_type=cols_as_map_type,
+            storage_options=storage_options,
+            index=index,
+        )
 
     @_cudf_nvtx_annotate
     def stack(self, level=-1, dropna=True):

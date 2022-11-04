@@ -22,8 +22,15 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <arrow/buffer.h>
+
+// We disable warning 611 because some Arrow subclasses of
+// `arrow::fs::FileSystem` only partially override the `Equals` method,
+// triggering warning 611-D from nvcc.
+#pragma nv_diag_suppress 611
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
+#pragma nv_diag_default 611
+
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
