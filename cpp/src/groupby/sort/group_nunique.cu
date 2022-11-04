@@ -62,9 +62,9 @@ struct is_unique_iterator_fn {
 
   __device__ size_type operator()(size_type i)
   {
-    bool is_input_countable =
+    auto const is_input_countable =
       !nulls || (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
-    bool is_unique =
+    auto const is_unique =
       is_input_countable && (group_offsets[group_labels[i]] == i ||  // first element or
                              (not equal(i, i - 1)));                 // new unique value in sorted
     return static_cast<size_type>(is_unique);
@@ -94,10 +94,11 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   auto const d_equal     = comparator.equal_to(
     cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
 
-  auto is_unique_iterator = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
+  auto const d_values_view      = column_device_view::create(values, stream);
+  auto const is_unique_iterator = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0),
     is_unique_iterator_fn<nullate::DYNAMIC>{nullate::DYNAMIC{values.has_nulls()},
-                                            *column_device_view::create(values, stream),
+                                            *d_values_view,
                                             d_equal,
                                             null_handling,
                                             group_offsets.data(),

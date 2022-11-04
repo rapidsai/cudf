@@ -58,8 +58,6 @@ struct permuted_row_equality_comparator {
 
  private:
   ComparatorT const _comparator;
-  cudf::size_type const* _permutation;
+  cudf::size_type const* const _permutation;
 };
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace cudf::groupby::detail
