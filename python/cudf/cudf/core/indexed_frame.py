@@ -1243,12 +1243,7 @@ class IndexedFrame(Frame):
 
         slicer = [slice(None, None)] * self.ndim
         slicer[axis] = slice(before, after)
-        result = self.loc[tuple(slicer)]
-
-        if copy:
-            result = result.copy()
-
-        return result
+        return self.loc[tuple(slicer)].copy()
 
     @cached_property
     def loc(self):
