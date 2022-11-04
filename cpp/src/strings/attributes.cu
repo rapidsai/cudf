@@ -87,19 +87,17 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> count_characters(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_characters(strings_column_view const& strings,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
   return counts_fn(strings, ufn, stream, mr);
 }
 
-std::unique_ptr<column> count_bytes(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_bytes(strings_column_view const& strings,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto ufn = [] __device__(const string_view& d_str) { return d_str.size_bytes(); };
   return counts_fn(strings, ufn, stream, mr);
@@ -135,10 +133,9 @@ struct code_points_fn {
 
 namespace detail {
 //
-std::unique_ptr<column> code_points(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> code_points(strings_column_view const& strings,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
