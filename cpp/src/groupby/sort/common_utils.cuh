@@ -17,9 +17,7 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 /**
  * @brief Functor to compare two rows of a table in given permutation order
  *
