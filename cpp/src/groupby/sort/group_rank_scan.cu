@@ -74,7 +74,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
   auto const comparator =
     cudf::experimental::row::equality::self_comparator{table_view{{grouped_values}}, stream};
   auto const d_equal = comparator.equal_to(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
-  auto permuted_equal = permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
+  auto const permuted_equal = permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);
