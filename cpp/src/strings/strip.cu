@@ -56,12 +56,11 @@ struct strip_transform_fn {
 
 }  // namespace
 
-std::unique_ptr<column> strip(
-  strings_column_view const& input,
-  side_type side                      = side_type::BOTH,
-  string_scalar const& to_strip       = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> strip(strings_column_view const& input,
+                              side_type side,
+                              string_scalar const& to_strip,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
