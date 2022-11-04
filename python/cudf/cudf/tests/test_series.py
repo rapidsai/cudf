@@ -1623,10 +1623,12 @@ def test_series_truncate():
     assert_eq(csr.truncate(before=1, after=2), psr.truncate(before=1, after=2))
 
 
-def test_series_truncate_invalid_axis():
+def test_series_truncate_errors():
     csr = cudf.Series([1, 2, 3, 4])
     with pytest.raises(ValueError):
         csr.truncate(axis=1)
+    with pytest.raises(ValueError):
+        csr.truncate(copy=False)
 
 
 def test_series_truncate_datetimeindex():

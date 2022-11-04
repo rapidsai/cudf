@@ -1074,6 +1074,13 @@ class IndexedFrame(Frame):
         `before` and `after` may be specified as strings instead of
         Timestamps.
 
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not actually supported. This method always
+            generates a copy.
+
         Examples
         --------
         **Series**
@@ -1212,6 +1219,8 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:26  1  2
         2021-01-01 23:45:27  1  2
         """
+        if not copy:
+            raise ValueError("The copy parameter is not supported.")
         axis = self._get_axis_from_axis_arg(axis)
         ax = self._index if axis == 0 else self._data.to_pandas_index()
 
