@@ -135,7 +135,7 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - mimesis>=4.1.0
-          - moto>=3.1.6
+          - moto>=4.0.8
           - pytest
           - pytest-benchmark
           - pytest-cases
@@ -146,7 +146,6 @@ dependencies:
           - s3fs>=2022.3.0
           - scipy  # Does this need a lower bound?
           - transformers<=4.10.3  # We should check and fix all "<=" pinnings
-          - werkzeug<2.2.0 # Temporary transient dependency pinning to avoid URL-LIB3 + moto timeouts
   doc:
     common:
       - output_types: [conda, requirements]
