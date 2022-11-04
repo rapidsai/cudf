@@ -173,8 +173,8 @@ TEST_F(BrotliDecompressTest, HelloWorld)
 TEST_F(NvcompConfigTest, Compression)
 {
   using cudf::io::nvcomp::compression_type;
-  using comp_disabled = cudf::io::nvcomp::is_compression_disabled;
   using cudf::io::nvcomp::library_version;
+  auto const& comp_disabled = cudf::io::nvcomp::is_compression_disabled;
 
   EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, library_version{2, 5, 0}, true, true));
   // version 2.5 required
@@ -198,31 +198,31 @@ TEST_F(NvcompConfigTest, Compression)
 TEST_F(NvcompConfigTest, Decompression)
 {
   using cudf::io::nvcomp::compression_type;
-  using decomp_disabled = cudf::io::nvcomp::is_decompression_disabled;
   using cudf::io::nvcomp::library_version;
+  auto const& decomp_disabled = cudf::io::nvcomp::is_decompression_disabled;
 
-  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, library_version{2, 5, 0}, true, true));
+  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, library_version{2, 5, 0}, true, true, 7));
   // version 2.5 required
-  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, library_version{2, 4, 0}, true, true));
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, library_version{2, 4, 0}, true, true, 7));
   // all integrations enabled required
-  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, library_version{2, 5, 0}, false, true));
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, library_version{2, 5, 0}, false, true, 7));
 
-  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, library_version{2, 4, 0}, true, true));
-  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, library_version{2, 3, 2}, false, true));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, library_version{2, 4, 0}, true, true, 7));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, library_version{2, 3, 2}, false, true, 6));
   EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, library_version{2, 3, 0}, true, true, 6));
   // 2.3.1 and earlier requires all integrations to be enabled
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 3, 1}, false, true));
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 3, 1}, false, true, 7));
   // 2.3 version required
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 2, 0}, true, true));
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 2, 0}, true, true, 7));
   // stable integrations enabled required
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 4, 0}, false, false));
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 4, 0}, false, false, 7));
   // 2.4.0 disabled on Pascal
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, library_version{2, 4, 0}, true, true, 6));
 
-  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, library_version{2, 4, 0}, true, true));
-  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, library_version{2, 3, 0}, false, true));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, library_version{2, 4, 0}, true, true, 7));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, library_version{2, 3, 0}, false, true, 7));
   // stable integrations enabled required
-  EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, library_version{2, 2, 0}, false, false));
+  EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, library_version{2, 2, 0}, false, false, 7));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
