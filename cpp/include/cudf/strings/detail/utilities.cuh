@@ -50,11 +50,10 @@ namespace detail {
  * @return offsets child column for strings column
  */
 template <typename InputIterator>
-std::unique_ptr<column> make_offsets_child_column(
-  InputIterator begin,
-  InputIterator end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> make_offsets_child_column(InputIterator begin,
+                                                  InputIterator end,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
   auto count = thrust::distance(begin, end);
@@ -117,12 +116,11 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
-auto make_strings_children(
-  SizeAndExecuteFunction size_and_exec_fn,
-  size_type exec_size,
-  size_type strings_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
+                           size_type exec_size,
+                           size_type strings_count,
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
 {
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
@@ -175,11 +173,10 @@ auto make_strings_children(
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
-auto make_strings_children(
-  SizeAndExecuteFunction size_and_exec_fn,
-  size_type strings_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
+                           size_type strings_count,
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }
