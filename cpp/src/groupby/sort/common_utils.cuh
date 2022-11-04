@@ -23,7 +23,6 @@ namespace cudf::groupby::detail {
  *
  * This is useful to identify unique elements in a sorted order table, when the permutation order is
  * the sorted order of the table.
- *
  */
 template <typename ComparatorT>
 struct permuted_row_equality_comparator {
