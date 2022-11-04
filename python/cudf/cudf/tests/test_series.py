@@ -1630,6 +1630,13 @@ def test_series_truncate_errors():
     with pytest.raises(ValueError):
         csr.truncate(copy=False)
 
+    csr.index = [3, 2, 1, 6]
+    psr = csr.to_pandas()
+    assert_exceptions_equal(
+        lfunc=csr.truncate,
+        rfunc=psr.truncate,
+    )
+
 
 def test_series_truncate_datetimeindex():
     dates = cudf.date_range("2021-01-01", "2021-01-02", freq="s")

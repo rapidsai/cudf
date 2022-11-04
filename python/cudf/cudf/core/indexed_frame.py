@@ -1078,8 +1078,8 @@ class IndexedFrame(Frame):
             **DataFrame.truncate, Series.truncate**
 
             The ``copy`` parameter is only present for API compatibility, but
-            ``copy=False`` is not actually supported. This method always
-            generates a copy.
+            ``copy=False`` is not supported. This method always generates a
+            copy.
 
         Examples
         --------
@@ -1101,7 +1101,8 @@ class IndexedFrame(Frame):
 
         >>> import cudf
         >>> dates = cudf.date_range(
-        ... '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s')
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
         >>> cs2 = cudf.Series(range(len(dates)), index=dates)
         >>> cs2
         2021-01-01 23:45:00     0
@@ -1138,7 +1139,8 @@ class IndexedFrame(Frame):
 
 
         >>> cs2.truncate(
-        ... before="2021-01-01 23:45:18", after="2021-01-01 23:45:27")
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
         2021-01-01 23:45:18    18
         2021-01-01 23:45:19    19
         2021-01-01 23:45:20    20
@@ -1151,7 +1153,7 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:27    27
         dtype: int64
 
-        >>> cs3 = cudf.Series({'A':1, 'B':2, 'C':3, 'D':4})
+        >>> cs3 = cudf.Series({'A': 1, 'B': 2, 'C': 3, 'D': 4})
         >>> cs3
         A    1
         B    2
@@ -1195,7 +1197,8 @@ class IndexedFrame(Frame):
 
         >>> import cudf
         >>> dates = cudf.date_range(
-        ... '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s')
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
         >>> df2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
         >>> df2.head()
                              A  B
@@ -1206,7 +1209,8 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:04  1  2
 
         >>> df2.truncate(
-        ... before="2021-01-01 23:45:18", after="2021-01-01 23:45:27")
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
                              A  B
         2021-01-01 23:45:18  1  2
         2021-01-01 23:45:19  1  2
@@ -1220,7 +1224,7 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:27  1  2
         """
         if not copy:
-            raise ValueError("The copy parameter is not supported.")
+            raise ValueError("Truncating with copy=False is not supported.")
         axis = self._get_axis_from_axis_arg(axis)
         ax = self._index if axis == 0 else self._data.to_pandas_index()
 
