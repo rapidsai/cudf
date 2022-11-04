@@ -39,6 +39,8 @@ enum class compression_type { SNAPPY, ZSTD, DEFLATE };
  */
 [[nodiscard]] bool is_compression_enabled(compression_type compression);
 
+[[nodiscard]] std::optional<std::string> is_decompression_disabled(compression_type compression);
+
 /**
  * @brief Device batch decompression of given type.
  *

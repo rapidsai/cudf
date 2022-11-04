@@ -43,7 +43,7 @@
 #define NVCOMP_HAS_ZSTD_COMP 0
 #endif
 
-#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 3)
+#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION >= 5)
 #define NVCOMP_HAS_DEFLATE 1
 #else
 #define NVCOMP_HAS_DEFLATE 0
@@ -163,22 +163,6 @@ size_t batched_decompress_temp_size(compression_type compression,
   return temp_size;
 }
 
-void check_is_zstd_enabled()
-{
-  CUDF_EXPECTS(NVCOMP_HAS_ZSTD_DECOMP, "nvCOMP 2.3 or newer is required for Zstandard compression");
-  CUDF_EXPECTS(NVCOMP_ZSTD_IS_STABLE or cudf::io::detail::nvcomp_integration::is_all_enabled(),
-               "Zstandard compression is experimental, you can enable it through "
-               "`LIBCUDF_NVCOMP_POLICY` environment variable.");
-
-#if NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL
-  int device;
-  int cc_major;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
-  CUDF_EXPECTS(cc_major != 6, "Zstandard decompression is disabled on Pascal GPUs");
-#endif
-}
-
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
@@ -187,8 +171,6 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
-  if (compression == compression_type::ZSTD) { check_is_zstd_enabled(); }
-
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
@@ -394,14 +376,59 @@ bool is_compression_enabled(compression_type compression)
 {
   switch (compression) {
     case compression_type::DEFLATE:
-      // See https://github.com/rapidsai/cudf/issues/11812
-      return false;
+      return NVCOMP_HAS_DEFLATE and detail::nvcomp_integration::is_all_enabled();
     case compression_type::SNAPPY: return detail::nvcomp_integration::is_stable_enabled();
     case compression_type::ZSTD:
       return NVCOMP_HAS_ZSTD_COMP and detail::nvcomp_integration::is_all_enabled();
     default: return false;
   }
   return false;
+}
+
+std::optional<std::string> is_zstd_decomp_disabled()
+{
+  if (!NVCOMP_HAS_ZSTD_DECOMP) {
+    return "nvCOMP 2.3 or newer is required for Zstandard decompression";
+  }
+  if (!NVCOMP_ZSTD_IS_STABLE and !cudf::io::detail::nvcomp_integration::is_all_enabled()) {
+    return "Zstandard compression is experimental, you can enable it through "
+           "`LIBCUDF_NVCOMP_POLICY` environment variable.";
+  }
+
+#if NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL
+  int device;
+  int cc_major;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
+  if (cc_major == 6) { return "Zstandard decompression is disabled on Pascal GPUs"; }
+#endif
+  return std::nullopt;
+}
+
+std::optional<std::string> is_decompression_disabled(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::DEFLATE: {
+      if (!NVCOMP_HAS_DEFLATE) {
+        return "nvCOMP 2.5 or newer is required for Deflate decompression";
+      }
+      if (not detail::nvcomp_integration::is_all_enabled()) {
+        return "DEFLATE decompression is experimental, you can enable it through "
+               "`LIBCUDF_NVCOMP_POLICY` environment variable.";
+      }
+      return std::nullopt;
+    }
+    case compression_type::SNAPPY: {
+      if (not detail::nvcomp_integration::is_stable_enabled()) {
+        return "Snappy decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
+               "environment variable.";
+      }
+      return std::nullopt;
+    }
+    case compression_type::ZSTD: return is_zstd_decomp_disabled();
+    default: return "Unsupported compression type";
+  }
+  return "Unsupported compression type";
 }
 
 size_t compress_input_alignment_bits(compression_type compression)
