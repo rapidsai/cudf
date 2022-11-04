@@ -109,23 +109,26 @@ struct fatal_cuda_error : public cuda_error {
  * CUDF_EXPECTS(p != nullptr, "Unexpected null pointer");
  *
  * // throws std::runtime_error
- * CUDF_EXPECTS(p != nullptr, std::runtime_error, "Unexpected nullptr");
+ * CUDF_EXPECTS(p != nullptr, "Unexpected nullptr", std::runtime_error);
  * ```
- * @param[in] _condition Expression that evaluates to true or false
- * @param[in] _expection_type The exception type to throw; must inherit
- *     `std::exception`. If not specified (i.e. if only two macro
- *     arguments are provided), defaults to `cudf::logic_error`
- * @param[in] _what  String literal description of why the exception was
- *     thrown, i.e. why `_condition` was expected to be true.
+ * @param ... This macro accepts either two or three arguments:
+ *   - The first argument must be an expression that evaluates to true or
+ *     false, and is the condition being checked.
+ *   - The second argument is a string literal used to construct the `what` of
+ *     the exception.
+ *   - When given, the third argument is the exception to be thrown. When not
+ *     specified, defaults to `cudf::logic_error`.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
 #define CUDF_EXPECTS(...)                                             \
   GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2) \
   (__VA_ARGS__)
 
+/// @cond
+
 #define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
 
-#define CUDF_EXPECTS_3(_condition, _exception_type, _reason)                        \
+#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)                        \
   do {                                                                              \
     static_assert(std::is_base_of_v<std::exception, _exception_type>);              \
     (!!(_condition)) ? static_cast<void>(0)                                         \
@@ -133,7 +136,9 @@ struct fatal_cuda_error : public cuda_error {
       {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason};     \
   } while (0)
 
-#define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, cudf::logic_error, _reason)
+#define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, _reason, cudf::logic_error)
+
+/// @endcond
 
 /**
  * @brief Indicates that an erroneous code path has been taken.
@@ -146,10 +151,19 @@ struct fatal_cuda_error : public cuda_error {
  * // Throws `std::runtime_error`
  * CUDF_FAIL("Unsupported code path", std::runtime_error);
  * ```
+ *
+ * @param ... This macro accepts either one or two arguments:
+ *   - The first argument is a string literal used to construct the `what` of
+ *     the exception.
+ *   - When given, the second argument is the exception to be thrown. When not
+ *     specified, defaults to `cudf::logic_error`.
+ * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
 #define CUDF_FAIL(...)                                       \
   GET_CUDF_FAIL_MACRO(__VA_ARGS__, CUDF_FAIL_2, CUDF_FAIL_1) \
   (__VA_ARGS__)
+
+/// @cond
 
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 
@@ -158,6 +172,8 @@ struct fatal_cuda_error : public cuda_error {
   throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
+
+/// @endcond
 
 namespace cudf {
 namespace detail {
