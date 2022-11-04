@@ -118,9 +118,9 @@ constexpr size_t compression_block_size(orc::CompressionKind compression)
   if (compression == orc::CompressionKind::NONE) { return 0; }
 
   auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
-                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
-                              : std::nullopt;
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
   constexpr size_t max_block_size = 256 * 1024;
   return std::min(nvcomp_limit.value_or(max_block_size), max_block_size);
@@ -537,7 +537,7 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
 auto uncomp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
     return 1u;
   }
 
@@ -547,7 +547,7 @@ auto uncomp_block_alignment(CompressionKind compression_kind)
 auto comp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
     return 1u;
   }
 

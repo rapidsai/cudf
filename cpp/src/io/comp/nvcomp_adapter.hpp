@@ -30,15 +30,23 @@ namespace cudf::io::nvcomp {
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
 /**
- * @brief Whether the given compression type is enabled through nvCOMP.
+ * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
- * Result depends on nvCOMP version and environment variables.
+ * Result cab depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
- * @returns true if nvCOMP use is enabled; false otherwise
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
-[[nodiscard]] bool is_compression_enabled(compression_type compression);
+[[nodiscard]] std::optional<std::string> is_compression_disabled(compression_type compression);
 
+/**
+ * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
+ *
+ * Result can depend on nvCOMP version and environment variables.
+ *
+ * @param compression Compression type
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
+ */
 [[nodiscard]] std::optional<std::string> is_decompression_disabled(compression_type compression);
 
 /**

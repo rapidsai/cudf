@@ -408,7 +408,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       case compression_type::ZSTD:
         if (auto const reason = nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD);
             reason) {
-          CUDF_FAIL("Compression error: " + reason.value());
+          CUDF_FAIL("Decompression error: " + reason.value());
         }
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    inflate_in_view,
