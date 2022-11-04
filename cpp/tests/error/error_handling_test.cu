@@ -29,10 +29,7 @@ TEST(ExpectsTest, FalseCondition)
 
 TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
 
-TEST(ExpectsTest, TryCatch)
-{
-  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), "test reason");
-}
+TEST(ExpectsTest, TryCatch) { EXPECT_THROW(CUDF_EXPECTS(false, "test reason"), cudf::logic_error); }
 
 TEST(CudaTryTest, Error)
 {

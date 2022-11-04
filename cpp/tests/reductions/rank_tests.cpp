@@ -316,12 +316,11 @@ TEST(RankScanTest, ExclusiveScan)
 {
   auto const vals = input<uint32_t>{3, 4, 5};
 
-  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, *dense_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
-                            "Rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, *rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
-                            "Rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, *percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
-                            "Rank aggregation operator requires an inclusive scan");
+  EXPECT_THROW(cudf::scan(vals, *dense_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::scan(vals, *rank, scan_type::EXCLUSIVE, INCLUDE_NULLS), cudf::logic_error);
+  EXPECT_THROW(cudf::scan(vals, *percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+               cudf::logic_error);
 }
 
 }  // namespace cudf::test

@@ -136,15 +136,6 @@ struct TypeList<Types<TYPES...>> {
   } while (0)
 
 /**
- * @brief test macro to be expected to throw cudf::logic_error with a message
- *
- * @param x The statement to be tested
- * @param msg The message associated with the exception
- */
-#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
-
-/**
  * @brief test macro to be expected to throw cudf::cuda_error with a message
  *
  * @param x The statement to be tested
