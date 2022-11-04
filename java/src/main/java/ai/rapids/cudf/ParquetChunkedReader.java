@@ -31,7 +31,8 @@ public class ParquetChunkedReader implements AutoCloseable {
   /**
    * Construct the reader instance from a read limit and a file path.
    *
-   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
    * @param filePath Full path of the input Parquet file to read.
    */
   public ParquetChunkedReader(long chunkSizeByteLimit, File filePath) {
@@ -41,7 +42,8 @@ public class ParquetChunkedReader implements AutoCloseable {
   /**
    * Construct the reader instance from a read limit, a ParquetOptions object, and a file path.
    *
-   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
    * @param opts The options for Parquet reading.
    * @param filePath Full path of the input Parquet file to read.
    */
@@ -53,7 +55,8 @@ public class ParquetChunkedReader implements AutoCloseable {
   /**
    * Construct the reader instance from a read limit and a file already read in a memory buffer.
    *
-   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
    * @param opts The options for Parquet reading.
    * @param buffer Raw Parquet file content.
    * @param offset The starting offset into buffer.
@@ -71,6 +74,13 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @return A boolean value indicating if there is more data to read from file.
    */
   public boolean hasNext() {
+    if (firstCall) {
+      // This function needs to return true at least once, so an empty table
+      // (but having empty columns instead of no column) can be returned by readChunk()
+      // if the input file has no row.
+      firstCall = false;
+      return true;
+    }
     return hasNext(handle);
   }
 
@@ -102,9 +112,15 @@ public class ParquetChunkedReader implements AutoCloseable {
   private long handle;
 
   /**
+   * Auxiliary variable to help {@link #hasNext()} returning true at least once.
+   */
+  private boolean firstCall = true;
+
+  /**
    * Create a native chunked Parquet reader object on heap and return its memory address.
    *
-   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
    * @param filterColumnNames Name of the columns to read, or an empty array if we want to read all.
    * @param binaryToString Whether to convert the corresponding column to String if it is binary.
    * @param filePath Full path of the file to read, or given as null if reading from a buffer.
