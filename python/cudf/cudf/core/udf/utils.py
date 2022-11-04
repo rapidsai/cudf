@@ -263,14 +263,12 @@ def _get_input_args_from_frame(fr):
 
 
 def _return_arr_from_dtype(dt, size):
-    extensionty = masked_array_types.get(dt)
-    if extensionty:
+    if extensionty := masked_array_types.get(dt):
         return rmm.DeviceBuffer(size=size * extensionty.return_type.size_bytes)
     return cp.empty(size, dtype=dt)
 
 
 def _post_process_output_col(col, retty):
-    getter = output_col_getters.get(retty)
-    if getter:
+    if getter := output_col_getters.get(retty):
         col = getter(col)
     return as_column(col, retty)
