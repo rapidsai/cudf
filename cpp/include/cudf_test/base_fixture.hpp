@@ -315,8 +315,11 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
     const char* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
     const char* env_stream_mode =
       std::getenv("GTEST_CUDF_STREAM_MODE");  // Overridden by CLI options
-    auto default_rmm_mode    = env_rmm_mode ? env_rmm_mode : "pool";
-    auto default_stream_mode = env_stream_mode ? env_stream_mode : "default";
+    const char* env_stream_error_mode =
+      std::getenv("GTEST_CUDF_STREAM_ERROR_MODE");  // Overridden by CLI options
+    auto default_rmm_mode          = env_rmm_mode ? env_rmm_mode : "pool";
+    auto default_stream_mode       = env_stream_mode ? env_stream_mode : "default";
+    auto default_stream_error_mode = env_stream_error_mode ? env_stream_error_mode : "error";
     options.allow_unrecognised_options().add_options()(
       "rmm_mode",
       "RMM allocation mode",
@@ -325,6 +328,11 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
       "stream_mode",
       "Whether to use a non-default stream",
       cxxopts::value<std::string>()->default_value(default_stream_mode));
+    options.allow_unrecognised_options().add_options()(
+      "stream_error_mode",
+      "Whether to error or print to stdout when a non-default stream is observed and stream_mode "
+      "is \"custom\"",
+      cxxopts::value<std::string>()->default_value(default_stream_error_mode));
     return options.parse(argc, argv);
   } catch (const cxxopts::OptionException& e) {
     CUDF_FAIL("Error parsing command line options");
@@ -341,21 +349,23 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                            \
-  int main(int argc, char** argv)                                           \
-  {                                                                         \
-    ::testing::InitGoogleTest(&argc, argv);                                 \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);                 \
-    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();           \
-    auto resource       = cudf::test::create_memory_resource(rmm_mode);     \
-    rmm::mr::set_current_device_resource(resource.get());                   \
-                                                                            \
-    auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();     \
-    rmm::cuda_stream const new_default_stream{};                            \
-    if (stream_mode == "custom") {                                          \
-      auto adapter = make_stream_checking_resource_adaptor(resource.get()); \
-      rmm::mr::set_current_device_resource(&adapter);                       \
-    }                                                                       \
-                                                                            \
-    return RUN_ALL_TESTS();                                                 \
+#define CUDF_TEST_PROGRAM_MAIN()                                                            \
+  int main(int argc, char** argv)                                                           \
+  {                                                                                         \
+    ::testing::InitGoogleTest(&argc, argv);                                                 \
+    auto const cmd_opts = parse_cudf_test_opts(argc, argv);                                 \
+    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();                           \
+    auto resource       = cudf::test::create_memory_resource(rmm_mode);                     \
+    rmm::mr::set_current_device_resource(resource.get());                                   \
+                                                                                            \
+    auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();                     \
+    rmm::cuda_stream const new_default_stream{};                                            \
+    if (stream_mode == "custom") {                                                          \
+      auto const stream_error_mode = cmd_opts["stream_error_mode"].as<std::string>();       \
+      auto adapter                 = make_stream_checking_resource_adaptor(resource.get()); \
+      if (stream_error_mode == "print") { adapter.disable_errors(); }                       \
+      rmm::mr::set_current_device_resource(&adapter);                                       \
+    }                                                                                       \
+                                                                                            \
+    return RUN_ALL_TESTS();                                                                 \
   }

@@ -70,6 +70,10 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     return upstream_->supports_get_mem_info();
   }
 
+  void enable_errors() { _error = true; }
+
+  void disable_errors() { _error = false; }
+
  private:
   /**
    * @brief Allocates memory of size at least `bytes` using the upstream
@@ -145,11 +149,16 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     auto cstream{stream.value()};
     if (cstream == cudaStreamDefault || (cstream == cudaStreamLegacy) ||
         (cstream == cudaStreamPerThread)) {
-      throw std::runtime_error("Attempted to perform an operation on a default stream!");
+      if (_error) {
+        throw std::runtime_error("Attempted to perform an operation on a default stream!");
+      } else {
+        std::cout << "Attempted to perform an operation on a default stream!" << std::endl;
+      }
     }
   }
 
   Upstream* upstream_;  // the upstream resource used for satisfying allocation requests
+  bool _error;          // the upstream resource used for satisfying allocation requests
 };
 
 /**

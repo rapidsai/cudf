@@ -30,6 +30,11 @@ project(
 # Option for whether the default stream is an error or whether we should search for a specific
 # stream.
 option(
+  ERROR_ON_INVALID_STREAM
+  "Whether to raise an exception when a default stream is found. If turned off, will print to stdout without throwing"
+  ON
+)
+option(
   ENABLE_SPECIFIC_STREAM
   "Enable APIs to expect only a specific stream rather than just overriding cudf's default stream"
   OFF
@@ -58,6 +63,9 @@ set_target_properties(
              POSITION_INDEPENDENT_CODE ON
 )
 
+if(ERROR_ON_INVALID_STREAM)
+  target_compile_definitions(identify_stream_usage PUBLIC ERROR_ON_INVALID_STREAM)
+endif()
 if(ENABLE_SPECIFIC_STREAM)
   target_compile_definitions(identify_stream_usage PUBLIC ENABLE_SPECIFIC_STREAM)
 endif()

@@ -183,7 +183,11 @@ void check_stream_and_error(cudaStream_t stream)
 #else
     std::cout << "Backtraces are only when built with a GNU compiler." << std::endl;
 #endif  // __GNUC__
+#ifdef ERROR_ON_INVALID_STREAM
     throw std::runtime_error("Found unexpected default stream!");
+#else
+    std::cout << "Found unexpected default stream!" << std::endl;
+#endif
   }
 }
 
