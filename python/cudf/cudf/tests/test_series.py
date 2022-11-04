@@ -1639,7 +1639,9 @@ def test_series_truncate_errors():
 
 
 def test_series_truncate_datetimeindex():
-    dates = cudf.date_range("2021-01-01", "2021-01-02", freq="s")
+    dates = cudf.date_range(
+        "2021-01-01 23:45:00", "2021-01-02 23:46:00", freq="s"
+    )
     csr = cudf.Series(range(len(dates)), index=dates)
     psr = csr.to_pandas()
 
