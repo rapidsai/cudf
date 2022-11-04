@@ -138,18 +138,29 @@ struct fatal_cuda_error : public cuda_error {
 /**
  * @brief Indicates that an erroneous code path has been taken.
  *
- * In host code, throws a `cudf::logic_error`.
- *
- *
  * Example usage:
- * ```
- * CUDF_FAIL("Non-arithmetic operation is not supported");
- * ```
+ * ```c++
+ * // Throws `cudf::logic_error`
+ * CUDF_FAIL("Unsupported code path");
  *
- * @param[in] reason String literal description of the reason
+ * // Throws `std::runtime_error`
+ * CUDF_FAIL("Unsupported code path", std::runtime_error);
+ * ```
  */
-#define CUDF_FAIL(reason) \
-  throw cudf::logic_error("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_FAIL(...)                                       \
+  GET_CUDF_FAIL_MACRO(__VA_ARGS__, CUDF_FAIL_2, CUDF_FAIL_1) \
+  (__VA_ARGS__)
+
+#define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
+
+#define CUDF_FAIL_2(_what, _exception_type)                                                     \
+  do {                                                                                          \
+    static_assert(std::is_base_of_v<std::exception, _exception_type>);                          \
+    /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/                                              \
+    throw _exception_type{"CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what}; \
+  } while (0)
+
+#define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 
 namespace cudf {
 namespace detail {
