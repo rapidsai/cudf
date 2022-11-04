@@ -31,7 +31,7 @@ dependencies:
           - cmake>=3.23.1
           - cython>=0.29,<0.30
           - dlpack>=0.5,<0.6.0a0
-          - pyarrow=9
+          - pyarrow=9.0.0
           - rmm=22.12.*
           - scikit-build>=0.13.1
       - output_types: conda
@@ -84,7 +84,6 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - cachetools
-          - cubinlinker
           - dask>=2022.9.2
           - distributed>=2022.9.2
           - fsspec>=0.6.0
@@ -93,25 +92,40 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - pandas>=1.0,<1.6.0dev0
-          - ptxcompiler
           - python-confluent-kafka=1.7.0
           - streamz
           - typing_extensions
       - output_types: conda
         packages:
+          - cubinlinker
           - cupy>=9.5.0,<12.0.0a0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
               - pyorc
+          - ptxcompiler
+          - rmm=22.12.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
           # This index is needed for rmm, cubinlinker, ptxcompiler.
           - --extra-index-url=https://pypi.ngc.nvidia.com
-          - cupy-cuda115>=9.5.0,<12.0.0a0  # Need to check this. ARM requires cupy-cuda11x?
+          - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
+          - ptxcompiler-cu11
           - pyorc
+          - rmm-cu11=22.12.*
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              - cupy-cuda115>=9.5.0,<12.0.0a0  # TODO: This might change to cupy-cuda11x?
+          - matrix:
+              arch: aarch64
+            packages:
+              - cupy-cuda11x -f https://pip.cupy.dev/aarch64  # TODO: Verify that this works.
   develop:
     common:
       - output_types: [conda, requirements]
@@ -141,7 +155,7 @@ dependencies:
           - pytorch<1.12.0  # We should check and fix all "<=" pinnings
           - s3fs>=2022.3.0
           - scipy
-          - transformers<=4.10.3  # We should check and fix all "<=" pinnings
+          - transformers
   doc:
     common:
       - output_types: [conda, requirements]

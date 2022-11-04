@@ -45,7 +45,7 @@ dependencies:
 - pre-commit
 - protobuf>=3.20.1,<3.21.0a0
 - ptxcompiler
-- pyarrow=9
+- pyarrow=9.0.0
 - pydata-sphinx-theme
 - pytest
 - pytest-benchmark
@@ -67,7 +67,7 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17
-- transformers<=4.10.3
+- transformers
 - typing_extensions
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
