@@ -6,7 +6,14 @@ import cudf
 from cudf._version import get_versions
 
 from . import backends
-from .core import DataFrame, Series, concat, from_cudf, from_dask_dataframe
+from .core import (
+    DataFrame,
+    Series,
+    concat,
+    from_cudf,
+    from_dask_dataframe,
+    from_dict,
+)
 from .groupby import groupby_agg
 from .io import read_csv, read_json, read_orc, read_text, to_orc
 

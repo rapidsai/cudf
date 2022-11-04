@@ -470,14 +470,14 @@ try:
 
         @staticmethod
         def from_dict(data, npartitions, orient="columns", **kwargs):
-            from dask_cudf import from_cudf
+            from dask_cudf import from_dict
 
-            if orient != "columns":
-                raise ValueError(f"orient={orient} is not supported")
-
-            return from_cudf(
-                cudf.DataFrame.from_dict(data, orient=orient, **kwargs),
-                npartitions=npartitions,
+            return from_dict(
+                data,
+                npartitions,
+                orient=orient,
+                dtype=kwargs.get("dtype", None),
+                columns=kwargs.get("columns", None),
             )
 
         @staticmethod
