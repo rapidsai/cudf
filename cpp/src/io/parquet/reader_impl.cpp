@@ -242,7 +242,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 void reader::impl::prepare_data(size_type skip_rows,
                                 size_type num_rows,
                                 bool uses_custom_row_bounds,
-                                std::vector<std::vector<size_type>> const& row_group_indices)
+                                host_span<std::vector<size_type> const> row_group_indices)
 {
   const auto [skip_rows_corrected, num_rows_corrected, row_groups_info] =
     _metadata->select_row_groups(row_group_indices, skip_rows, num_rows);
@@ -307,7 +307,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
-                                       std::vector<std::vector<size_type>> const& row_group_indices)
+                                       host_span<std::vector<size_type> const> row_group_indices)
 {
   prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
   return read_chunk_internal(uses_custom_row_bounds);

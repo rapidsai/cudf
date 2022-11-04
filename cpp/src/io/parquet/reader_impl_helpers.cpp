@@ -328,7 +328,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<size_type, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
-  std::vector<std::vector<size_type>> const& row_group_indices,
+  host_span<std::vector<size_type> const> row_group_indices,
   size_type row_start,
   size_type row_count) const
 {

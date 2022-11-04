@@ -74,7 +74,7 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            bool uses_custom_row_bounds,
-                           std::vector<std::vector<size_type>> const& row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices);
 
  private:
   /**
@@ -89,7 +89,7 @@ class reader::impl {
   void prepare_data(size_type skip_rows,
                     size_type num_rows,
                     bool uses_custom_row_bounds,
-                    std::vector<std::vector<size_type>> const& row_group_indices);
+                    host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Load and decompress the input file(s) into memory.
