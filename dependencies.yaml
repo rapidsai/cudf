@@ -20,16 +20,15 @@ channels:
   - rapidsai
   - conda-forge
 # Not sure whether we need these:
-# - nvidia
 # - rapidsai-nightly
 # - dask/label/dev
+# - nvidia
 dependencies:
   build:
     common:
       - output_types: [conda, requirements]
         packages:
           - cmake>=3.23.1
-          - cmake_setuptools>=0.1.3
           - cython>=0.29,<0.30
           - dlpack>=0.5,<0.6.0a0
           - pyarrow=9
@@ -117,13 +116,10 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - gcovr>=5.0
           - pre-commit
       - output_types: conda
         packages:
-          - clang=11.1.0  # Are these clang packages needed? For what?
-          - clang-tools=11.1.0  # Are these clang packages needed? For what?
-          - doxygen=1.8.20  # We rely on this being installed for pre-commit but pre-commit handles all the rest of this section for us (except pre-commit itself). We can probably remove black, etc.
+          - doxygen=1.8.20  # pre-commit hook needs a specific version.
   test:
     common:
       - output_types: [conda, requirements]
@@ -144,7 +140,7 @@ dependencies:
           - python-snappy>=0.6.0
           - pytorch<1.12.0  # We should check and fix all "<=" pinnings
           - s3fs>=2022.3.0
-          - scipy  # Does this need a lower bound?
+          - scipy
           - transformers<=4.10.3  # We should check and fix all "<=" pinnings
   doc:
     common:

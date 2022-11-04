@@ -6,16 +6,11 @@ channels:
 dependencies:
 - aiobotocore>=2.2.0
 - arrow-cpp=9
-- black=22.3.0
 - boto3>=1.21.21
 - botocore>=1.24.21
 - c-compiler
 - cachetools
-- clang-tools=11.1.0
-- clang=11.1.0
 - cmake>=3.23.1
-- cmake_setuptools>=0.1.3
-- cmakelang=0.6.13
 - cubinlinker
 - cuda-python>=11.7.1,<12.0
 - cudatoolkit=11.5
@@ -28,22 +23,20 @@ dependencies:
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.8.20
 - fastavro>=0.22.9
-- flake8=3.8.3
 - fsspec>=0.6.0
 - gcc_linux-64=9.*
-- gcovr>=5.0
 - hypothesis
 - ipython
-- isort=5.10.1
 - librdkafka=1.7.0
 - mimesis>=4.1.0
-- moto>=3.1.6
+- moto>=4.0.8
 - myst-nb
 - nbsphinx
 - notebook>=0.5.0
 - numba>=0.56.2
 - numpy
 - numpydoc
+- nvcc_linux-64=11.5
 - nvtx>=0.2.1
 - packaging
 - pandas>=1.0,<1.6.0dev0
@@ -54,7 +47,6 @@ dependencies:
 - ptxcompiler
 - pyarrow=9
 - pydata-sphinx-theme
-- pydocstyle=6.1.1
 - pytest
 - pytest-benchmark
 - pytest-cases
@@ -77,7 +69,6 @@ dependencies:
 - sysroot_linux-64==2.17
 - transformers<=4.10.3
 - typing_extensions
-- werkzeug<2.2.0
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
   - pyorc
