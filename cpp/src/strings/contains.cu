@@ -86,29 +86,26 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 
 }  // namespace
 
-std::unique_ptr<column> contains_re(
-  strings_column_view const& input,
-  regex_program const& prog,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains_re(strings_column_view const& input,
+                                    regex_program const& prog,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   return contains_impl(input, prog, false, stream, mr);
 }
 
-std::unique_ptr<column> matches_re(
-  strings_column_view const& input,
-  regex_program const& prog,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> matches_re(strings_column_view const& input,
+                                   regex_program const& prog,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   return contains_impl(input, prog, true, stream, mr);
 }
 
-std::unique_ptr<column> count_re(
-  strings_column_view const& input,
-  regex_program const& prog,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_re(strings_column_view const& input,
+                                 regex_program const& prog,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);

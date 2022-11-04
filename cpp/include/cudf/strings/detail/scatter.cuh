@@ -57,18 +57,18 @@ namespace detail {
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
-std::unique_ptr<column> scatter(
-  SourceIterator begin,
-  SourceIterator end,
-  MapIterator scatter_map,
-  strings_column_view const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scatter(SourceIterator begin,
+                                SourceIterator end,
+                                MapIterator scatter_map,
+                                strings_column_view const& target,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   if (target.is_empty()) return make_empty_column(type_id::STRING);
 
   // create vector of string_view's to scatter into
-  rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);
+  rmm::device_uvector<string_view> target_vector =
+    create_string_vector_from_column(target, stream, rmm::mr::get_current_device_resource());
 
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = thrust::distance(begin, end);
