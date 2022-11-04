@@ -1,7 +1,7 @@
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
 files:
   all:
-    generate: conda
+    output: conda
     matrix:
       cuda: ["11.5"]
       arch: [x86_64]
@@ -13,7 +13,7 @@ files:
       - doc
       - notebook
   test:
-    generate: none
+    output: none
     includes:
       - test
 channels:
