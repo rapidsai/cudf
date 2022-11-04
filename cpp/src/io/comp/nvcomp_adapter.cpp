@@ -360,10 +360,10 @@ void batched_compress(compression_type compression,
 }
 
 std::optional<std::string> is_compression_disabled(compression_type compression,
-                                                   std::optional<nvcomp_version> target_version)
+                                                   std::optional<library_version> target_version)
 {
-  auto const version = version.value_or(
-    nvcomp_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
+  auto const version = target_version.value_or(
+    library_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
   switch (compression) {
     case compression_type::DEFLATE: {
       if (not NVCOMP_HAS_DEFLATE(version.major, version.minor, version.patch)) {
@@ -397,7 +397,8 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   return "Unsupported compression type";
 }
 
-std::optional<std::string> is_zstd_decomp_disabled(nvcomp_version version)
+std::optional<std::string> is_zstd_decomp_disabled(library_version version,
+                                                   std::optional<int> compute_capability)
 {
   if (not NVCOMP_HAS_ZSTD_DECOMP(version.major, version.minor, version.patch)) {
     return "nvCOMP 2.3 or newer is required for Zstandard decompression";
@@ -413,21 +414,25 @@ std::optional<std::string> is_zstd_decomp_disabled(nvcomp_version version)
            "`LIBCUDF_NVCOMP_POLICY` environment variable.";
   }
 
-#if NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(version.major, version.minor, version.patch)
-  int device;
-  int cc_major;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
-  if (cc_major == 6) { return "Zstandard decompression is disabled on Pascal GPUs"; }
-#endif
+  if (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(version.major, version.minor, version.patch)) {
+    int const cc_major = compute_capability.value_or([]() {
+      int device;
+      int cc;
+      CUDF_CUDA_TRY(cudaGetDevice(&device));
+      CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc, cudaDevAttrComputeCapabilityMajor, device));
+      return cc;
+    }());
+    if (cc_major == 6) { return "Zstandard decompression is disabled on Pascal GPUs"; }
+  }
   return std::nullopt;
 }
 
 std::optional<std::string> is_decompression_disabled(compression_type compression,
-                                                     std::optional<nvcomp_version> target_version)
+                                                     std::optional<library_version> target_version,
+                                                     std::optional<int> compute_capability)
 {
-  auto const version = version.value_or(
-    nvcomp_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
+  auto const version = target_version.value_or(
+    library_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
 
   switch (compression) {
     case compression_type::DEFLATE: {
@@ -447,7 +452,7 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
       }
       return std::nullopt;
     }
-    case compression_type::ZSTD: return is_zstd_decomp_disabled(version);
+    case compression_type::ZSTD: return is_zstd_decomp_disabled(version, compute_capability);
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";

@@ -29,7 +29,7 @@ namespace cudf::io::nvcomp {
 
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
-struct nvcomp_version {
+struct library_version {
   int major;
   int minor;
   int patch;
@@ -41,10 +41,11 @@ struct nvcomp_version {
  * Result cab depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
+ * @param target_version Optional, target nvCOMP version
  * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
 [[nodiscard]] std::optional<std::string> is_compression_disabled(
-  compression_type compression, std::optional<nvcomp_version> target_version = std::nullopt);
+  compression_type compression, std::optional<library_version> target_version = std::nullopt);
 
 /**
  * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
@@ -52,10 +53,14 @@ struct nvcomp_version {
  * Result can depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
+ * @param target_version Optional, target nvCOMP version
+ * @param compute_capability Optional, major compute capability of the target device
  * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
 [[nodiscard]] std::optional<std::string> is_decompression_disabled(
-  compression_type compression, std::optional<nvcomp_version> target_version = std::nullopt);
+  compression_type compression,
+  std::optional<library_version> target_version = std::nullopt,
+  std::optional<int> compute_capability         = std::nullopt);
 
 /**
  * @brief Device batch decompression of given type.
