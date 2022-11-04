@@ -938,16 +938,22 @@ def test_json_dtypes_nested_data():
     # TODO failing test cases
 )
 class TestNestedJsonReaderCommon:
-    @pytest.mark.parametrize("chunk_size", [0, 10, 100, 1024, 1024 * 1024])
+    @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
         expected = pd.read_json(StringIO(data), lines=True)
 
-        df = cudf.read_json(
-            StringIO(data),
-            engine="cudf_experimental_chunked",
-            chunk_size=chunk_size,
-            lines=True,
-        )
+        source_size = len(data)
+        chunks = []
+        for chunk_start in range(0, source_size, chunk_size):
+            chunks.append(
+                cudf.read_json(
+                    StringIO(data),
+                    engine="cudf_experimental",
+                    byte_range=[chunk_start, chunk_size],
+                    lines=True,
+                )
+            )
+        df = cudf.concat(chunks).reset_index(drop=True)
         assert_eq(df, expected, check_dtype=False)
         # assert df.to_arrow().equals(expected.to_arrow())
 

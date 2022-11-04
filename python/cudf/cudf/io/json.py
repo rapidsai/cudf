@@ -25,7 +25,6 @@ def read_json(
     byte_range=None,
     keep_quotes=False,
     storage_options=None,
-    chunk_size=1024,
     *args,
     **kwargs,
 ):
@@ -47,11 +46,7 @@ def read_json(
         )
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if (
-        engine == "cudf"
-        or engine == "cudf_experimental"
-        or engine == "cudf_experimental_chunked"
-    ):
+    if engine == "cudf" or engine == "cudf_experimental":
         if dtype is None:
             dtype = True
 
@@ -96,26 +91,15 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        if engine == "cudf_experimental_chunked" and chunk_size != 0:
-            df = chunked_read_json(
-                filepaths_or_buffers,
-                dtype,
-                lines,
-                compression,
-                chunk_size,
-                engine == "cudf_experimental_chunked",
-                keep_quotes,
-            )
-        else:
-            df = libjson.read_json(
-                filepaths_or_buffers,
-                dtype,
-                lines,
-                compression,
-                byte_range,
-                engine in ["cudf_experimental", "cudf_experimental_chunked"],
-                keep_quotes,
-            )
+        df = libjson.read_json(
+            filepaths_or_buffers,
+            dtype,
+            lines,
+            compression,
+            byte_range,
+            engine == "cudf_experimental",
+            keep_quotes,
+        )
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "
@@ -175,104 +159,6 @@ def read_json(
         df = df.astype(default_dtypes)
 
     return df
-
-
-def chunked_read_json(
-    filepaths_or_buffers,
-    dtype,
-    lines,
-    compression,
-    chunk_size,
-    is_experimental,
-    keep_quotes,
-):
-    total_source_size = libjson.sources_size(
-        filepaths_or_buffers, compression, [0, 0]
-    )
-    # print("total_source_size", total_source_size)
-    num_chunks = (total_source_size + chunk_size - 1) // chunk_size
-    # launch individual read_json chunked reads
-    dfs = [
-        libjson.read_json(
-            filepaths_or_buffers,
-            dtype,
-            lines,
-            compression,
-            [chunk_index * chunk_size, chunk_size],
-            is_experimental,
-            keep_quotes,
-        )
-        for chunk_index in range(num_chunks)
-    ]
-    return cudf.concat(dfs, ignore_index=True)
-
-
-def chunked_read_json2(
-    filepaths_or_buffers,
-    dtype,
-    lines,
-    compression,
-    chunk_size,
-    is_experimental,
-    keep_quotes,
-):
-    # find size of sources
-    # compute num chunks
-    # find first delim of each chunk.
-    # compute record ranges
-    # read record ranges
-    # concat
-    total_source_size = libjson.sources_size(
-        filepaths_or_buffers, compression, [0, 0]
-    )
-    # print("total_source_size", total_source_size)
-    num_chunks = (total_source_size + chunk_size - 1) // chunk_size
-    delimiter_positions_in_chunks = [
-        libjson.find_first_delimiter_in_chunk(
-            filepaths_or_buffers,
-            lines,
-            compression,
-            [chunk_index * chunk_size, chunk_size],
-            is_experimental,
-            "\n".encode()[0],
-        )
-        for chunk_index in range(num_chunks)
-    ]
-    delimiter_positions_in_chunks[0] = 0
-    delimiter_positions_in_chunks = [
-        pos + chunk_index * chunk_size
-        for chunk_index, pos in zip(
-            range(num_chunks), delimiter_positions_in_chunks
-        )
-        if pos is not None
-    ]
-    delimiter_positions_in_chunks.append(total_source_size)
-    # print(delimiter_positions_in_chunks)
-    record_ranges = list(
-        zip(delimiter_positions_in_chunks, delimiter_positions_in_chunks[1:])
-    )
-    # print(record_ranges)
-
-    # launch individual read_json chunked reads
-    dfs = [
-        libjson.read_json(
-            filepaths_or_buffers,
-            dtype,
-            lines,
-            compression,
-            [chunk_start, chunk_end - chunk_start],
-            is_experimental,
-            keep_quotes,
-        )
-        for chunk_start, chunk_end in record_ranges
-    ]
-
-    # for i, df in enumerate(dfs):
-    #     print("i=", i)
-    #     print(df.columns, "\n", df.dtypes)
-    #     print(df)
-    # concat
-    return cudf.concat(dfs, ignore_index=True)
 
 
 @ioutils.doc_to_json()

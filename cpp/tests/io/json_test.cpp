@@ -29,6 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <arrow/io/api.h>
 
 #include <fstream>

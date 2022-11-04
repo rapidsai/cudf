@@ -44,11 +44,14 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   using namespace cudf::io::detail::json::experimental;
   using cudf::size_type;
   // assuming single source.
-  auto reader_opts_chunk           = reader_opts;
-  auto const total_source_size     = sources_size(sources, 0, 0);
+  size_t total_source_size = 0;
+  for (const auto& source : sources) {
+    total_source_size += source->size();
+  }
   size_t num_chunks                = (total_source_size + chunk_size - 1) / chunk_size;
   constexpr size_type no_min_value = -1;
   std::vector<size_type> first_delimiter_index(num_chunks);
+  auto reader_opts_chunk = reader_opts;
   for (size_t i = 0; i < num_chunks; i++) {
     auto const chunk_start = i * chunk_size;
     reader_opts_chunk.set_byte_range_offset(chunk_start);

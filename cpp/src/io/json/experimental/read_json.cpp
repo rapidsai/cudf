@@ -37,26 +37,29 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
-std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
+std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> const& sources,
                                       compression_type compression,
                                       size_t range_offset,
                                       size_t range_size)
 {
+  // Iterate through the user defined sources and read the contents into the local buffer
   auto const total_source_size = sources_size(sources, range_offset, range_size);
   auto buffer                  = std::vector<uint8_t>(total_source_size);
 
   size_t bytes_read = 0;
   for (const auto& source : sources) {
-    auto const data_size =
-      (range_size == 0 or range_offset + range_size > source->size() ? source->size() - range_offset
-                                                                     : range_size);
-    //  FIXME: I can't see why we concatenate strings from multiple sources, but it's how it's done
-    //  in csv.
-    auto destination = buffer.data() + bytes_read;
-    bytes_read += source->host_read(range_offset, data_size, destination);
+    if (!source->is_empty()) {
+      auto data_size   = (range_size != 0) ? range_size : source->size();
+      auto destination = buffer.data() + bytes_read;
+      bytes_read += source->host_read(range_offset, data_size, destination);
+    }
   }
 
-  return (compression == compression_type::NONE) ? buffer : decompress(compression, buffer);
+  if (compression == compression_type::NONE) {
+    return buffer;
+  } else {
+    return decompress(compression, buffer);
+  }
 }
 
 size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,

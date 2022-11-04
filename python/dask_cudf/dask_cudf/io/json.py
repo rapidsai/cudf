@@ -2,8 +2,11 @@
 
 from functools import partial
 
-import dask
+import dask.dataframe as dd
 
 import cudf
 
-read_json = partial(dask.dataframe.read_json, engine=cudf.read_json)
+read_json = partial(dd.read_json, engine=cudf.read_json)
+read_json_experimental = partial(
+    dd.read_json, engine=partial(cudf.read_json, engine="cudf_experimental")
+)
