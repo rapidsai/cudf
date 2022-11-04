@@ -418,7 +418,6 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                    total_decomp_size,
                                    stream);
         break;
-
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
     decompress_check(inflate_res, any_block_failure.device_ptr(), stream);
