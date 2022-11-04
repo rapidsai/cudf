@@ -43,7 +43,8 @@ def maybe_patch_numba_linker(driver_version):
 
 def _get_ptx_file():
     if "RAPIDS_NO_INITIALIZE" in os.environ:
-        cc = int(os.environ.get("STRINGS_UDF_CC", "52"))
+        # shim_60.ptx is always built
+        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
     else:
         dev = cuda.get_current_device()
 
