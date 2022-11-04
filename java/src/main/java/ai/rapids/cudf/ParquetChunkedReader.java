@@ -109,12 +109,16 @@ public class ParquetChunkedReader implements AutoCloseable {
   }
 
 
-  private long handle;
-
   /**
    * Auxiliary variable to help {@link #hasNext()} returning true at least once.
    */
   private boolean firstCall = true;
+
+  /**
+   * Handle for memory address of the native Parquet chunked reader class.
+   */
+  private long handle;
+
 
   /**
    * Create a native chunked Parquet reader object on heap and return its memory address.
