@@ -39,9 +39,6 @@ dependencies:
           - python>=3.8,<3.10
           - rmm=22.12.*
           - scikit-build>=0.13.1
-          # Not sure if these are used anywhere?
-          # - double-conversion
-          # - rapidjson
       - output_types: conda
         packages:
           - c-compiler
