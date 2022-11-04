@@ -102,12 +102,11 @@ struct like_fn {
 
 }  // namespace
 
-std::unique_ptr<column> like(
-  strings_column_view const& input,
-  string_scalar const& pattern,
-  string_scalar const& escape_character,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> like(strings_column_view const& input,
+                             string_scalar const& pattern,
+                             string_scalar const& escape_character,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),

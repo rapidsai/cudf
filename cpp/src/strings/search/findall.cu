@@ -92,12 +92,11 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
 }  // namespace
 
 //
-std::unique_ptr<column> findall(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> findall(strings_column_view const& input,
+                                std::string_view pattern,
+                                regex_flags const flags,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
