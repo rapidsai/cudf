@@ -269,6 +269,10 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
       if (cufile_integration::is_always_enabled()) throw;
     }
   }
+#else
+  CUDF_EXPECTS(not cufile_integration::is_always_enabled(),
+               "Unable to enforce the use of GDS requested through the LIBCUDF_CUFILE_POLICY "
+               "environment variable; current build was compiled without cuFile headers");
 #endif
   return nullptr;
 }
@@ -283,6 +287,10 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
       if (cufile_integration::is_always_enabled()) throw;
     }
   }
+#else
+  CUDF_EXPECTS(not cufile_integration::is_always_enabled(),
+               "Unable to enforce the use of GDS requested through the LIBCUDF_CUFILE_POLICY "
+               "environment variable; current build was compiled without cuFile headers");
 #endif
   return nullptr;
 }
