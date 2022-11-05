@@ -82,7 +82,7 @@ struct column_fast_sort_fn {
     mutable_column_view output_view = temp_col->mutable_view();
 
     // DeviceSegmentedSort is faster then DeviceSegmentedRadixSort at this time
-    auto fast_sort_impl = [stream](bool ascending, auto&&... args) {
+    auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
       rmm::device_buffer d_temp_storage;
       size_t temp_storage_bytes = 0;
       if (ascending) {
