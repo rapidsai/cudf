@@ -31,10 +31,6 @@ files:
 channels:
   - rapidsai
   - conda-forge
-# Not sure whether we need these:
-# - rapidsai-nightly
-# - dask/label/dev
-# - nvidia
 dependencies:
   build:
     common:
