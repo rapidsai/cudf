@@ -364,8 +364,11 @@ void write_chunked(data_sink* out_sink,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   cudf::string_scalar newline{options.get_line_terminator()};
-  auto p_str_col_w_nl =
-    cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
+  auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
+                                                            newline,
+                                                            string_scalar("", false),
+                                                            stream,
+                                                            rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
@@ -470,9 +473,11 @@ void write_csv(data_sink* out_sink,
                                                     delimiter_str,
                                                     options.get_na_rep(),
                                                     strings::separator_on_nulls::YES,
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
         cudf::string_scalar narep{options.get_na_rep()};
-        return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
+        return cudf::strings::detail::replace_nulls(
+          str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
       }();
 
       write_chunked(out_sink, str_concat_col->view(), options, stream, mr);
