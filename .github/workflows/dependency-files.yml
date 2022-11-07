@@ -9,4 +9,4 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@main
     with:
       enable_check_size: false
-      enable_check_size: false
+      enable_check_style: false
