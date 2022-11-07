@@ -63,6 +63,8 @@ class hostdevice_vector {
     h_data.push_back(data);
   }
 
+  void clear() { h_data.clear(); }
+
   [[nodiscard]] size_t capacity() const noexcept { return h_data.capacity(); }
   [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * size(); }

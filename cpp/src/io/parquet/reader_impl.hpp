@@ -48,6 +48,37 @@ using namespace cudf::io;
 // Forward declarations
 class aggregate_reader_metadata;
 
+struct row_group_info {
+  size_type const index;
+  size_t const start_row;  // TODO source index
+  size_type const source_index;
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index(index), start_row(start_row), source_index(source_index)
+  {
+  }
+};
+
+struct rowgroup_data {
+  std::future<void> task;
+  hostdevice_vector<gpu::ColumnChunkDesc> chunks;
+  int64_t num_rows;
+  size_t decompressed_size;
+  std::vector<size_type> chunk_source_map;
+  std::vector<size_t> column_chunk_offsets;
+  std::vector<std::unique_ptr<datasource::buffer>> page_data;
+  rmm::cuda_stream_view stream;
+
+  void clear()
+  {
+    chunks.clear();
+    num_rows          = 0;
+    decompressed_size = 0;
+    chunk_source_map.clear();
+    column_chunk_offsets.clear();
+    page_data.clear();
+  }
+};
+
 /**
  * @brief Implementation for Parquet reader
  */
@@ -98,7 +129,8 @@ class reader::impl {
                                        size_t begin_chunk,
                                        size_t end_chunk,
                                        const std::vector<size_t>& column_chunk_offsets,
-                                       std::vector<size_type> const& chunk_source_map);
+                                       std::vector<size_type> const& chunk_source_map,
+                                       rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the number of total pages from the given column chunks
@@ -107,7 +139,8 @@ class reader::impl {
    *
    * @return The total number of pages
    */
-  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks);
+  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                            rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the page information from the given column chunks.
@@ -116,7 +149,8 @@ class reader::impl {
    * @param pages List of page information
    */
   void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                           hostdevice_vector<gpu::PageInfo>& pages);
+                           hostdevice_vector<gpu::PageInfo>& pages,
+                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -127,7 +161,8 @@ class reader::impl {
    * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                          hostdevice_vector<gpu::PageInfo>& pages);
+                                          hostdevice_vector<gpu::PageInfo>& pages,
+                                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers
@@ -145,7 +180,8 @@ class reader::impl {
    */
   void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
                              hostdevice_vector<gpu::PageInfo>& pages,
-                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
+                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info,
+                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Preprocess column information and allocate output buffers.
@@ -169,7 +205,8 @@ class reader::impl {
                           hostdevice_vector<gpu::PageInfo>& pages,
                           size_t min_row,
                           size_t total_rows,
-                          bool uses_custom_row_bounds);
+                          bool uses_custom_row_bounds,
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -184,7 +221,12 @@ class reader::impl {
                         hostdevice_vector<gpu::PageInfo>& pages,
                         hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
                         size_t min_row,
-                        size_t total_rows);
+                        size_t total_rows,
+                        rmm::cuda_stream_view stream);
+
+  rowgroup_data read_row_group(row_group_info const& rgi,
+                               size_type const remaining_rows,
+                               rmm::cuda_stream_view stream);
 
  private:
   rmm::cuda_stream_view _stream;
