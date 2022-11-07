@@ -297,3 +297,48 @@ def test_series_slice_setitem_struct():
     actual[0:3] = cudf.Scalar({"a": {"b": 5050}, "b": 101})
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("indices", [0, [1, 2]])
+def test_series_setitem_upcasting(dtype, indices):
+    sr = pd.Series([0, 0, 0], dtype=dtype)
+    cr = cudf.from_pandas(sr)
+    assert_eq(sr, cr)
+    # Must be a non-integral floating point value that can't be losslessly
+    # converted to float32, otherwise pandas will try and match the source
+    # column dtype.
+    new_value = np.float64(np.pi)
+    col_ref = cr._column
+    sr[indices] = new_value
+    cr[indices] = new_value
+    if PANDAS_GE_150:
+        assert_eq(sr, cr)
+    else:
+        # pandas bug, incorrectly fails to upcast from float32 to float64
+        assert_eq(sr.values, cr.values)
+    if dtype == np.float64:
+        # no-op type cast should not modify backing column
+        assert col_ref == cr._column
+
+
+# TODO: these two tests could perhaps be changed once specifics of
+# pandas compat wrt upcasting are decided on; this is just baking in
+# status-quo.
+def test_series_setitem_upcasting_string_column():
+    sr = pd.Series([0, 0, 0], dtype=str)
+    cr = cudf.from_pandas(sr)
+    new_value = np.float64(10.5)
+    sr[0] = str(new_value)
+    cr[0] = new_value
+    assert_eq(sr, cr)
+
+
+def test_series_setitem_upcasting_string_value():
+    sr = cudf.Series([0, 0, 0], dtype=int)
+    # This is a distinction with pandas, which lets you instead make an
+    # object column with ["10", 0, 0]
+    sr[0] = "10"
+    assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
+    with pytest.raises(ValueError):
+        sr[0] = "non-integer"
