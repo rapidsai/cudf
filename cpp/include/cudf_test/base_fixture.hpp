@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <dlfcn.h>
 #include <random>
 
 #include <cudf/utilities/default_stream.hpp>
