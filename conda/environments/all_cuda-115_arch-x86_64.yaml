@@ -2,7 +2,10 @@
 # To make changes, edit ../../dependencies.yaml and run `rapids-dependency-file-generator`.
 channels:
 - rapidsai
+- rapidsai-nightly
+- dask/label/dev
 - conda-forge
+- nvidia
 dependencies:
 - aiobotocore>=2.2.0
 - arrow-cpp=9
