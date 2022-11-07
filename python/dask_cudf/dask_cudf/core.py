@@ -704,7 +704,7 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
 
-    return dask.dataframe.io.from_dict(
+    return DataFrame.from_dict(
         data,
         npartitions,
         orient=orient,
