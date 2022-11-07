@@ -146,7 +146,11 @@ def one_hot_encode(Column input_column, Column categories):
             libcudf_transform.one_hot_encode(c_view_input, c_view_categories)
         )
 
-    owner = Column.from_unique_ptr(move(c_result.first))
+    # Notice, the data pointer of `owner` has been exposed
+    # through `c_result.second` at this point.
+    owner = Column.from_unique_ptr(
+        move(c_result.first), data_ptr_exposed=True
+    )
 
     pylist_categories = categories.to_arrow().to_pylist()
     encodings, _ = data_from_table_view(

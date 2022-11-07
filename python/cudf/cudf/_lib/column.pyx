@@ -8,7 +8,14 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import (
+    Buffer,
+    SpillableBuffer,
+    SpillLock,
+    as_buffer,
+    get_spill_lock,
+    with_spill_lock,
+)
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -95,7 +102,11 @@ cdef class Column:
         if self._data is None:
             start = self.offset * self.dtype.itemsize
             end = start + self.size * self.dtype.itemsize
-            self._data = self.base_data[start:end]
+            if start == 0 and end == self.base_data.size:
+                # `data` spans all of `base_data`
+                self._data = self.base_data
+            else:
+                self._data = self.base_data[start:end]
         return self._data
 
     @property
@@ -249,7 +260,8 @@ cdef class Column:
     @property
     def null_count(self):
         if self._null_count is None:
-            self._null_count = self.compute_null_count()
+            with with_spill_lock():
+                self._null_count = self.compute_null_count()
         return self._null_count
 
     @property
@@ -381,7 +393,14 @@ cdef class Column:
         cdef vector[column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.base_data_ptr)
+        if col.base_data is None:
+            data = NULL
+        elif isinstance(col.base_data, SpillableBuffer):
+            data = <void*><uintptr_t>(col.base_data).get_ptr(
+                spill_lock=get_spill_lock()
+            )
+        else:
+            data = <void*><uintptr_t>(col.base_data.ptr)
 
         cdef Column child_column
         if col.base_children:
@@ -406,7 +425,16 @@ cdef class Column:
             children)
 
     @staticmethod
-    cdef Column from_unique_ptr(unique_ptr[column] c_col):
+    cdef Column from_unique_ptr(
+        unique_ptr[column] c_col, bint data_ptr_exposed=False
+    ):
+        """Create a Column from a column
+
+        Typically, this is called on the result of a libcudf operation.
+        If the data of the libcudf result has been exposed, set
+        `data_ptr_exposed=True` to expose the memory of the returned Column
+        as well.
+        """
         cdef column_view view = c_col.get()[0].view()
         cdef libcudf_types.type_id tid = view.type().id()
         cdef libcudf_types.data_type c_dtype
@@ -431,20 +459,30 @@ cdef class Column:
         # After call to release(), c_col is unusable
         cdef column_contents contents = move(c_col.get()[0].release())
 
-        data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = as_buffer(data)
+        data = as_buffer(
+            DeviceBuffer.c_from_unique_ptr(move(contents.data)),
+            exposed=data_ptr_exposed
+        )
 
         if null_count > 0:
-            mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = as_buffer(mask)
+            mask = as_buffer(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask)),
+                exposed=data_ptr_exposed
+            )
         else:
             mask = None
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
-        children = ()
+        children = []
         if c_children.size() != 0:
-            children = tuple(Column.from_unique_ptr(move(c_children[i]))
-                             for i in range(c_children.size()))
+            # Because of a bug in Cython, we cannot set the optional
+            # `data_ptr_exposed` argument within a comprehension.
+            for i in range(c_children.size()):
+                child = Column.from_unique_ptr(
+                    move(c_children[i]),
+                    data_ptr_exposed=data_ptr_exposed
+                )
+                children.append(child)
 
         return cudf.core.column.build_column(
             data,
@@ -452,7 +490,7 @@ cdef class Column:
             mask=mask,
             size=size,
             null_count=null_count,
-            children=children
+            children=tuple(children)
         )
 
     @staticmethod
@@ -474,6 +512,7 @@ cdef class Column:
         size = cv.size()
         offset = cv.offset()
         dtype = dtype_from_column_view(cv)
+        dtype_itemsize = dtype.itemsize if hasattr(dtype, "itemsize") else 1
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None
@@ -484,19 +523,45 @@ cdef class Column:
             data_owner = owner.base_data
             mask_owner = mask_owner.base_mask
             base_size = owner.base_size
-
+        base_nbytes = base_size * dtype_itemsize
         if data_ptr:
             if data_owner is None:
                 data = as_buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size+offset) * dtype.itemsize)
+                                     size=(size+offset) * dtype_itemsize)
                 )
+            elif (
+                # This is an optimization to avoid creating a new
+                # SpillableBuffer that represent the same memory
+                # as the owner.
+                column_owner and
+                isinstance(data_owner, SpillableBuffer) and
+                # We have to make sure that `data_owner` is already spill
+                # locked and that its pointer is the same as `data_ptr`
+                # _without_ exposing the buffer permanently.
+                not data_owner.spillable and
+                data_owner.get_ptr(spill_lock=SpillLock()) == data_ptr and
+                data_owner.size == base_nbytes
+            ):
+                data = data_owner
             else:
+                # At this point we don't know the relationship between data_ptr
+                # and data_owner thus we mark both of them exposed.
+                # TODO: try to discover their relationship and create a
+                #       SpillableBufferSlice instead.
                 data = as_buffer(
-                    data=data_ptr,
-                    size=(base_size) * dtype.itemsize,
-                    owner=data_owner
+                    data_ptr,
+                    size=base_nbytes,
+                    owner=data_owner,
+                    exposed=True,
                 )
+                if isinstance(data_owner, SpillableBuffer):
+                    if data_owner.is_spilled:
+                        raise ValueError(
+                            f"{data_owner} is spilled, which invalidates "
+                            f"the exposed data_ptr ({hex(data_ptr)})"
+                        )
+                    data_owner.ptr  # accessing the pointer marks it exposed.
         else:
             data = as_buffer(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
@@ -538,7 +603,8 @@ cdef class Column:
                 mask = as_buffer(
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
-                    owner=mask_owner
+                    owner=mask_owner,
+                    exposed=True
                 )
 
         if cv.has_nulls():

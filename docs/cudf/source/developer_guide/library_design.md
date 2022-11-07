@@ -203,7 +203,6 @@ For instance, all numerical types (floats and ints of different widths) are all 
 
 ### Buffer
 
-
 `Column`s are in turn composed of one or more `Buffer`s.
 A `Buffer` represents a single, contiguous, device memory allocation owned by another object.
 A `Buffer` constructed from a preexisting device memory allocation (such as a CuPy array) will view that memory.
@@ -211,6 +210,14 @@ Conversely, when constructed from a host object,
 `Buffer` uses [`rmm.DeviceBuffer`](https://github.com/rapidsai/rmm#devicebuffers) to allocate new memory.
 The data is then copied from the host object into the newly allocated device memory.
 You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
+
+
+### Spilling to host memory
+
+Setting the environment variable `CUDF_SPILL=on` enables automatic spilling (and "unspilling") of buffers from
+device to host to enable out-of-memory computation, i.e., computing on objects that occupy more memory than is
+available on the GPU.
+
 
 ## The Cython layer
 

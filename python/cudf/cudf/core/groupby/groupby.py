@@ -259,6 +259,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             self.grouping = _Grouping(obj, by, level)
 
+        self._groupby = libgroupby.GroupBy(
+            [*self.grouping.keys._columns], dropna=self._dropna
+        )
+
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):

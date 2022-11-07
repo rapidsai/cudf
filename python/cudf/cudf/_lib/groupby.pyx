@@ -10,6 +10,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
+from cudf.core.buffer import with_spill_lock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -86,13 +87,16 @@ cdef class GroupBy:
 
     def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
         cdef libcudf_types.null_policy c_null_handling
+        cdef table_view keys_view
 
         if dropna:
             c_null_handling = libcudf_types.null_policy.EXCLUDE
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = table_view_from_columns(keys)
+        with with_spill_lock() as spill_lock:
+            keys_view = table_view_from_columns(keys)
+            self._spill_lock = spill_lock
 
         with nogil:
             self.c_obj.reset(
