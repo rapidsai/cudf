@@ -6,16 +6,28 @@ import pytest
 
 import dask
 from dask import dataframe as dd
+from dask.utils_test import hlg_layer
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import AGGS, CUMULATIVE_AGGS, _aggs_supported
+from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
 
 
-@pytest.fixture
-def pdf():
+def assert_cudf_groupby_layers(ddf):
+    for prefix in ("cudf-aggregate-chunk", "cudf-aggregate-agg"):
+        try:
+            hlg_layer(ddf.dask, prefix)
+        except KeyError:
+            raise AssertionError(
+                "Expected Dask dataframe to contain groupby layer with "
+                f"prefix {prefix}"
+            )
+
+
+@pytest.fixture(params=["non_null", "null"])
+def pdf(request):
     np.random.seed(0)
 
     # note that column name "x" is a substring of the groupby key;
@@ -27,13 +39,17 @@ def pdf():
             "y": np.random.normal(size=10000),
         }
     )
+
+    # insert nulls into dataframe at random
+    if request.param == "null":
+        pdf = pdf.mask(np.random.choice([True, False], size=pdf.shape))
+
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", AGGS)
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
-
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_grouped = gdf.groupby("xx")
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
@@ -42,30 +58,38 @@ def test_groupby_basic(series, aggregation, pdf):
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    a = getattr(gdf_grouped, aggregation)()
-    b = getattr(ddf_grouped, aggregation)().compute()
+    check_dtype = aggregation != "count"
 
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+    expect = getattr(gdf_grouped, aggregation)()
+    actual = getattr(ddf_grouped, aggregation)()
 
-    a = gdf_grouped.agg({"xx": aggregation})
-    b = ddf_grouped.agg({"xx": aggregation}).compute()
+    assert_cudf_groupby_layers(actual)
 
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+    dd.assert_eq(expect, actual, check_dtype=check_dtype)
+
+    expect = gdf_grouped.agg({"xx": aggregation})
+    actual = ddf_grouped.agg({"xx": aggregation})
+
+    assert_cudf_groupby_layers(actual)
+
+    dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
+# TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
-@pytest.mark.parametrize("aggregation", CUMULATIVE_AGGS)
+@pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    gdf_grouped = gdf.groupby("xx")
+    if pdf.isna().sum().any():
+        with pytest.xfail(
+            reason="https://github.com/rapidsai/cudf/issues/12055"
+        ):
+            gdf_grouped = gdf.groupby("xx")
+    else:
+        gdf_grouped = gdf.groupby("xx")
+
     ddf_grouped = ddf.groupby("xx")
 
     if series:
@@ -73,7 +97,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
         ddf_grouped = ddf_grouped.xx
 
     a = getattr(gdf_grouped, aggregation)()
-    b = getattr(ddf_grouped, aggregation)().compute()
+    b = getattr(ddf_grouped, aggregation)()
 
     if aggregation == "cumsum" and series:
         with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
@@ -82,37 +106,31 @@ def test_groupby_cumulative(aggregation, pdf, series):
         dd.assert_eq(a, b)
 
 
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df: df.groupby("x").agg({"y": "max"}),
-        lambda df: df.groupby("x").agg(["sum", "max"]),
-        lambda df: df.groupby("x").y.agg(["sum", "max"]),
-        lambda df: df.groupby("x").agg("sum"),
-        lambda df: df.groupby("x").y.agg("sum"),
+        lambda df, agg: df.groupby("xx").agg({"y": agg}),
+        lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
+        lambda df, agg: df.groupby("xx").agg([agg]),
+        lambda df, agg: df.groupby("xx").y.agg([agg]),
+        lambda df, agg: df.groupby("xx").agg(agg),
+        lambda df, agg: df.groupby("xx").y.agg(agg),
     ],
 )
-def test_groupby_agg(func):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
+def test_groupby_agg(func, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    a = func(gdf).to_pandas()
-    b = func(ddf).compute().to_pandas()
+    actual = func(ddf, aggregation)
+    expect = func(gdf, aggregation)
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
-    b.name = None
+    check_dtype = aggregation != "count"
 
-    dd.assert_eq(a, b)
+    assert_cudf_groupby_layers(actual)
+
+    dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("split_out", [1, 3])
@@ -134,28 +152,6 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
 
     expect = df.groupby(["id"]).agg({"x": ["sum"]}).sort_index()
     dd.assert_eq(gb.compute().sort_index(), expect)
-
-
-@pytest.mark.parametrize(
-    "func",
-    [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
-)
-def test_groupby_std(func):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
-
-    a = func(gdf).to_pandas()
-    b = func(ddf).compute().to_pandas()
-
-    dd.assert_eq(a, b)
 
 
 # reason gotattr in cudf
@@ -710,7 +706,7 @@ def test_groupby_agg_redirect(aggregations):
     ],
 )
 def test_is_supported(arg, supported):
-    assert _aggs_supported(arg, AGGS) is supported
+    assert _aggs_optimized(arg, OPTIMIZED_AGGS) is supported
 
 
 def test_groupby_unique_lists():
@@ -746,22 +742,20 @@ def test_groupby_first_last(data, agg):
     gddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
     dd.assert_eq(
-        ddf.groupby("a").agg(agg).compute(),
-        gddf.groupby("a").agg(agg).compute(),
+        ddf.groupby("a").agg(agg),
+        gddf.groupby("a").agg(agg),
     )
 
     dd.assert_eq(
-        getattr(ddf.groupby("a"), agg)().compute(),
-        getattr(gddf.groupby("a"), agg)().compute(),
+        getattr(ddf.groupby("a"), agg)(),
+        getattr(gddf.groupby("a"), agg)(),
     )
 
-    dd.assert_eq(
-        gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg).compute()
-    )
+    dd.assert_eq(gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg))
 
     dd.assert_eq(
         getattr(gdf.groupby("a"), agg)(),
-        getattr(gddf.groupby("a"), agg)().compute(),
+        getattr(gddf.groupby("a"), agg)(),
     )
 
 
