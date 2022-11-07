@@ -149,7 +149,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     auto cstream{stream.value()};
     if (cstream == cudaStreamDefault || (cstream == cudaStreamLegacy) ||
         (cstream == cudaStreamPerThread)) {
-      if (_error) {
+      if (_error_on_invalid_stream) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {
         std::cout << "Attempted to perform an operation on an unexpected stream!" << std::endl;
@@ -157,8 +157,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     }
   }
 
-  Upstream* upstream_;  // the upstream resource used for satisfying allocation requests
-  bool _error;          // the upstream resource used for satisfying allocation requests
+  Upstream* upstream_;            // the upstream resource used for satisfying allocation requests
+  bool _error_on_invalid_stream;  // If true, throw an exception when the wrong stream is detected.
+                                  // When false, simply print to stdout.
 };
 
 /**
