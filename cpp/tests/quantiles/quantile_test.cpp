@@ -21,7 +21,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/quantiles.hpp>
-//#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
