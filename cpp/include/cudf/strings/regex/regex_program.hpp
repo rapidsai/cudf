@@ -35,7 +35,7 @@ namespace strings {
  * Create an instance from a regex pattern and use it to call the appropriate
  * strings APIs. An instance can be reused.
  *
- * See the @ref md_regex "Regex Features" page for details on patterns and APIs the support regex.
+ * See the @ref md_regex "Regex Features" page for details on patterns and APIs that support regex.
  */
 struct regex_program {
   struct regex_program_impl;
@@ -43,7 +43,7 @@ struct regex_program {
   /**
    * @brief Create a program from a pattern
    *
-   * @throw cudf::logic_error If pattern is found to be invalid or contain unsupported features
+   * @throw cudf::logic_error If pattern is invalid or contains unsupported features
    *
    * @param pattern Regex pattern
    * @param flags Regex flags for interpreting special characters in the pattern
