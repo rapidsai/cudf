@@ -31,10 +31,28 @@ namespace cudf::io::nvcomp {
 
 enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 
-struct library_version {
-  int major;
-  int minor;
-  int patch;
+/**
+ * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
+ */
+struct feature_status_parameters {
+  int lib_major_version;
+  int lib_minor_version;
+  int lib_patch_version;
+  bool are_all_integrations_enabled;
+  bool are_stable_integrations_enabled;
+  int compute_capability;
+
+  feature_status_parameters();
+  feature_status_parameters(
+    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc)
+    : lib_major_version{major},
+      lib_minor_version{minor},
+      lib_patch_version{patch},
+      are_all_integrations_enabled{all_enabled},
+      are_stable_integrations_enabled{stable_enabled},
+      compute_capability{cc}
+  {
+  }
 };
 
 /**
@@ -43,14 +61,11 @@ struct library_version {
  * Result cab depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
- * @param target_version Optional, target nvCOMP version
+ * @param params Optional parameters to query status with different configurations
  * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
 [[nodiscard]] std::optional<std::string> is_compression_disabled(
-  compression_type compression,
-  std::optional<library_version> target_version = std::nullopt,
-  bool is_all_enabled                           = detail::nvcomp_integration::is_all_enabled(),
-  bool is_stable_enabled                        = detail::nvcomp_integration::is_stable_enabled());
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
 
 /**
  * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
@@ -58,16 +73,11 @@ struct library_version {
  * Result can depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
- * @param target_version Optional, target nvCOMP version
- * @param compute_capability Optional, major compute capability of the target device
+ * @param params Optional parameters to query status with different configurations
  * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
 [[nodiscard]] std::optional<std::string> is_decompression_disabled(
-  compression_type compression,
-  std::optional<library_version> target_version = std::nullopt,
-  bool is_all_enabled                           = detail::nvcomp_integration::is_all_enabled(),
-  bool is_stable_enabled                        = detail::nvcomp_integration::is_stable_enabled(),
-  std::optional<int> compute_capability         = std::nullopt);
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
 
 /**
  * @brief Device batch decompression of given type.

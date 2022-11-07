@@ -359,37 +359,47 @@ void batched_compress(compression_type compression,
   update_compression_results(actual_compressed_data_sizes, results, stream);
 }
 
-std::optional<std::string> is_compression_disabled(compression_type compression,
-                                                   std::optional<library_version> target_version,
-                                                   bool is_all_enabled,
-                                                   bool is_stable_enabled)
+feature_status_parameters::feature_status_parameters()
+  : lib_major_version{NVCOMP_MAJOR_VERSION},
+    lib_minor_version{NVCOMP_MINOR_VERSION},
+    lib_patch_version{NVCOMP_PATCH_VERSION},
+    are_all_integrations_enabled{detail::nvcomp_integration::is_all_enabled()},
+    are_stable_integrations_enabled{detail::nvcomp_integration::is_stable_enabled()}
 {
-  auto const version = target_version.value_or(
-    library_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
+  int device;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(
+    cudaDeviceGetAttribute(&compute_capability, cudaDevAttrComputeCapabilityMajor, device));
+}
 
+std::optional<std::string> is_compression_disabled(compression_type compression,
+                                                   feature_status_parameters params)
+{
   switch (compression) {
     case compression_type::DEFLATE: {
-      if (not NVCOMP_HAS_DEFLATE(version.major, version.minor, version.patch)) {
+      if (not NVCOMP_HAS_DEFLATE(
+            params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
         return "nvCOMP 2.5 or newer is required for Deflate compression";
       }
-      if (not is_all_enabled) {
+      if (not params.are_all_integrations_enabled) {
         return "DEFLATE compression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
     }
     case compression_type::SNAPPY: {
-      if (not is_stable_enabled) {
+      if (not params.are_stable_integrations_enabled) {
         return "Snappy compression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
                "environment variable.";
       }
       return std::nullopt;
     }
     case compression_type::ZSTD: {
-      if (not NVCOMP_HAS_ZSTD_COMP(version.major, version.minor, version.patch)) {
+      if (not NVCOMP_HAS_ZSTD_COMP(
+            params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
         return "nvCOMP 2.3 or newer is required for Zstandard compression";
       }
-      if (not is_stable_enabled) {
+      if (not params.are_stable_integrations_enabled) {
         return "Zstandard compression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
@@ -400,68 +410,55 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   return "Unsupported compression type";
 }
 
-std::optional<std::string> is_zstd_decomp_disabled(library_version version,
-                                                   bool is_all_enabled,
-                                                   bool is_stable_enabled,
-                                                   std::optional<int> compute_capability)
+std::optional<std::string> is_zstd_decomp_disabled(feature_status_parameters const& params)
 {
-  if (not NVCOMP_HAS_ZSTD_DECOMP(version.major, version.minor, version.patch)) {
+  if (not NVCOMP_HAS_ZSTD_DECOMP(
+        params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
     return "nvCOMP 2.3 or newer is required for Zstandard decompression";
   }
 
-  if (NVCOMP_ZSTD_DECOMP_IS_STABLE(version.major, version.minor, version.patch)) {
-    if (not is_stable_enabled) {
+  if (NVCOMP_ZSTD_DECOMP_IS_STABLE(
+        params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
+    if (not params.are_stable_integrations_enabled) {
       return "Zstandard decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
              "environment variable.";
     }
-  } else if (not is_all_enabled) {
+  } else if (not params.are_all_integrations_enabled) {
     return "Zstandard decompression is experimental, you can enable it through "
            "`LIBCUDF_NVCOMP_POLICY` environment variable.";
   }
 
-  if (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(version.major, version.minor, version.patch)) {
-    int const cc_major = compute_capability.value_or([]() {
-      int device;
-      int cc;
-      CUDF_CUDA_TRY(cudaGetDevice(&device));
-      CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc, cudaDevAttrComputeCapabilityMajor, device));
-      return cc;
-    }());
-    if (cc_major == 6) { return "Zstandard decompression is disabled on Pascal GPUs"; }
+  if (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(
+        params.lib_major_version, params.lib_minor_version, params.lib_patch_version) and
+      params.compute_capability == 6) {
+    return "Zstandard decompression is disabled on Pascal GPUs";
   }
   return std::nullopt;
 }
 
 std::optional<std::string> is_decompression_disabled(compression_type compression,
-                                                     std::optional<library_version> target_version,
-                                                     bool is_all_enabled,
-                                                     bool is_stable_enabled,
-                                                     std::optional<int> compute_capability)
+                                                     feature_status_parameters params)
 {
-  auto const version = target_version.value_or(
-    library_version{NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION});
-
   switch (compression) {
     case compression_type::DEFLATE: {
-      if (not NVCOMP_HAS_DEFLATE(version.major, version.minor, version.patch)) {
+      if (not NVCOMP_HAS_DEFLATE(
+            params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
         return "nvCOMP 2.5 or newer is required for Deflate decompression";
       }
-      if (not is_all_enabled) {
+      if (not params.are_all_integrations_enabled) {
         return "DEFLATE decompression is experimental, you can enable it through "
                "`LIBCUDF_NVCOMP_POLICY` environment variable.";
       }
       return std::nullopt;
     }
     case compression_type::SNAPPY: {
-      if (not is_stable_enabled) {
+      if (not params.are_stable_integrations_enabled) {
         return "Snappy decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
                "environment variable.";
       }
       return std::nullopt;
     }
-    case compression_type::ZSTD:
-      return is_zstd_decomp_disabled(
-        version, is_all_enabled, is_stable_enabled, compute_capability);
+    case compression_type::ZSTD: return is_zstd_decomp_disabled(params);
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
