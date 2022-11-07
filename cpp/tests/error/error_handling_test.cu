@@ -145,6 +145,7 @@ int main(int argc, char** argv)
   if (stream_mode == "custom") {
     auto resource = rmm::mr::get_current_device_resource();
     auto adapter  = make_stream_checking_resource_adaptor(resource);
+    if (stream_error_mode == "print") { adapter.disable_errors(); }
     rmm::mr::set_current_device_resource(&adapter);
   }
   return RUN_ALL_TESTS();

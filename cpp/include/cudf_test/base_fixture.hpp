@@ -359,8 +359,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
     rmm::mr::set_current_device_resource(resource.get());                                   \
                                                                                             \
     auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();                     \
-    rmm::cuda_stream const new_default_stream{};                                            \
-    if (stream_mode == "custom" || stream_mode == "custom") {                               \
+    if (stream_mode == "custom") {                                                          \
       auto const stream_error_mode = cmd_opts["stream_error_mode"].as<std::string>();       \
       auto adapter                 = make_stream_checking_resource_adaptor(resource.get()); \
       if (stream_error_mode == "print") { adapter.disable_errors(); }                       \
