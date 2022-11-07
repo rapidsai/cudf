@@ -38,12 +38,11 @@ namespace cudf {
 namespace strings {
 namespace detail {
 //
-std::unique_ptr<column> all_characters_of_type(
-  strings_column_view const& strings,
-  string_character_types types,
-  string_character_types verify_types,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+                                               string_character_types types,
+                                               string_character_types verify_types,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);

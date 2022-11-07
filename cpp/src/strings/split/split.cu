@@ -791,12 +791,11 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 
 }  // namespace
 
-std::unique_ptr<table> split(
-  strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> split(strings_column_view const& strings_column,
+                             string_scalar const& delimiter,
+                             size_type maxsplit,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
@@ -816,12 +815,11 @@ std::unique_ptr<table> split(
     strings_column, split_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, stream, mr);
 }
 
-std::unique_ptr<table> rsplit(
-  strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+                              string_scalar const& delimiter,
+                              size_type maxsplit,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 

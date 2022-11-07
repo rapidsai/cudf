@@ -1045,6 +1045,206 @@ class IndexedFrame(Frame):
             zip(self._column_names, data_columns), self._index
         )
 
+    @_cudf_nvtx_annotate
+    def truncate(self, before=None, after=None, axis=0, copy=True):
+        """
+        Truncate a Series or DataFrame before and after some index value.
+
+        This is a useful shorthand for boolean indexing based on index
+        values above or below certain thresholds.
+
+        Parameters
+        ----------
+        before : date, str, int
+            Truncate all rows before this index value.
+        after : date, str, int
+            Truncate all rows after this index value.
+        axis : {0 or 'index', 1 or 'columns'}, optional
+            Axis to truncate. Truncates the index (rows) by default.
+        copy : bool, default is True,
+            Return a copy of the truncated section.
+
+        Returns
+        -------
+            The truncated Series or DataFrame.
+
+        Notes
+        -----
+        If the index being truncated contains only datetime values,
+        `before` and `after` may be specified as strings instead of
+        Timestamps.
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> cs1 = cudf.Series([1, 2, 3, 4])
+        >>> cs1
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+
+        >>> cs1.truncate(before=1, after=2)
+        1    2
+        2    3
+        dtype: int64
+
+        >>> import cudf
+        >>> dates = cudf.date_range(
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
+        >>> cs2 = cudf.Series(range(len(dates)), index=dates)
+        >>> cs2
+        2021-01-01 23:45:00     0
+        2021-01-01 23:45:01     1
+        2021-01-01 23:45:02     2
+        2021-01-01 23:45:03     3
+        2021-01-01 23:45:04     4
+        2021-01-01 23:45:05     5
+        2021-01-01 23:45:06     6
+        2021-01-01 23:45:07     7
+        2021-01-01 23:45:08     8
+        2021-01-01 23:45:09     9
+        2021-01-01 23:45:10    10
+        2021-01-01 23:45:11    11
+        2021-01-01 23:45:12    12
+        2021-01-01 23:45:13    13
+        2021-01-01 23:45:14    14
+        2021-01-01 23:45:15    15
+        2021-01-01 23:45:16    16
+        2021-01-01 23:45:17    17
+        2021-01-01 23:45:18    18
+        2021-01-01 23:45:19    19
+        2021-01-01 23:45:20    20
+        2021-01-01 23:45:21    21
+        2021-01-01 23:45:22    22
+        2021-01-01 23:45:23    23
+        2021-01-01 23:45:24    24
+        ...
+        2021-01-01 23:45:56    56
+        2021-01-01 23:45:57    57
+        2021-01-01 23:45:58    58
+        2021-01-01 23:45:59    59
+        dtype: int64
+
+
+        >>> cs2.truncate(
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
+        2021-01-01 23:45:18    18
+        2021-01-01 23:45:19    19
+        2021-01-01 23:45:20    20
+        2021-01-01 23:45:21    21
+        2021-01-01 23:45:22    22
+        2021-01-01 23:45:23    23
+        2021-01-01 23:45:24    24
+        2021-01-01 23:45:25    25
+        2021-01-01 23:45:26    26
+        2021-01-01 23:45:27    27
+        dtype: int64
+
+        >>> cs3 = cudf.Series({'A': 1, 'B': 2, 'C': 3, 'D': 4})
+        >>> cs3
+        A    1
+        B    2
+        C    3
+        D    4
+        dtype: int64
+
+        >>> cs3.truncate(before='B', after='C')
+        B    2
+        C    3
+        dtype: int64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame({
+        ...     'A': ['a', 'b', 'c', 'd', 'e'],
+        ...     'B': ['f', 'g', 'h', 'i', 'j'],
+        ...     'C': ['k', 'l', 'm', 'n', 'o']
+        ... }, index=[1, 2, 3, 4, 5])
+        >>> df
+           A  B  C
+        1  a  f  k
+        2  b  g  l
+        3  c  h  m
+        4  d  i  n
+        5  e  j  o
+
+        >>> df.truncate(before=2, after=4)
+           A  B  C
+        2  b  g  l
+        3  c  h  m
+        4  d  i  n
+
+        >>> df.truncate(before="A", after="B", axis="columns")
+           A  B
+        1  a  f
+        2  b  g
+        3  c  h
+        4  d  i
+        5  e  j
+
+        >>> import cudf
+        >>> dates = cudf.date_range(
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
+        >>> df2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
+        >>> df2.head()
+                             A  B
+        2021-01-01 23:45:00  1  2
+        2021-01-01 23:45:01  1  2
+        2021-01-01 23:45:02  1  2
+        2021-01-01 23:45:03  1  2
+        2021-01-01 23:45:04  1  2
+
+        >>> df2.truncate(
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
+                             A  B
+        2021-01-01 23:45:18  1  2
+        2021-01-01 23:45:19  1  2
+        2021-01-01 23:45:20  1  2
+        2021-01-01 23:45:21  1  2
+        2021-01-01 23:45:22  1  2
+        2021-01-01 23:45:23  1  2
+        2021-01-01 23:45:24  1  2
+        2021-01-01 23:45:25  1  2
+        2021-01-01 23:45:26  1  2
+        2021-01-01 23:45:27  1  2
+        """
+        if not copy:
+            raise ValueError("Truncating with copy=False is not supported.")
+        axis = self._get_axis_from_axis_arg(axis)
+        ax = self._index if axis == 0 else self._data.to_pandas_index()
+
+        if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
+            raise ValueError("truncate requires a sorted index")
+
+        if type(ax) is cudf.core.index.DatetimeIndex:
+            before = pd.to_datetime(before)
+            after = pd.to_datetime(after)
+
+        if before is not None and after is not None and before > after:
+            raise ValueError(f"Truncate: {after} must be after {before}")
+
+        if len(ax) > 1 and ax.is_monotonic_decreasing and ax.nunique() > 1:
+            before, after = after, before
+
+        slicer = [slice(None, None)] * self.ndim
+        slicer[axis] = slice(before, after)
+        return self.loc[tuple(slicer)].copy()
+
     @cached_property
     def loc(self):
         """Select rows and columns by label or boolean mask.
