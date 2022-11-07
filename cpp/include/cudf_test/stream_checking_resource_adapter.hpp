@@ -150,9 +150,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     if (cstream == cudaStreamDefault || (cstream == cudaStreamLegacy) ||
         (cstream == cudaStreamPerThread)) {
       if (_error) {
-        throw std::runtime_error("Attempted to perform an operation on a default stream!");
+        throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {
-        std::cout << "Attempted to perform an operation on a default stream!" << std::endl;
+        std::cout << "Attempted to perform an operation on an unexpected stream!" << std::endl;
       }
     }
   }
