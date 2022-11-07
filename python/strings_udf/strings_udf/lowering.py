@@ -19,6 +19,7 @@ from strings_udf._typing import size_type, string_view, udf_string
 character_flags_table_ptr = get_character_flags_table_ptr()
 
 _STR_VIEW_PTR = types.CPointer(string_view)
+_UDF_STRING_PTR = types.CPointer(udf_string)
 
 
 # CUDA function declarations
@@ -55,7 +56,9 @@ _string_view_endswith = _declare_bool_str_str_func("endswith")
 _string_view_find = _declare_size_type_str_str_func("find")
 _string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
-
+_string_view_strip = cuda.declare_device(
+    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
 
 # A binary function of the form f(string, int) -> bool
 _declare_bool_str_int_func = partial(
@@ -179,6 +182,36 @@ def create_binary_string_func(binary_func, retty):
     return deco
 
 
+def create_binary_string_func_return_string(binary_func):
+    def deco(cuda_func):
+        @cuda_lower(binary_func, string_view, string_view)
+        def binary_func_return_string_impl(context, builder, sig, args):
+            lhs_ptr = builder.alloca(args[0].type)
+            rhs_ptr = builder.alloca(args[1].type)
+            builder.store(args[0], lhs_ptr)
+            builder.store(args[1], rhs_ptr)
+
+            udf_str_ptr = builder.alloca(
+                default_manager[udf_string].get_value_type()
+            )
+
+            _ = context.compile_internal(
+                builder,
+                cuda_func,
+                size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                (udf_str_ptr, lhs_ptr, rhs_ptr),
+            )
+
+            result = cgutils.create_struct_proxy(udf_string)(
+                context, builder, value=builder.load(udf_str_ptr)
+            )
+            return result._getvalue()
+
+        return binary_func_return_string_impl
+
+    return deco
+
+
 @create_binary_string_func(operator.contains, types.boolean)
 def contains_impl(st, substr):
     return _string_view_contains(st, substr)
@@ -212,6 +245,11 @@ def gt_impl(st, rhs):
 @create_binary_string_func(operator.lt, types.boolean)
 def lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
+
+
+@create_binary_string_func_return_string("StringView.strip")
+def strip_impl(result, to_strip, strip_char):
+    return _string_view_strip(result, to_strip, strip_char)
 
 
 @create_binary_string_func("StringView.startswith", types.boolean)

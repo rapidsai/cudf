@@ -278,3 +278,11 @@ def test_string_udf_return_string(data):
         return st
 
     run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_strip(data, strip_char):
+    def func(st):
+        return st.strip(strip_char)
+
+    run_udf_test(data, func, "str")
