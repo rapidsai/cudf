@@ -520,15 +520,17 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
   // so if map.capacity() > int-max we'll call thrust::copy_if in chunks instead
   auto const map_size =
     std::min(map.capacity(), static_cast<std::size_t>(std::numeric_limits<size_type>::max()));
-  auto key_end      = key_itr + map.capacity();
-  auto pop_keys_itr = populated_keys.begin();
+  auto const key_end = key_itr + map.capacity();
+  auto pop_keys_itr  = populated_keys.begin();
 
   std::size_t output_size = 0;
-  while (key_itr < key_end) {
-    auto copy_end = key_itr + map_size < key_end ? key_itr + map_size : key_end;
-    auto end_it =
+  while (key_itr != key_end) {
+    auto const copy_end = static_cast<std::size_t>(std::distance(key_itr, key_end)) <= map_size
+                            ? key_end
+                            : key_itr + map_size;
+    auto const end_it =
       thrust::copy_if(rmm::exec_policy(stream), key_itr, copy_end, pop_keys_itr, key_used);
-    auto copied = std::distance(pop_keys_itr, end_it);
+    auto const copied = std::distance(pop_keys_itr, end_it);
     pop_keys_itr += copied;
     output_size += copied;
     key_itr = copy_end;
