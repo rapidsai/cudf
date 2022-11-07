@@ -115,7 +115,7 @@ public class RmmTest {
     try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
       Rmm.resetScopedMaximumBytesAllocated(1024);
       try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
-        assertEquals(20480, Rmm.getScopedMaximumBytesAllocated());
+        assertEquals(21504, Rmm.getScopedMaximumBytesAllocated());
         assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
       }
     }
@@ -157,6 +157,8 @@ public class RmmTest {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
     AtomicInteger timesRetried = new AtomicInteger();
+    AtomicLong totalAllocated = new AtomicLong();
+    AtomicLong totalDeallocated = new AtomicLong();
 
     RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
@@ -166,6 +168,16 @@ public class RmmTest {
         amountRequested.set(sizeRequested);
         return count != 3;
       }
+
+      @Override
+      public void onAllocated(long sizeAllocated) {
+        totalAllocated.addAndGet(sizeAllocated);
+      }
+
+      @Override
+      public void onDeallocated(long sizeDeallocated) {
+        totalDeallocated.addAndGet(sizeDeallocated);
+      }
     };
 
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
@@ -174,6 +186,10 @@ public class RmmTest {
     addr.close();
     assertTrue(addr.address != 0);
     assertEquals(0, invokedCount.get());
+
+    // by default, we don't get callbacks on allocated or deallocated
+    assertEquals(0, totalAllocated.get());
+    assertEquals(0, totalDeallocated.get());
 
     // Try to allocate too much
     long requested = TOO_MUCH_MEMORY;
@@ -192,6 +208,14 @@ public class RmmTest {
     requested = 8192;
     addr = Rmm.alloc(requested);
     addr.close();
+
+    // test the debug event handler
+    Rmm.clearEventHandler();
+    Rmm.setEventHandler(handler, /*enableDebug*/ true);
+    addr = Rmm.alloc(1024);
+    addr.close();
+    assertEquals(1024, totalAllocated.get());
+    assertEquals(1024, totalDeallocated.get());
   }
 
   @Test
