@@ -706,11 +706,10 @@ def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
 
     return DataFrame.from_dict(
         data,
-        npartitions,
+        npartitions=npartitions,
         orient=orient,
         dtype=dtype,
         columns=columns,
-        constructor=cudf.DataFrame,
     )
 
 
