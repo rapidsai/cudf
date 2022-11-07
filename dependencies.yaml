@@ -13,11 +13,21 @@ files:
       - test
       - doc
       - notebook
-  test:
+  test_cpp:
     output: none
     includes:
       - cudatoolkit
-      - test
+  test_python:
+    output: none
+    includes:
+      - cudatoolkit
+      - test_python
+  checks:
+    output: none
+    includes:
+      - build
+      - develop
+      - py_version
 channels:
   - rapidsai
   - conda-forge
@@ -141,7 +151,7 @@ dependencies:
       - output_types: conda
         packages:
           - doxygen=1.8.20  # pre-commit hook needs a specific version.
-  test:
+  test_python:
     common:
       - output_types: [conda, requirements]
         packages:
