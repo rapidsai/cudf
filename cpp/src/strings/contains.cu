@@ -86,32 +86,29 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 
 }  // namespace
 
-std::unique_ptr<column> contains_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains_re(strings_column_view const& input,
+                                    std::string_view pattern,
+                                    regex_flags const flags,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   return contains_impl(input, pattern, flags, false, stream, mr);
 }
 
-std::unique_ptr<column> matches_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> matches_re(strings_column_view const& input,
+                                   std::string_view pattern,
+                                   regex_flags const flags,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   return contains_impl(input, pattern, flags, true, stream, mr);
 }
 
-std::unique_ptr<column> count_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_re(strings_column_view const& input,
+                                 std::string_view pattern,
+                                 regex_flags const flags,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // compile regex into device object
   auto d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
