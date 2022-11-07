@@ -19,6 +19,7 @@
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/pinned_allocator.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -30,7 +31,6 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/system/cuda/experimental/pinned_allocator.h>
 #include <thrust/transform.h>
 
 #include <fstream>
@@ -65,8 +65,7 @@ struct bgzip_nvcomp_transform_functor {
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
-  using pinned_host_vector =
-    thrust::host_vector<T, thrust::system::cuda::experimental::pinned_allocator<T>>;
+  using pinned_host_vector = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>;
 
   template <typename T>
   static void copy_to_device(const pinned_host_vector<T>& host,

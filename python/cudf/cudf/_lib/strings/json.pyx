@@ -1,6 +1,5 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -12,7 +11,6 @@ from cudf._lib.cpp.strings.json cimport (
     get_json_object as cpp_get_json_object,
     get_json_object_options,
 )
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 

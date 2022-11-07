@@ -34,7 +34,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -46,7 +46,7 @@ void set_null_mask(bitmask_type* bitmask,
                    size_type begin_bit,
                    size_type end_bit,
                    bool valid,
-                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in the range

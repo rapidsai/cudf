@@ -1,6 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-import numpy as np
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from cudf._lib.column cimport Column
 
@@ -45,10 +43,6 @@ from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
     integers_to_ipv4 as cpp_integers_to_ipv4,
     ipv4_to_integers as cpp_ipv4_to_integers,
     is_ipv4 as cpp_is_ipv4,
-)
-from cudf._lib.cpp.strings.convert.convert_urls cimport (
-    url_decode as cpp_url_decode,
-    url_encode as cpp_url_encode,
 )
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport underlying_type_t_type_id

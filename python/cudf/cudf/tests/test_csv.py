@@ -766,6 +766,81 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     assert_eq(df_out, out)
 
 
+def test_csv_reader_bools_custom():
+    names = ["text", "bool"]
+    dtypes = {"text": "str", "bool": "bool"}
+    trues = ["foo", "1"]
+    falses = ["bar", "0"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "0,0",
+        "1,1",
+    ]
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+
+    # Note: bool literals give parsing errors as int
+    # "0" and "1" give parsing errors as bool in pandas
+    expected = pd.read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert_eq(df, expected, check_dtype=True)
+
+
+def test_csv_reader_bools_NA():
+    names = ["text", "int"]
+    dtypes = ["str", "int"]
+    trues = ["foo"]
+    falses = ["bar"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "qux,qux",
+    ]
+
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert len(df.columns) == 2
+    assert df["text"].dtype == np.dtype("object")
+    assert df["int"].dtype == np.dtype("int64")
+    expected = pd.DataFrame(
+        {
+            "text": ["true", "false", "foo", "bar", "qux"],
+            "int": [1, 0, 1, 0, 0],
+        }
+    )
+    # breaking behaviour is np.nan for qux
+    assert_eq(df, expected)
+
+
 def test_csv_quotednumbers(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 

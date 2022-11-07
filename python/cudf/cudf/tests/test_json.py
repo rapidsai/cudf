@@ -688,6 +688,101 @@ def test_json_types_data():
 
 
 @pytest.mark.parametrize(
+    "col_type,json_str",
+    [
+        # without quotes
+        ("int", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        # with quotes
+        ("int", '[{"k": "1"}, {"k": "2"}]'),
+        # with quotes, mixed
+        ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        # with quotes, null, mixed
+        ("int", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        # without quotes, null
+        ("int", '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]'),
+        # without quotes
+        ("float", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        # with quotes
+        ("float", '[{"k": "1"}, {"k": "2"}]'),
+        # with quotes, mixed
+        ("float", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        # with quotes, null, mixed
+        ("float", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        # with quotes, NAN
+        ("float", '[{"k": "1"}, {"k": "2"}, {"k": NaN}, {"k": "4"}]'),
+        # without quotes
+        ("str", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        # with quotes
+        ("str", '[{"k": "1"}, {"k": "2"}]'),
+        # with quotes, mixed
+        ("str", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        # with quotes, null, mixed
+        ("str", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        # without quotes, null
+        ("str", '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]'),
+    ],
+)
+def test_json_quoted_values_with_schema(col_type, json_str):
+    experimental_df = cudf.read_json(
+        StringIO(json_str),
+        engine="cudf_experimental",
+        orient="records",
+        dtype={"k": col_type},
+    )
+    cudf_df = cudf.read_json(
+        StringIO(json_str.replace(",", "\n")[1:-1]),
+        engine="cudf",
+        orient="records",
+        lines=True,
+        dtype={"k": col_type},
+    )
+    assert_eq(cudf_df, experimental_df)
+
+
+@pytest.mark.parametrize(
+    "col_type,json_str,expected",
+    [
+        # with quotes, mixed
+        ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
+        # with quotes, null, mixed
+        (
+            "int",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
+        # with quotes, mixed
+        (
+            "str",
+            '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]',
+            ["1", "2", "3", "4"],
+        ),
+        # with quotes, null, mixed
+        (
+            "str",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            ["1", "2", None, "4"],
+        ),
+    ],
+)
+def test_json_quoted_values(col_type, json_str, expected):
+    experimental_df = cudf.read_json(
+        StringIO(json_str),
+        engine="cudf_experimental",
+        orient="records",
+        dtype={"k": col_type},
+    )
+    cudf_df = cudf.read_json(
+        StringIO(json_str.replace(",", "\n")[1:-1]),
+        engine="cudf",
+        orient="records",
+        lines=True,
+        dtype={"k": col_type},
+    )
+    assert_eq(expected, experimental_df.k.to_arrow().to_pylist())
+    assert_eq(expected, cudf_df.k.to_arrow().to_pylist())
+
+
+@pytest.mark.parametrize(
     "keep_quotes,result",
     [
         (

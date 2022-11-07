@@ -96,6 +96,35 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   }
 }
 
+TEST_F(DataChunkSourceTest, DataSourceHost)
+{
+  std::string const content = "host buffer source";
+  auto const datasource =
+    cudf::io::datasource::create(cudf::io::host_buffer{content.data(), content.size()});
+  auto const source = cudf::io::text::make_source(*datasource);
+
+  test_source(content, *source);
+}
+
+TEST_F(DataChunkSourceTest, DataSourceFile)
+{
+  std::string content = "file datasource";
+  // make it big enought to have is_device_read_preferred return true
+  content.reserve(content.size() << 20);
+  for (int i = 0; i < 20; i++) {
+    content += content;
+  }
+  auto const filename = temp_env->get_temp_filepath("file_source");
+  {
+    std::ofstream file{filename};
+    file << content;
+  }
+  auto const datasource = cudf::io::datasource::create(filename);
+  auto const source     = cudf::io::text::make_source(*datasource);
+
+  test_source(content, *source);
+}
+
 TEST_F(DataChunkSourceTest, Device)
 {
   std::string const content = "device buffer source";

@@ -38,7 +38,8 @@ std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
   string_scalar const& separator,
   string_scalar const& narep,
-  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
+  separator_on_nulls separate_nulls = separator_on_nulls::YES,
+  // Move before separate_nulls?
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -52,7 +53,7 @@ std::unique_ptr<column> join_strings(
   strings_column_view const& strings,
   string_scalar const& separator,
   string_scalar const& narep,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

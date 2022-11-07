@@ -36,15 +36,18 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
+#include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -82,7 +85,7 @@ struct node_ranges {
   __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
   {
     // Whether a token expects to be followed by its respective end-of-* token partner
-    auto is_begin_of_section = [] __device__(PdaTokenT const token) {
+    auto const is_begin_of_section = [] __device__(PdaTokenT const token) {
       switch (token) {
         case token_t::StringBegin:
         case token_t::ValueBegin:
@@ -91,7 +94,7 @@ struct node_ranges {
       };
     };
     // The end-of-* partner token for a given beginning-of-* token
-    auto end_of_partner = [] __device__(PdaTokenT const token) {
+    auto const end_of_partner = [] __device__(PdaTokenT const token) {
       switch (token) {
         case token_t::StringBegin: return token_t::StringEnd;
         case token_t::ValueBegin: return token_t::ValueEnd;
@@ -101,8 +104,8 @@ struct node_ranges {
     };
     // Includes quote char for end-of-string token or Skips the quote char for
     // beginning-of-field-name token
-    auto get_token_index = [include_quote_char = include_quote_char] __device__(
-                             PdaTokenT const token, SymbolOffsetT const token_index) {
+    auto const get_token_index = [include_quote_char = include_quote_char] __device__(
+                                   PdaTokenT const token, SymbolOffsetT const token_index) {
       constexpr SymbolOffsetT quote_char_size = 1;
       switch (token) {
         // Strip off quote char included for StringBegin
@@ -211,7 +214,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 {
   CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
-  auto is_node = [] __device__(PdaTokenT const token) -> bool {
+  auto const is_node = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructBegin:
       case token_t::ListBegin:
@@ -224,7 +227,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pops from the parent node stack
-  auto does_pop = [] __device__(PdaTokenT const token) -> bool {
+  auto const does_pop = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::StructMemberEnd:
       case token_t::StructEnd:
@@ -234,7 +237,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   };
 
   // Whether the token pushes onto the parent node stack
-  auto does_push = [] __device__(PdaTokenT const token) -> bool {
+  auto const does_push = [] __device__(PdaTokenT const token) -> bool {
     switch (token) {
       case token_t::FieldNameBegin:
       case token_t::StructBegin:
@@ -243,27 +246,45 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     };
   };
 
-  auto num_tokens = tokens.size();
-  auto num_nodes  = thrust::count_if(
-    rmm::exec_policy(stream), tokens.begin(), tokens.begin() + num_tokens, is_node);
+  // Look for ErrorBegin and report the point of error.
+  if (auto const error_count =
+        thrust::count(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
+      error_count > 0) {
+    auto const error_location =
+      thrust::find(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
+    SymbolOffsetT error_index;
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(&error_index,
+                      token_indices.data() + thrust::distance(tokens.begin(), error_location),
+                      sizeof(SymbolOffsetT),
+                      cudaMemcpyDeviceToHost,
+                      stream.value()));
+    stream.synchronize();
+    CUDF_FAIL("JSON Parser encountered an invalid format at location " +
+              std::to_string(error_index));
+  }
+
+  auto const num_tokens = tokens.size();
+  auto const num_nodes =
+    thrust::count_if(rmm::exec_policy(stream), tokens.begin(), tokens.end(), is_node);
 
   // Node levels: transform_exclusive_scan, copy_if.
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
   {
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
-    auto push_pop_it = thrust::make_transform_iterator(
+    auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(), [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
         return does_push(token) - does_pop(token);
       });
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
-                                           token_levels.begin(),
-                                           token_levels.begin() + num_tokens,
-                                           tokens.begin(),
-                                           node_levels.begin(),
-                                           is_node);
+    auto const node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
+                                                 token_levels.begin(),
+                                                 token_levels.end(),
+                                                 tokens.begin(),
+                                                 node_levels.begin(),
+                                                 is_node);
     CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -287,8 +308,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // if previous node is SMB and its previous node is a push, then i-2
     // eg. `{ SMB FB FE VB VE SME` -> `{` index as FB's parent.
     // else -1
-    auto first_childs_parent_token_id = [tokens_gpu =
-                                           tokens.begin()] __device__(auto i) -> NodeIndexT {
+    auto const first_childs_parent_token_id = [tokens_gpu =
+                                                 tokens.begin()] __device__(auto i) -> NodeIndexT {
       if (i <= 0) { return -1; }
       if (tokens_gpu[i - 1] == token_t::StructBegin or tokens_gpu[i - 1] == token_t::ListBegin) {
         return i - 1;
@@ -310,7 +331,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       parent_node_ids.begin(),
       [node_ids_gpu = node_token_ids.begin(), num_nodes, first_childs_parent_token_id] __device__(
         NodeIndexT const tid) -> NodeIndexT {
-        auto pid = first_childs_parent_token_id(tid);
+        auto const pid = first_childs_parent_token_id(tid);
         return pid < 0
                  ? parent_node_sentinel
                  : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
@@ -326,28 +347,25 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
 
   // Node categories: copy_if with transform.
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
-  auto node_categories_it =
+  auto const node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
-  auto node_categories_end = thrust::copy_if(rmm::exec_policy(stream),
-                                             tokens.begin(),
-                                             tokens.begin() + num_tokens,
-                                             node_categories_it,
-                                             is_node);
+  auto const node_categories_end = thrust::copy_if(
+    rmm::exec_policy(stream), tokens.begin(), tokens.end(), node_categories_it, is_node);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
 
   // Node ranges: copy_if with transform.
   rmm::device_uvector<SymbolOffsetT> node_range_begin(num_nodes, stream, mr);
   rmm::device_uvector<SymbolOffsetT> node_range_end(num_nodes, stream, mr);
-  auto node_range_tuple_it =
+  auto const node_range_tuple_it =
     thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
   // Whether the tokenizer stage should keep quote characters for string values
   // If the tokenizer keeps the quote characters, they may be stripped during type casting
   constexpr bool include_quote_char = true;
-  auto node_range_out_it            = thrust::make_transform_output_iterator(
+  auto const node_range_out_it      = thrust::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
-  auto node_range_out_end =
+  auto const node_range_out_end =
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(0) + num_tokens,
@@ -383,38 +401,45 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
     cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
-  auto num_nodes = d_tree.node_categories.size();
+
+  auto const num_nodes  = d_tree.node_categories.size();
+  auto const num_fields = thrust::count(rmm::exec_policy(stream),
+                                        d_tree.node_categories.begin(),
+                                        d_tree.node_categories.end(),
+                                        node_t::NC_FN);
 
   constexpr size_type empty_node_index_sentinel = -1;
-  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+  hash_map_type key_map{compute_hash_table_size(num_fields, 40),  // 40% occupancy in hash map
                         cuco::sentinel::empty_key{empty_node_index_sentinel},
                         cuco::sentinel::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
-  auto d_hasher = [d_input          = d_input.data(),
-                   node_range_begin = d_tree.node_range_begin.data(),
-                   node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
+  auto const d_hasher = [d_input          = d_input.data(),
+                         node_range_begin = d_tree.node_range_begin.data(),
+                         node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id) {
     auto const field_name = cudf::string_view(d_input + node_range_begin[node_id],
                                               node_range_end[node_id] - node_range_begin[node_id]);
     return cudf::detail::default_hash<cudf::string_view>{}(field_name);
   };
-  auto d_equal = [d_input          = d_input.data(),
-                  node_range_begin = d_tree.node_range_begin.data(),
-                  node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
-                                                                            auto node_id2) {
+  auto const d_equal = [d_input          = d_input.data(),
+                        node_range_begin = d_tree.node_range_begin.data(),
+                        node_range_end   = d_tree.node_range_end.data()] __device__(auto node_id1,
+                                                                                  auto node_id2) {
     auto const field_name1 = cudf::string_view(
       d_input + node_range_begin[node_id1], node_range_end[node_id1] - node_range_begin[node_id1]);
     auto const field_name2 = cudf::string_view(
       d_input + node_range_begin[node_id2], node_range_end[node_id2] - node_range_begin[node_id2]);
     return field_name1 == field_name2;
   };
-  auto is_field_name_node = [node_categories = d_tree.node_categories.data()] __device__(
-                              auto node_id) { return node_categories[node_id] == node_t::NC_FN; };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
-  auto iter = cudf::detail::make_counting_transform_iterator(
+  auto const iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
+  auto const is_field_name_node = [node_categories =
+                                     d_tree.node_categories.data()] __device__(auto node_id) {
+    return node_categories[node_id] == node_t::NC_FN;
+  };
   key_map.insert_if(iter,
                     iter + num_nodes,
                     thrust::counting_iterator<size_type>(0),  // stencil
@@ -422,9 +447,10 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                     d_hasher,
                     d_equal,
                     stream.value());
-  auto get_hash_value =
+
+  auto const get_hash_value =
     [key_map = key_map.get_device_view(), d_hasher, d_equal] __device__(auto node_id) -> size_type {
-    auto it = key_map.find(node_id, d_hasher, d_equal);
+    auto const it = key_map.find(node_id, d_hasher, d_equal);
     return (it == key_map.end()) ? size_type{0} : it->second.load(cuda::std::memory_order_relaxed);
   };
 
@@ -444,211 +470,225 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   return node_type;
 }
 
-/**
- * @brief Translates sorted parent_node_ids to parent_indices with indices from scatter_indices
- *
- * @param scatter_indices The sorted order of parent_node_ids
- * @param parent_node_ids The sorted parent_node_ids
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return Translated parent_indices pointing to sorted node_ids positions
- */
-rmm::device_uvector<NodeIndexT> translate_sorted_parent_node_indices(
-  device_span<size_type const> scatter_indices,
+// Two level hashing algorithm
+// 1. Convert node_category+fieldname to node_type. (passed as argument)
+//   a. Create a hashmap to hash field name and assign unique node id as values.
+//   b. Convert the node categories to node types.
+//      Node type is defined as node category enum value if it is not a field node,
+//      otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
+// 2. Set operation on entire path of each node
+//   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
+//      until root.
+//   b. While creating hashmap, transform node id to unique node ids that are inserted into the
+//      hash map. This mimicks set operation with hash map. This unique node ids are set ids.
+//   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_node_path(
+  device_span<TreeDepthT const> node_levels,
+  device_span<size_type const> node_type,
   device_span<NodeIndexT const> parent_node_ids,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const num_nodes      = scatter_indices.size();
-  auto const gather_indices = cudf::detail::scatter_to_gather(
-    scatter_indices.begin(), scatter_indices.end(), num_nodes, stream);
+  auto const num_nodes = parent_node_ids.size();
+  rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
-  rmm::device_uvector<NodeIndexT> parent_indices(num_nodes, stream);
-  // gather, except parent sentinels
-  thrust::transform(rmm::exec_policy(stream),
-                    parent_node_ids.begin(),
-                    parent_node_ids.end(),
-                    parent_indices.begin(),
-                    [gather_indices = gather_indices.data()] __device__(auto parent_node_id) {
-                      return (parent_node_id == parent_node_sentinel)
-                               ? parent_node_sentinel
-                               : gather_indices[parent_node_id];
-                    });
-  return parent_indices;
-};
+  using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+  using hash_map_type =
+    cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+
+  constexpr size_type empty_node_index_sentinel = -1;
+  hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
+                        cuco::sentinel::empty_key{empty_node_index_sentinel},
+                        cuco::sentinel::empty_value{empty_node_index_sentinel},
+                        cuco::sentinel::erased_key{-2},
+                        hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
+  // path compression is not used since extra writes make all map operations slow.
+  auto const d_hasher = [node_level      = node_levels.begin(),
+                         node_type       = node_type.begin(),
+                         parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
+    auto hash =
+      cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
+                                 cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+    node_id = parent_node_ids[node_id];
+    while (node_id != parent_node_sentinel) {
+      hash = cudf::detail::hash_combine(
+        hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
+      hash = cudf::detail::hash_combine(
+        hash, cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+      node_id = parent_node_ids[node_id];
+    }
+    return hash;
+  };
+
+  rmm::device_uvector<hash_value_type> node_hash(num_nodes, stream);
+  thrust::tabulate(rmm::exec_policy(stream), node_hash.begin(), node_hash.end(), d_hasher);
+  auto const d_hashed_cache = [node_hash = node_hash.begin()] __device__(auto node_id) {
+    return node_hash[node_id];
+  };
+
+  auto const d_equal = [node_level      = node_levels.begin(),
+                        node_type       = node_type.begin(),
+                        parent_node_ids = parent_node_ids.begin(),
+                        d_hashed_cache] __device__(auto node_id1, auto node_id2) {
+    if (node_id1 == node_id2) return true;
+    if (d_hashed_cache(node_id1) != d_hashed_cache(node_id2)) return false;
+    auto const is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
+      if (node_id1 == node_id2) return true;
+      return node_level[node_id1] == node_level[node_id2] and
+             node_type[node_id1] == node_type[node_id2];
+    };
+    // if both nodes have same node types at all levels, it will check until it has common parent
+    // or root.
+    while (node_id1 != parent_node_sentinel and node_id2 != parent_node_sentinel and
+           node_id1 != node_id2 and is_equal_level(node_id1, node_id2)) {
+      node_id1 = parent_node_ids[node_id1];
+      node_id2 = parent_node_ids[node_id2];
+    }
+    return node_id1 == node_id2;
+  };
+
+  // insert and convert node ids to unique set ids
+  auto const num_inserted = thrust::count_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_nodes),
+    [d_hashed_cache,
+     d_equal,
+     view       = key_map.get_device_mutable_view(),
+     uq_node_id = col_id.begin()] __device__(auto node_id) mutable {
+      auto it = view.insert_and_find(cuco::make_pair(node_id, node_id), d_hashed_cache, d_equal);
+      uq_node_id[node_id] = (it.first)->first.load(cuda::std::memory_order_relaxed);
+      return it.second;
+    });
+
+  auto const num_columns = num_inserted;  // key_map.get_size() is not updated.
+  rmm::device_uvector<size_type> unique_keys(num_columns, stream);
+  key_map.retrieve_all(unique_keys.begin(), thrust::make_discard_iterator(), stream.value());
+
+  return {std::move(col_id), std::move(unique_keys)};
+}
 
 /**
- * @brief Generates column id and parent column id for each node from the node_level sorted inputs
+ * @brief Generates column id and parent column id for each node
  *
- * 4. Per-Level Processing: Propagate parent node ids for each level.
- *   For each level,
- *     a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
- *     b. stable sort by {parent_col_id, node_type}
- *     c. scan sum of unique {parent_col_id, node_type}
- *     d. scatter the col_id back to stable node_level order (using scatter_indices)
+ * 1. Generate col_id:
+ *    a. Set operation on entire path of each node, translate each node id to set id.
+ *       (two level hashing)
+ *    b. gather unique set ids.
+ *    c. sort and use binary search to generate column ids.
+ *    d. Translate parent node ids to parent column ids.
  *
- * pre-condition: All input arguments are stable sorted by node_level (stable in node_id order)
- * post-condition: Returned column_id, parent_col_id are level sorted.
- * @param node_type Unique id to identify node type, field with different name has different id.
- * @param parent_indices Parent node indices in the sorted node_level order
- * @param d_level_boundaries The boundaries of each level in the sorted node_level order
+ * All inputs and outputs are in node_id order.
+ * @param d_input JSON string in device memory
+ * @param d_tree Tree representation of the JSON
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column_id, parent_column_id
  */
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
-  device_span<size_type> node_type,        // level sorted
-  device_span<NodeIndexT> parent_indices,  // level sorted
-  device_span<size_type const> d_level_boundaries,
+  device_span<SymbolT const> d_input,
+  tree_meta_t const& d_tree,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+  auto const num_nodes = d_tree.node_categories.size();
 
-  auto const num_nodes = node_type.size();
-  rmm::device_uvector<NodeIndexT> col_id(num_nodes, stream, mr);
-  rmm::device_uvector<NodeIndexT> parent_col_id(num_nodes, stream);
-  if (num_nodes == 0) { return {std::move(col_id), std::move(parent_col_id)}; }
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-  // scatter 1 to level_boundaries alone, useful for scan later
-  thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1),
-                  thrust::make_constant_iterator(1) + d_level_boundaries.size() - 1,
-                  d_level_boundaries.begin(),
-                  col_id.begin());
-  auto level_boundaries = cudf::detail::make_std_vector_async(d_level_boundaries, stream);
-  // Initialize First level node's node col_id to 0
-  thrust::fill(rmm::exec_policy(stream), col_id.begin(), col_id.begin() + level_boundaries[0], 0);
-  // Initialize First level node's parent_col_id to parent_node_sentinel sentinel
-  thrust::fill(rmm::exec_policy(stream),
-               parent_col_id.begin(),
-               parent_col_id.begin() + level_boundaries[0],
-               parent_node_sentinel);
+  // Two level hashing:
+  //   one for field names -> node_type and,
+  //   another for {node_level, node_category} + field hash for the entire path
+  //    which is {node_level, node_type} recursively using parent_node_id
+  auto [col_id, unique_keys] = [&]() {
+    // Convert node_category + field_name to node_type.
+    rmm::device_uvector<size_type> node_type =
+      hash_node_type_with_field_name(d_input, d_tree, stream);
 
-  // Per-level processing
-  auto const num_levels = level_boundaries.size();
-  for (size_t level = 1; level < num_levels; level++) {
-    // Gather the each node's parent's column id for the nodes of the current level
-    thrust::gather(rmm::exec_policy(stream),
-                   parent_indices.data() + level_boundaries[level - 1],
-                   parent_indices.data() + level_boundaries[level],
-                   col_id.data(),
-                   parent_col_id.data() + level_boundaries[level - 1]);
+    // hash entire path from node to root.
+    return hash_node_path(d_tree.node_levels, node_type, d_tree.parent_node_ids, stream, mr);
+  }();
 
-    // To invoke Radix sort for keys {parent_col_id, node_type} instead of merge sort,
-    // we need to split to 2 Radix sorts.
-    // Secondary sort on node_type
+  thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
+  thrust::lower_bound(rmm::exec_policy(stream),
+                      unique_keys.begin(),
+                      unique_keys.end(),
+                      col_id.begin(),
+                      col_id.end(),
+                      col_id.begin());
 
-    thrust::stable_sort_by_key(
-      rmm::exec_policy(stream),
-      node_type.data() + level_boundaries[level - 1],
-      node_type.data() + level_boundaries[level],
-      thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                scatter_indices.begin()));
-    // Primary sort on parent_col_id
-    thrust::stable_sort_by_key(
-      rmm::exec_policy(stream),
-      parent_col_id.begin() + level_boundaries[level - 1],
-      parent_col_id.begin() + level_boundaries[level],
-      thrust::make_zip_iterator(node_type.data() + level_boundaries[level - 1],
-                                scatter_indices.begin()));
-
-    auto start_it = thrust::make_zip_iterator(parent_col_id.begin() + level_boundaries[level - 1],
-                                              node_type.data() + level_boundaries[level - 1]);
-    auto adjacent_pair_it = thrust::make_zip_iterator(start_it - 1, start_it);
-    // Compares two adjacent items, beginning with the first and second item from the current level.
-    // Writes flags to the index of the rhs item.
-    // First index holds next col_id from previous level.
-    thrust::transform(rmm::exec_policy(stream),
-                      adjacent_pair_it + 1,
-                      adjacent_pair_it + level_boundaries[level] - level_boundaries[level - 1],
-                      col_id.data() + level_boundaries[level - 1] + 1,
-                      [] __device__(auto adjacent_pair) -> size_type {
-                        auto const lhs = thrust::get<0>(adjacent_pair);
-                        auto const rhs = thrust::get<1>(adjacent_pair);
-                        return lhs != rhs ? 1 : 0;
-                      });
-
-    // includes previous level last col_id to continue the index.
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           col_id.data() + level_boundaries[level - 1],
-                           col_id.data() + level_boundaries[level] + (level != num_levels - 1),
-                           // +1 only for not-last-levels, for next level start col_id
-                           col_id.data() + level_boundaries[level - 1]);
-
-    // scatter to restore original order.
-    auto const num_nodes_per_level = level_boundaries[level] - level_boundaries[level - 1];
-    {
-      rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes_per_level, stream);
-      rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes_per_level, stream);
-      thrust::scatter(rmm::exec_policy(stream),
-                      thrust::make_zip_iterator(col_id.begin() + level_boundaries[level - 1],
-                                                parent_col_id.data() + level_boundaries[level - 1]),
-                      thrust::make_zip_iterator(col_id.begin() + level_boundaries[level],
-                                                parent_col_id.data() + level_boundaries[level]),
-                      scatter_indices.begin(),
-                      thrust::make_zip_iterator(tmp_col_id.begin(), tmp_parent_col_id.begin()));
-      thrust::copy(rmm::exec_policy(stream),
-                   tmp_col_id.begin(),
-                   tmp_col_id.end(),
-                   col_id.begin() + level_boundaries[level - 1]);
-      thrust::copy(rmm::exec_policy(stream),
-                   tmp_parent_col_id.begin(),
-                   tmp_parent_col_id.end(),
-                   parent_col_id.begin() + level_boundaries[level - 1]);
-    }
-    thrust::sequence(rmm::exec_policy(stream),
-                     scatter_indices.begin(),
-                     scatter_indices.begin() + num_nodes_per_level);
-  }
+  rmm::device_uvector<size_type> parent_col_id(num_nodes, stream, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    d_tree.parent_node_ids.begin(),
+                    d_tree.parent_node_ids.end(),
+                    parent_col_id.begin(),
+                    [col_id = col_id.begin()] __device__(auto node_id) {
+                      return node_id >= 0 ? col_id[node_id] : parent_node_sentinel;
+                    });
 
   return {std::move(col_id), std::move(parent_col_id)};
 }
 
 /**
  * @brief Computes row indices of each node in the hierarchy.
- * 5. Generate row_offset.
- *   a. stable_sort by parent_col_id.
- *   b. scan_by_key {parent_col_id} (required only on nodes who's parent is list)
- *   c. propagate to non-list leaves from parent list node by recursion
+ * 2. Generate row_offset.
+ *   a. Extract only list children
+ *   b. stable_sort by parent_col_id.
+ *   c. scan_by_key {parent_col_id} (done only on nodes who's parent is list)
+ *   d. propagate to non-list leaves from parent list node by recursion
  *
  * pre-condition:
- *  scatter_indices is a sequence, representing node_id.
  *  d_tree.node_categories, d_tree.parent_node_ids, parent_col_id are in order of node_id.
  * post-condition: row_offsets is in order of node_id.
- *  parent_col_id and scatter_indices are sorted by parent_col_id. (unused after this function)
- * @param scatter_indices node_id
+ *  parent_col_id is moved and reused inside this function.
  * @param parent_col_id parent node's column id
  * @param d_tree Tree representation of the JSON string
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return row_offsets
  */
-rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatter_indices,
-                                                   rmm::device_uvector<NodeIndexT>&& parent_col_id,
-                                                   tree_meta_t& d_tree,
+rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndexT>&& parent_col_id,
+                                                   tree_meta_t const& d_tree,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
-  // TODO generate scatter_indices sequences here itself
-  thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), parent_col_id.begin(), parent_col_id.end(), scatter_indices.begin());
+
+  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
+  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
+
+  // Extract only list children. (nodes who's parent is a list/root)
+  auto const list_parent_end =
+    thrust::remove_if(rmm::exec_policy(stream),
+                      thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()),
+                      thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
+                      d_tree.parent_node_ids.begin(),
+                      [node_categories = d_tree.node_categories.begin()] __device__(auto pnid) {
+                        return !(pnid == parent_node_sentinel || node_categories[pnid] == NC_LIST);
+                      });
+  auto const num_list_parent = thrust::distance(
+    thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
+
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             parent_col_id.begin(),
+                             parent_col_id.begin() + num_list_parent,
+                             scatter_indices.begin());
+
   rmm::device_uvector<size_type> row_offsets(num_nodes, stream, mr);
   // TODO is it possible to generate list child_offsets too here?
-  thrust::exclusive_scan_by_key(
-    rmm::exec_policy(stream),
-    parent_col_id.begin(),  // TODO: is there any way to limit this to list parents alone?
-    parent_col_id.end(),
-    thrust::make_constant_iterator<size_type>(1),
-    row_offsets.begin());
+  // write only 1st child offset to parent node id child_offsets?
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                parent_col_id.begin(),
+                                parent_col_id.begin() + num_list_parent,
+                                thrust::make_constant_iterator<size_type>(1),
+                                row_offsets.begin());
 
   // Using scatter instead of sort.
   auto& temp_storage = parent_col_id;  // reuse parent_col_id as temp storage
   thrust::scatter(rmm::exec_policy(stream),
                   row_offsets.begin(),
-                  row_offsets.end(),
+                  row_offsets.begin() + num_list_parent,
                   scatter_indices.begin(),
                   temp_storage.begin());
   row_offsets = std::move(temp_storage);
@@ -672,126 +712,37 @@ rmm::device_uvector<size_type> compute_row_offsets(device_span<size_type> scatte
     },
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      auto parent_node_id = parent_node_ids[node_id];
+      auto const parent_node_id = parent_node_ids[node_id];
       return parent_node_id != parent_node_sentinel and
              !(node_categories[parent_node_id] == node_t::NC_LIST);
     });
   return row_offsets;
 }
 
-/**
-@note
-This algorithm assigns a unique column id to each node in the tree.
-The row offset is the row index of the node in that column id.
-Algorithm:
-1. Convert node_category+fieldname to node_type.
-  a. Create a hashmap to hash field name and assign unique node id as values.
-  b. Convert the node categories to node types.
-     Node type is defined as node category enum value if it is not a field node,
-     otherwise it is the unique node id assigned by the hashmap (value shifted by #NUM_CATEGORY).
-2. Preprocessing: Translate parent node ids after sorting by level.
-  a. sort by level
-  b. get gather map of sorted indices
-  c. translate parent_node_ids to new sorted indices
-3. Find level boundaries.
-   copy_if index of first unique values of sorted levels.
-4. Per-Level Processing: Propagate parent node ids for each level.
-  For each level,
-    a. gather col_id from previous level results. input=col_id, gather_map is parent_indices.
-    b. stable sort by {parent_col_id, node_type}
-    c. scan sum of unique {parent_col_id, node_type}
-    d. scatter the col_id back to stable node_level order (using scatter_indices)
-  Restore original node_id order
-5. Generate row_offset.
-  a. stable_sort by parent_col_id.
-  b. scan_by_key {parent_col_id} (required only on nodes whose parent is a list)
-  c. propagate to non-list leaves from parent list node by recursion
-**/
+// This algorithm assigns a unique column id to each node in the tree.
+// The row offset is the row index of the node in that column id.
+// Algorithm:
+// 1. Generate col_id:
+//   a. Set operation on entire path of each node, translate each node id to set id.
+//   b. gather unique set ids.
+//   c. sort and use binary search to generate column ids.
+//   d. Translate parent node ids to parent column ids.
+// 2. Generate row_offset.
+//   a. filter only list childs
+//   a. stable_sort by parent_col_id.
+//   b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
+//   c. propagate to non-list leaves from parent list node by recursion
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
-                              tree_meta_t& d_tree,
+                              tree_meta_t const& d_tree,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // 1. Convert node_category + field_name to node_type.
+  auto [new_col_id, new_parent_col_id] = generate_column_id(d_input, d_tree, stream, mr);
 
-  auto num_nodes = d_tree.node_categories.size();
-  rmm::device_uvector<size_type> node_type =
-    hash_node_type_with_field_name(d_input, d_tree, stream);
-  // TODO two-level hashing:  one for field names
-  // and another for {node-level, node_category} + field hash for the entire path
-
-  // 2. Preprocessing: Translate parent node ids after sorting by level.
-  //   a. sort by level
-  //   b. get gather map of sorted indices
-  //   c. translate parent_node_ids to sorted indices
-
-  rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
-  thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-
-  rmm::device_uvector<NodeIndexT> parent_node_ids(d_tree.parent_node_ids, stream);  // make a copy
-  auto out_pid =
-    thrust::make_zip_iterator(scatter_indices.data(), parent_node_ids.data(), node_type.data());
-  // Uses cub radix sort. sort by level
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             d_tree.node_levels.data(),
-                             d_tree.node_levels.data() + num_nodes,
-                             out_pid);
-
-  rmm::device_uvector<NodeIndexT> parent_indices =
-    translate_sorted_parent_node_indices(scatter_indices, parent_node_ids, stream);
-  // TODO optimize memory usage: parent_node_ids is no longer needed
-
-  // 3. Find level boundaries.
-  auto level_boundaries = [&]() {
-    if (d_tree.node_levels.is_empty()) return rmm::device_uvector<size_type>{0, stream};
-    // Already node_levels is sorted
-    auto max_level = d_tree.node_levels.back_element(stream);
-    rmm::device_uvector<size_type> level_boundaries(max_level + 1, stream);
-    // TODO try reduce_by_key
-    auto level_end =
-      thrust::copy_if(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(1),
-                      thrust::make_counting_iterator<size_type>(num_nodes + 1),
-                      level_boundaries.begin(),
-                      [num_nodes, node_levels = d_tree.node_levels.begin()] __device__(auto index) {
-                        return index == num_nodes || node_levels[index] != node_levels[index - 1];
-                      });
-    CUDF_EXPECTS(thrust::distance(level_boundaries.begin(), level_end) == max_level + 1,
-                 "num_levels != max_level + 1");
-    return level_boundaries;
-  };
-
-  // 4. Per-Level Processing: Propagate parent node ids for each level.
-  auto [col_id, parent_col_id] = generate_column_id(node_type,       // level sorted
-                                                    parent_indices,  // level sorted
-                                                    level_boundaries(),
-                                                    stream,
-                                                    mr);
-
-  // restore original order of col_id, parent_col_id and used d_tree members
-  {
-    rmm::device_uvector<NodeIndexT> tmp_col_id(num_nodes, stream);
-    rmm::device_uvector<NodeIndexT> tmp_parent_col_id(num_nodes, stream);
-    rmm::device_uvector<TreeDepthT> tmp_node_levels(num_nodes, stream);
-    thrust::scatter(
-      rmm::exec_policy(stream),
-      thrust::make_zip_iterator(col_id.begin(), parent_col_id.begin(), d_tree.node_levels.begin()),
-      thrust::make_zip_iterator(col_id.end(), parent_col_id.end(), d_tree.node_levels.end()),
-      scatter_indices.begin(),
-      thrust::make_zip_iterator(
-        tmp_col_id.begin(), tmp_parent_col_id.begin(), tmp_node_levels.begin()));
-    col_id             = std::move(tmp_col_id);
-    parent_col_id      = std::move(tmp_parent_col_id);
-    d_tree.node_levels = std::move(tmp_node_levels);
-    thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
-  }
-
-  // 5. Generate row_offset.
-  auto row_offsets =
-    compute_row_offsets(scatter_indices, std::move(parent_col_id), d_tree, stream, mr);
-  return std::tuple{std::move(col_id), std::move(row_offsets)};
+  auto row_offsets = compute_row_offsets(std::move(new_parent_col_id), d_tree, stream, mr);
+  return std::tuple{std::move(new_col_id), std::move(row_offsets)};
 }
 
 }  // namespace detail

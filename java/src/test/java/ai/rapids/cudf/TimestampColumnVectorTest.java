@@ -30,7 +30,7 @@ public class TimestampColumnVectorTest extends CudfTestBase {
                                   17716,    //2018-07-04
                                   19382,    //2023-01-25
                                   -1528,    //1965-10-26
-                                  17716};   //2018-07-04 
+                                  17716};   //2018-07-04
 
   static final long[] TIMES_S = {-131968728L,   //'1965-10-26 14:01:12' Tuesday
                                  1530705600L,   //'2018-07-04 12:00:00' Wednesday
