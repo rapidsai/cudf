@@ -4,7 +4,7 @@ channels:
 - rapidsai
 - conda-forge
 dependencies:
-- aiobotocore>=2.2.0
+- aiobotocore>=99999
 - arrow-cpp=9
 - boto3>=1.21.21
 - botocore>=1.24.21
