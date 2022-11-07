@@ -31,9 +31,9 @@ uint64_t random_generator_incrementing_seed()
   static uint64_t seed = 0;
   return ++seed;
 }
+}  // namespace detail
 
 rmm::cuda_stream_view const get_default_stream() { return cudf::get_default_stream(); }
 
-}  // namespace detail
 }  // namespace test
 }  // namespace cudf
