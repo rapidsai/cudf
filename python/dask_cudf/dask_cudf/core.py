@@ -702,17 +702,6 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
     )
 
 
-def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
-
-    return DataFrame.from_dict(
-        data,
-        npartitions=npartitions,
-        orient=orient,
-        dtype=dtype,
-        columns=columns,
-    )
-
-
 from_cudf.__doc__ = (
     "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
 )

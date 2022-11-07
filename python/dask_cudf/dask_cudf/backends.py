@@ -469,15 +469,18 @@ try:
         """
 
         @staticmethod
-        def from_dict(data, npartitions, orient="columns", **kwargs):
-            from dask_cudf import from_dict
+        def from_dict(
+            data, npartitions, orient="columns", dtype=None, columns=None
+        ):
 
-            return from_dict(
+            return _default_backend(
+                dd.from_dict,
                 data,
-                npartitions,
+                npartitions=npartitions,
                 orient=orient,
-                dtype=kwargs.get("dtype", None),
-                columns=kwargs.get("columns", None),
+                dtype=dtype,
+                columns=columns,
+                constructor=cudf.DataFrame,
             )
 
         @staticmethod
