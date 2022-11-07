@@ -688,7 +688,9 @@ add_library(cudf::cudf ALIAS cudf)
 # * build cudftestutil ----------------------------------------------------------------------------
 
 add_library(
-  cudftestutil STATIC
+  # TODO: We need this to be a shared library in order to support runtime
+  # symbol patching with LD_PRELOAD. Are we OK with that change?
+  cudftestutil SHARED
   tests/io/metadata_utilities.cpp
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
