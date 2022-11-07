@@ -403,7 +403,7 @@ Functions like merge or groupby in libcudf make no guarantees about the order of
 Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
 Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
 
-## libcudf does not promise consistent exception messages
+## libcudf does not promise specific exception messages
 
 libcudf documents the exceptions that will be thrown by an API for different kinds of invalid inputs.
 The types of those exceptions (e.g. `cudf::logic_error`) are part of the public API.
