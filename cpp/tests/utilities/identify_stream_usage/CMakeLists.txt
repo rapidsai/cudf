@@ -30,9 +30,8 @@ project(
 # Option for whether the default stream is an error or whether we should search for a specific
 # stream.
 option(
-  ENABLE_SPECIFIC_STREAM
-  "Enable APIs to expect only a specific stream rather than just overriding cudf's default stream"
-  OFF
+  STREAM_MODE_TESTING
+  "Change the behavior of cudf::test::get_default_stream instead of cudf::get_default_stream." OFF
 )
 
 include(rapids-cpm)
@@ -56,8 +55,8 @@ set_target_properties(
              POSITION_INDEPENDENT_CODE ON
 )
 
-if(ENABLE_SPECIFIC_STREAM)
-  target_compile_definitions(identify_stream_usage PUBLIC ENABLE_SPECIFIC_STREAM)
+if(STREAM_MODE_TESTING)
+  target_compile_definitions(identify_stream_usage PUBLIC STREAM_MODE_TESTING)
 endif()
 
 # Add the test file.
