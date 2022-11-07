@@ -21,6 +21,7 @@ files:
     output: none
     includes:
       - cudatoolkit
+      - py_version
       - test_python
   checks:
     output: none
