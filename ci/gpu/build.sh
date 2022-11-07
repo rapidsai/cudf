@@ -111,6 +111,8 @@ function install_dask {
     set +x
 }
 
+install_dask
+
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
     gpuci_logger "Install dependencies"
@@ -125,8 +127,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     # https://docs.rapids.ai/maintainers/depmgmt/
     # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
     # gpuci_mamba_retry install -y "your-pkg=1.0.0"
-
-    install_dask
 
     ################################################################################
     # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
