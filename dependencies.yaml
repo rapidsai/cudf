@@ -9,10 +9,10 @@ files:
       - build
       - cudatoolkit
       - develop
-      - run
-      - test
       - doc
       - notebook
+      - run
+      - test_python
   test_cpp:
     output: none
     includes:
@@ -120,6 +120,18 @@ dependencies:
         packages:
           - ipython
           - notebook>=0.5.0
+  py_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              py: "3.8"
+            packages:
+              - python=3.8
+          - matrix:
+              py: "3.9"
+            packages:
+              - python=3.9
   run:
     common:
       - output_types: [conda, requirements]
