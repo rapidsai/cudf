@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <dlfcn.h>
 #include <random>
 
 #include <cudf/utilities/default_stream.hpp>
@@ -331,7 +332,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
     options.allow_unrecognised_options().add_options()(
       "stream_error_mode",
       "Whether to error or print to stdout when a non-default stream is observed and stream_mode "
-      "is \"custom\"",
+      "is not \"default\"",
       cxxopts::value<std::string>()->default_value(default_stream_error_mode));
     return options.parse(argc, argv);
   } catch (const cxxopts::OptionException& e) {
@@ -360,7 +361,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
                                                                                             \
     auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();                     \
     rmm::cuda_stream const new_default_stream{};                                            \
-    if (stream_mode == "custom") {                                                          \
+    if (stream_mode == "new_cudf_default" || stream_mode == "testing_cudf_default") {       \
       auto const stream_error_mode = cmd_opts["stream_error_mode"].as<std::string>();       \
       auto adapter                 = make_stream_checking_resource_adaptor(resource.get()); \
       if (stream_error_mode == "print") { adapter.disable_errors(); }                       \

@@ -38,8 +38,6 @@ namespace cudf {
 
 namespace test {
 
-std::optional<rmm::cuda_stream_view> _default_stream;
-
 /**
  * @brief Get the default stream to use for tests.
  *
@@ -47,20 +45,9 @@ std::optional<rmm::cuda_stream_view> _default_stream;
  */
 rmm::cuda_stream_view const get_default_stream()
 {
-  if (!_default_stream.has_value()) {
-    throw std::runtime_error(
-      "You must set the default stream to use when leveraging identify_stream_usage built with "
-      "ENABLE_SPECIFIC_STREAM=ON.");
-  }
-  return *_default_stream;
+  static rmm::cuda_stream stream{};
+  return {stream};
 }
-
-/**
- * @brief get the default stream to use for tests.
- *
- * @param The stream to use for tests.
- */
-void const set_default_stream(rmm::cuda_stream_view stream) { _default_stream = stream; }
 
 }  // namespace test
 
