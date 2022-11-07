@@ -7,6 +7,7 @@ files:
       arch: [x86_64]
     includes:
       - build
+      - cudatoolkit
       - develop
       - run
       - test
@@ -15,6 +16,7 @@ files:
   test:
     output: none
     includes:
+      - cudatoolkit
       - test
 channels:
   - rapidsai
@@ -59,12 +61,6 @@ dependencies:
       - output_types: conda
         matrices:
         - matrix:
-            cuda: "11.5"
-          packages:
-            - cudatoolkit=11.5
-      - output_types: conda
-        matrices:
-        - matrix:
             arch: x86_64
             cuda: "11.5"
           packages:
@@ -74,6 +70,22 @@ dependencies:
             cuda: "11.5"
           packages:
             - nvcc_linux-aarch64=11.5
+  cudatoolkit:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.2"
+            packages:
+              - cudatoolkit=11.2
+          - matrix:
+              cuda: "11.4"
+            packages:
+              - cudatoolkit=11.4
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cudatoolkit=11.5
   run:
     common:
       - output_types: [conda, requirements]
