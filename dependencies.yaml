@@ -96,6 +96,34 @@ dependencies:
               cuda: "11.5"
             packages:
               - cudatoolkit=11.5
+  develop:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - pre-commit
+      - output_types: conda
+        packages:
+          - doxygen=1.8.20  # pre-commit hook needs a specific version.
+  doc:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - myst-nb
+          - nbsphinx
+          - numpydoc
+          - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
+          - pydata-sphinx-theme
+          - sphinx
+          - sphinx-autobuild
+          - sphinx-copybutton
+          - sphinx-markdown-tables
+          - sphinxcontrib-websupport
+  notebook:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - ipython
+          - notebook>=0.5.0
   run:
     common:
       - output_types: [conda, requirements]
@@ -143,14 +171,6 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64  # TODO: Verify that this works.
-  develop:
-    common:
-      - output_types: [conda, requirements]
-        packages:
-          - pre-commit
-      - output_types: conda
-        packages:
-          - doxygen=1.8.20  # pre-commit hook needs a specific version.
   test_python:
     common:
       - output_types: [conda, requirements]
@@ -173,23 +193,3 @@ dependencies:
           - s3fs>=2022.3.0
           - scipy
           - transformers
-  doc:
-    common:
-      - output_types: [conda, requirements]
-        packages:
-          - myst-nb
-          - nbsphinx
-          - numpydoc
-          - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
-          - pydata-sphinx-theme
-          - sphinx
-          - sphinx-autobuild
-          - sphinx-copybutton
-          - sphinx-markdown-tables
-          - sphinxcontrib-websupport
-  notebook:
-    common:
-      - output_types: [conda, requirements]
-        packages:
-          - ipython
-          - notebook>=0.5.0
