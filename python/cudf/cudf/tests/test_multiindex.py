@@ -768,7 +768,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
     Case2: Constructed from MultiIndex, NumericColumns
     """
     cudf.set_option("copy_on_write", copy_on_write)
-    same_ref = (not deep) or cudf.get_option("copy_on_write")
+    same_ref = (not deep) or (cudf.get_option("copy_on_write") and not deep)
 
     if isinstance(data, dict):
         import operator
