@@ -47,6 +47,20 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
   add_library(arrow_shared ALIAS Arrow::Arrow)
 
+  # When using the libarrow inside a wheel we must build libcudf with the old ABI because pyarrow's
+  # `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old ABI. Note
+  # that these flags will often be redundant because we build wheels in manylinux containers that
+  # actually have the old libc++ anyway, but setting them explicitly ensures correct and consistent
+  # behavior in all other cases such as aarch builds on newer manylinux or testing builds in newer
+  # containers. Note that tests will not build successfully without also propagating these options
+  # to builds of GTest. Similarly, benchmarks will not work without updating GBench (and possibly
+  # NVBench) builds. We are currently ignoring these limitations since we don't anticipate using
+  # this feature except for building wheels.
+  target_compile_options(
+    Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
+                           "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0>"
+  )
+
   # TODO: Should these both be here? I think so, the `rapids_find_generate_module` doesn't seems to
   # create the necessary `find_dependency` calls in the config files.
   rapids_export_package(BUILD Arrow cudf-exports)
@@ -63,26 +77,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   if(USE_LIBARROW_FROM_PYARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
-    # When using the libarrow inside a wheel we must build libcudf with the old ABI because
-    # pyarrow's `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old
-    # ABI. Note that these flags will often be redundant because we build wheels in manylinux
-    # containers that actually have the old libc++ anyway, but setting them explicitly ensures
-    # correct and consistent behavior in all other cases such as aarch builds on newer manylinux or
-    # testing builds in newer containers. Note that tests will not build successfully without also
-    # propagating these options to builds of GTest. Similarly, benchmarks will not work without
-    # updating GBench (and possibly NVBench) builds. We are currently ignoring these limitations
-    # since we don't anticipate using this feature except for building wheels.
-    list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
-    list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
-    set(CUDF_CXX_FLAGS
-        "${CUDF_CXX_FLAGS}"
-        PARENT_SCOPE
-    )
-    set(CUDF_CUDA_FLAGS
-        "${CUDF_CUDA_FLAGS}"
-        PARENT_SCOPE
-    )
-
     return()
   endif()
 
@@ -124,10 +118,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ARROW_BUILD_STATIC ON)
     set(ARROW_BUILD_SHARED OFF)
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
-    # library TODO: Can we use `CPM_DOWNLOAD_<PackageName>` (aka `CPM_DOWNLOAD_ARROW`) instead? This
-    # is a big hammer, although I guess it is effectively limited which packages will be affected by
-    # the scope of the variable here.
-    set(CPM_DOWNLOAD_ALL TRUE)
+    # library.
+    set(CPM_DOWNLOAD_Arrow TRUE)
   else()
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
@@ -150,10 +142,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   rapids_cpm_find(
-    Arrow
-    ${VERSION}
-    # TODO: Should we set the list of global targets conditionally based on whether we're building
-    # shared/static and whether parquet is enabled?
+    Arrow ${VERSION}
     GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared arrow_static parquet_static
                    arrow_dataset_static
     CPM_ARGS
@@ -296,9 +285,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       BUILD Arrow
       VERSION ${VERSION}
       EXPORT_SET arrow_targets
-      # TODO: What about all the other GLOBAL_TARGETS specified in the `rapids_cpm_find` command?
-      # Also, should this be constructed conditionally based on whether we're using shared or static
-      # libs for arrow?
       GLOBAL_TARGETS arrow_shared arrow_static
       NAMESPACE cudf::
       FINAL_CODE_BLOCK arrow_code_string
