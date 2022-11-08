@@ -61,8 +61,6 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
                            "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0>"
   )
 
-  # TODO: Should these both be here? I think so, the `rapids_find_generate_module` doesn't seems to
-  # create the necessary `find_dependency` calls in the config files.
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
@@ -199,15 +197,17 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
   if(Arrow_DIR)
-    # TODO: Under what circumstances do we need a `find_package` _after_ `rapids_cpm_find`??
+    # This extra find_package is necessary because rapids_cpm_find does not propagate all the
+    # variables from find_package that we might need. This is especially problematic when
+    # rapids_cpm_find builds from source.
     find_package(Arrow REQUIRED QUIET)
     if(ENABLE_PARQUET)
+      # Setting Parquet_DIR is conditional because parquet may be installed independently of arrow.
       if(NOT Parquet_DIR)
         # Set this to enable `find_package(Parquet)`
         set(Parquet_DIR "${Arrow_DIR}")
       endif()
-      # Set this to enable `find_package(ArrowDataset)` TODO: Should this be conditional like the
-      # Parquet_DIR setting above?
+      # Set this to enable `find_package(ArrowDataset)`
       set(ArrowDataset_DIR "${Arrow_DIR}")
       find_package(ArrowDataset REQUIRED QUIET)
     endif()
@@ -342,12 +342,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
   endif()
   # We generate the arrow-configfiles when we built arrow locally, so always do `find_dependency`
-  # TODO: Isn't the second call here redundant? The above `rapids_export` command will also encode a
-  # `find_dependency` in the INSTALL export set. It's less obvious whether we should still include
-  # the first `rapids_export_package` below since that will translate to a `find_dependency` call in
-  # the build config and `rapids-export` will put a `CPMFindPackage` there instead; is our goal to
-  # add `find_dependency`? Since it'll happen after `CPMFindPackage` I think it'll just be
-  # redundant.
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 
