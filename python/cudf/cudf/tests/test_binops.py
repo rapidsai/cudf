@@ -881,7 +881,21 @@ def test_binop_bool_uint(func, rhs):
     "series_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
 )
 @pytest.mark.parametrize(
-    "divisor_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+    "divisor_dtype",
+    (
+        pytest.param(
+            np.bool_,
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Pandas handling of division by zero-bool is too strange"
+                )
+            ),
+        ),
+        np.int8,
+        np.uint8,
+        np.int64,
+        np.uint64,
+    ),
 )
 @pytest.mark.parametrize("scalar_divisor", [False, True])
 def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
@@ -899,13 +913,29 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
 
 @pytest.mark.parametrize(
     "dtype",
-    (np.bool_, np.int8, np.uint8, np.int64, np.uint64, np.float32, np.float64),
+    (
+        pytest.param(
+            np.bool_,
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Pandas handling of division by zero-bool is too strange"
+                )
+            ),
+        ),
+        np.int8,
+        np.uint8,
+        np.int64,
+        np.uint64,
+        np.float32,
+        np.float64,
+    ),
 )
 def test_rmod_zero_nan(dtype):
     sr = pd.Series([1, 1, 0], dtype=dtype)
     cr = cudf.from_pandas(sr)
     utils.assert_eq(1 % sr, 1 % cr)
-    utils.assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=np.float64))
+    expected_dtype = np.float64 if cr.dtype.kind != "f" else dtype
+    utils.assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=expected_dtype))
 
 
 def test_series_misc_binop():
