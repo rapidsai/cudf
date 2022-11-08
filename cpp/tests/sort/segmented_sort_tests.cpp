@@ -80,14 +80,12 @@ TEST_F(SegmentedSortInt, Empty)
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_empty, table_empty, segments));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_empty, table_empty, col_empty));
 
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_empty, table_valid, segments),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_empty, table_valid, col_empty),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_valid, table_empty, segments),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_valid, table_empty, col_empty),
-                            "Mismatch in number of rows for values and keys");
+  // Swapping "empty" and "valid" tables is invalid because the keys and values will be of different
+  // sizes.
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_empty, table_valid, segments), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_empty, table_valid, col_empty), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_valid, table_empty, segments), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_valid, table_empty, col_empty), cudf::logic_error);
 }
 
 TEST_F(SegmentedSortInt, Single)
