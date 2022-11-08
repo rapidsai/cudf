@@ -868,6 +868,14 @@ def test_string_udf_count(str_udf_data, substr):
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
 
+@string_udf_test
+def test_string_udf_return_string(str_udf_data):
+    def func(row):
+        return row["str_col"]
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
 )

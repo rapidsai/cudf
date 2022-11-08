@@ -69,6 +69,8 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
