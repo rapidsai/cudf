@@ -26,16 +26,16 @@
  * allocation/deallocation.
  */
 template <typename Upstream>
-class stream_checking_resource_adaptor final : public rmm::mr::device_memory_resource {
+class stream_checking_resource_adapter final : public rmm::mr::device_memory_resource {
  public:
   /**
-   * @brief Construct a new adaptor.
+   * @brief Construct a new adapter.
    *
    * @throws `cudf::logic_error` if `upstream == nullptr`
    *
    * @param upstream The resource used for allocating/deallocating device memory
    */
-  stream_checking_resource_adaptor(Upstream* upstream,
+  stream_checking_resource_adapter(Upstream* upstream,
                                    bool error_on_invalid_stream,
                                    bool check_default_stream)
     : upstream_{upstream},
@@ -45,12 +45,12 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     CUDF_EXPECTS(nullptr != upstream, "Unexpected null upstream resource pointer.");
   }
 
-  stream_checking_resource_adaptor()                                        = delete;
-  ~stream_checking_resource_adaptor() override                              = default;
-  stream_checking_resource_adaptor(stream_checking_resource_adaptor const&) = delete;
-  stream_checking_resource_adaptor& operator=(stream_checking_resource_adaptor const&) = delete;
-  stream_checking_resource_adaptor(stream_checking_resource_adaptor&&) noexcept        = default;
-  stream_checking_resource_adaptor& operator=(stream_checking_resource_adaptor&&) noexcept =
+  stream_checking_resource_adapter()                                        = delete;
+  ~stream_checking_resource_adapter() override                              = default;
+  stream_checking_resource_adapter(stream_checking_resource_adapter const&) = delete;
+  stream_checking_resource_adapter& operator=(stream_checking_resource_adapter const&) = delete;
+  stream_checking_resource_adapter(stream_checking_resource_adapter&&) noexcept        = default;
+  stream_checking_resource_adapter& operator=(stream_checking_resource_adapter&&) noexcept =
     default;
 
   /**
@@ -122,7 +122,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     if (this == &other) { return true; }
-    auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
+    auto cast = dynamic_cast<stream_checking_resource_adapter<Upstream> const*>(&other);
     return cast != nullptr ? upstream_->is_equal(*cast->get_upstream())
                            : upstream_->is_equal(other);
   }
@@ -179,16 +179,16 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
 };
 
 /**
- * @brief Convenience factory to return a `stream_checking_resource_adaptor` around the
+ * @brief Convenience factory to return a `stream_checking_resource_adapter` around the
  * upstream resource `upstream`.
  *
  * @tparam Upstream Type of the upstream `device_memory_resource`.
  * @param upstream Pointer to the upstream resource
  */
 template <typename Upstream>
-stream_checking_resource_adaptor<Upstream> make_stream_checking_resource_adaptor(
+stream_checking_resource_adapter<Upstream> make_stream_checking_resource_adapter(
   Upstream* upstream, bool error_on_invalid_stream, bool check_default_stream)
 {
-  return stream_checking_resource_adaptor<Upstream>{
+  return stream_checking_resource_adapter<Upstream>{
     upstream, error_on_invalid_stream, check_default_stream};
 }
