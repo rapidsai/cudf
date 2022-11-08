@@ -169,7 +169,7 @@ def typeof_masked(val, c):
 
 # Implemented typing for Masked(value, valid) - the construction of a Masked
 # type in a kernel.
-def register_masked_constructor(supported_masked_types):
+def _register_masked_constructor_typing(supported_masked_types):
     class MaskedConstructor(ConcreteTemplate):
         key = api.Masked
         cases = [
