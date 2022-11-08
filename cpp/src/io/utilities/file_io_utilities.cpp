@@ -257,11 +257,20 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
   // writes.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
+#else
+cufile_input_impl::cufile_input_impl(std::string const& filepath)
+{
+  CUDF_FAIL("Cannot create cuFile source, current build was compiled without cuFile headers");
+}
+
+cufile_output_impl::cufile_output_impl(std::string const& filepath)
+{
+  CUDF_FAIL("Cannot create cuFile sink, current build was compiled without cuFile headers");
+}
 #endif
 
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
 {
-#ifdef CUFILE_FOUND
   if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_input_impl>(filepath);
@@ -269,13 +278,11 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
       if (cufile_integration::is_always_enabled()) throw;
     }
   }
-#endif
   return nullptr;
 }
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
-#ifdef CUFILE_FOUND
   if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_output_impl>(filepath);
@@ -283,7 +290,6 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
       if (cufile_integration::is_always_enabled()) throw;
     }
   }
-#endif
   return nullptr;
 }
 

@@ -382,7 +382,7 @@ You can skip these checks with `git commit --no-verify` or with the short versio
 
 ## Developer Guidelines
 
-The [C++ Developer Guide](cpp/docs/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
+The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
 The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
 

@@ -305,7 +305,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
   auto const d_strings     = column_device_view::create(strings.parent(), stream);
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     begin,
     end,
     d_out_offsets,
@@ -317,7 +317,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   // check total size is not too large
   size_t const total_bytes = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     d_out_offsets,
     d_out_offsets + output_count,
     [] __device__(auto size) { return static_cast<size_t>(size); },
@@ -327,8 +327,10 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                "total size of output strings is too large for a cudf column");
 
   // In-place convert output sizes into offsets
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + output_count + 1, d_out_offsets);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         d_out_offsets,
+                         d_out_offsets + output_count + 1,
+                         d_out_offsets);
 
   // build chars column
   cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
