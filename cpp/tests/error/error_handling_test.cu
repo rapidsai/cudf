@@ -16,7 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/stream_checking_resource_adapter.hpp>
+#include <cudf_test/stream_checking_resource_adaptor.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>

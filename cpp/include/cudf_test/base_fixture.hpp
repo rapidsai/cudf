@@ -25,7 +25,7 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/file_utilities.hpp>
-#include <cudf_test/stream_checking_resource_adapter.hpp>
+#include <cudf_test/stream_checking_resource_adaptor.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
