@@ -32,8 +32,5 @@ uint64_t random_generator_incrementing_seed()
   return ++seed;
 }
 }  // namespace detail
-
-rmm::cuda_stream_view const get_default_stream() { return cudf::get_default_stream(); }
-
 }  // namespace test
 }  // namespace cudf
