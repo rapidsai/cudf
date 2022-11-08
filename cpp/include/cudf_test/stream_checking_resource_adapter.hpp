@@ -151,7 +151,7 @@ class stream_checking_resource_adapter final : public rmm::mr::device_memory_res
    * - check_default_stream_ is false and this function is passed any stream
    *   other than the result of cudf::test::get_default_stream().
    *
-   * @throws `std::runtime_error` if provided a default stream
+   * @throws `std::runtime_error` if provided an invalid stream
    */
   void verify_stream(rmm::cuda_stream_view const stream) const
   {
