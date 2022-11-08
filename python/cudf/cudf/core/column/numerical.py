@@ -226,7 +226,14 @@ class NumericalColumn(NumericalBaseColumn):
                     and (tmp.dtype.type != np.bool_)
                     and (
                         (
-                            (np.isscalar(tmp) or isinstance(tmp, cudf.Scalar))
+                            (
+                                np.isscalar(tmp)
+                                or (
+                                    isinstance(tmp, cudf.Scalar)
+                                    # host to device copy
+                                    and (tmp.value is not pd.NA)
+                                )
+                            )
                             and (0 == tmp)
                         )
                         or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
