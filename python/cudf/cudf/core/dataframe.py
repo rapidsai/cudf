@@ -2112,7 +2112,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if orient != "tight":
-            return cls(data, index=index, columns=columns, dtype=dtype)
+            return cls(data, index=index, dtype=dtype)
         else:
             realdata = data["data"]
 
