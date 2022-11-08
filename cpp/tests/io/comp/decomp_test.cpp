@@ -183,8 +183,8 @@ TEST_F(NvcompConfigTest, Compression)
 
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 0}));
   EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, true, 0}));
-  // 2.3 version required
-  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 2, 0, false, true, 0}));
+  // 2.4 version required
+  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 3, 1, false, true, 0}));
   // stable integrations enabled required
   EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 0}));
 
@@ -219,6 +219,7 @@ TEST_F(NvcompConfigTest, Decompression)
 
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, true, 7}));
   // stable integrations enabled required
   EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, false, 7}));
 }

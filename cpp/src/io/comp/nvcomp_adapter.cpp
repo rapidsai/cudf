@@ -397,7 +397,7 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
     case compression_type::ZSTD: {
       if (not NVCOMP_HAS_ZSTD_COMP(
             params.lib_major_version, params.lib_minor_version, params.lib_patch_version)) {
-        return "nvCOMP 2.3 or newer is required for Zstandard compression";
+        return "nvCOMP 2.4 or newer is required for Zstandard compression";
       }
       if (not params.are_stable_integrations_enabled) {
         return "Zstandard compression is experimental, you can enable it through "
