@@ -285,15 +285,21 @@ class NumericalColumn(NumericalBaseColumn):
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
-        try:
-            # Try and use the dtype of the incoming object
-            other_dtype = other.dtype
-        except AttributeError:
-            # Otherwise fall back to numpy's type deduction scheme.
-            other_dtype = np.result_type(other)
-
-        if other_dtype.kind in {"b", "i", "u", "f"}:
-            common_dtype = np.promote_types(self.dtype, other_dtype)
+        # Try and match pandas and hence numpy. Deduce the common
+        # dtype via the _value_ of other, and the dtype of self. TODO:
+        # When NEP50 is accepted, this might want changed or
+        # simplified.
+        # This is not at all simple:
+        # np.result_type(np.int64(0), np.uint8)
+        #   => np.uint8
+        # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.int64(0), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
+        #   => np.int64
+        common_dtype = np.result_type(self.dtype, other)
+        if common_dtype.kind in {"b", "i", "u", "f"}:
             if common_dtype == np.dtype("float16"):
                 common_dtype = cudf.dtype("float32")
             if self.dtype.kind == "b":
