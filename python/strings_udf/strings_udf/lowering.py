@@ -171,49 +171,42 @@ def create_binary_string_func(binary_func, retty):
         def binary_func_impl(context, builder, sig, args):
             lhs_ptr = builder.alloca(args[0].type)
             rhs_ptr = builder.alloca(args[1].type)
-
             builder.store(args[0], lhs_ptr)
             builder.store(args[1], rhs_ptr)
-            result = context.compile_internal(
-                builder,
-                cuda_func,
-                nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
-                (lhs_ptr, rhs_ptr),
-            )
 
-            return result
+            # these conditional statements should compile out
+            if retty != udf_string:
+                # binary function of two strings yielding a fixed-width type
+                # example: str.startswith(other) -> bool
+                # shim functions can return the value through nb_retval
+                result = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (lhs_ptr, rhs_ptr),
+                )
+                return result
+            else:
+                # binary function of two strings yielding a new string
+                # example: str.strip(other) -> str
+                # shim functions can not return a struct due to C linkage
+                # so we operate on an extra void ptr and throw away nb_retval
+                udf_str_ptr = builder.alloca(
+                    default_manager[udf_string].get_value_type()
+                )
+
+                _ = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (udf_str_ptr, lhs_ptr, rhs_ptr),
+                )
+                result = cgutils.create_struct_proxy(udf_string)(
+                    context, builder, value=builder.load(udf_str_ptr)
+                )
+                return result._getvalue()
 
         return binary_func_impl
-
-    return deco
-
-
-def create_binary_string_func_return_string(binary_func):
-    def deco(cuda_func):
-        @cuda_lower(binary_func, string_view, string_view)
-        def binary_func_return_string_impl(context, builder, sig, args):
-            lhs_ptr = builder.alloca(args[0].type)
-            rhs_ptr = builder.alloca(args[1].type)
-            builder.store(args[0], lhs_ptr)
-            builder.store(args[1], rhs_ptr)
-
-            udf_str_ptr = builder.alloca(
-                default_manager[udf_string].get_value_type()
-            )
-
-            _ = context.compile_internal(
-                builder,
-                cuda_func,
-                size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
-                (udf_str_ptr, lhs_ptr, rhs_ptr),
-            )
-
-            result = cgutils.create_struct_proxy(udf_string)(
-                context, builder, value=builder.load(udf_str_ptr)
-            )
-            return result._getvalue()
-
-        return binary_func_return_string_impl
 
     return deco
 
@@ -253,17 +246,17 @@ def lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
 
 
-@create_binary_string_func_return_string("StringView.strip")
+@create_binary_string_func("StringView.strip", udf_string)
 def strip_impl(result, to_strip, strip_char):
     return _string_view_strip(result, to_strip, strip_char)
 
 
-@create_binary_string_func_return_string("StringView.lstrip")
+@create_binary_string_func("StringView.lstrip", udf_string)
 def lstrip_impl(result, to_strip, strip_char):
     return _string_view_lstrip(result, to_strip, strip_char)
 
 
-@create_binary_string_func_return_string("StringView.rstrip")
+@create_binary_string_func("StringView.rstrip", udf_string)
 def rstrip_impl(result, to_strip, strip_char):
     return _string_view_rstrip(result, to_strip, strip_char)
 
