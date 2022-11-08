@@ -2303,5 +2303,87 @@ TEST_F(CsvReaderTest, CropColumnsUseColsNames)
   ASSERT_EQ(result_table.column(0).type(), data_type{type_id::FLOAT32});
   expect_column_data_equal(std::vector<float>{9., 8., 7.}, result_table.column(0));
 }
+/*
+    df = cudf.read_csv(
+        StringIO(buffer), usecols=["b", "d"], names=["a", "b", "c", "d"]
+    )
+
+    df = cudf.read_csv(
+        StringIO(buffer),
+        usecols=["b", "d"],
+        names=["a", "b", "c", "d"],
+        dtype={"a": "str", "b": "str", "c": "str", "d": "bool"},
+    )
+
+    df = cudf.read_csv(
+        StringIO(buffer),
+        usecols=["b", "d"],
+        names=["a", "b", "c", "d"],
+        dtype=["str", "str", "str", "float"],
+    )
+    */
+
+TEST_F(CsvReaderTest, ExtraColumns)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+  {
+    cudf::io::csv_reader_options opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .header(-1);
+    auto result = cudf::io::read_csv(opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 4);
+    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::INT64});
+    ASSERT_EQ(result_table.column(3).null_count(), 3);
+  }
+  {
+    cudf::io::csv_reader_options with_dtypes_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<float>()})
+        .header(-1);
+    auto result = cudf::io::read_csv(with_dtypes_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 4);
+    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::FLOAT32});
+    ASSERT_EQ(result_table.column(3).null_count(), 3);
+  }
+}
+
+TEST_F(CsvReaderTest, ExtraColumnsUseCols)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+
+  {
+    cudf::io::csv_reader_options in_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .use_cols_names({"b", "d"})
+        .header(-1);
+    auto result = cudf::io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 2);
+    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::INT64});
+    ASSERT_EQ(result_table.column(1).null_count(), 3);
+  }
+  {
+    cudf::io::csv_reader_options with_dtypes_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .use_cols_names({"b", "d"})
+        .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<cudf::string_view>()})
+        .header(-1);
+    auto result = cudf::io::read_csv(with_dtypes_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 2);
+    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::STRING});
+    ASSERT_EQ(result_table.column(1).null_count(), 3);
+  }
+}
 
 CUDF_TEST_PROGRAM_MAIN()
