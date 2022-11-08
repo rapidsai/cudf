@@ -2085,21 +2085,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             if len(data) > 0:
                 data_list = list(data.values())
-                if isinstance(data_list[0], (pd.Series, Series, dict)):
-                    if isinstance(data_list[0], Series):
-                        data = {
-                            key: val.to_pandas() for key, val in data.items()
-                        }
+                if isinstance(data_list[0], Series):
+                    data = DataFrame.from_dict(data=data).T
+                elif isinstance(data_list[0], (pd.Series, dict)):
                     new_data: defaultdict = defaultdict(dict)
-                    for index, s in data.items():
+                    for i, s in data.items():
                         for col, v in s.items():
-                            new_data[col][index] = v
+                            new_data[col][i] = v
                     data = new_data
                 else:
                     index = list(data.keys())
                     data = data_list
-            df = pd.DataFrame(data=data, index=index, columns=columns)
-            df = cudf.from_pandas(df)
+            df = cudf.DataFrame(data=data, index=index, columns=columns)
             if dtype:
                 return df.astype(dtype)
             return df
