@@ -63,24 +63,15 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   if(USE_LIBARROW_FROM_PYARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
-    set(ARROW_FOUND
-        TRUE
-        PARENT_SCOPE
-    )
-    set(ARROW_LIBRARIES
-        arrow_shared
-        PARENT_SCOPE
-    )
-
     # When using the libarrow inside a wheel we must build libcudf with the old ABI because
     # pyarrow's `libarrow.so` is compiled for manylinux2014 (centos7 toolchain) which uses the old
     # ABI. Note that these flags will often be redundant because we build wheels in manylinux
     # containers that actually have the old libc++ anyway, but setting them explicitly ensures
     # correct and consistent behavior in all other cases such as aarch builds on newer manylinux or
-    # testing builds in newer containers. TODO: Tests will not build successfully now without also
+    # testing builds in newer containers. Note that tests will not build successfully without also
     # propagating these options to builds of GTest. Similarly, benchmarks will not work without
-    # updating GBench (and possibly NVBench) builds. Do we care about that since we don't anticipate
-    # using this feature except when building wheels?
+    # updating GBench (and possibly NVBench) builds. We are currently ignoring these limitations
+    # since we don't anticipate using this feature except for building wheels.
     list(APPEND CUDF_CXX_FLAGS -D_GLIBCXX_USE_CXX11_ABI=0)
     list(APPEND CUDF_CUDA_FLAGS -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0)
     set(CUDF_CXX_FLAGS
@@ -95,8 +86,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     return()
   endif()
 
-  # TODO: How would the targets have been created before this function is called? Is this just to
-  # ensure that the function is idempotent? If so, why do we need to set these variables again?
   if(BUILD_STATIC)
     if(TARGET arrow_static)
       set(ARROW_FOUND
@@ -200,22 +189,15 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             "xsimd_SOURCE AUTO"
   )
 
-  # TODO: Will this not get set by rapids_cpm_find?
   set(ARROW_FOUND
       TRUE
       PARENT_SCOPE
   )
 
   if(BUILD_STATIC)
-    set(ARROW_LIBRARIES
-        arrow_static
-        PARENT_SCOPE
-    )
+    set(ARROW_LIBRARIES arrow_static)
   else()
-    set(ARROW_LIBRARIES
-        arrow_shared
-        PARENT_SCOPE
-    )
+    set(ARROW_LIBRARIES arrow_shared)
   endif()
 
   # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
@@ -244,9 +226,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
            DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
       )
     endif()
-    #
-    # This shouldn't be necessary!
-    #
     # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
     # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
     #
@@ -389,6 +368,11 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     rapids_export_find_package_root(BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
     rapids_export_find_package_root(BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
   endif()
+
+  set(ARROW_LIBRARIES
+      "${ARROW_LIBRARIES}"
+      PARENT_SCOPE
+  )
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
