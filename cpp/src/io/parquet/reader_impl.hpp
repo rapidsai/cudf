@@ -148,7 +148,7 @@ class reader::impl {
                              hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
 
   /**
-   * @brief Preprocess column information for nested schemas.
+   * @brief Preprocess column information and allocate output buffers.
    *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas.
@@ -163,15 +163,13 @@ class reader::impl {
    * @param total_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
    * bounds
-   * @param has_lists Whether or not this data contains lists and requires
    * a preprocess.
    */
   void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                           hostdevice_vector<gpu::PageInfo>& pages,
                           size_t min_row,
                           size_t total_rows,
-                          bool uses_custom_row_bounds,
-                          bool has_lists);
+                          bool uses_custom_row_bounds);
 
   /**
    * @brief Converts the page data and outputs to columns.

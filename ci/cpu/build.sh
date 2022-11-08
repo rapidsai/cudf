@@ -28,7 +28,7 @@ export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
 
 # Whether to keep `dask/label/dev` channel in the env. If INSTALL_DASK_MAIN=0,
 # `dask/label/dev` channel is removed.
-export INSTALL_DASK_MAIN=0
+export INSTALL_DASK_MAIN=1
 
 # Switch to project root; also root of repo checkout
 cd "$WORKSPACE"
@@ -130,7 +130,7 @@ if [ "$BUILD_CUDF" == '1' ]; then
 
   gpuci_logger "Build conda pkg for custreamz"
   gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
-  
+
   gpuci_logger "Build conda pkg for strings_udf"
   gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/strings_udf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 

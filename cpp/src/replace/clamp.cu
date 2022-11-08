@@ -300,14 +300,17 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
+  auto default_mr   = rmm::mr::get_current_device_resource();
 
   // get the indexes for lo_replace and for hi_replace
-  auto lo_replace_index = dictionary::detail::get_index(matched_view, lo_replace, stream);
-  auto hi_replace_index = dictionary::detail::get_index(matched_view, hi_replace, stream);
+  auto lo_replace_index =
+    dictionary::detail::get_index(matched_view, lo_replace, stream, default_mr);
+  auto hi_replace_index =
+    dictionary::detail::get_index(matched_view, hi_replace, stream, default_mr);
 
   // get the closest indexes for lo and for hi
-  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream);
-  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream);
+  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream, default_mr);
+  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream, default_mr);
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
@@ -391,7 +394,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::default_stream_value, mr);
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, cudf::get_default_stream(), mr);
 }
 
 // clamp input at lo and hi
@@ -401,6 +404,6 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::clamp(input, lo, lo, hi, hi, cudf::default_stream_value, mr);
+  return detail::clamp(input, lo, lo, hi, hi, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

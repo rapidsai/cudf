@@ -40,7 +40,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
     install(
       TARGETS ${CMAKE_TEST_NAME}
       COMPONENT testing
-      DESTINATION bin/gtests/libcudf)
+      DESTINATION bin/gtests/libcudf
+    )
   else()
     install(
       TARGETS ${CMAKE_TEST_NAME}
@@ -153,7 +154,7 @@ ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(
-  QUANTILES_TEST quantiles/percentile_approx_test.cu quantiles/quantile_test.cpp
+  QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
 )
 
@@ -237,6 +238,7 @@ ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp)
+target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)

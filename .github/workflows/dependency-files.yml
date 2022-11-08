@@ -1,0 +1,12 @@
+name: pr
+
+on:
+  pull_request:
+
+jobs:
+  checks:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@main
+    with:
+      enable_check_size: false
+      enable_check_style: false

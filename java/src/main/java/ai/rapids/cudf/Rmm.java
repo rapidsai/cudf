@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,19 +137,78 @@ public class Rmm {
   public static native long getTotalBytesAllocated();
 
   /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding during the
+   * lifetime of the process.
+   */
+  public static native long getMaximumTotalBytesAllocated();
+
+  /**
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
+   * code sections while debugging.
+   *
+   * @param initialValue an initial value (in Bytes) to use for this scoped counter
+   */
+  public static void resetScopedMaximumBytesAllocated(long initialValue) {
+    resetScopedMaximumBytesAllocatedInternal(initialValue);
+  }
+
+  /**
+   * Resets a scoped maximum counter of RMM memory used to keep track of usage between
+   * code sections while debugging.
+   *
+   * This resets the counter to 0 Bytes.
+   */
+  public static void resetScopedMaximumBytesAllocated() {
+    resetScopedMaximumBytesAllocatedInternal(0L);
+  }
+
+  private static native void resetScopedMaximumBytesAllocatedInternal(long initialValue);
+
+  /**
+   * Returns the maximum amount of RMM memory (Bytes) outstanding since the last
+   * `resetScopedMaximumOutstanding` call was issued (it is "scoped" because it's the
+   * maximum amount seen since the last reset).
+   *
+   * If the memory used is net negative (for example if only frees happened since
+   * reset, and we reset to 0), then result will be 0.
+   *
+   * If `resetScopedMaximumBytesAllocated` is never called, the scope is the whole
+   * program and is equivalent to `getMaximumTotalBytesAllocated`.
+   *
+   * @return the scoped maximum bytes allocated
+   */
+  public static native long getScopedMaximumBytesAllocated();
+
+  /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
    * @param handler event handler to invoke on RMM events or null to clear an existing handler
    * @throws RmmException if an active handler is already set
    */
   public static void setEventHandler(RmmEventHandler handler) throws RmmException {
+    setEventHandler(handler, false);
+  }
+
+  /**
+   * Sets the event handler to be called on RMM events (e.g.: allocation failure) and
+   * optionally enable debug mode (callbacks on every allocate and deallocate)
+   *
+   * NOTE: Only enable debug mode when necessary, as code will run much slower!
+   *
+   * @param handler event handler to invoke on RMM events or null to clear an existing handler
+   * @param enableDebug if true enable debug callbacks in RmmEventHandler
+   *                    (onAllocated, onDeallocated)
+   * @throws RmmException if an active handler is already set
+   */
+  public static void setEventHandler(RmmEventHandler handler,
+                                     boolean enableDebug) throws RmmException {
     long[] allocThresholds = (handler != null) ? sortThresholds(handler.getAllocThresholds()) : null;
     long[] deallocThresholds = (handler != null) ? sortThresholds(handler.getDeallocThresholds()) : null;
-    setEventHandlerInternal(handler, allocThresholds, deallocThresholds);
+    setEventHandlerInternal(handler, allocThresholds, deallocThresholds, enableDebug);
   }
 
   /** Clears the active RMM event handler if one is set. */
   public static void clearEventHandler() throws RmmException {
-    setEventHandlerInternal(null, null, null);
+    setEventHandlerInternal(null, null, null, false);
   }
 
   private static long[] sortThresholds(long[] thresholds) {
@@ -257,7 +316,8 @@ public class Rmm {
   static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
 
   static native void setEventHandlerInternal(RmmEventHandler handler,
-      long[] allocThresholds, long[] deallocThresholds) throws RmmException;
+      long[] allocThresholds, long[] deallocThresholds,
+      boolean enableDebug) throws RmmException;
 
   /**
    * Allocate device memory using `cudaMalloc` and return a pointer to device memory.

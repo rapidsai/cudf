@@ -154,7 +154,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(rmm::exec_policy(cudf::default_stream_value),
+  thrust::for_each(rmm::exec_policy(cudf::get_default_stream()),
                    count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
@@ -393,14 +393,13 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                : std::make_shared<arrow::NullArray>(c.size());
     });
 
-  std::transform(
-    arrays.begin(),
-    arrays.end(),
-    metadata.begin(),
-    std::back_inserter(fields),
-    [](auto const& array, auto const& meta) {
-      return std::make_shared<arrow::Field>(meta.name, array->type());
-    });
+  std::transform(arrays.begin(),
+                 arrays.end(),
+                 metadata.begin(),
+                 std::back_inserter(fields),
+                 [](auto const& array, auto const& meta) {
+                   return std::make_shared<arrow::Field>(meta.name, array->type());
+                 });
 
   auto result = arrow::Table::Make(arrow::schema(fields), arrays, input.num_rows());
 
@@ -418,7 +417,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
+  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
 }
 
 }  // namespace cudf

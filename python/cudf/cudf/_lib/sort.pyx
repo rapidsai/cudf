@@ -5,8 +5,6 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from enum import IntEnum
-
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.aggregation cimport (
     rank_method,
@@ -20,10 +18,9 @@ from cudf._lib.cpp.sorting cimport (
     rank,
     sorted_order,
 )
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport table_view_from_columns
 
 
 def is_sorted(
@@ -198,8 +195,6 @@ def rank_columns(list source_columns, object method, str na_option,
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = table_view_from_columns(source_columns)
-
     cdef rank_method c_rank_method = < rank_method > (
         < underlying_type_t_rank_method > method
     )

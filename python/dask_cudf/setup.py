@@ -46,6 +46,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
 
 
 install_requires = [
+    "cudf",
     "dask==2022.9.2",
     "distributed==2022.9.2",
     "fsspec>=0.6.0",

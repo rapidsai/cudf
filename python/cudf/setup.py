@@ -46,17 +46,42 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-cmdclass = versioneer.get_cmdclass()
+install_requires = [
+    "cachetools",
+    "cuda-python>=11.5,<11.7.1",
+    "fsspec>=0.6.0",
+    "numba>=0.54",
+    "numpy",
+    "nvtx>=0.2.1",
+    "packaging",
+    "pandas>=1.0,<1.6.0dev0",
+    "protobuf>=3.20.1,<3.21.0a0",
+    "typing_extensions",
+    "pyarrow==9.0.0",
+    f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    f"ptxcompiler{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    f"cubinlinker{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    (
+        f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0"
+        ",<12.0.0a0; platform_machine=='x86_64'",
+    ),
+]
 
-cmake_args = []
-
-if os.getenv("CUDF_BUILD_WHEELS", "") != "":
-    import pyarrow as pa
-
-    cmake_args = [
-        "-DCUDF_BUILD_WHEELS=ON",
-        f"-DCUDF_PYARROW_WHEEL_DIR={pa.__path__[0]}",
+extras_require = {
+    "test": [
+        "pytest",
+        "pytest-benchmark",
+        "pytest-xdist",
+        "hypothesis",
+        "mimesis<4.1",
+        "fastavro>=0.22.9",
+        "python-snappy>=0.6.0",
+        "pyorc",
+        "msgpack",
+        "transformers<=4.10.3",
+        "tzdata",
     ]
+}
 
 
 setup(
@@ -77,8 +102,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
     ],
-    cmdclass=cmdclass,
-    cmake_args=cmake_args,
+    cmdclass=versioneer.get_cmdclass(),
     include_package_data=True,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
@@ -87,40 +111,7 @@ setup(
     setup_requires=[
         f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
     ],
-    install_requires=[
-        "cachetools",
-        "cuda-python>=11.5,<11.7.1",
-        "fsspec>=0.6.0",
-        "numba>=0.54",
-        "numpy",
-        "nvtx>=0.2.1",
-        "packaging",
-        "pandas>=1.0,<1.6.0dev0",
-        "protobuf>=3.20.1,<3.21.0a0",
-        "typing_extensions",
-        "pyarrow==9.0.0",
-        f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-        f"ptxcompiler{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-        f"cubinlinker{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-        (
-            f"cupy-cuda{get_cuda_version_from_header(cuda_include_dir)}>=9.5.0"
-            ",<12.0.0a0; platform_machine=='x86_64'",
-        ),
-    ],
-    extras_require={
-        "test": [
-            "pytest",
-            "pytest-benchmark",
-            "pytest-xdist",
-            "hypothesis",
-            "mimesis<4.1",
-            "fastavro>=0.22.9",
-            "python-snappy>=0.6.0",
-            "pyorc",
-            "msgpack",
-            "transformers<=4.10.3",
-            "tzdata",
-        ]
-    },
+    install_requires=install_requires,
+    extras_require=extras_require,
     zip_safe=False,
 )

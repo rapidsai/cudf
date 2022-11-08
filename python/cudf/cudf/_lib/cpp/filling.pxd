@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -29,7 +29,6 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] repeat(
         const table_view & input,
         const column_view & count,
-        bool check_count
     ) except +
 
     cdef unique_ptr[table] repeat(

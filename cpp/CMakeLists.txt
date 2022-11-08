@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.10.00
+  VERSION 22.12.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -61,14 +61,17 @@ option(
          stream to external libraries."
   OFF
 )
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
 )
+option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -80,7 +83,7 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
+  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
   VERBOSE
@@ -124,12 +127,6 @@ rapids_find_package(
   INSTALL_EXPORT_SET cudf-exports
 )
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
-
-# ctest cuda memcheck
-find_program(CUDA_SANITIZER compute-sanitizer)
-set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
-set(MEMORYCHECK_TYPE CudaSanitizer)
-set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 # ##################################################################################################
 # * dependencies ----------------------------------------------------------------------------------
@@ -361,6 +358,7 @@ add_library(
   src/io/text/byte_range_info.cpp
   src/io/text/data_chunk_source_factories.cpp
   src/io/text/bgzip_data_chunk_source.cu
+  src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -621,9 +619,15 @@ target_compile_definitions(
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
 target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
 
-# Instruct jitify to use the kernel JIT cache
 if(JITIFY_USE_CACHE)
-  target_compile_definitions(cudf PUBLIC JITIFY_USE_CACHE "CUDF_VERSION=${PROJECT_VERSION}")
+  # Instruct src/jit/cache what version of cudf we are building so it can compute a cal-ver cache
+  # directory. We isolate this definition to the single source so it doesn't effect compiling
+  # caching for all of libcudf
+  set_property(
+    SOURCE src/jit/cache.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS "JITIFY_USE_CACHE" "CUDF_VERSION=${PROJECT_VERSION}"
+  )
 endif()
 
 # Per-thread default stream
@@ -691,28 +695,26 @@ add_library(cudf::cudf ALIAS cudf)
 # * build cudftestutil ----------------------------------------------------------------------------
 
 if(NOT CUDF_BUILD_WHEELS)
-
   add_library(
     cudftestutil STATIC
     tests/io/metadata_utilities.cpp
-    tests/quantiles/tdigest_utilities.cu
     tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
     tests/utilities/table_utilities.cu
-    tests/strings/utilities.cpp
+    tests/utilities/tdigest_utilities.cu
   )
 
   set_target_properties(
     cudftestutil
     PROPERTIES BUILD_RPATH "\$ORIGIN"
-              INSTALL_RPATH "\$ORIGIN"
-              # set target compile options
-              CXX_STANDARD 17
-              CXX_STANDARD_REQUIRED ON
-              CUDA_STANDARD 17
-              CUDA_STANDARD_REQUIRED ON
-              POSITION_INDEPENDENT_CODE ON
-              INTERFACE_POSITION_INDEPENDENT_CODE ON
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
 
   target_compile_options(
@@ -720,7 +722,11 @@ if(NOT CUDF_BUILD_WHEELS)
                         "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
   )
 
-  target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
+  target_link_libraries(
+    cudftestutil
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
 
   target_include_directories(
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
@@ -736,6 +742,13 @@ endif()
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
+
+  # ctest cuda memcheck
+  find_program(CUDA_SANITIZER compute-sanitizer)
+  set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+  set(MEMORYCHECK_TYPE CudaSanitizer)
+  set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
+
   # Always print verbose output when tests fail if run using `make test`.
   list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
   add_subdirectory(tests)
@@ -746,23 +759,16 @@ endif()
 
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
-  rapids_cpm_find(
-    benchmark 1.5.2
-    GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.5.2
-    GIT_SHALLOW TRUE
-    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
-  )
+  include(${rapids-cmake-dir}/cpm/gbench.cmake)
+  rapids_cpm_gbench()
 
-  # Find or install NVBench
+  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
+  # do not support the latest version of fmt, which is automatically pulled into our conda
+  # environments by mamba.
+  set(CPM_DOWNLOAD_fmt TRUE)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   rapids_cpm_nvbench()
   add_subdirectory(benchmarks)
-endif()
-
-# build pretty-printer load script
-if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
-  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
 endif()
 
 # ##################################################################################################
@@ -932,3 +938,11 @@ add_custom_target(
   DEPENDS CUDF_DOXYGEN
   COMMENT "Custom command for building cudf doxygen docs."
 )
+
+# ##################################################################################################
+# * make gdb helper scripts ------------------------------------------------------------------------
+
+# build pretty-printer load script
+if(Thrust_SOURCE_DIR AND rmm_SOURCE_DIR)
+  configure_file(scripts/load-pretty-printers.in load-pretty-printers @ONLY)
+endif()

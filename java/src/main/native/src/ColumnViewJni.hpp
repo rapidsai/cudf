@@ -51,7 +51,7 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
  */
 std::unique_ptr<cudf::column>
 generate_list_offsets(cudf::column_view const &list_length,
-                      rmm::cuda_stream_view stream = cudf::default_stream_value);
+                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Perform a special treatment for the results of `cudf::lists::have_overlap` to produce the
@@ -73,7 +73,7 @@ generate_list_offsets(cudf::column_view const &list_length,
  */
 void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view const &rhs,
                                std::unique_ptr<cudf::column> const &overlap_result,
-                               rmm::cuda_stream_view stream = cudf::default_stream_value);
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Generates lists column by copying elements that are distinct by key from each input list

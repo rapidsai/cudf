@@ -41,7 +41,7 @@ A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-co
 
 ## Quick Start
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with cuStreamz already installed.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you're running. This provides a ready to run Docker container with cuStreamz already installed.
 
 ## Installation
 
@@ -66,4 +66,4 @@ Nightly:
 conda install -c rapidsai-nightly cudf_kafka custreamz
 ```
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.

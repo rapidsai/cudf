@@ -211,7 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         following_window_bounds,
                                         min_periods,
                                         aggr,
-                                        cudf::default_stream_value,
+                                        cudf::get_default_stream(),
                                         mr);
 }
 
@@ -1049,7 +1049,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                               following,
                                               min_periods,
                                               aggr,
-                                              cudf::default_stream_value,
+                                              cudf::get_default_stream(),
                                               mr);
 }
 
@@ -1089,7 +1089,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                               following,
                                               min_periods,
                                               aggr,
-                                              cudf::default_stream_value,
+                                              cudf::get_default_stream(),
                                               mr);
 }
 
@@ -1124,7 +1124,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               following,
                                               min_periods,
                                               aggr,
-                                              cudf::default_stream_value,
+                                              cudf::get_default_stream(),
                                               mr);
 }
 

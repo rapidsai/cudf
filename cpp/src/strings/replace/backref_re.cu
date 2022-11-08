@@ -153,7 +153,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
 {
   CUDF_FUNC_RANGE();
   return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, cudf::default_stream_value, mr);
+    strings, pattern, replacement, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

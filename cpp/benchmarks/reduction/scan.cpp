@@ -38,7 +38,7 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto result = cudf::scan(
-      *column, cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+      *column, *cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
   }
 }
 

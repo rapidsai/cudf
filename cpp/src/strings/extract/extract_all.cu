@@ -95,12 +95,11 @@ struct extract_fn {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> extract_all_record(
-  strings_column_view const& input,
-  std::string_view pattern,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> extract_all_record(strings_column_view const& input,
+                                           std::string_view pattern,
+                                           regex_flags const flags,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
@@ -171,7 +170,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, pattern, flags, cudf::default_stream_value, mr);
+  return detail::extract_all_record(strings, pattern, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

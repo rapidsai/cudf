@@ -35,7 +35,7 @@ struct reduce_op {
     // result is a scalar, but we want to extract out the underlying column
     auto scalar_result =
       cudf::reduce(values,
-                   cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
+                   *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
                    cudf::data_type{cudf::type_id::STRUCT});
     auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
     std::vector<std::unique_ptr<cudf::column>> cols;
@@ -53,7 +53,7 @@ struct reduce_merge_op {
     // result is a scalar, but we want to extract out the underlying column
     auto scalar_result =
       cudf::reduce(values,
-                   cudf::make_merge_tdigest_aggregation<cudf::reduce_aggregation>(delta),
+                   *cudf::make_merge_tdigest_aggregation<cudf::reduce_aggregation>(delta),
                    cudf::data_type{cudf::type_id::STRUCT});
     auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
     std::vector<std::unique_ptr<cudf::column>> cols;
@@ -133,7 +133,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   // merge
   auto scalar_result =
     cudf::reduce(*values,
-                 cudf::make_merge_tdigest_aggregation<cudf::reduce_aggregation>(1000),
+                 *cudf::make_merge_tdigest_aggregation<cudf::reduce_aggregation>(1000),
                  cudf::data_type{cudf::type_id::STRUCT});
 
   // convert to a table
