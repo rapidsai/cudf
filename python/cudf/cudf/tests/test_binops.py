@@ -881,15 +881,20 @@ def test_binop_bool_uint(func, rhs):
     "series_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
 )
 @pytest.mark.parametrize(
-    "scalar_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+    "divisor_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
 )
-def test_floordiv_zero_float64(series_dtype, scalar_dtype):
+@pytest.mark.parametrize("scalar_divisor", [False, True])
+def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     sr = pd.Series([1, 2, 3], dtype=series_dtype)
     cr = cudf.from_pandas(sr)
 
-    utils.assert_eq(
-        (sr // scalar_dtype(0)), (cr // cudf.Scalar(0, dtype=scalar_dtype))
-    )
+    if scalar_divisor:
+        pd_div = divisor_dtype(0)
+        cudf_div = cudf.Scalar(0, dtype=divisor_dtype)
+    else:
+        pd_div = pd.Series([0], dtype=divisor_dtype)
+        cudf_div = cudf.from_pandas(pd_div)
+    utils.assert_eq((sr // pd_div), (cr // cudf_div))
 
 
 @pytest.mark.parametrize(
