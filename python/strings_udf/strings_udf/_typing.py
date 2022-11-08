@@ -229,7 +229,7 @@ id_unary_funcs = [
     "isnumeric",
     "istitle",
 ]
-string_binary_funcs = ["strip"]
+string_binary_funcs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
     setattr(

@@ -286,3 +286,19 @@ def test_string_udf_strip(data, strip_char):
         return st.strip(strip_char)
 
     run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_lstrip(data, strip_char):
+    def func(st):
+        return st.lstrip(strip_char)
+
+    run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_rstrip(data, strip_char):
+    def func(st):
+        return st.rstrip(strip_char)
+
+    run_udf_test(data, func, "str")

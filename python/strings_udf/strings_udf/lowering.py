@@ -59,6 +59,12 @@ _string_view_contains = _declare_bool_str_str_func("contains")
 _string_view_strip = cuda.declare_device(
     "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
+_string_view_lstrip = cuda.declare_device(
+    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
+_string_view_rstrip = cuda.declare_device(
+    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
 
 # A binary function of the form f(string, int) -> bool
 _declare_bool_str_int_func = partial(
@@ -250,6 +256,16 @@ def lt_impl(st, rhs):
 @create_binary_string_func_return_string("StringView.strip")
 def strip_impl(result, to_strip, strip_char):
     return _string_view_strip(result, to_strip, strip_char)
+
+
+@create_binary_string_func_return_string("StringView.lstrip")
+def lstrip_impl(result, to_strip, strip_char):
+    return _string_view_lstrip(result, to_strip, strip_char)
+
+
+@create_binary_string_func_return_string("StringView.rstrip")
+def rstrip_impl(result, to_strip, strip_char):
+    return _string_view_rstrip(result, to_strip, strip_char)
 
 
 @create_binary_string_func("StringView.startswith", types.boolean)
