@@ -694,6 +694,7 @@ add_library(
   tests/io/metadata_utilities.cpp
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
+  tests/utilities/default_stream.cpp
   tests/utilities/table_utilities.cu
   tests/utilities/tdigest_utilities.cu
 )

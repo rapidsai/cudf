@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf_test/default_stream.hpp>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 /**
@@ -33,7 +35,12 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    *
    * @param upstream The resource used for allocating/deallocating device memory
    */
-  stream_checking_resource_adaptor(Upstream* upstream) : upstream_{upstream}
+  stream_checking_resource_adaptor(Upstream* upstream,
+                                   bool error_on_invalid_stream,
+                                   bool check_default_stream)
+    : upstream_{upstream},
+      error_on_invalid_stream_{error_on_invalid_stream},
+      check_default_stream_{check_default_stream}
   {
     CUDF_EXPECTS(nullptr != upstream, "Unexpected null upstream resource pointer.");
   }
@@ -70,10 +77,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     return upstream_->supports_get_mem_info();
   }
 
-  void enable_errors() { _error = true; }
-
-  void disable_errors() { _error = false; }
-
  private:
   /**
    * @brief Allocates memory of size at least `bytes` using the upstream
@@ -91,7 +94,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    */
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
-    verify_non_default_stream(stream);
+    verify_stream(stream);
     return upstream_->allocate(bytes, stream);
   }
 
@@ -106,7 +109,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    */
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) override
   {
-    verify_non_default_stream(stream);
+    verify_stream(stream);
     upstream_->deallocate(ptr, bytes, stream);
   }
 
@@ -135,21 +138,31 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    */
   std::pair<std::size_t, std::size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override
   {
-    verify_non_default_stream(stream);
+    verify_stream(stream);
     return upstream_->get_mem_info(stream);
   }
 
   /**
-   * @brief Throw an error if given one of CUDA's default stream specifiers.
+   * @brief Throw an error if the provided stream is invalid.
+   *
+   * A stream is invalid if:
+   * - check_default_stream_ is true and this function is passed one of CUDA's
+   *   default stream specifiers, or
+   * - check_default_stream_ is false and this function is passed any stream
+   *   other than the result of cudf::test::get_default_stream().
    *
    * @throws `std::runtime_error` if provided a default stream
    */
-  void verify_non_default_stream(rmm::cuda_stream_view const stream) const
+  void verify_stream(rmm::cuda_stream_view const stream) const
   {
     auto cstream{stream.value()};
-    if (cstream == cudaStreamDefault || (cstream == cudaStreamLegacy) ||
-        (cstream == cudaStreamPerThread)) {
-      if (_error_on_invalid_stream) {
+    auto const invalid_stream =
+      check_default_stream_ ? ((cstream == cudaStreamDefault) || (cstream == cudaStreamLegacy) ||
+                               (cstream == cudaStreamPerThread))
+                            : (cstream != cudf::test::get_default_stream().value());
+
+    if (invalid_stream) {
+      if (error_on_invalid_stream_) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {
         std::cout << "Attempted to perform an operation on an unexpected stream!" << std::endl;
@@ -158,8 +171,11 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   }
 
   Upstream* upstream_;            // the upstream resource used for satisfying allocation requests
-  bool _error_on_invalid_stream;  // If true, throw an exception when the wrong stream is detected.
-                                  // When false, simply print to stdout.
+  bool error_on_invalid_stream_;  // If true, throw an exception when the wrong stream is detected.
+                                  // If false, simply print to stdout.
+  bool check_default_stream_;  // If true, throw an exception when the default stream is observed.
+                               // If false, throw an exception when anything other than
+                               // cudf::test::get_default_stream() is observed.
 };
 
 /**
@@ -170,7 +186,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
  * @param upstream Pointer to the upstream resource
  */
 template <typename Upstream>
-stream_checking_resource_adaptor<Upstream> make_stream_checking_resource_adaptor(Upstream* upstream)
+stream_checking_resource_adaptor<Upstream> make_stream_checking_resource_adaptor(
+  Upstream* upstream, bool error_on_invalid_stream, bool check_default_stream)
 {
-  return stream_checking_resource_adaptor<Upstream>{upstream};
+  return stream_checking_resource_adaptor<Upstream>{
+    upstream, error_on_invalid_stream, check_default_stream};
 }

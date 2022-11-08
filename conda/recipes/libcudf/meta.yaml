@@ -274,6 +274,7 @@ outputs:
         - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
         - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
         - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+        - test -f $PREFIX/include/cudf_test/default_stream.hpp
         - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
         - test -f $PREFIX/include/cudf_test/file_utilities.hpp
         - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
