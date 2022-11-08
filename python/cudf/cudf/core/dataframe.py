@@ -2087,7 +2087,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data_list = list(data.values())
                 if isinstance(data_list[0], (pd.Series, Series, dict)):
                     if isinstance(data_list[0], Series):
-                        data = {key: val.to_pandas() for key, val in data}
+                        data = {key: val.to_pandas() for key, val in data.items()}
                     data = _from_nested_dict(data)
                 else:
                     index = list(data.keys())
