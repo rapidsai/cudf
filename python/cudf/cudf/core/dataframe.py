@@ -2087,8 +2087,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 data_list = list(data.values())
                 if isinstance(data_list[0], (pd.Series, Series, dict)):
                     if isinstance(data_list[0], Series):
-                        data = {key: val.to_pandas() for key, val in data.items()}
-                    data = _from_nested_dict(data)
+                        data = {
+                            key: val.to_pandas() for key, val in data.items()
+                        }
+                    new_data: defaultdict = defaultdict(dict)
+                    for index, s in data.items():
+                        for col, v in s.items():
+                            new_data[col][index] = v
+                    data = new_data
                 else:
                     index = list(data.keys())
                     data = data_list
@@ -7688,11 +7694,3 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
-
-
-def _from_nested_dict(data) -> defaultdict:
-    new_data: defaultdict = defaultdict(dict)
-    for index, s in data.items():
-        for col, v in s.items():
-            new_data[col][index] = v
-    return new_data
