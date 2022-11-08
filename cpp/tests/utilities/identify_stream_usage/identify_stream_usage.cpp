@@ -24,7 +24,6 @@
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
