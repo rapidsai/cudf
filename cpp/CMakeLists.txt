@@ -48,7 +48,7 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
-option(CUDF_BUILD_WHEELS "Whether we're building libcudf to go in a wheel for pypi" OFF)
+option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
@@ -95,6 +95,12 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 rapids_cmake_build_type("Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
+  message(
+    FATAL_ERROR
+      "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
+  )
+endif()
 
 set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
@@ -134,7 +140,7 @@ include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 # find zlib
 rapids_find_package(ZLIB REQUIRED)
 
-if(NOT CUDF_BUILD_WHEELS)
+if(CUDF_BUILD_TESTUTIL)
   # find Threads (needed by cudftestutil)
   rapids_find_package(
     Threads REQUIRED
@@ -163,7 +169,7 @@ rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-expo
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
-if(NOT CUDF_BUILD_WHEELS)
+if(CUDF_BUILD_TESTUTIL)
   include(cmake/thirdparty/get_gtest.cmake)
 endif()
 # preprocess jitify-able kernels
@@ -694,7 +700,7 @@ add_library(cudf::cudf ALIAS cudf)
 # ##################################################################################################
 # * build cudftestutil ----------------------------------------------------------------------------
 
-if(NOT CUDF_BUILD_WHEELS)
+if(CUDF_BUILD_TESTUTIL)
   add_library(
     cudftestutil STATIC
     tests/io/metadata_utilities.cpp
@@ -790,7 +796,7 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-if(NOT CUDF_BUILD_WHEELS)
+if(CUDF_BUILD_TESTUTIL)
   install(
     TARGETS cudftestutil
     DESTINATION ${lib_dir}
@@ -911,7 +917,7 @@ rapids_export(
   FINAL_CODE_BLOCK build_code_string
 )
 
-if(NOT CUDF_BUILD_WHEELS)
+if(CUDF_BUILD_TESTUTIL)
   export(
     EXPORT cudf-testing-exports
     FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
