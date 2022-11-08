@@ -33,14 +33,14 @@ using namespace cudf::io::parquet;
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
-type_id to_type_id(SchemaElement const& schema,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id);
+[[nodiscard]] type_id to_type_id(SchemaElement const& schema,
+                                 bool strings_to_categorical,
+                                 type_id timestamp_type_id);
 
 /**
  * @brief Converts cuDF type enum to column logical type
  */
-inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
+[[nodiscard]] inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
 {
   return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
            ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}

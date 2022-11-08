@@ -45,14 +45,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   auto str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
     total_str_dict_indexes, _stream);
 
-  // TODO (dm): hd_vec should have begin and end iterator members
-  size_t sum_max_depths =
-    std::accumulate(chunks.host_ptr(),
-                    chunks.host_ptr(chunks.size()),
-                    0,
-                    [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
-                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
-                    });
+  size_t const sum_max_depths = std::accumulate(
+    chunks.begin(), chunks.end(), 0, [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
+      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+    });
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
