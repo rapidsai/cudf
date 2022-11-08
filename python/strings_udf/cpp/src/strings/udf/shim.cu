@@ -17,10 +17,7 @@
 #include <cudf/strings/udf/char_types.cuh>
 #include <cudf/strings/udf/search.cuh>
 #include <cudf/strings/udf/starts_with.cuh>
-<<<<<<< HEAD
 #include <cudf/strings/udf/strip.cuh>
-=======
->>>>>>> branch-22.12
 #include <cudf/strings/udf/udf_string.cuh>
 
 using namespace cudf::strings::udf;
