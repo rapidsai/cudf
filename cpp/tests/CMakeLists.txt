@@ -40,6 +40,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     TARGETS ${CMAKE_TEST_NAME}
     COMPONENT testing
     DESTINATION bin/gtests/libcudf
+    EXCLUDE_FROM_ALL
   )
 endfunction()
 
