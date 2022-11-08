@@ -39,9 +39,6 @@
 
 namespace cudf::io::detail::parquet {
 
-using namespace cudf::io::parquet;
-using namespace cudf::io;
-
 /**
  * @brief Implementation for Parquet reader
  */
