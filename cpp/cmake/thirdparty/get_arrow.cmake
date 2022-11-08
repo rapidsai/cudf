@@ -77,6 +77,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   if(USE_LIBARROW_FROM_PYARROW)
     # Generate a FindArrow.cmake to find pyarrow's libarrow.so
     find_libarrow_in_python_wheel(${VERSION})
+    set(ARROW_FOUND
+        TRUE
+        PARENT_SCOPE
+    )
+    set(ARROW_LIBRARIES
+        arrow_shared
+        PARENT_SCOPE
+    )
     return()
   endif()
 

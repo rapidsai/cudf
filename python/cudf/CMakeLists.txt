@@ -78,14 +78,6 @@ if(NOT cudf_FOUND)
   install(TARGETS cudf DESTINATION ${cython_lib_dir})
 endif()
 
-if(USE_LIBARROW_FROM_PYARROW)
-  # TODO: It would be nice to avoid setting these globally, but we'd need to manually set this for
-  # each of the rapids-cython targets otherwise which seems undesirable. For now I'm setting this
-  # after the `add_subdirectory(cpp)` call to limit the scope, maybe that's good enough.
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0")
-endif()
-
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
