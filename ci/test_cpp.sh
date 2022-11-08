@@ -21,13 +21,17 @@ export GTEST_CUDF_STREAM_MODE="new_cudf_default"
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 export LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_CUDF}
 
-ctest -E SPAN_TEST -j20 --output-on-failure
+ctest -E "SPAN_TEST|HASHING_TEST" -j20 --output-on-failure
 
 # This one test is specifically designed to test using a thrust device vector,
 # so we expect and allow it to include default stream usage.
 _allowlist_filter="SpanTest.CanConstructFromDeviceContainers"
 GTEST_FILTER="-${_allowlist_filter}" ctest -R SPAN_TEST -VV
 LD_PRELOAD= GTEST_CUDF_STREAM_MODE=default GTEST_FILTER="${_allowlist_filter}" ctest -R SPAN_TEST -VV
+
+_allowlist_filter="HashTest.MultiValue"
+GTEST_FILTER="-${_allowlist_filter}" ctest -R HASHING_TEST -VV
+GTEST_FILTER="${_allowlist_filter}" GTEST_CUDF_STREAM_MODE="new_testing_default" LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_TESTING} ctest -R HASHING_TEST -VV
 
 SUITEERROR=$?
 
