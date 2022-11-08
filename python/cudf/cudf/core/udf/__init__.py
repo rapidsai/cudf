@@ -43,7 +43,14 @@ try:
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
         _supported_masked_types |= {string_view}
 
-        utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
+        def column_to_string_view_array_init_heap(col):
+            # lazily allocate heap only when a string needs to be returned
+            strings_udf.set_malloc_heap_size()
+            return column_to_string_view_array(col)
+
+        utils.launch_arg_getters[
+            cudf_str_dtype
+        ] = column_to_string_view_array_init_heap
         utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
         utils.masked_array_types[cudf_str_dtype] = string_view
         row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes

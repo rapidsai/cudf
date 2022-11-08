@@ -3,6 +3,7 @@ import glob
 import os
 
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
+from cuda import cudart
 from numba import cuda
 from numba.cuda.cudadrv.driver import Linker
 from ptxcompiler.patch import NO_DRIVER, safe_get_versions
@@ -85,6 +86,26 @@ def _get_ptx_file():
         )
     else:
         return regular_result[1]
+
+
+default_heap_size = int(2e6)
+heap_size = 0
+
+
+def set_malloc_heap_size(size=default_heap_size):
+    """
+    Heap size control for strings_udf, size in bytes.
+    """
+    global heap_size
+    if size == heap_size:
+        return
+    else:
+        (ret,) = cudart.cudaDeviceSetLimit(cudart.cudaLimit(2), size)
+        if ret.value != 0:
+            breakpoint()
+            raise RuntimeError("Unable to set cudaMalloc heap size")
+
+        heap_size = size
 
 
 ptxpath = None
