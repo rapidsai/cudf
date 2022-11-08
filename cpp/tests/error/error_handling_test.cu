@@ -149,7 +149,7 @@ int main(int argc, char** argv)
     auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
     auto const error_on_invalid_stream = (stream_error_mode == "error");
     auto const check_default_stream    = (stream_mode == "new_cudf_default");
-    auto adapter                       = make_stream_checking_resource_adapter(
+    auto adapter                       = make_stream_checking_resource_adaptor(
       resource, error_on_invalid_stream, check_default_stream);
   }
   return RUN_ALL_TESTS();
