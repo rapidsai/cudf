@@ -225,7 +225,10 @@ class NumericalColumn(NumericalBaseColumn):
                     (tmp.dtype.type in int_float_dtype_mapping)
                     and (tmp.dtype.type != np.bool_)
                     and (
-                        (np.isscalar(tmp) and (0 == tmp))
+                        (
+                            (np.isscalar(tmp) or isinstance(tmp, cudf.Scalar))
+                            and (0 == tmp)
+                        )
                         or (
                             (isinstance(tmp, NumericalColumn)) and (0.0 in tmp)
                         )

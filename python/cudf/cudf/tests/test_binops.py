@@ -877,6 +877,21 @@ def test_binop_bool_uint(func, rhs):
     )
 
 
+@pytest.mark.parametrize(
+    "series_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+)
+@pytest.mark.parametrize(
+    "scalar_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+)
+def test_floordiv_zero_float64(series_dtype, scalar_dtype):
+    sr = pd.Series([1, 2, 3], dtype=series_dtype)
+    cr = cudf.from_pandas(sr)
+
+    utils.assert_eq(
+        (sr // scalar_dtype(0)), (cr // cudf.Scalar(0, dtype=scalar_dtype))
+    )
+
+
 def test_series_misc_binop():
     pds = pd.Series([1, 2, 4], name="abc xyz")
     gds = cudf.Series([1, 2, 4], name="abc xyz")
