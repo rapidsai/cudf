@@ -239,21 +239,20 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
-  // Verify that the input files have matching numbers of columns
-  size_type num_cols = -1;
-  for (auto const& pfm : per_file_metadata) {
-    if (pfm.row_groups.size() != 0) {
-      if (num_cols == -1)
-        num_cols = pfm.row_groups[0].columns.size();
-      else
-        CUDF_EXPECTS(num_cols == static_cast<size_type>(pfm.row_groups[0].columns.size()),
+  if (per_file_metadata.size() > 0) {
+    auto const& first_meta = per_file_metadata.front();
+    auto const num_cols =
+      first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
+    auto const& schema = first_meta.schema;
+
+    // Verify that the input files have matching numbers of columns and schema.
+    for (auto const& pfm : per_file_metadata) {
+      if (pfm.row_groups.size() > 0) {
+        CUDF_EXPECTS(num_cols == pfm.row_groups.front().columns.size(),
                      "All sources must have the same number of columns");
+      }
+      CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
     }
-  }
-  // Verify that the input files have matching schemas
-  for (auto const& pfm : per_file_metadata) {
-    CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
-                 "All sources must have the same schemas");
   }
 }
 
