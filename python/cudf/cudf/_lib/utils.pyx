@@ -340,8 +340,8 @@ cdef data_from_table_view(
     along with referencing an ``owner`` Python object that owns the memory
     lifetime. If ``owner`` is a Frame we reach inside of it and
     reach inside of each ``cudf.Column`` to make the owner of each newly
-    created ``DeviceBufferLike`` underneath the ``cudf.Column`` objects of the
-    created Frame the respective ``DeviceBufferLike`` from the relevant
+    created ``Buffer`` underneath the ``cudf.Column`` objects of the
+    created Frame the respective ``Buffer`` from the relevant
     ``cudf.Column`` of the ``owner`` Frame
     """
     cdef size_type column_idx = 0

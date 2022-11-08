@@ -134,13 +134,12 @@ struct ngram_builder_fn {
 
 // detail APIs
 
-std::unique_ptr<cudf::column> ngrams_tokenize(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& delimiter = cudf::string_scalar(""),
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& strings,
+                                              cudf::size_type ngrams,
+                                              cudf::string_scalar const& delimiter,
+                                              cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());

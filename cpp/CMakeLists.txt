@@ -66,6 +66,7 @@ option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated 
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
 )
+option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
@@ -689,10 +690,10 @@ add_library(cudf::cudf ALIAS cudf)
 add_library(
   cudftestutil STATIC
   tests/io/metadata_utilities.cpp
-  tests/quantiles/tdigest_utilities.cu
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu
+  tests/utilities/tdigest_utilities.cu
 )
 
 set_target_properties(
@@ -752,7 +753,10 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
   rapids_cpm_gbench()
 
-  # Find or install NVBench
+  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
+  # do not support the latest version of fmt, which is automatically pulled into our conda
+  # environments by mamba.
+  set(CPM_DOWNLOAD_fmt TRUE)
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
   rapids_cpm_nvbench()
   add_subdirectory(benchmarks)

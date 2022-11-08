@@ -26,6 +26,7 @@
 #include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
@@ -222,6 +223,7 @@ std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> c
                                       size_t range_size,
                                       size_t range_size_padded)
 {
+  CUDF_FUNC_RANGE();
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
   for (const auto& source : sources) {
@@ -313,6 +315,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
                                                 rmm::device_uvector<uint64_t>& rec_starts,
                                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   size_t end_offset = h_data.size();
 
   // Trim lines that are outside range
@@ -592,6 +595,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (reader_opts.is_enabled_experimental()) {
     return experimental::read_json(sources, reader_opts, stream, mr);
   }

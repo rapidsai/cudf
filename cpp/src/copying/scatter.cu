@@ -119,7 +119,7 @@ struct column_scalar_scatterer_impl {
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -184,14 +184,18 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                    stream,
                                    mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
-    auto scalar_index = dictionary::detail::get_index(dict_view, source.get(), stream);
-    auto scalar_iter  = thrust::make_permutation_iterator(
+    auto scalar_index = dictionary::detail::get_index(
+      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
+    auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
-    thrust::scatter(
-      rmm::exec_policy(stream), scalar_iter, scalar_iter + scatter_rows, scatter_iter, target_iter);
+    thrust::scatter(rmm::exec_policy_nosync(stream),
+                    scalar_iter,
+                    scalar_iter + scatter_rows,
+                    scatter_iter,
+                    target_iter);
 
     // build the dictionary indices column from the result
     auto const indices_type = new_indices->type();
@@ -382,7 +386,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
     data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
-  thrust::sequence(rmm::exec_policy(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream),
                    mutable_indices.begin<size_type>(),
                    mutable_indices.end<size_type>(),
                    0);

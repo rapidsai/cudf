@@ -4,6 +4,7 @@ import decimal
 import operator
 import pickle
 import textwrap
+from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
@@ -20,7 +21,7 @@ import cudf
 from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_GE_130, PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
 
 if PANDAS_GE_150:
@@ -592,7 +593,7 @@ class StructDtype(_BaseDtype):
         header: Dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[DeviceBufferLike] = []
+        frames: List[Buffer] = []
 
         fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 
@@ -626,6 +627,13 @@ class StructDtype(_BaseDtype):
             else:
                 fields[k] = pickle.loads(dtype)
         return cls(fields)
+
+    @cached_property
+    def itemsize(self):
+        return sum(
+            cudf.utils.dtypes.cudf_dtype_from_pa_type(field.type).itemsize
+            for field in self._typ
+        )
 
 
 decimal_dtype_template = textwrap.dedent(

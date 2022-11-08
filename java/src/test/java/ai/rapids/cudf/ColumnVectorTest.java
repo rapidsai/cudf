@@ -4194,6 +4194,63 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testLike() {
+    // Default escape character
+    try (ColumnVector testStrings = ColumnVector.fromStrings(
+           "a", "aa", "aaa", "aba", "b", "bb", "bba", "", "áéêú", "a1b2c3");
+         Scalar patternString1 = Scalar.fromString("a1b2c3");
+         Scalar patternString2 = Scalar.fromString("__a%");
+         Scalar defaultEscape = Scalar.fromString("\\");
+         ColumnVector res1 = testStrings.like(patternString1, defaultEscape);
+         ColumnVector res2 = testStrings.like(patternString2, defaultEscape);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+           false, false, false, false, false, false, false, false, false, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, false, true, true, false, false, true, false, false, false)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+    }
+    // Non-default escape character
+    try (ColumnVector testStrings = ColumnVector.fromStrings(
+           "10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "aéb", "_%_", "_%a");
+         Scalar patternString1 = Scalar.fromString("10%%%%-20%%");
+         Scalar patternString2 = Scalar.fromString("___%%");
+         Scalar escapeChar1 = Scalar.fromString("%");
+         Scalar escapeChar2 = Scalar.fromString("_");
+         ColumnVector res1 = testStrings.like(patternString1, escapeChar1);
+         ColumnVector res2 = testStrings.like(patternString2, escapeChar2);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+           false, false, true, false, false, false, false, false, false, false);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, false, false, false, false, false, false, false, true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar defaultEscape = Scalar.fromString("\\");
+           ColumnVector res = testStrings.like(null, defaultEscape)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar patternString = Scalar.fromString("");
+           ColumnVector res = testStrings.like(patternString, null)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar patternString = Scalar.fromString("");
+           Scalar intScalar = Scalar.fromInt(1);
+           ColumnVector res = testStrings.like(patternString, intScalar)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar intScalar = Scalar.fromInt(1);
+           Scalar defaultEscape = Scalar.fromString("\\");
+           ColumnVector res = testStrings.like(intScalar, defaultEscape)) {}
+    });
+  }
+
+  @Test
   void testUrlDecode() {
     String[] inputs = new String[] {
         "foobar.site%2Fq%3Fx%3D%C3%A9%25",

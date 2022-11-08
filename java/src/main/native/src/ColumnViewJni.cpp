@@ -1298,6 +1298,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(JNIEnv *env, jobject j_object,
+                                                            jlong j_view_handle, jlong pattern,
+                                                            jlong escapeChar) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
+  JNI_NULL_CHECK(env, pattern, "pattern is null", false);
+  JNI_NULL_CHECK(env, escapeChar, "escape character is null", false);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const column_view = reinterpret_cast<cudf::column_view const *>(j_view_handle);
+    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const *>(pattern);
+    auto const escape_scalar = reinterpret_cast<cudf::string_scalar const *>(escapeChar);
+    return release_as_jlong(cudf::strings::like(strings_column, *pattern_scalar, *escape_scalar));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, jclass,
                                                                   jlong lhs_view, jlong rhs_view,
                                                                   jint int_op, jint out_dtype,
