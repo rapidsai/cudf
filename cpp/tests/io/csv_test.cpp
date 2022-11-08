@@ -2246,9 +2246,9 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
 
 TEST_F(CsvReaderTest, UseColsValidation)
 {
-  std::string buffer = "1,2,3";
+  const std::string buffer = "1,2,3";
 
-  cudf::io::csv_reader_options idx_cnt_options =
+  const cudf::io::csv_reader_options idx_cnt_options =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
       .names({"a", "b"})
       .use_cols_indexes({0});
@@ -2269,14 +2269,14 @@ TEST_F(CsvReaderTest, UseColsValidation)
 
 TEST_F(CsvReaderTest, CropColumns)
 {
-  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+  const std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
       .names({"a", "b"})
       .header(-1);
-  auto result = cudf::io::read_csv(in_opts);
+  const auto result = cudf::io::read_csv(in_opts);
 
   const auto result_table = result.tbl->view();
   ASSERT_EQ(result_table.num_columns(), 2);
