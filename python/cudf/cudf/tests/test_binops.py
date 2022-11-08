@@ -892,6 +892,17 @@ def test_floordiv_zero_float64(series_dtype, scalar_dtype):
     )
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    (np.bool_, np.int8, np.uint8, np.int64, np.uint64, np.float32, np.float64),
+)
+def test_rmod_zero_nan(dtype):
+    sr = pd.Series([1, 1, 0], dtype=dtype)
+    cr = cudf.from_pandas(sr)
+    utils.assert_eq(1 % sr, 1 % cr)
+    utils.assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=np.float64))
+
+
 def test_series_misc_binop():
     pds = pd.Series([1, 2, 4], name="abc xyz")
     gds = cudf.Series([1, 2, 4], name="abc xyz")
