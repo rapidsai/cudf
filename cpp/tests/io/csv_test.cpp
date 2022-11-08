@@ -2303,25 +2303,6 @@ TEST_F(CsvReaderTest, CropColumnsUseColsNames)
   ASSERT_EQ(result_table.column(0).type(), data_type{type_id::FLOAT32});
   expect_column_data_equal(std::vector<float>{9., 8., 7.}, result_table.column(0));
 }
-/*
-    df = cudf.read_csv(
-        StringIO(buffer), usecols=["b", "d"], names=["a", "b", "c", "d"]
-    )
-
-    df = cudf.read_csv(
-        StringIO(buffer),
-        usecols=["b", "d"],
-        names=["a", "b", "c", "d"],
-        dtype={"a": "str", "b": "str", "c": "str", "d": "bool"},
-    )
-
-    df = cudf.read_csv(
-        StringIO(buffer),
-        usecols=["b", "d"],
-        names=["a", "b", "c", "d"],
-        dtype=["str", "str", "str", "float"],
-    )
-    */
 
 TEST_F(CsvReaderTest, ExtraColumns)
 {
