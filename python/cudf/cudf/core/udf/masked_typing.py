@@ -70,6 +70,7 @@ def _type_to_masked_type(t):
                 "attempting to use a column of unsupported dtype in a UDF. "
                 f"Supported dtypes are:\n{supported_type_str}"
             )
+            breakpoint()
             return types.Poison(err)
     else:
         return result
