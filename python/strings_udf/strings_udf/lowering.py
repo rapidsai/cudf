@@ -190,7 +190,11 @@ def create_binary_string_func(binary_func, retty):
                 # binary function of two strings yielding a new string
                 # example: str.strip(other) -> str
                 # shim functions can not return a struct due to C linkage
-                # so we operate on an extra void ptr and throw away nb_retval
+                # so we create a new udf_string and pass a pointer to it
+                # for the shim function to write the output to. The return
+                # value of compile_internal is therefore discarded (although
+                # this may change in the future if we need to return error
+                # codes, for instance).
                 udf_str_ptr = builder.alloca(
                     default_manager[udf_string].get_value_type()
                 )
