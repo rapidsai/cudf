@@ -1956,7 +1956,7 @@ def _fsspec_data_transfer(
         try:
             file_size = path_or_fob.size
         except AttributeError:
-            # Find file size of there is no `size`
+            # Find file size if there is no `size`
             # attribute
             old_file_position = path_or_fob.tell()
             path_or_fob.seek(0, os.SEEK_END)
