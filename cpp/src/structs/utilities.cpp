@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -72,10 +73,21 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
 }
 
 namespace {
+
 /**
  * @brief Check whether the specified column is of type `STRUCT`.
  */
 bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
+
+/**
+ * @brief Check whether the specified column is of compound types.
+ */
+bool is_or_has_has_nested_compound(cudf::column_view const& col)
+{
+  return cudf::is_compound(col.type()) ||
+         std::any_of(col.child_begin(), col.child_end(), is_or_has_has_nested_compound);
+}
+
 }  // namespace
 
 bool is_or_has_nested_lists(cudf::column_view const& col)
@@ -213,47 +225,47 @@ flattened_table flatten_nested_columns(table_view const& input,
 // over the specified member (child) column.
 void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               size_type parent_null_count,
-                              column& child,
+                              std::unique_ptr<column> const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  if (child.type().id() == cudf::type_id::EMPTY) {
+  if (input.type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
     return;
   }
-  if (!child.nullable()) {
+  if (!input.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
-    child.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, child.size(), stream, mr));
-    child.set_null_count(parent_null_count);
+    input.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, input.size(), stream, mr));
+    input.set_null_count(parent_null_count);
   } else {
     // Child should have a null mask.
     // `AND` the child's null mask with the parent's.
 
-    auto current_child_mask = child.mutable_view().null_mask();
+    auto current_child_mask = input.mutable_view().null_mask();
 
     std::vector<bitmask_type const*> masks{
       reinterpret_cast<bitmask_type const*>(parent_null_mask),
       reinterpret_cast<bitmask_type const*>(current_child_mask)};
     std::vector<size_type> begin_bits{0, 0};
     auto const valid_count = cudf::detail::inplace_bitmask_and(
-      device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
+      device_span<bitmask_type>(current_child_mask, num_bitmask_words(input.size())),
       masks,
       begin_bits,
-      child.size(),
+      input.size(),
       stream);
-    auto const null_count = child.size() - valid_count;
-    child.set_null_count(null_count);
+    auto const null_count = input.size() - valid_count;
+    input.set_null_count(null_count);
   }
 
   // If the child is also a struct, repeat for all grandchildren.
-  if (child.type().id() == cudf::type_id::STRUCT) {
-    const auto current_child_mask = child.mutable_view().null_mask();
+  if (input.type().id() == cudf::type_id::STRUCT) {
+    const auto current_child_mask = input.mutable_view().null_mask();
     std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(child.num_children()),
-                  [&current_child_mask, &child, stream, mr](auto i) {
+                  thrust::make_counting_iterator(input.num_children()),
+                  [&current_child_mask, &input, stream, mr](auto i) {
                     superimpose_parent_nulls(
-                      current_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
+                      current_child_mask, UNKNOWN_NULL_COUNT, input.child(i), stream, mr);
                   });
   }
 }
