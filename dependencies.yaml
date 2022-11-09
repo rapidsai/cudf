@@ -59,28 +59,28 @@ dependencies:
     specific:
       - output_types: conda
         matrices:
-        - matrix:
-            arch: x86_64
-          packages:
-            - gcc_linux-64=9.*
-            - sysroot_linux-64==2.17
-        - matrix:
-            arch: aarch64
-          packages:
-            - gcc_linux-aarch64=9.*
-            - sysroot_linux-aarch64==2.17
+          - matrix:
+              arch: x86_64
+            packages:
+              - &gcc_amd64 gcc_linux-64=9.*
+              - &sysroot_amd64 sysroot_linux-64==2.17
+          - matrix:
+              arch: aarch64
+            packages:
+              - &gcc_aarch64 gcc_linux-aarch64=9.*
+              - &sysroot_aarch64 sysroot_linux-aarch64==2.17
       - output_types: conda
         matrices:
-        - matrix:
-            arch: x86_64
-            cuda: "11.5"
-          packages:
-            - nvcc_linux-64=11.5
-        - matrix:
-            arch: aarch64
-            cuda: "11.5"
-          packages:
-            - nvcc_linux-aarch64=11.5
+          - matrix:
+              arch: x86_64
+              cuda: "11.5"
+            packages:
+              - &nvcc_amd64_115 nvcc_linux-64=11.5
+          - matrix:
+              arch: aarch64
+              cuda: "11.5"
+            packages:
+              - &nvcc_aarch64_115 nvcc_linux-aarch64=11.5
   cudatoolkit:
     specific:
       - output_types: conda
@@ -127,28 +127,48 @@ dependencies:
     specific:
       - output_types: conda
         matrices:
-        - matrix:
-            arch: x86_64
-          packages:
-            - gcc_linux-64=9.*
-            - sysroot_linux-64==2.17
-        - matrix:
-            arch: aarch64
-          packages:
-            - gcc_linux-aarch64=9.*
-            - sysroot_linux-aarch64==2.17
+          - matrix:
+              arch: x86_64
+            packages:
+              - *gcc_amd64
+              - *sysroot_amd64
+          - matrix:
+              arch: aarch64
+            packages:
+              - *gcc_aarch64
+              - *sysroot_aarch64
       - output_types: conda
         matrices:
-        - matrix:
-            arch: x86_64
-            cuda: "11.5"
-          packages:
-            - nvcc_linux-64=11.5
-        - matrix:
-            arch: aarch64
-            cuda: "11.5"
-          packages:
-            - nvcc_linux-aarch64=11.5
+          - matrix:
+              arch: x86_64
+              cuda: "11.2"
+            packages:
+              - nvcc_linux-64=11.2
+          - matrix:
+              arch: aarch64
+              cuda: "11.2"
+            packages:
+              - nvcc_linux-aarch64=11.2
+          - matrix:
+              arch: x86_64
+              cuda: "11.4"
+            packages:
+              - nvcc_linux-64=11.4
+          - matrix:
+              arch: aarch64
+              cuda: "11.4"
+            packages:
+              - nvcc_linux-aarch64=11.4
+          - matrix:
+              arch: x86_64
+              cuda: "11.5"
+            packages:
+              - *nvcc_amd64_115
+          - matrix:
+              arch: aarch64
+              cuda: "11.5"
+            packages:
+              - *nvcc_aarch64_115
   notebook:
     common:
       - output_types: [conda, requirements]
@@ -209,11 +229,11 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              - cupy-cuda115>=9.5.0,<12.0.0a0  # TODO: This might change to cupy-cuda11x?
+              - cupy-cuda115>=9.5.0,<12.0.0a0 # TODO: This might change to cupy-cuda11x?
           - matrix:
               arch: aarch64
             packages:
-              - cupy-cuda11x -f https://pip.cupy.dev/aarch64  # TODO: Verify that this works.
+              - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
   test_python:
     common:
       - output_types: [conda, requirements]
@@ -232,7 +252,7 @@ dependencies:
           - pytest-cov
           - pytest-xdist
           - python-snappy>=0.6.0
-          - pytorch<1.12.0  # We should check and fix all "<=" pinnings
+          - pytorch<1.12.0 # We should check and fix all "<=" pinnings
           - s3fs>=2022.3.0
           - scipy
           - transformers
