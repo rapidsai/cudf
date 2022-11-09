@@ -22,6 +22,7 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@main
     with:
       build_type: pull-request
+      node_type: cpu16
   conda-cpp-tests:
     needs: conda-cpp-build
     secrets: inherit
@@ -34,6 +35,7 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@main
     with:
       build_type: pull-request
+      node_type: cpu16
   conda-python-tests:
     needs: conda-python-build
     secrets: inherit
