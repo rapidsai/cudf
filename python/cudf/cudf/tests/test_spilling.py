@@ -237,22 +237,6 @@ def test_zero_device_limit(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (gen_df.buffer_size * 2, 0)
 
 
-def test_lookup_address_range(manager: SpillManager):
-    df = gen_df()
-    buf = gen_df.buffer(df)
-    buffers = manager.base_buffers()
-    assert len(buffers) == 1
-    (buf,) = buffers
-    assert gen_df.buffer(df) is buf
-    assert manager.lookup_address_range(buf.ptr, buf.size)[0] is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size - 1)[0] is buf
-    assert manager.lookup_address_range(buf.ptr + 1, buf.size + 1)[0] is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size - 1)[0] is buf
-    assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1)[0] is buf
-    assert not manager.lookup_address_range(buf.ptr + buf.size, buf.size)
-    assert not manager.lookup_address_range(buf.ptr - buf.size, buf.size)
-
-
 def test_external_memory_never_spills(manager):
     """
     Test that external data, i.e., data not managed by RMM,

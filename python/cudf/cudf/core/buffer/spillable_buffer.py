@@ -100,18 +100,6 @@ class SpillableBuffer(Buffer):
                 f"cannot create {self.__class__} with a global spill manager"
             )
 
-        if self._ptr:
-            # TODO: run the following asserts in "debug mode" or not at all.
-            # Assert that any buffers `data` may refer to has been exposed
-            # already. If this is not the case, it means that somewhere we
-            # are accessing a buffer's device pointer without marking it as
-            # exposed, which would be a bug.
-            bases = manager.lookup_address_range(self._ptr, self._size)
-            assert all(b.exposed for b in bases)
-            # Assert that if `data` refers to any existing base buffers, it
-            # must itself be exposed.
-            assert len(bases) == 0 or exposed
-
         self._manager = manager
         self._manager.add(self)
 
@@ -369,14 +357,6 @@ class SpillableBuffer(Buffer):
                     )
                 ]
             return header, frames
-
-    def is_overlapping(self, ptr: int, size: int):
-        with self._lock:
-            return (
-                not self.is_spilled
-                and (ptr + size) > self._ptr
-                and (self._ptr + self._size) > ptr
-            )
 
     def __repr__(self) -> str:
         if self._ptr_desc["type"] != "gpu":

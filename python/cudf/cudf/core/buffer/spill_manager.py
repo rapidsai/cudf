@@ -239,15 +239,6 @@ class SpillManager:
             ret += nbytes
         return ret
 
-    def lookup_address_range(  # TODO: remove, only for debugging
-        self, ptr: int, size: int
-    ) -> List[SpillableBuffer]:
-        ret = []
-        for buf in self.base_buffers():
-            if buf.is_overlapping(ptr, size):
-                ret.append(buf)
-        return ret
-
     def __repr__(self) -> str:
         spilled = sum(
             buf.size for buf in self.base_buffers() if buf.is_spilled
