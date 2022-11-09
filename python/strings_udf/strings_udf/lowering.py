@@ -78,6 +78,19 @@ _declare_bool_str_int_func = partial(
 )
 
 
+def _declare_upper_or_lower(func):
+    return cuda.declare_device(
+        func,
+        types.void(
+            _UDF_STRING_PTR,
+            _STR_VIEW_PTR,
+            types.int64,
+            types.int64,
+            types.int64,
+        ),
+    )
+
+
 _string_view_isdigit = _declare_bool_str_int_func("pyisdigit")
 _string_view_isalnum = _declare_bool_str_int_func("pyisalnum")
 _string_view_isalpha = _declare_bool_str_int_func("pyisalpha")
@@ -87,18 +100,9 @@ _string_view_isspace = _declare_bool_str_int_func("pyisspace")
 _string_view_isupper = _declare_bool_str_int_func("pyisupper")
 _string_view_islower = _declare_bool_str_int_func("pyislower")
 _string_view_istitle = _declare_bool_str_int_func("pyistitle")
-_string_view_upper = cuda.declare_device(
-    "upper",
-    types.void(
-        _UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64, types.int64
-    ),
-)
-_string_view_lower = cuda.declare_device(
-    "lower",
-    types.void(
-        _UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64, types.int64
-    ),
-)
+_string_view_upper = _declare_upper_or_lower("upper")
+_string_view_lower = _declare_upper_or_lower("lower")
+
 
 _string_view_count = cuda.declare_device(
     "pycount",
