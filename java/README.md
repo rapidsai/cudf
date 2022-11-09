@@ -34,7 +34,7 @@ most modern cuda drivers.
 </dependency>
 ```
 
-In some cases there may be a classifier to indicate the version of cuda required. See the 
+In some cases there may be a classifier to indicate the version of cuda required. See the
 [Build From Source](#build-from-source) section below for more information about when this
 can happen. No official release of the jar will have a classifier on it.
 
@@ -114,12 +114,12 @@ mvn clean install -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 
 ## GPUDirect Storage (GDS)
 
-The JNI code can be built with *GPUDirect Storage* (GDS) support, which enables direct copying 
+The JNI code can be built with *GPUDirect Storage* (GDS) support, which enables direct copying
 between GPU device buffers and supported filesystems (see
 https://docs.nvidia.com/gpudirect-storage/).
 
 To enable GDS support, first make sure GDS is installed (see
-https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html), then run:  
+https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html), then run:
 ```shell script
 cd src/cudf/java
 mvn clean install -DUSE_GDS=ON

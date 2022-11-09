@@ -96,8 +96,8 @@ function install_dask {
     gpuci_logger "Install the conda-forge or nightly version of dask and distributed"
     set -x
     if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
-        gpuci_logger "gpuci_mamba_retry update dask"
-        gpuci_mamba_retry update dask
+        gpuci_logger "gpuci_mamba_retry install -c dask/label/dev 'dask/label/dev::dask' 'dask/label/dev::distributed'"
+        gpuci_mamba_retry install -c dask/label/dev "dask/label/dev::dask" "dask/label/dev::distributed"
         conda list
     else
         gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
@@ -110,6 +110,8 @@ function install_dask {
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
     set +x
 }
+
+install_dask
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
@@ -125,8 +127,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     # https://docs.rapids.ai/maintainers/depmgmt/
     # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
     # gpuci_mamba_retry install -y "your-pkg=1.0.0"
-
-    install_dask
 
     ################################################################################
     # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
@@ -197,7 +197,7 @@ else
     # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
-    
+
     gpuci_logger "Check current conda environment"
     conda list --show-channel-urls
 
@@ -295,22 +295,15 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 gpuci_logger "Installing strings_udf"
 gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
-# only install strings_udf after cuDF is finished testing without its presence
 cd "$WORKSPACE/python/strings_udf/strings_udf"
 gpuci_logger "Python py.test for strings_udf"
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
 
-STRINGS_UDF_PYTEST_RETCODE=0
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests || STRINGS_UDF_PYTEST_RETCODE=$?
+# retest cuDF UDFs
+cd "$WORKSPACE/python/cudf/cudf"
+gpuci_logger "Python py.test retest cuDF UDFs"
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests/test_udf_masked_ops.py
 
-if [ ${STRINGS_UDF_PYTEST_RETCODE} -eq 5 ]; then
-    echo "No strings UDF tests were run, but this script will continue to execute."
-elif [ ${STRINGS_UDF_PYTEST_RETCODE} -ne 0 ]; then
-    exit ${STRINGS_UDF_PYTEST_RETCODE}
-else
-    cd "$WORKSPACE/python/cudf/cudf"
-    gpuci_logger "Python py.test retest cuDF UDFs"
-    py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests
-fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.

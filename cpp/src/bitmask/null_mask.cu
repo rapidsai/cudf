@@ -165,7 +165,7 @@ rmm::device_buffer create_null_mask(size_type size,
 // or null, otherwise;
 void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid)
 {
-  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid);
+  return detail::set_null_mask(bitmask, begin_bit, end_bit, valid, cudf::get_default_stream());
 }
 
 namespace detail {

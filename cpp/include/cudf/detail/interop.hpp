@@ -16,7 +16,13 @@
 
 #pragma once
 
+// We disable warning 611 because the `arrow::TableBatchReader` only partially
+// override the `ReadNext` method of `arrow::RecordBatchReader::ReadNext`
+// triggering warning 611-D from nvcc.
+#pragma nv_diag_suppress 611
 #include <arrow/api.h>
+#pragma nv_diag_default 611
+
 #include <cudf/interop.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -34,7 +40,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -44,7 +50,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 // Creating arrow as per given type_id and buffer arguments
@@ -114,7 +120,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  */
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

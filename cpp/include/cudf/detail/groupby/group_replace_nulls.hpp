@@ -40,7 +40,7 @@ std::unique_ptr<column> group_replace_nulls(
   cudf::column_view const& grouped_value,
   device_span<size_type const> group_labels,
   cudf::replace_policy replace_policy,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

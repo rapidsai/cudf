@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_dtype,
     is_scalar,
+    is_string_dtype,
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
@@ -214,19 +215,20 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = column.as_column(value)
 
         if (
-            not isinstance(
-                self._frame._column.dtype,
-                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+            (
+                _is_non_decimal_numeric_dtype(self._frame._column.dtype)
+                or is_string_dtype(self._frame._column.dtype)
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
-            if not is_integer(key):
-                to_dtype = np.result_type(
-                    value.dtype, self._frame._column.dtype
-                )
-                value = value.astype(to_dtype)
+            # In contrast to Column.__setitem__ (which downcasts the value to
+            # the dtype of the column) here we upcast the series to the
+            # larger data type mimicking pandas
+            to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
+            value = value.astype(to_dtype)
+            if to_dtype != self._frame._column.dtype:
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
@@ -283,6 +285,10 @@ class _SeriesLocIndexer(_FrameIndexer):
         self._frame.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        if isinstance(arg, tuple) and arg and isinstance(arg[0], slice):
+            if len(arg) > 1:
+                raise IndexError("Too many Indexers")
+            arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
@@ -815,7 +821,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy : boolean, default True
         level: Not Supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit: Not Supported
         tolerance: Not Supported
 
@@ -1605,7 +1611,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
-        of duplicated entries. Setting the value of ‘inplace’ to
+        of duplicated entries. Setting the value of 'inplace' to
         `True` performs the operation inplace and returns `None`.
 
         >>> s.drop_duplicates(keep=False, inplace=True)
@@ -1831,8 +1837,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    3
         3    4
         dtype: int64
-        >>> series.data
-        <cudf.core.buffer.Buffer ...>
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1881,7 +1885,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -2763,7 +2767,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             only works with numeric data.
 
         dropna : bool, default True
-            Don’t include counts of NaN and None.
+            Don't include counts of NaN and None.
 
         Returns
         -------
@@ -2886,7 +2890,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
-        interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
         columns : list of str
@@ -4352,7 +4356,7 @@ class DatetimeProperties:
         Parameters
         ----------
         date_format : str
-            Date format string (e.g. “%Y-%m-%d”).
+            Date format string (e.g. "%Y-%m-%d").
 
         Returns
         -------
