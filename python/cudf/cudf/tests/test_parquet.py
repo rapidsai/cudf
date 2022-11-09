@@ -712,7 +712,7 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
 def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     # Check that we can read a file opened with the
-    # Arrow FileSystem inferface
+    # Arrow FileSystem interface
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:

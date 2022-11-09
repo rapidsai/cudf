@@ -1801,7 +1801,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
   // PageInfo::skipped_values, which tells us where to start decoding in the input  .
   // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
-  // specified artifical bounds).
+  // specified artificial bounds).
   if (uses_custom_row_bounds) {
     gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, true);

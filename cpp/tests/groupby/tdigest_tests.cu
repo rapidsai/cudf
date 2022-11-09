@@ -173,7 +173,7 @@ TYPED_TEST(TDigestAllTypes, LargeGroups)
     values.push_back(v[0]);
   }
 
-  // generate a seperate tdigest for each group
+  // generate a separate tdigest for each group
   std::vector<std::unique_ptr<column>> parts;
   std::transform(
     iter, iter + values.size(), std::back_inserter(parts), [&keys, &values, delta](int i) {
@@ -283,7 +283,7 @@ TEST_F(TDigestMergeTest, Grouped)
 
   int const delta = 1000;
 
-  // generate seperate digests
+  // generate separate digests
   std::vector<std::unique_ptr<column>> parts;
   auto iter = thrust::make_counting_iterator(0);
   std::transform(
