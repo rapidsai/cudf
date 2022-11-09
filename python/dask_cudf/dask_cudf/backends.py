@@ -2,6 +2,7 @@
 
 import warnings
 from collections.abc import Iterator
+from functools import partial
 
 import cupy as cp
 import numpy as np
@@ -493,11 +494,15 @@ try:
             )
 
         @staticmethod
-        def read_json(*args, engine=None, **kwargs):
+        def read_json(*args, engine="cudf", **kwargs):
             return _default_backend(
                 dd.read_json,
                 *args,
-                engine=cudf.read_json,
+                engine=(
+                    partial(cudf.read_json, engine=engine)
+                    if isinstance(engine, str)
+                    else engine
+                ),
                 **kwargs,
             )
 
