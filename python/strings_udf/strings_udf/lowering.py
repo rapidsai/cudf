@@ -35,6 +35,12 @@ def _declare_binary_func(lhs, rhs, out, name):
     )
 
 
+def _declare_strip_func(name):
+    return cuda.declare_device(
+        name, size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+    )
+
+
 # A binary function of the form f(string, string) -> bool
 _declare_bool_str_str_func = partial(
     _declare_binary_func, _STR_VIEW_PTR, _STR_VIEW_PTR, types.boolean
@@ -56,15 +62,10 @@ _string_view_endswith = _declare_bool_str_str_func("endswith")
 _string_view_find = _declare_size_type_str_str_func("find")
 _string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
-_string_view_strip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
-_string_view_lstrip = cuda.declare_device(
-    "lstrip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
-_string_view_rstrip = cuda.declare_device(
-    "rstrip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
+_string_view_strip = _declare_strip_func("strip")
+_string_view_lstrip = _declare_strip_func("lstrip")
+_string_view_rstrip = _declare_strip_func("rstrip")
+
 
 # A binary function of the form f(string, int) -> bool
 _declare_bool_str_int_func = partial(
