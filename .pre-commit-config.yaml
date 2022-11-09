@@ -134,7 +134,12 @@ repos:
       - repo: https://github.com/codespell-project/codespell
         rev: v2.1.0
         hooks:
-        - id: codespell
+              - id: codespell
+                exclude: |
+                  (?x)^(
+                    .*test.*|
+                    ^.*versioneer.py$
+                  )
 
 default_language_version:
       python: python3
