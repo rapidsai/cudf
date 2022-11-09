@@ -194,7 +194,7 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
     }();
 
     auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-    auto constexpr preceding = 2;
+    auto constexpr preceding  = 2;
     auto constexpr following  = 2;
     auto constexpr min_period = 1;
 
@@ -301,7 +301,7 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
   }();
 
   auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceding = 2;
+  auto constexpr preceding  = 2;
   auto constexpr following  = 2;
   auto constexpr min_period = 1;
 
@@ -375,7 +375,7 @@ TEST_F(RollingStructTest, NullParentMinMaxCount)
 
   auto const expected_count_valid = ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, no_nulls()};
   auto const expected_count_all   = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceding       = 2;
+  auto constexpr preceding        = 2;
   auto constexpr following        = 2;
   auto constexpr min_period       = 1;
 
