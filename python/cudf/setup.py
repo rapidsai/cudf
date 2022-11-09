@@ -9,7 +9,8 @@ from skbuild import setup
 
 install_requires = [
     "cachetools",
-    "cuda-python>=11.7.1,<12.0",
+    # "cuda-python>=11.7.1,<12.0",
+    "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
     "numba>=0.54",
     "numpy",
