@@ -73,8 +73,7 @@ def test_read_json_lines(lines):
         dd.assert_eq(actual, actual_pd)
 
 
-@pytest.mark.filterwarnings("ignore:Using CPU")
-def test_read_json_nested_experimental():
+def test_read_json_nested_experimental(tmp_path):
     # Check that `engine="cudf_experimental"` can
     # be used to support nested data
     df = pd.DataFrame(
@@ -84,9 +83,9 @@ def test_read_json_nested_experimental():
             "c": [1, 3, 5, 7],
         }
     )
-    lines = dict(orient="records", lines=True)
-    with tmpfile("json") as f:
-        df.to_json(f, **lines)
-        actual = dask_cudf.read_json(f, engine="cudf_experimental", **lines)
-        actual_pd = pd.read_json(f, **lines)
+    kwargs = dict(orient="records", lines=True)
+    with tmp_path / "data.json" as f:
+        df.to_json(f, **kwargs)
+        actual = dask_cudf.read_json(f, engine="cudf_experimental", **kwargs)
+        actual_pd = pd.read_json(f, **kwargs)
         dd.assert_eq(actual, actual_pd)
