@@ -955,3 +955,15 @@ def test_json_round_trip_gzip():
     with gzip.open(bytes, mode="rb") as fo:
         written_df = cudf.read_json(fo, orient="records", lines=True)
     assert_eq(written_df, df)
+
+    # Testing writing from middle of the file.
+    loc = bytes.tell()
+
+    with gzip.open(bytes, mode="wb") as fo:
+        fo.seek(loc)
+        df.to_json(fo, orient="records", lines=True)
+    bytes.seek(loc)
+    with gzip.open(bytes, mode="rb") as fo:
+        fo.seek(loc)
+        written_df = cudf.read_json(fo, orient="records", lines=True)
+    assert_eq(written_df, df)
