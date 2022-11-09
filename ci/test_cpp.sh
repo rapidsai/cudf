@@ -22,16 +22,10 @@ rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   libcudf libcudf_kafka libcudf-tests
 
-TESTRESULTS_DIR=test-results
-mkdir -p ${TESTRESULTS_DIR}
-SUITEERROR=0
-
 rapids-logger "Check GPU usage"
 nvidia-smi
 
 set +e
-
-# TODO: Insert trap to remove jitify cache from ci/gpu/build.sh
 
 # Set up library for finding incorrect default stream usage.
 pushd "cpp/tests/utilities/identify_stream_usage/"
@@ -40,17 +34,25 @@ STREAM_IDENTIFY_LIB="$(realpath build/libidentify_stream_usage.so)"
 echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
 popd
 
-rapids-logger "Running googletests"
-for gt in "$CONDA_PREFIX/bin/gtests/libcudf/"* ; do
+# Run libcudf and libcudf_kafka gtests from libcudf-tests package
+rapids-logger "Running gtests"
+TESTRESULTS_DIR=test-results
+mkdir -p ${TESTRESULTS_DIR}
+SUITEERROR=0
+
+# TODO: exit code handling is too verbose. Find a cleaner solution.
+
+for gt in "$CONDA_PREFIX/bin/gtests/{libcudf,libcudf_kafka}/"* ; do
     test_name=$(basename ${gt})
+    echo "Running gtest $test_name"
     if [[ ${test_name} == "SPAN_TEST" ]]; then
         # This one test is specifically designed to test using a thrust device
         # vector, so we expect and allow it to include default stream usage.
         gtest_filter="SpanTest.CanConstructFromDeviceContainers"
-        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}"
-        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="${gtest_filter}"
+        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}" && \
+            ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="${gtest_filter}"
     else
-        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
+        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
     fi
 
     exitcode=$?
@@ -60,10 +62,11 @@ for gt in "$CONDA_PREFIX/bin/gtests/libcudf/"* ; do
     fi
 done
 
+rapids-logger "Running gtests with kvikio"
 # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
 for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
     gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
-    echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+    echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
     LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
     exitcode=$?
     if (( ${exitcode} != 0 )); then
@@ -71,5 +74,21 @@ for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
         echo "FAILED: GTest ${gt}"
     fi
 done
+
+if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
+    rapids-logger "Memcheck gtests with rmm_mode=cuda"
+    export GTEST_CUDF_RMM_MODE=cuda
+    COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
+    for gt in "$CONDA_PREFIX/bin/gtests/{libcudf,libcudf_kafka}"/* ; do
+        test_name=$(basename ${gt})
+        if [[ "$test_name" == "ERROR_TEST" ]]; then
+            continue
+        fi
+        echo "Running gtest $test_name"
+        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${TESTRESULTS_DIR}/${test_name}.cs.log"
+    done
+    unset GTEST_CUDF_RMM_MODE
+    # TODO: test-results/*.cs.log are processed in gpuci
+fi
 
 exit ${SUITEERROR}
