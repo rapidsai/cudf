@@ -669,4 +669,110 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
   }
 }
 
+template <typename DfaT,
+          typename AgentDFAPolicy,
+          typename SymbolItT,
+          typename OffsetT,
+          typename StateVectorT>
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__ void ReduceDFAKernel(
+  DfaT dfa, SymbolItT d_chars, OffsetT const num_chars, StateVectorT* block_state_transitions)
+{
+  using AgentDfaSimT = AgentDFA<AgentDFAPolicy, SymbolItT, OffsetT>;
+    
+  constexpr uint32_t BLOCK_THREADS     = AgentDFAPolicy::BLOCK_THREADS;
+  constexpr uint32_t SYMBOLS_PER_BLOCK = AgentDfaSimT::SYMBOLS_PER_BLOCK;
+  constexpr int32_t NUM_STATES         = DfaT::MAX_NUM_STATES;
+
+  using StateVectorCompositeOpT = VectorCompositeOp<NUM_STATES>;
+
+  using ItemsBlockReduce =
+    cub::BlockReduce<StateVectorT, BLOCK_THREADS, cub::BLOCK_REDUCE_WARP_REDUCTIONS>;
+
+  __shared__ union {
+    struct {
+      // Shared memory required by the DFA simulation algorithm
+      typename AgentDfaSimT::TempStorage agent;
+      // Shared memory required by the symbol group lookup table
+      typename DfaT::SymbolGroupStorageT matcher;
+      // Shared memory required by the transition table
+      typename DfaT::TransitionTableStorageT transition;
+    } dfa;
+    typename ItemsBlockReduce::TempStorage reduce;
+  } temp_storage;
+
+  // Initialize symbol group lookup table
+  auto symbol_matcher = dfa.InitSymbolGroupLUT(temp_storage.dfa.matcher);
+
+  // Initialize transition table
+  auto transition_table = dfa.InitTransitionTable(temp_storage.dfa.transition);
+
+  // Set up DFA
+  AgentDfaSimT agent_dfa(temp_storage.dfa.agent);
+
+  // Compute the state-transition vector
+  // Keeping track of the state for each of the <NUM_STATES> state machines
+  std::array<StateIndexT, NUM_STATES> state_vector;
+
+  // Initialize the seed state transition vector with the identity vector
+  thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
+
+  // Compute the state transition vector
+  agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,
+                                                       transition_table,
+                                                       d_chars,
+                                                       blockIdx.x * SYMBOLS_PER_BLOCK,
+                                                       num_chars,
+                                                       state_vector);
+
+  // Store it in a compact representation
+  StateVectorT out_state_vector;
+#pragma unroll
+  for (int32_t i = 0; i < NUM_STATES; ++i) {
+    out_state_vector.Set(i, state_vector[i]);
+  }
+
+  // sync before temp_storage reuse
+  __syncthreads();
+
+  auto block_state_vector =
+    ItemsBlockReduce(temp_storage.reduce).Reduce(out_state_vector, StateVectorCompositeOpT{});
+
+  if (threadIdx.x == 0) { block_state_transitions[blockIdx.x] = block_state_vector; }
+}
+
+template <typename DfaT, typename AgentDFAPolicy, typename StateVectorT>
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
+  void ReduceSingleBlockKernel(StateVectorT* block_state_transitions, int32_t num_blocks)
+{
+  constexpr uint32_t BLOCK_THREADS      = AgentDFAPolicy::BLOCK_THREADS;
+  constexpr int32_t NUM_STATES          = DfaT::MAX_NUM_STATES;
+  constexpr int32_t ELEMENTS_PER_THREAD = 4;
+
+  using ItemsBlockReduce =
+    cub::BlockReduce<StateVectorT, BLOCK_THREADS, cub::BLOCK_REDUCE_WARP_REDUCTIONS>;
+  using StateVectorCompositeOpT = VectorCompositeOp<NUM_STATES>;
+
+  __shared__ typename ItemsBlockReduce::TempStorage temp_storage;
+
+  StateVectorT state_identity_vector;
+  for (int32_t i = 0; i < NUM_STATES; ++i) {
+    state_identity_vector.Set(i, i);
+  }
+  auto state_vector = state_identity_vector;
+  StateVectorCompositeOpT op{};
+
+  for (int32_t base = 0; base < num_blocks; base += ELEMENTS_PER_THREAD * BLOCK_THREADS) {
+    int32_t thread_base     = base + threadIdx.x * ELEMENTS_PER_THREAD;
+    auto local_state_vector = state_identity_vector;
+    for (int32_t i = thread_base; i < thread_base + ELEMENTS_PER_THREAD; i++) {
+      if (i < num_blocks) {
+        local_state_vector = op(local_state_vector, block_state_transitions[i]);
+      }
+    }
+    state_vector = op(state_vector, ItemsBlockReduce(temp_storage).Reduce(local_state_vector, op));
+  }
+
+  if (threadIdx.x == 0) { block_state_transitions[num_blocks] = state_vector; }
+}
+
 }  // namespace cudf::io::fst::detail

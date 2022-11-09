@@ -25,6 +25,8 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/iterator/discard_iterator.h>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -62,8 +64,7 @@ namespace {
  * @param[out] out_tape A forward output iterator to which the transduced input will be written
  * @param[out] out_index_tape A forward output iterator to which indexes of the symbols that
  * actually caused some output are written to
- * @return A pair of iterators to one past the last element of (1) the transduced output symbol
- * sequence and (2) the indexes of
+ * @return The final state after parsing the entire input
  */
 template <typename InputItT,
           typename StateT,
@@ -71,14 +72,16 @@ template <typename InputItT,
           typename TransitionTableT,
           typename TransducerTableT,
           typename OutputItT,
+          typename StateItT,
           typename IndexOutputItT>
-static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
+static StateT fst_baseline(InputItT begin,
                                                          InputItT end,
                                                          StateT const& init_state,
                                                          SymbolGroupLutT symbol_group_lut,
                                                          TransitionTableT transition_table,
                                                          TransducerTableT translation_table,
                                                          OutputItT out_tape,
+                                                         StateItT out_state_tape,
                                                          IndexOutputItT out_index_tape)
 {
   // Initialize "FSM" with starting state
@@ -108,13 +111,15 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
 
     out_index_tape = std::fill_n(out_index_tape, out_size, in_offset);
 
+    *out_state_tape++ = state;
+
     // Transition the state of the finite-state machine
     state = static_cast<char>(transition_table[state][symbol_group]);
 
     // Continue with next symbol from input tape
     in_offset++;
   }
-  return {out_tape, out_index_tape};
+  return state;
 }
 
 using namespace cudf::test::io::json;
@@ -173,7 +178,7 @@ TEST_F(FstTest, GroundTruth)
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
   // Allocate device-side temporary storage & run algorithm
-  parser.Transduce(d_input.data(),
+  auto final_state = parser.Transduce(d_input.data(),
                    static_cast<SymbolOffsetT>(d_input.size()),
                    output_gpu.device_ptr(),
                    out_indexes_gpu.device_ptr(),
@@ -193,13 +198,14 @@ TEST_F(FstTest, GroundTruth)
   out_index_cpu.reserve(input.size());
 
   // Run CPU-side algorithm
-  fst_baseline(std::begin(input),
+  auto final_state_ref = fst_baseline(std::begin(input),
                std::end(input),
                start_state,
                pda_sgs,
                pda_state_tt,
                pda_out_tt,
                std::back_inserter(output_cpu),
+               thrust::make_discard_iterator(),
                std::back_inserter(out_index_cpu));
 
   // Make sure results have been copied back to host
@@ -207,8 +213,115 @@ TEST_F(FstTest, GroundTruth)
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
+  ASSERT_EQ(final_state, final_state_ref);
   CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output_cpu, output_cpu.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(out_indexes_gpu, out_index_cpu, output_cpu.size());
+}
+
+TEST_F(FstTest, GroudTruthPartial)
+{
+  // Type used to represent the atomic symbol type used within the finite-state machine
+  using SymbolT = char;
+
+  // Type sufficiently large to index symbols within the input and output (may be unsigned)
+  using SymbolOffsetT = uint32_t;
+
+  // Helper class to set up transition table, symbol group lookup table, and translation table
+  using DfaFstT = cudf::io::fst::detail::Dfa<char, NUM_SYMBOL_GROUPS, TT_NUM_STATES>;
+
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Test input
+  std::string input = R"(  {)"
+                      R"("category": "reference",)"
+                      R"("index:" [4,12,42],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "Sayings of the Century",)"
+                      R"("price": 8.95)"
+                      R"(}  )"
+                      R"({)"
+                      R"("category": "reference",)"
+                      R"("index:" [4,{},null,{"a":[]}],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "Sayings of the Century",)"
+                      R"("price": 8.95)"
+                      R"(} "\")"; // to make sure we land in different states in each input section
+
+  auto d_input_scalar                = cudf::make_string_scalar(input);
+  auto& d_string_scalar              = static_cast<cudf::string_scalar&>(*d_input_scalar);
+  cudf::size_type const repeat_times = 1 << 15;
+  auto d_input_string                = cudf::strings::repeat_string(d_string_scalar, repeat_times);
+  auto& d_input = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_string);
+  input         = d_input.to_string(stream);
+
+  // Prepare input & reference output buffers
+
+  // Run algorithm
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+
+  // Compute a reference solution
+  std::string out_cpu{};
+  std::vector<char> out_state_cpu{};
+  std::vector<SymbolOffsetT> out_index_cpu{};
+  out_cpu.reserve(input.size());
+  out_state_cpu.reserve(input.size());
+  out_index_cpu.reserve(input.size());
+
+  // Run CPU-side algorithm
+  auto final_state_ref = fst_baseline(std::begin(input),
+               std::end(input),
+               start_state,
+               pda_sgs,
+               pda_state_tt,
+               pda_out_tt,
+               std::back_inserter(out_cpu),
+               std::back_inserter(out_state_cpu),
+               std::back_inserter(out_index_cpu));
+
+  // Make sure results have been copied back to host
+  stream.synchronize();
+
+  for (SymbolOffsetT start_ofs : {0, 10, 100, 1000, 10000, static_cast<int>(input.size() / 2)}) {
+    SCOPED_TRACE(start_ofs);
+    std::array<uint32_t, TT_NUM_STATES> state_vector{};
+    parser.Reduce(d_input.data(), start_ofs, state_vector, stream.value());
+    auto new_start_state = state_vector[start_state];
+    ASSERT_EQ(new_start_state, out_state_cpu[start_ofs]);
+
+    constexpr std::size_t single_item = 1;
+    auto const local_size = static_cast<SymbolOffsetT>(d_input.size() - start_ofs);
+    hostdevice_vector<SymbolT> out_gpu(local_size, stream_view);
+    hostdevice_vector<SymbolOffsetT> out_gpu_size(single_item, stream_view);
+    hostdevice_vector<SymbolOffsetT> out_index_gpu(local_size, stream_view);
+    auto final_state = parser.Transduce(d_input.data() + start_ofs, local_size, out_gpu.device_ptr(),
+      out_index_gpu.device_ptr(),
+      out_gpu_size.device_ptr(),
+      new_start_state,
+      stream.value());
+      
+    // Async copy results from device to host
+    out_gpu.device_to_host(stream_view);
+    out_index_gpu.device_to_host(stream_view);
+    out_gpu_size.device_to_host(stream_view);
+
+    std::string out_cpu_partial{};
+    std::vector<SymbolOffsetT> out_index_cpu_partial{};
+    out_cpu_partial.reserve(local_size);
+    out_index_cpu_partial.reserve(local_size);
+    for (std::size_t i = 0; i < out_cpu.size(); i++) {
+      if (out_index_cpu[i] >= start_ofs) {
+        out_cpu_partial.push_back(out_cpu[i]);
+        out_index_cpu_partial.push_back(out_index_cpu[i] - start_ofs);
+      }
+    }
+
+    ASSERT_EQ(out_gpu_size[0], out_cpu_partial.size());
+    ASSERT_EQ(final_state, final_state_ref);
+    CUDF_TEST_EXPECT_VECTOR_EQUAL(out_gpu, out_cpu_partial, out_cpu_partial.size());
+    CUDF_TEST_EXPECT_VECTOR_EQUAL(out_index_gpu, out_index_cpu_partial, out_cpu_partial.size());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

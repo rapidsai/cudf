@@ -523,13 +523,14 @@ class Dfa {
    * @param seed_state The DFA's starting state. For streaming DFAs this corresponds to the
    * "end-state" of the previous invocation of the algorithm.
    * @param stream CUDA stream to launch kernels within. Default is the null-stream.
+   * @return the final state after parsing the input
    */
   template <typename SymbolT,
             typename TransducedOutItT,
             typename TransducedIndexOutItT,
             typename TransducedCountOutItT,
             typename OffsetT>
-  void Transduce(SymbolT const* d_chars,
+            uint32_t Transduce(SymbolT const* d_chars,
                  OffsetT num_chars,
                  TransducedOutItT d_out_it,
                  TransducedIndexOutItT d_out_idx_it,
@@ -539,6 +540,7 @@ class Dfa {
   {
     std::size_t temp_storage_bytes = 0;
     rmm::device_buffer temp_storage{};
+    uint32_t final_state{};
     DeviceTransduce(nullptr,
                     temp_storage_bytes,
                     this->get_device_view(),
@@ -548,6 +550,7 @@ class Dfa {
                     d_out_idx_it,
                     d_num_transduced_out_it,
                     seed_state,
+                    &final_state,
                     stream);
 
     if (temp_storage.size() < temp_storage_bytes) {
@@ -563,6 +566,49 @@ class Dfa {
                     d_out_idx_it,
                     d_num_transduced_out_it,
                     seed_state,
+                    &final_state,
+                    stream);
+    return final_state;
+  }
+
+  /**
+   * @brief Dispatches the finite-state DFA reduction algorithm to the GPU.
+   *
+   * @tparam SymbolT The atomic symbol type from the input tape
+   * @tparam OffsetT A type large enough to index into the input symbols
+   * @param d_chars Pointer to the input string of symbols
+   * @param num_chars The total number of input symbols to process
+   * @param state_vector The DFA's starting state. For streaming DFAs this corresponds to the
+   * "end-state" of the previous invocation of the algorithm.
+   * @param stream CUDA stream to launch kernels within. Default is the null-stream.
+   */
+  template <typename SymbolT,
+            typename OffsetT>
+  void Reduce(SymbolT const* d_chars,
+                 OffsetT num_chars,
+                 std::array<uint32_t, NUM_STATES>& state_vector,
+                 rmm::cuda_stream_view stream)
+  {
+    std::size_t temp_storage_bytes = 0;
+    rmm::device_buffer temp_storage{};
+    DeviceFSMReduce(nullptr,
+                    temp_storage_bytes,
+                    this->get_device_view(),
+                    d_chars,
+                    num_chars,
+                    state_vector,
+                    stream);
+
+    if (temp_storage.size() < temp_storage_bytes) {
+      temp_storage.resize(temp_storage_bytes, stream);
+    }
+
+    DeviceFSMReduce(temp_storage.data(),
+                    temp_storage_bytes,
+                    this->get_device_view(),
+                    d_chars,
+                    num_chars,
+                    state_vector,
                     stream);
   }
 

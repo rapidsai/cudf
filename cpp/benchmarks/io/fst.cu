@@ -225,6 +225,37 @@ void BM_FST_JSON_no_str(nvbench::state& state)
   });
 }
 
+void BM_FST_JSON_reduce(nvbench::state& state)
+{
+  // TODO: to be replaced by nvbench fixture once it's ready
+  cudf::rmm_pool_raii rmm_pool;
+
+  CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
+               "Benchmarks only support up to size_type's maximum number of items");
+  auto const string_size{size_type(state.get_int64("string_size"))};
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  auto input_string = make_test_json_data(state);
+  auto& d_input     = static_cast<cudf::scalar_type_t<std::string>&>(*input_string);
+
+  state.add_element_count(d_input.size());
+
+  // Run algorithm
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    // Allocate device-side temporary storage & run algorithm
+    std::array<uint32_t, TT_NUM_STATES> states{};
+    parser.Reduce(d_input.data(),
+                     static_cast<SymbolOffsetT>(d_input.size()),
+                     states,
+                     stream.value());
+  });
+}
+
 NVBENCH_BENCH(BM_FST_JSON)
   .set_name("FST_JSON")
   .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
@@ -240,5 +271,9 @@ NVBENCH_BENCH(BM_FST_JSON_no_out)
 NVBENCH_BENCH(BM_FST_JSON_no_str)
   .set_name("FST_JSON_no_str")
   .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
+
+  NVBENCH_BENCH(BM_FST_JSON_reduce)
+    .set_name("FST_JSON_reduce")
+    .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
 }  // namespace cudf
