@@ -164,17 +164,15 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
         const string new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
 
+        // Stop parsing when we hit the line terminator; relevant when there is
+        // a blank line following the header. In this case, first_row includes
+        // multiple line terminators at the end, as the new recStart belongs to
+        // a line that comes after the blank line(s)
+        if (!quotation && first_row[pos] == parse_opts.terminator) { break; }
       } else {
         // This is the first data row, add the automatically generated name
         col_names.push_back(prefix + std::to_string(num_cols));
       }
-
-      // Stop parsing when we hit the line terminator; relevant when there is
-      // a blank line following the header. In this case, first_row includes
-      // multiple line terminators at the end, as the new recStart belongs to
-      // a line that comes after the blank line(s)
-      if (!quotation && first_row[pos] == parse_opts.terminator) { break; }
-
       num_cols++;
 
       // Skip adjacent delimiters if delim_whitespace is set
