@@ -32,12 +32,13 @@ nvidia-smi
 
 set +e
 
+# TODO: Disabling stream identification for now.
 # Set up library for finding incorrect default stream usage.
-pushd "cpp/tests/utilities/identify_stream_usage/"
-mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
-STREAM_IDENTIFY_LIB="$(realpath build/libidentify_stream_usage.so)"
-echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
-popd
+#pushd "cpp/tests/utilities/identify_stream_usage/"
+#mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
+#STREAM_IDENTIFY_LIB="$(realpath build/libidentify_stream_usage.so)"
+#echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
+#popd
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 rapids-logger "Run gtests"
@@ -50,15 +51,17 @@ SUITEERROR=0
 for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     test_name=$(basename ${gt})
     echo "Running gtest $test_name"
-    if [[ ${test_name} == "SPAN_TEST" ]]; then
-        # This one test is specifically designed to test using a thrust device
-        # vector, so we expect and allow it to include default stream usage.
-        gtest_filter="SpanTest.CanConstructFromDeviceContainers"
-        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}" && \
-            ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="${gtest_filter}"
-    else
-        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
-    fi
+    ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
+    # TODO: Disabling stream identification for now.
+    #if [[ ${test_name} == "SPAN_TEST" ]]; then
+    #    # This one test is specifically designed to test using a thrust device
+    #    # vector, so we expect and allow it to include default stream usage.
+    #    gtest_filter="SpanTest.CanConstructFromDeviceContainers"
+    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}" && \
+    #        ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="${gtest_filter}"
+    #else
+    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
+    #fi
 
     exitcode=$?
     if (( ${exitcode} != 0 )); then
@@ -72,7 +75,7 @@ rapids-logger "Run gtests with kvikio"
 for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
     gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
     echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
+    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
     exitcode=$?
     if (( ${exitcode} != 0 )); then
         SUITEERROR=${exitcode}
