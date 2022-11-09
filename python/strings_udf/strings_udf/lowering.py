@@ -93,6 +93,12 @@ _string_view_upper = cuda.declare_device(
         _UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64, types.int64
     ),
 )
+_string_view_lower = cuda.declare_device(
+    "lower",
+    types.void(
+        _UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64, types.int64
+    ),
+)
 
 _string_view_count = cuda.declare_device(
     "pycount",
@@ -392,6 +398,11 @@ def create_upper_or_lower(id_func):
 @create_upper_or_lower("StringView.upper")
 def upper_impl(result, st, flags, cases, special):
     return _string_view_upper(result, st, flags, cases, special)
+
+
+@create_upper_or_lower("StringView.lower")
+def lower_impl(result, st, flags, cases, special):
+    return _string_view_lower(result, st, flags, cases, special)
 
 
 @create_unary_identifier_func("StringView.isdigit")

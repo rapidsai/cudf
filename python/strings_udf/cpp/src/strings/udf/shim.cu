@@ -298,3 +298,30 @@ extern "C" __device__ int upper(int* nb_retval,
 
   return 0;
 }
+
+extern "C" __device__ int lower(int* nb_retval,
+                                void* result,
+                                void* const* st,
+                                std::int64_t flags_table,
+                                std::int64_t cases_table,
+                                std::int64_t special_table)
+{
+  auto udf_str_ptr = reinterpret_cast<udf_string*>(result);
+  auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
+
+  auto flags_table_ptr =
+    reinterpret_cast<cudf::strings::detail::character_flags_table_type*>(flags_table);
+  auto cases_table_ptr =
+    reinterpret_cast<cudf::strings::detail::character_cases_table_type*>(cases_table);
+  auto special_table_ptr =
+    reinterpret_cast<cudf::strings::detail::special_case_mapping*>(special_table);
+
+  cudf::strings::udf::chars_tables tables;
+  tables.flags_table                = flags_table_ptr;
+  tables.cases_table                = cases_table_ptr;
+  tables.special_case_mapping_table = special_table_ptr;
+
+  *udf_str_ptr = to_lower(tables, *st_ptr);
+
+  return 0;
+}
