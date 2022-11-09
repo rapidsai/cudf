@@ -34,11 +34,11 @@ set +e
 # TODO: Insert trap to remove jitify cache from ci/gpu/build.sh
 
 # Set up library for finding incorrect default stream usage.
-cd "cpp/tests/utilities/identify_stream_usage/"
+pushd "cpp/tests/utilities/identify_stream_usage/"
 mkdir build && cd build && cmake .. -GNinja && ninja && ninja test
 STREAM_IDENTIFY_LIB="$(realpath build/libidentify_stream_usage.so)"
 echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
-cd -
+popd
 
 rapids-logger "Running googletests"
 for gt in "$CONDA_PREFIX/bin/gtests/libcudf/"* ; do
