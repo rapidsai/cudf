@@ -6,10 +6,11 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 conda activate base
 
+rapids-logger "Generate C++ testing dependencies"
 rapids-dependency-file-generator \
   --output conda \
   --file_key test_cpp \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*}" > env.yaml
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*}" | tee env.yaml
 
 rapids-mamba-retry env create --force -f env.yaml -n test
 conda activate test
@@ -35,7 +36,7 @@ echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
 popd
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
-rapids-logger "Running gtests"
+rapids-logger "Run gtests"
 TESTRESULTS_DIR=test-results
 mkdir -p ${TESTRESULTS_DIR}
 SUITEERROR=0
@@ -62,7 +63,7 @@ for gt in "$CONDA_PREFIX/bin/gtests/{libcudf,libcudf_kafka}/"* ; do
     fi
 done
 
-rapids-logger "Running gtests with kvikio"
+rapids-logger "Run gtests with kvikio"
 # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
 for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
     gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
