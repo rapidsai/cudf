@@ -302,3 +302,17 @@ def test_string_udf_rstrip(data, strip_char):
         return st.rstrip(strip_char)
 
     run_udf_test(data, func, "str")
+
+
+def test_string_udf_upper(data):
+    def func(st):
+        return st.upper()
+
+    run_udf_test(data, func, "str")
+
+
+def test_string_udf_lower(data):
+    def func(st):
+        return st.lower()
+
+    run_udf_test(data, func, "str")

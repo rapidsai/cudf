@@ -229,6 +229,7 @@ id_unary_funcs = [
     "isnumeric",
     "istitle",
 ]
+string_unary_funcs = ["upper", "lower"]
 string_binary_funcs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
@@ -256,6 +257,13 @@ for func in id_unary_funcs:
         StringViewAttrs,
         f"resolve_{func}",
         create_identifier_attr(func, types.boolean),
+    )
+
+for func in string_unary_funcs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attr(func, udf_string),
     )
 
 cuda_decl_registry.register_attr(StringViewAttrs)

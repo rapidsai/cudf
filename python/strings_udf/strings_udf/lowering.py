@@ -13,10 +13,16 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 
-from strings_udf._lib.tables import get_character_flags_table_ptr
+from strings_udf._lib.tables import (
+    get_character_cases_table_ptr,
+    get_character_flags_table_ptr,
+    get_special_case_mapping_table_ptr,
+)
 from strings_udf._typing import size_type, string_view, udf_string
 
 character_flags_table_ptr = get_character_flags_table_ptr()
+character_cases_table_ptr = get_character_cases_table_ptr()
+special_case_mapping_table_ptr = get_special_case_mapping_table_ptr()
 
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
@@ -81,7 +87,12 @@ _string_view_isspace = _declare_bool_str_int_func("pyisspace")
 _string_view_isupper = _declare_bool_str_int_func("pyisupper")
 _string_view_islower = _declare_bool_str_int_func("pyislower")
 _string_view_istitle = _declare_bool_str_int_func("pyistitle")
-
+_string_view_upper = cuda.declare_device(
+    "upper",
+    types.void(
+        _UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64, types.int64
+    ),
+)
 
 _string_view_count = cuda.declare_device(
     "pycount",
@@ -317,6 +328,70 @@ def create_unary_identifier_func(id_func):
         return id_func_impl
 
     return deco
+
+
+def create_upper_or_lower(id_func):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement a unary function
+    of a string.
+    """
+
+    def deco(cuda_func):
+        @cuda_lower(id_func, string_view)
+        def id_func_impl(context, builder, sig, args):
+            str_ptr = builder.alloca(args[0].type)
+            builder.store(args[0], str_ptr)
+
+            # Lookup table required for conversion functions
+            # must be resolved at runtime after context initialization,
+            # therefore cannot be a global variable
+            flags_tbl_ptr = context.get_constant(
+                types.int64, character_flags_table_ptr
+            )
+            cases_tbl_ptr = context.get_constant(
+                types.int64, character_cases_table_ptr
+            )
+            special_tbl_ptr = context.get_constant(
+                types.int64, special_case_mapping_table_ptr
+            )
+
+            udf_str_ptr = builder.alloca(
+                default_manager[udf_string].get_value_type()
+            )
+
+            _ = context.compile_internal(
+                builder,
+                cuda_func,
+                types.void(
+                    _UDF_STRING_PTR,
+                    _STR_VIEW_PTR,
+                    types.int64,
+                    types.int64,
+                    types.int64,
+                ),
+                (
+                    udf_str_ptr,
+                    str_ptr,
+                    flags_tbl_ptr,
+                    cases_tbl_ptr,
+                    special_tbl_ptr,
+                ),
+            )
+
+            result = cgutils.create_struct_proxy(udf_string)(
+                context, builder, value=builder.load(udf_str_ptr)
+            )
+            return result._getvalue()
+
+        return id_func_impl
+
+    return deco
+
+
+@create_upper_or_lower("StringView.upper")
+def upper_impl(result, st, flags, cases, special):
+    return _string_view_upper(result, st, flags, cases, special)
 
 
 @create_unary_identifier_func("StringView.isdigit")
