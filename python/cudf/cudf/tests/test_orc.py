@@ -313,7 +313,9 @@ def test_orc_read_skiprows():
     # repro for other sizes of data
     skiprows = 10
 
-    expected = _pandas_read_orc(buff)[skiprows:].reset_index(drop=True)
+    expected = (
+        _pandas_read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
+    )
     got = cudf.read_orc(buff, skiprows=skiprows)
     assert_eq(expected, got)
 
