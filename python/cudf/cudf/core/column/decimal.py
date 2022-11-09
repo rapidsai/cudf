@@ -16,7 +16,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 )
 from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import (
     Decimal32Dtype,
@@ -203,7 +203,7 @@ class Decimal32Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int32"))
         data_32 = data_128[::4].copy()
         return cls(
-            data=as_device_buffer_like(data_32.view("uint8")),
+            data=as_buffer(data_32.view("uint8")),
             size=len(data),
             dtype=dtype,
             offset=data.offset,
@@ -290,7 +290,7 @@ class Decimal64Column(DecimalBaseColumn):
         data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
         data_64 = data_128[::2].copy()
         return cls(
-            data=as_device_buffer_like(data_64.view("uint8")),
+            data=as_buffer(data_64.view("uint8")),
             size=len(data),
             dtype=dtype,
             offset=data.offset,
@@ -399,4 +399,12 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # to try the next dtype
                 continue
 
-    raise OverflowError("Maximum supported decimal type is Decimal128")
+    # Instead of raising an overflow error, we create a `Decimal128Dtype`
+    # with max possible scale & precision, see example of this demonstration
+    # here: https://learn.microsoft.com/en-us/sql/t-sql/data-types/
+    # precision-scale-and-length-transact-sql?view=sql-server-ver16#examples
+    scale = min(
+        scale, cudf.Decimal128Dtype.MAX_PRECISION - (precision - scale)
+    )
+    precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
+    return cudf.Decimal128Dtype(precision=precision, scale=scale)

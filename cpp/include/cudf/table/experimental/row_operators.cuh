@@ -820,7 +820,7 @@ class self_comparator {
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
                   host_span<null_order const> null_precedence = {},
-                  rmm::cuda_stream_view stream                = cudf::default_stream_value)
+                  rmm::cuda_stream_view stream                = cudf::get_default_stream())
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
   }
@@ -962,7 +962,7 @@ class two_table_comparator {
                        table_view const& right,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {},
-                       rmm::cuda_stream_view stream                = cudf::default_stream_value);
+                       rmm::cuda_stream_view stream                = cudf::get_default_stream());
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of

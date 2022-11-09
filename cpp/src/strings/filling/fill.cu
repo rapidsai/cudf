@@ -19,7 +19,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/fill.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -35,13 +35,12 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-std::unique_ptr<column> fill(
-  strings_column_view const& strings,
-  size_type begin,
-  size_type end,
-  string_scalar const& value,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> fill(strings_column_view const& strings,
+                             size_type begin,
+                             size_type end,
+                             string_scalar const& value,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);

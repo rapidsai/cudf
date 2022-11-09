@@ -62,7 +62,7 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::unique(input_table, {0}, Keep, cudf::null_equality::EQUAL);
   });

@@ -1,4 +1,4 @@
-# libcudf++ C++ Documentation Guide
+# libcudf C++ Documentation Guide
 
 These guidelines apply to documenting all libcudf C++ source files using doxygen style formatting although only public APIs and classes are actually [published](https://docs.rapids.ai/api/libcudf/stable/index.html).
 
@@ -224,7 +224,7 @@ Also, \@copydoc is useful when documenting a `detail` function that differs only
      */
     std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                     std::vector<size_type> const& indices,
-                                                    rmm::cuda_stream_view stream = cudf::default_stream_value);
+                                                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 Note, you must specify the whole signature of the function, including optional parameters, so that doxygen will be able to locate it.
 

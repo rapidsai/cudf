@@ -114,25 +114,25 @@ std::vector<table_view> slice(table_view const& input,
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  return detail::slice(input, indices, cudf::get_default_stream());
 }
 
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  return detail::slice(input, indices, cudf::get_default_stream());
 };
 
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  return detail::slice(input, indices, cudf::get_default_stream());
 }
 
 std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, cudf::default_stream_value);
+  return detail::slice(input, indices, cudf::get_default_stream());
 };
 
 }  // namespace cudf

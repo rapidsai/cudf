@@ -178,9 +178,9 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                               stream,
                                               mr);
   }
-  result = std::move(cudf::detail::scatter(
-                       table_view{{*result}}, *gather_map, table_view{{*result}}, false, stream, mr)
-                       ->release()[0]);
+  result = std::move(
+    cudf::detail::scatter(table_view{{*result}}, *gather_map, table_view{{*result}}, stream, mr)
+      ->release()[0]);
   if (rank_agg._null_handling == null_policy::EXCLUDE) {
     result->set_null_mask(cudf::detail::copy_bitmask(get_grouped_values(), stream, mr));
   }

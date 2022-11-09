@@ -86,7 +86,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(strings, true_string, cudf::default_stream_value, mr);
+  return detail::to_booleans(strings, true_string, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -155,7 +155,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, cudf::default_stream_value, mr);
+  return detail::from_booleans(booleans, true_string, false_string, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

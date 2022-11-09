@@ -50,7 +50,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
                             thrust::host_vector<bool> const& expect,
-                            rmm::cuda_stream_view stream = cudf::default_stream_value)
+                            rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     rmm::device_uvector<bool> result(expect.size(), stream);
     auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};

@@ -125,13 +125,12 @@ struct replace_multi_regex_fn {
 
 }  // namespace
 
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  std::vector<std::string> const& patterns,
-  strings_column_view const& replacements,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_re(strings_column_view const& input,
+                                   std::vector<std::string> const& patterns,
+                                   strings_column_view const& replacements,
+                                   regex_flags const flags,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
@@ -198,7 +197,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, cudf::default_stream_value, mr);
+  return detail::replace_re(strings, patterns, replacements, flags, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

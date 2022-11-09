@@ -180,10 +180,8 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead
-    auto const offset_it =
-      -1 + thrust::upper_bound(
-             thrust::seq, input_offsets, input_offsets + num_input_views, output_index);
+    auto const offset_it            = thrust::prev(thrust::upper_bound(
+      thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 
     // Copy input data to output
@@ -557,7 +555,7 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_masks(views, cudf::default_stream_value, mr);
+  return detail::concatenate_masks(views, cudf::get_default_stream(), mr);
 }
 
 // Concatenates the elements from a vector of column_views
@@ -565,14 +563,14 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, cudf::default_stream_value, mr);
+  return detail::concatenate(columns_to_concat, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, cudf::default_stream_value, mr);
+  return detail::concatenate(tables_to_concat, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

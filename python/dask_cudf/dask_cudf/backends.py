@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import warnings
 from collections.abc import Iterator
 
 import cupy as cp
@@ -8,6 +9,8 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
 
+import dask.dataframe as dd
+from dask import config
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -426,3 +429,110 @@ def sizeof_cudf_dataframe(df):
 @_dask_cudf_nvtx_annotate
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
+
+
+def _default_backend(func, *args, **kwargs):
+    # Utility to call a dask.dataframe function with
+    # the default ("pandas") backend
+
+    # NOTE: Some `CudfBackendEntrypoint` methods need to
+    # invoke the "pandas"-version of the same method, but
+    # with custom kwargs (e.g. `engine`). In these cases,
+    # an explicit "pandas" config context is needed to
+    # avoid a recursive loop
+    with config.set({"dataframe.backend": "pandas"}):
+        return func(*args, **kwargs)
+
+
+try:
+
+    # Define "cudf" backend engine to be registered with Dask
+    from dask.dataframe.backends import DataFrameBackendEntrypoint
+
+    class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
+        """Backend-entrypoint class for Dask-DataFrame
+
+        This class is registered under the name "cudf" for the
+        ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
+        Dask-DataFrame will use the methods defined in this class
+        in place of ``dask.dataframe.<creation-method>`` when the
+        "dataframe.backend" configuration is set to "cudf":
+
+        Examples
+        --------
+        >>> import dask
+        >>> import dask.dataframe as dd
+        >>> with dask.config.set({"dataframe.backend": "cudf"}):
+        ...     ddf = dd.from_dict({"a": range(10)})
+        >>> type(ddf)
+        <class 'dask_cudf.core.DataFrame'>
+        """
+
+        @staticmethod
+        def from_dict(data, npartitions, orient="columns", **kwargs):
+            from dask_cudf import from_cudf
+
+            if orient != "columns":
+                raise ValueError(f"orient={orient} is not supported")
+            # TODO: Use cudf.from_dict
+            # (See: https://github.com/rapidsai/cudf/issues/11934)
+            return from_cudf(
+                cudf.DataFrame(data),
+                npartitions=npartitions,
+            )
+
+        @staticmethod
+        def read_parquet(*args, engine=None, **kwargs):
+            from dask_cudf.io.parquet import CudfEngine
+
+            return _default_backend(
+                dd.read_parquet,
+                *args,
+                engine=CudfEngine,
+                **kwargs,
+            )
+
+        @staticmethod
+        def read_json(*args, engine=None, **kwargs):
+            return _default_backend(
+                dd.read_json,
+                *args,
+                engine=cudf.read_json,
+                **kwargs,
+            )
+
+        @staticmethod
+        def read_orc(*args, **kwargs):
+            from dask_cudf.io import read_orc
+
+            return read_orc(*args, **kwargs)
+
+        @staticmethod
+        def read_csv(*args, **kwargs):
+            from dask_cudf.io import read_csv
+
+            chunksize = kwargs.pop("chunksize", None)
+            blocksize = kwargs.pop("blocksize", "default")
+            if chunksize is None and blocksize != "default":
+                chunksize = blocksize
+            return read_csv(
+                *args,
+                chunksize=chunksize,
+                **kwargs,
+            )
+
+        @staticmethod
+        def read_hdf(*args, **kwargs):
+            from dask_cudf import from_dask_dataframe
+
+            # HDF5 reader not yet implemented in cudf
+            warnings.warn(
+                "read_hdf is not yet implemented in cudf/dask_cudf. "
+                "Moving to cudf from pandas. Expect poor performance!"
+            )
+            return from_dask_dataframe(
+                _default_backend(dd.read_hdf, *args, **kwargs)
+            )
+
+except ImportError:
+    pass

@@ -171,7 +171,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      bool nullable                = true,
-                                     rmm::cuda_stream_view stream = cudf::default_stream_value)
+                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
@@ -540,7 +540,7 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
 {
   CUDF_FUNC_RANGE();
   return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::default_stream_value, mr);
+    tables_to_merge, key_cols, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

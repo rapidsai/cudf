@@ -220,7 +220,7 @@ std::unique_ptr<column> segmented_sorted_order(table_view const& keys,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_sorted_order(
-    keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+    keys, segment_offsets, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> stable_segmented_sorted_order(
@@ -232,7 +232,7 @@ std::unique_ptr<column> stable_segmented_sorted_order(
 {
   CUDF_FUNC_RANGE();
   return detail::stable_segmented_sorted_order(
-    keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+    keys, segment_offsets, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
@@ -244,7 +244,7 @@ std::unique_ptr<table> segmented_sort_by_key(table_view const& values,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_sort_by_key(
-    values, keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+    values, keys, segment_offsets, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<table> stable_segmented_sort_by_key(table_view const& values,
@@ -256,7 +256,7 @@ std::unique_ptr<table> stable_segmented_sort_by_key(table_view const& values,
 {
   CUDF_FUNC_RANGE();
   return detail::stable_segmented_sort_by_key(
-    values, keys, segment_offsets, column_order, null_precedence, cudf::default_stream_value, mr);
+    values, keys, segment_offsets, column_order, null_precedence, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

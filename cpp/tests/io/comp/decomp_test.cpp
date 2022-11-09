@@ -46,7 +46,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   const uint8_t* compressed,
                   size_t compressed_size)
   {
-    auto stream = cudf::default_stream_value;
+    auto stream = cudf::get_default_stream();
     rmm::device_buffer src{compressed, compressed_size, stream};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
@@ -82,7 +82,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
                          d_inf_out,
                          d_inf_stat,
                          cudf::io::gzip_header_included::YES,
-                         cudf::default_stream_value);
+                         cudf::get_default_stream());
   }
 };
 
@@ -94,7 +94,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
                 device_span<device_span<uint8_t>> d_inf_out,
                 device_span<cudf::io::compression_result> d_inf_stat)
   {
-    cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::default_stream_value);
+    cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
   }
 };
 
@@ -107,14 +107,14 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
                 device_span<cudf::io::compression_result> d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
-                                 cudf::default_stream_value};
+                                 cudf::get_default_stream()};
 
     cudf::io::gpu_debrotli(d_inf_in,
                            d_inf_out,
                            d_inf_stat,
                            d_scratch.data(),
                            d_scratch.size(),
-                           cudf::default_stream_value);
+                           cudf::get_default_stream());
   }
 };
 

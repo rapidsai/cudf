@@ -51,7 +51,7 @@ auto default_json_options()
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  auto const stream     = cudf::default_stream_value;
+  auto const stream     = cudf::get_default_stream();
   parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
@@ -60,7 +60,7 @@ auto default_json_options()
 
 TEST_F(JSONTypeCastTest, String)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
@@ -70,7 +70,7 @@ TEST_F(JSONTypeCastTest, String)
 
   auto d_column = cudf::column_device_view::create(input);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
                     svs.begin(),
@@ -93,14 +93,14 @@ TEST_F(JSONTypeCastTest, String)
 
 TEST_F(JSONTypeCastTest, Int)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::INT64};
 
   cudf::test::strings_column_wrapper data({"1", "null", "3", "true", "5", "false"});
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
                     svs.begin(),
@@ -120,7 +120,7 @@ TEST_F(JSONTypeCastTest, Int)
 
 TEST_F(JSONTypeCastTest, StringEscapes)
 {
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
@@ -137,7 +137,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   });
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> svs(d_column->size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, false>(),
                     d_column->pair_end<cudf::string_view, false>(),
                     svs.begin(),

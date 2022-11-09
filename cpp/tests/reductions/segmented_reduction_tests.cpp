@@ -19,6 +19,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
@@ -52,7 +53,8 @@ TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{6, 4, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
@@ -98,7 +100,8 @@ TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{15, 15, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
@@ -144,7 +147,8 @@ TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{3, 3, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
@@ -190,7 +194,8 @@ TYPED_TEST(SegmentedReductionTest, MinExcludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{1, 1, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
@@ -236,9 +241,10 @@ TYPED_TEST(SegmentedReductionTest, AnyExcludeNulls)
   auto const input = fixed_width_column_wrapper<TypeParam>{
     {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX},
     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
-  auto const offsets   = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<bool>{
+  auto const offsets = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<bool>{
     {false, false, true, true, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
     {true, true, true, true, false, true, true, false, false}};
 
@@ -285,9 +291,10 @@ TYPED_TEST(SegmentedReductionTest, AllExcludeNulls)
   auto const input = fixed_width_column_wrapper<TypeParam>{
     {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX, 1, 0, 3, 1, XXX, 0, 0},
     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1}};
-  auto const offsets   = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<bool>{
+  auto const offsets = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<bool>{
     {true, true, bool{XXX}, true, bool{XXX}, bool{XXX}, false, false, false},
     {true, true, false, true, false, false, true, true, true}};
 
@@ -335,7 +342,8 @@ TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{6, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
 
@@ -384,7 +392,8 @@ TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{15, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
 
@@ -433,7 +442,8 @@ TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{3, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
 
@@ -482,7 +492,8 @@ TYPED_TEST(SegmentedReductionTest, MinIncludeNulls)
   auto const input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0}};
   auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<TypeParam>{{1, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
 
@@ -531,9 +542,10 @@ TYPED_TEST(SegmentedReductionTest, AnyIncludeNulls)
   auto const input = fixed_width_column_wrapper<TypeParam>{
     {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX},
     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
-  auto const offsets   = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<bool>{
+  auto const offsets = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<bool>{
     {false, bool{XXX}, true, bool{XXX}, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
     {true, false, true, false, false, true, true, false, false}};
 
@@ -592,9 +604,10 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
   auto const input = fixed_width_column_wrapper<TypeParam>{
     {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX, 1, 0, 3, 1, XXX, 0, 0},
     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1}};
-  auto const offsets   = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<bool>{
+  auto const offsets = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<bool>{
     {true, bool{XXX}, bool{XXX}, true, bool{XXX}, bool{XXX}, false, bool{XXX}, false},
     {true, false, false, true, false, false, true, false, true}};
 
@@ -655,9 +668,10 @@ TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
 
   auto const input = fixed_width_column_wrapper<int32_t>{
     {1, 2, 3, 4, 5, 6, 7}, {true, true, true, true, true, true, true}};
-  auto const offsets   = std::vector<size_type>{1, 3, 4};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<int32_t>{{5, 4}, {true, true}};
+  auto const offsets = std::vector<size_type>{1, 3, 4};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<int32_t>{{5, 4}, {true, true}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -702,9 +716,10 @@ TEST_F(SegmentedReductionTestUntyped, NonNullableInput)
   // outputs: {1, 5, 4}
   // output nullmask: {1, 1, 1}
 
-  auto const input     = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7};
-  auto const offsets   = std::vector<size_type>{0, 1, 1, 3, 7};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const input   = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7};
+  auto const offsets = std::vector<size_type>{0, 1, 1, 3, 7};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<int32_t>{{1, XXX, 5, 22}, {true, false, true, true}};
 
@@ -745,10 +760,11 @@ TEST_F(SegmentedReductionTestUntyped, NonNullableInput)
 
 TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
 {
-  auto const input     = fixed_width_column_wrapper<int32_t>{};
-  auto const offsets   = std::vector<size_type>{0};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = fixed_width_column_wrapper<int32_t>{};
+  auto const input   = fixed_width_column_wrapper<int32_t>{};
+  auto const offsets = std::vector<size_type>{0};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = fixed_width_column_wrapper<int32_t>{};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -780,9 +796,10 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
 
 TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
 {
-  auto const input     = fixed_width_column_wrapper<int32_t>{};
-  auto const offsets   = std::vector<size_type>{0, 0, 0, 0, 0, 0};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
+  auto const input   = fixed_width_column_wrapper<int32_t>{};
+  auto const offsets = std::vector<size_type>{0, 0, 0, 0, 0, 0};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const expect =
     fixed_width_column_wrapper<int32_t>{{XXX, XXX, XXX, XXX, XXX}, {0, 0, 0, 0, 0}};
 
@@ -840,9 +857,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNulls)
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                            numeric::scale_type{scale});
     auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
-    auto const expect    = fixed_point_column_wrapper<RepType>(
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type     = column_view(input).type();
+    auto const expect = fixed_point_column_wrapper<RepType>(
       {3, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale});
 
     auto res = segmented_reduce(input,
@@ -872,9 +890,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MaxExcludeNulls)
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                            numeric::scale_type{scale});
     auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
-    auto const expect    = fixed_point_column_wrapper<RepType>(
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type     = column_view(input).type();
+    auto const expect = fixed_point_column_wrapper<RepType>(
       {3, 3, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}, numeric::scale_type{scale});
 
     auto res = segmented_reduce(input,
@@ -904,9 +923,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MinIncludeNulls)
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                            numeric::scale_type{scale});
     auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
-    auto const expect    = fixed_point_column_wrapper<RepType>(
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type     = column_view(input).type();
+    auto const expect = fixed_point_column_wrapper<RepType>(
       {1, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale});
 
     auto res = segmented_reduce(input,
@@ -936,9 +956,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MinExcludeNulls)
                                                            {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                            numeric::scale_type{scale});
     auto const offsets = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
-    auto const expect    = fixed_point_column_wrapper<RepType>(
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type     = column_view(input).type();
+    auto const expect = fixed_point_column_wrapper<RepType>(
       {1, 1, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}, numeric::scale_type{scale});
 
     auto res = segmented_reduce(input,
@@ -965,9 +986,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MaxNonNullableInput)
   for (auto scale : {-2, 0, 5}) {
     auto const input =
       fixed_point_column_wrapper<RepType>({1, 2, 3, 1}, numeric::scale_type{scale});
-    auto const offsets   = std::vector<size_type>{0, 3, 4, 4};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
+    auto const offsets = std::vector<size_type>{0, 3, 4, 4};
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type = column_view(input).type();
     auto const expect =
       fixed_point_column_wrapper<RepType>({3, 1, XXX}, {1, 1, 0}, numeric::scale_type{scale});
 
@@ -1002,9 +1024,10 @@ TYPED_TEST(SegmentedReductionFixedPointTest, MinNonNullableInput)
   for (auto scale : {-2, 0, 5}) {
     auto const input =
       fixed_point_column_wrapper<RepType>({1, 2, 3, 1}, numeric::scale_type{scale});
-    auto const offsets   = std::vector<size_type>{0, 3, 4, 4};
-    auto const d_offsets = thrust::device_vector<size_type>(offsets);
-    auto out_type        = column_view(input).type();
+    auto const offsets = std::vector<size_type>{0, 3, 4, 4};
+    auto const d_offsets =
+      cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+    auto out_type = column_view(input).type();
     auto const expect =
       fixed_point_column_wrapper<RepType>({1, 1, XXX}, {1, 1, 0}, numeric::scale_type{scale});
 
@@ -1148,10 +1171,11 @@ TEST_F(SegmentedReductionStringTest, MinExcludeNulls)
 
 TEST_F(SegmentedReductionStringTest, EmptyInputWithOffsets)
 {
-  auto const input     = strings_column_wrapper{};
-  auto const offsets   = std::vector<size_type>{0, 0, 0, 0};
-  auto const d_offsets = thrust::device_vector<size_type>(offsets);
-  auto const expect    = strings_column_wrapper({XXX, XXX, XXX}, {0, 0, 0});
+  auto const input   = strings_column_wrapper{};
+  auto const offsets = std::vector<size_type>{0, 0, 0, 0};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expect = strings_column_wrapper({XXX, XXX, XXX}, {0, 0, 0});
 
   auto result = segmented_reduce(input,
                                  d_offsets,

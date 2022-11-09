@@ -42,7 +42,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   cudf::test::strings_column_wrapper repls({"#", ""});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case replace_type::replace_re:  // contains_re and matches_re use the same main logic
         cudf::strings::replace_re(input, "\\d+");

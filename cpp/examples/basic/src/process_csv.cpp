@@ -19,6 +19,10 @@
 #include <cudf/io/csv.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -72,6 +76,21 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
 int main(int argc, char** argv)
 {
+  // Construct a CUDA memory resource using RAPIDS Memory Manager (RMM)
+  // This is the default memory resource for libcudf for allocating device memory.
+  rmm::mr::cuda_memory_resource cuda_mr{};
+  // Construct a memory pool using the CUDA memory resource
+  // Using a memory pool for device memory allocations is important for good performance in libcudf.
+  // The pool defaults to allocating half of the available GPU memory.
+  rmm::mr::pool_memory_resource mr{&cuda_mr};
+
+  // Set the pool resource to be used by default for all device memory allocations
+  // Note: It is the user's responsibility to ensure the `mr` object stays alive for the duration of
+  // it being set as the default
+  // Also, call this before the first libcudf API call to ensure all data is allocated by the same
+  // memory resource.
+  rmm::mr::set_current_device_resource(&mr);
+
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");
 

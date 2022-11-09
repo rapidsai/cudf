@@ -34,11 +34,10 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-std::unique_ptr<column> find_multiple(
-  strings_column_view const& input,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> find_multiple(strings_column_view const& input,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const targets_count = targets.size();
@@ -92,7 +91,7 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(input, targets, cudf::default_stream_value, mr);
+  return detail::find_multiple(input, targets, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
