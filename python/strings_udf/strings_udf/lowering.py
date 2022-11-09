@@ -60,10 +60,10 @@ _string_view_strip = cuda.declare_device(
     "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
 _string_view_lstrip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+    "lstrip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
 _string_view_rstrip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+    "rstrip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
 
 # A binary function of the form f(string, int) -> bool
