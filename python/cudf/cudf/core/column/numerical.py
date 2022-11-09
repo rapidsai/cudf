@@ -308,8 +308,6 @@ class NumericalColumn(NumericalBaseColumn):
         #   => np.int64
         common_dtype = np.result_type(self.dtype, other)
         if common_dtype.kind in {"b", "i", "u", "f"}:
-            if common_dtype == np.dtype("float16"):
-                common_dtype = cudf.dtype("float32")
             if self.dtype.kind == "b":
                 common_dtype = min_signed_type(other)
             return cudf.Scalar(other, dtype=common_dtype)
