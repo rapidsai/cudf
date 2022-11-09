@@ -124,13 +124,13 @@ struct reduce_dispatch_functor {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = static_cast<tdigest_aggregation const&>(agg);
-        return detail::tdigest::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
+        return tdigest::detail::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       case aggregation::MERGE_TDIGEST: {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = static_cast<merge_tdigest_aggregation const&>(agg);
-        return detail::tdigest::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
+        return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
@@ -157,7 +157,7 @@ std::unique_ptr<scalar> reduce(
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
-      return detail::tdigest::make_empty_tdigest_scalar(stream);
+      return tdigest::detail::make_empty_tdigest_scalar(stream);
     }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
       // Under some circumstance, the output type will become the List of input type,

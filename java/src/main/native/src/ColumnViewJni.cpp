@@ -69,7 +69,7 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>

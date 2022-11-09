@@ -3,6 +3,7 @@
 import operator
 
 import llvmlite.binding as ll
+import numpy as np
 from numba import types
 from numba.core.datamodel import default_manager
 from numba.core.extending import models, register_model
@@ -23,18 +24,32 @@ target_data = ll.create_target_data(data_layout)
 
 
 # String object definitions
-class DString(types.Type):
+class UDFString(types.Type):
+
+    np_dtype = np.dtype("object")
+
     def __init__(self):
-        super().__init__(name="dstring")
+        super().__init__(name="udf_string")
         llty = default_manager[self].get_value_type()
         self.size_bytes = llty.get_abi_size(target_data)
 
+    @property
+    def return_type(self):
+        return self
+
 
 class StringView(types.Type):
+
+    np_dtype = np.dtype("object")
+
     def __init__(self):
         super().__init__(name="string_view")
         llty = default_manager[self].get_value_type()
         self.size_bytes = llty.get_abi_size(target_data)
+
+    @property
+    def return_type(self):
+        return UDFString()
 
 
 @register_model(StringView)
@@ -56,9 +71,9 @@ class stringview_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-@register_model(DString)
-class dstring_model(models.StructModel):
-    # from dstring.hpp:
+@register_model(UDFString)
+class udf_string_model(models.StructModel):
+    # from udf_string.hpp:
     # private:
     #   char* m_data{};
     #   cudf::size_type m_bytes{};
@@ -74,8 +89,9 @@ class dstring_model(models.StructModel):
         super().__init__(dmm, fe_type, self._members)
 
 
-any_string_ty = (StringView, DString, types.StringLiteral)
+any_string_ty = (StringView, UDFString, types.StringLiteral)
 string_view = StringView()
+udf_string = UDFString()
 
 
 class StrViewArgHandler:
@@ -93,7 +109,9 @@ class StrViewArgHandler:
     """
 
     def prepare_args(self, ty, val, **kwargs):
-        if isinstance(ty, types.CPointer) and isinstance(ty.dtype, StringView):
+        if isinstance(ty, types.CPointer) and isinstance(
+            ty.dtype, (StringView, UDFString)
+        ):
             return types.uint64, val.ptr
         else:
             return ty, val
@@ -113,7 +131,7 @@ class StringLength(AbstractTemplate):
         if isinstance(args[0], any_string_ty) and len(args) == 1:
             # length:
             # string_view -> int32
-            # dstring -> int32
+            # udf_string -> int32
             # literal -> int32
             return nb_signature(size_type, args[0])
 

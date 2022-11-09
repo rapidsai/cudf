@@ -23,6 +23,9 @@
 
 namespace cudf {
 namespace strings {
+
+struct regex_program;
+
 /**
  * @addtogroup strings_contains
  * @{
@@ -61,6 +64,39 @@ std::unique_ptr<column> findall(
   strings_column_view const& input,
   std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a lists column of strings for each matching occurrence using
+ * the regex_program pattern within each string
+ *
+ * Each output row includes all the substrings within the corresponding input row
+ * that match the given pattern. If no matches are found, the output row is empty.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny", "rabbit", "hare", "dog"]
+ * p = regex_program::create("[ab]")
+ * r = findall(s, p)
+ * r is now a lists column like:
+ *  [ ["b"]
+ *    ["a","b","b"]
+ *    ["a"]
+ *    [] ]
+ * @endcode
+ *
+ * A null output row occurs if the corresponding input row is null.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param input Strings instance for this operation
+ * @param prog Regex program instance
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New lists column of strings
+ */
+std::unique_ptr<column> findall(
+  strings_column_view const& input,
+  regex_program const& prog,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

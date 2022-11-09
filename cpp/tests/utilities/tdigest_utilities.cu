@@ -17,7 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/column_utilities.hpp>
