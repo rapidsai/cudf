@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -93,16 +94,15 @@ std::unique_ptr<column> findall_util(column_device_view const& d_strings,
 
 //
 std::unique_ptr<column> findall(strings_column_view const& input,
-                                std::string_view pattern,
-                                regex_flags const flags,
+                                regex_program const& prog,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
-  // compile regex into device object
-  auto const d_prog = reprog_device::create(pattern, flags, capture_groups::NON_CAPTURE, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
   auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
@@ -138,7 +138,16 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, pattern, flags, cudf::get_default_stream(), mr);
+  auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
+  return detail::findall(input, *h_prog, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> findall(strings_column_view const& input,
+                                regex_program const& prog,
+                                rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::findall(input, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
