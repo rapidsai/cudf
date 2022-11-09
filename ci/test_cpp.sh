@@ -31,9 +31,21 @@ nvidia-smi
 
 set +e
 
+# TODO: Insert trap to remove jitify cache from ci/gpu/build.sh
+
 rapids-logger "Running googletests"
 for gt in "$CONDA_PREFIX/bin/gtests/libcudf/"* ; do
-    ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
+    test_name=$(basename ${gt})
+    if [[ ${test_name} == "SPAN_TEST" ]]; then
+        # This one test is specifically designed to test using a thrust device
+        # vector, so we expect and allow it to include default stream usage.
+        gtest_filter="SpanTest.CanConstructFromDeviceContainers"
+        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}"
+        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" --gtest_filter="${gtest_filter}"
+    else
+        GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
+    fi
+
     exitcode=$?
     if (( ${exitcode} != 0 )); then
         SUITEERROR=${exitcode}
