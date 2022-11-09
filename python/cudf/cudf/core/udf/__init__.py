@@ -1,10 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
-import numpy as np
-from numba import cuda, types
-from numba.cuda.cudaimpl import (
-    lower as cuda_lower,
-    registry as cuda_lowering_registry,
-)
+
+from numba import types
+from numba.cuda.cudaimpl import lower as cuda_lower
 
 from cudf.core.dtypes import dtype
 from cudf.core.udf import api, row_function, utils
@@ -23,7 +20,7 @@ _supported_masked_types = (
     | {types.boolean}
 )
 _STRING_UDFS_ENABLED = False
-
+cudf_str_dtype = dtype(str)
 try:
     import strings_udf
     from strings_udf import ptxpath
@@ -31,32 +28,32 @@ try:
     if ptxpath:
         utils.ptx_files.append(ptxpath)
 
-        from strings_udf._lib.cudf_jit_udf import to_string_view_array
+        from strings_udf._lib.cudf_jit_udf import (
+            column_from_udf_string_array,
+            column_to_string_view_array,
+        )
         from strings_udf._typing import str_view_arg_handler, string_view
 
         from . import strings_typing  # isort: skip
         from . import strings_lowering  # isort: skip
 
-        cuda_lower(api.Masked, strings_typing.string_view, types.boolean)(
+        cuda_lower(api.Masked, string_view, types.boolean)(
             masked_lowering.masked_constructor
         )
-
-        # add an overload of pack_return(string_view)
-        cuda_lower(api.pack_return, strings_typing.string_view)(
-            masked_lowering.pack_return_scalar_impl
-        )
-
-        _supported_masked_types |= {strings_typing.string_view}
-        utils.launch_arg_getters[dtype("O")] = to_string_view_array
-        utils.masked_array_types[dtype("O")] = string_view
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
+        _supported_masked_types |= {string_view}
+
+        utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
+        utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
+        utils.masked_array_types[cudf_str_dtype] = string_view
+        row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes
 
         utils.arg_handlers.append(str_view_arg_handler)
-        row_function.itemsizes[dtype("O")] = string_view.size_bytes
-
         _STRING_UDFS_ENABLED = True
 
 except ImportError as e:
     # allow cuDF to work without strings_udf
     pass
-masked_typing.register_masked_constructor(_supported_masked_types)
+
+masked_typing._register_masked_constructor_typing(_supported_masked_types)
+masked_lowering._register_masked_constructor_lowering(_supported_masked_types)

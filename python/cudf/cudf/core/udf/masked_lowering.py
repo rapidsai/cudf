@@ -372,10 +372,6 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
-@lower_builtin(api.Masked, types.Boolean, types.boolean)
-@lower_builtin(api.Masked, types.Number, types.boolean)
-@lower_builtin(api.Masked, types.NPDatetime, types.boolean)
-@lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args
@@ -383,6 +379,11 @@ def masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()
+
+
+def _register_masked_constructor_lowering(supported_masked_types):
+    for ty in supported_masked_types:
+        lower_builtin(api.Masked, ty, types.boolean)(masked_constructor)
 
 
 # Allows us to make an instance of MaskedType a global variable

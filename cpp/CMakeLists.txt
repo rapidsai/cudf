@@ -69,6 +69,8 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -499,7 +501,8 @@ add_library(
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
-  src/strings/regex/regexec.cu
+  src/strings/regex/regexec.cpp
+  src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
   src/strings/replace/multi_re.cu
@@ -690,10 +693,10 @@ add_library(cudf::cudf ALIAS cudf)
 add_library(
   cudftestutil STATIC
   tests/io/metadata_utilities.cpp
-  tests/quantiles/tdigest_utilities.cu
   tests/utilities/base_fixture.cpp
   tests/utilities/column_utilities.cu
   tests/utilities/table_utilities.cu
+  tests/utilities/tdigest_utilities.cu
 )
 
 set_target_properties(

@@ -76,7 +76,8 @@ std::unique_ptr<column> scatter(SourceIterator begin,
     begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
 
   // do the scatter
-  thrust::scatter(rmm::exec_policy(stream), itr, itr + size, scatter_map, target_vector.begin());
+  thrust::scatter(
+    rmm::exec_policy_nosync(stream), itr, itr + size, scatter_map, target_vector.begin());
 
   // build the output column
   auto sv_span = cudf::device_span<string_view const>(target_vector);
