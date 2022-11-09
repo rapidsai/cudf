@@ -42,11 +42,13 @@ set +e
 
 rapids-logger "pytest cudf"
 # TODO: This needs copied from ci/gpu/build.sh. Paths are probably wrong.
+pushd python/cudf/cudf/tests
 pytest -n 8 --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term --dist=loadscope
 exitcode=$?
 if (( ${exitcode} != 0 )); then
     SUITEERROR=${exitcode}
     echo "FAILED: 1 or more tests in /cudf/python"
 fi
+popd
 
 exit ${SUITEERROR}
