@@ -2088,7 +2088,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if isinstance(data_list[0], Series):
                     data = DataFrame.from_dict(data=data).T
                 elif isinstance(data_list[0], (pd.Series, dict)):
-                    new_data = defaultdict(dict)
+                    new_data: defaultdict = defaultdict(dict)
                     for i, s in data.items():
                         for col, v in s.items():
                             new_data[col][i] = v
