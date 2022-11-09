@@ -31,10 +31,21 @@ nvidia-smi
 
 set +e
 
-# TODO: Copy testing logic from ci/gpu/build.sh?
 rapids-logger "Running googletests"
-for gt in "$CONDA_PREFIX/bin/gtests/librmm/"* ; do
+for gt in "$CONDA_PREFIX/bin/gtests/libcudf/"* ; do
     ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
+    exitcode=$?
+    if (( ${exitcode} != 0 )); then
+        SUITEERROR=${exitcode}
+        echo "FAILED: GTest ${gt}"
+    fi
+done
+
+# Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
+for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+    gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
+    echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
+    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${TESTRESULTS_DIR}/
     exitcode=$?
     if (( ${exitcode} != 0 )); then
         SUITEERROR=${exitcode}
