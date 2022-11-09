@@ -229,7 +229,7 @@ id_unary_funcs = [
     "isnumeric",
     "istitle",
 ]
-string_binary_funcs = ["strip", "lstrip", "rstrip"]
+string_return_attrs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
     setattr(
@@ -238,7 +238,7 @@ for func in bool_binary_funcs:
         create_binary_attr(func, types.boolean),
     )
 
-for func in string_binary_funcs:
+for func in string_return_attrs:
     setattr(
         StringViewAttrs,
         f"resolve_{func}",
