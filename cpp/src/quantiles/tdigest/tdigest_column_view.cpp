@@ -17,7 +17,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 
 namespace cudf {
 namespace tdigest {

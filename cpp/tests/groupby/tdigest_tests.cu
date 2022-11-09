@@ -17,7 +17,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -466,13 +466,13 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
   int const delta = 1000;
 
-  auto a = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
   auto b = cudf::type_dispatcher(
     static_cast<column_view>(values_b).type(), tdigest_gen_grouped{}, keys, values_b, delta);
-  auto c = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
   auto d = cudf::type_dispatcher(
     static_cast<column_view>(values_d).type(), tdigest_gen_grouped{}, keys, values_d, delta);
-  auto e = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto e = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
 
   std::vector<column_view> cols;
   cols.push_back(*a);
