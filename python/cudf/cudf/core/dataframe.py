@@ -2231,9 +2231,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         orient = orient.lower()
 
         if orient == "series":
-            # Special case needed because we don't want
-            # convert the values as pd.Series, and want
-            # them as cudf.Series
+            # Special case needed to avoid converting
+            # cudf.Series objects into pd.Series
             into_c = pd.core.common.standardize_mapping(into)
             return into_c((k, v) for k, v in self.items())
 
