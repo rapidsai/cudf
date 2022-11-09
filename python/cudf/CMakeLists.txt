@@ -85,6 +85,10 @@ if(NOT cudf_FOUND)
     # Statically link cudart if building wheels
     set(CUDA_STATIC_RUNTIME ON)
 
+    # Need to set this so all the nvcomp targets are global, not only nvcomp::nvcomp
+    # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
+    set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+
     # Don't install the cuDF C++ targets into wheels
     set(_exclude_from_all EXCLUDE_FROM_ALL)
   endif()
