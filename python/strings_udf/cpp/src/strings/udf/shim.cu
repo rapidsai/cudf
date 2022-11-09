@@ -270,3 +270,11 @@ extern "C" __device__ int rstrip(int* nb_retval,
 
   return 0;
 }
+
+extern "C" __device__ int concat(int* nb_retval,
+                                 void* const* to_strip,
+                                 void* udf_str,
+                                 void* const* strip_str)
+{
+  return 0;
+}
