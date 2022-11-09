@@ -42,7 +42,7 @@ set +e
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 rapids-logger "Run gtests"
-TESTRESULTS_DIR=test-results
+TESTRESULTS_DIR=test-results/
 mkdir -p ${TESTRESULTS_DIR}
 SUITEERROR=0
 
@@ -93,7 +93,7 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
             continue
         fi
         echo "Running gtest $test_name"
-        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${TESTRESULTS_DIR}/${test_name}.cs.log"
+        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${TESTRESULTS_DIR}${test_name}.cs.log"
     done
     unset GTEST_CUDF_RMM_MODE
     # TODO: test-results/*.cs.log are processed in gpuci
