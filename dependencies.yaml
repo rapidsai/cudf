@@ -17,6 +17,7 @@ files:
     output: none
     includes:
       - cudatoolkit
+      - libidentify_stream_usage_build
   test_python:
     output: none
     includes:
@@ -40,7 +41,7 @@ dependencies:
     common:
       - output_types: [conda, requirements]
         packages:
-          - cmake>=3.23.1
+          - &cmake_ver cmake>=3.23.1
           - cuda-python>=11.7.1,<12.0
           - cython>=0.29,<0.30
           - dlpack>=0.5,<0.6.0a0
@@ -118,6 +119,11 @@ dependencies:
           - sphinx-copybutton
           - sphinx-markdown-tables
           - sphinxcontrib-websupport
+  libidentify_stream_usage_build:
+    common:
+      - output_types: conda
+        packages:
+          - *cmake_ver
   notebook:
     common:
       - output_types: [conda, requirements]
