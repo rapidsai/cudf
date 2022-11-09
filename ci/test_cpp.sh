@@ -43,7 +43,7 @@ SUITEERROR=0
 
 # TODO: exit code handling is too verbose. Find a cleaner solution.
 
-for gt in "$CONDA_PREFIX/bin/gtests/{libcudf,libcudf_kafka}/"* ; do
+for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     test_name=$(basename ${gt})
     echo "Running gtest $test_name"
     if [[ ${test_name} == "SPAN_TEST" ]]; then
@@ -80,7 +80,7 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     rapids-logger "Memcheck gtests with rmm_mode=cuda"
     export GTEST_CUDF_RMM_MODE=cuda
     COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
-    for gt in "$CONDA_PREFIX/bin/gtests/{libcudf,libcudf_kafka}"/* ; do
+    for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
         test_name=$(basename ${gt})
         if [[ "$test_name" == "ERROR_TEST" ]]; then
             continue
