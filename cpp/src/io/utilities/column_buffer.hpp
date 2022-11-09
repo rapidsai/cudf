@@ -108,6 +108,19 @@ struct column_buffer {
 
   auto& null_count() { return _null_count; }
 
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept
+  {
+    if (_strings) _strings->set_stream(stream);
+    _data.set_stream(stream);
+    _null_mask.set_stream(stream);
+    for (auto& child : children) {
+      child.set_stream(stream);
+    }
+  }
+
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
