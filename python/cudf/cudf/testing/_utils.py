@@ -10,11 +10,14 @@ from decimal import Decimal
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.orc
 import pytest
 from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.core._compat import PANDAS_GE_100
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils import dtypes as dtypeutils
 
@@ -377,6 +380,13 @@ def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
     if dtype is None and (data is None or len(data) == 0):
         dtype = "float64"
     return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
+
+
+def _pandas_read_orc(fname, columns=None):
+    if PANDAS_GE_100:
+        return pd.read_orc(fname, columns=columns)
+    else:
+        return pa.orc.ORCFile(fname).read(columns=columns).to_pandas()
 
 
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(

@@ -5,12 +5,10 @@ import os
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import _pandas_read_orc, assert_eq
 
 gcsfs = pytest.importorskip("gcsfs")
 
@@ -71,5 +69,5 @@ def test_write_orc(pdf, monkeypatch, tmpdir):
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
     gdf.to_orc(f"gcs://{gcs_fname}")
 
-    got = pa.orc.ORCFile(local_filepath).read().to_pandas()
+    got = _pandas_read_orc(local_filepath)
     assert_eq(pdf, got)

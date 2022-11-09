@@ -8,10 +8,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pyarrow import orc
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import _pandas_read_orc, assert_eq
 
 if not os.environ.get("RUN_HDFS_TESTS"):
     pytestmark = pytest.mark.skip("Env not configured to run HDFS tests")
@@ -212,7 +211,7 @@ def test_read_orc(datadir, hdfs, test_url):
         hd_fpath = f"hdfs://{basedir}/file.orc"
 
     got = cudf.read_orc(hd_fpath)
-    expect = orc.ORCFile(buffer).read().to_pandas()
+    expect = _pandas_read_orc(buffer)
     assert_eq(expect, got)
 
 
@@ -232,7 +231,7 @@ def test_write_orc(pdf, hdfs, test_url):
 
     assert hdfs.exists(f"{basedir}/test_orc_writer.orc")
     with hdfs.open(f"{basedir}/test_orc_writer.orc", mode="rb") as f:
-        got = orc.ORCFile(f).read().to_pandas()
+        got = _pandas_read_orc(f)
 
     assert_eq(pdf, got)
 
