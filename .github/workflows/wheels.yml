@@ -1,32 +1,48 @@
 name: cuDF wheels
 
 on:
-  push:
-    branches:
-      - 'pull-request/[0-9]+'
+  workflow_call:
+    inputs:
+      versioneer-override:
+        type: string
+        default: ''
+      build-tag:
+        type: string
+        default: ''
+      branch:
+        required: true
+        type: string
+      date:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+      build-type:
+        type: string
+        default: nightly
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: "${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
 jobs:
   cudf-wheels:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/wheel-ci-actions-2
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
     with:
       package-name: cudf
       package-dir: python/cudf
-      python-package-versioneer-override: "22.10.00"
+      python-package-versioneer-override: ${{ inputs.versioneer-override }}
 
       cibw-before-all-amd64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-before-all-arm64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-environment: "CUDF_BUILD_WHEELS=1"
 
-      skbuild-configure-options: "--log-level=DEBUG -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF -DCMAKE_CUDA_ARCHITECTURES=ALL"
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
       test-extras:  "test"
       test-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
-      test-unittest: "pytest -v ./python/cudf/cudf/tests"
+      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
     secrets: inherit
   dask_cudf-wheel:
     needs: cudf-wheels
@@ -34,10 +50,9 @@ jobs:
     with:
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      python-package-cuda-suffix: "-cu11"
-      python-package-versioneer-override: "22.10.00"
+      python-package-versioneer-override: ${{ inputs.versioneer-override }}
 
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-extras:  "test"
-      test-unittest: "pytest -v ./python/dask_cudf/dask_cudf/tests"
+      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
     secrets: inherit
