@@ -6,7 +6,6 @@ import versioneer
 from setuptools import find_packages
 from skbuild import setup
 
-
 install_requires = [
     "cachetools",
     "cuda-python>=11.7.1,<12.0",
