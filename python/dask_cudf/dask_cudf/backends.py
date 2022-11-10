@@ -493,13 +493,10 @@ try:
             )
 
         @staticmethod
-        def read_json(*args, engine=None, **kwargs):
-            return _default_backend(
-                dd.read_json,
-                *args,
-                engine=cudf.read_json,
-                **kwargs,
-            )
+        def read_json(*args, **kwargs):
+            from dask_cudf.io.json import read_json
+
+            return read_json(*args, **kwargs)
 
         @staticmethod
         def read_orc(*args, **kwargs):

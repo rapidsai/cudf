@@ -22,7 +22,7 @@
 #pragma once
 
 #include "parquet_gpu.hpp"
-#include "reader_impl_helpers.cuh"
+#include "reader_impl_helpers.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -38,13 +38,6 @@
 #include <vector>
 
 namespace cudf::io::detail::parquet {
-
-using namespace cudf::io::parquet;
-using namespace cudf::io;
-
-// Forward declarations
-class aggregate_reader_metadata;
-
 /**
  * @brief Implementation for Parquet reader
  */
@@ -80,7 +73,7 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            bool uses_custom_row_bounds,
-                           std::vector<std::vector<size_type>> const& row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
@@ -135,7 +128,7 @@ class reader::impl {
   void prepare_data(size_type skip_rows,
                     size_type num_rows,
                     bool uses_custom_row_bounds,
-                    std::vector<std::vector<size_type>> const& row_group_indices);
+                    host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Load and decompress the input file(s) into memory.

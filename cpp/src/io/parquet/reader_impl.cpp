@@ -259,7 +259,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
 void reader::impl::prepare_data(size_type skip_rows,
                                 size_type num_rows,
                                 bool uses_custom_row_bounds,
-                                std::vector<std::vector<size_type>> const& row_group_indices)
+                                host_span<std::vector<size_type> const> row_group_indices)
 {
   if (_file_preprocessed) { return; }
 
@@ -352,21 +352,14 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-// #define ALLOW_PLAIN_READ_CHUNK_LIMIT
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
-                                       std::vector<std::vector<size_type>> const& row_group_indices)
+                                       host_span<std::vector<size_type> const> row_group_indices)
 {
-#if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
-  prepare_data(
-    skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
-  return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
-#else
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
   prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
   return read_chunk_internal(uses_custom_row_bounds);
-#endif
 }
 
 table_with_metadata reader::impl::read_chunk()

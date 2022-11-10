@@ -199,6 +199,7 @@ cdef extern from "cudf/io/csv.hpp" \
         char get_inter_column_delimiter() except +
         string get_true_value() except +
         string get_false_value() except +
+        vector[string] get_names() except +
 
         # setter
         void set_metadata(cudf_io_types.table_metadata* val) except +
@@ -207,8 +208,9 @@ cdef extern from "cudf/io/csv.hpp" \
         void set_rows_per_chunk(size_type val) except +
         void set_line_terminator(string term) except +
         void set_inter_column_delimiter(char delim) except +
-        void set__true_value(string val) except +
+        void set_true_value(string val) except +
         void set_false_value(string val) except +
+        void set_names(vector[string] val) except +
 
         @staticmethod
         csv_writer_options_builder builder(
@@ -223,9 +225,7 @@ cdef extern from "cudf/io/csv.hpp" \
             cudf_table_view.table_view table
         ) except +
 
-        csv_writer_options_builder& metadata(
-            cudf_io_types.table_metadata* val
-        ) except +
+        csv_writer_options_builder& names(vector[string] val) except +
         csv_writer_options_builder& na_rep(string val) except +
         csv_writer_options_builder& include_header(bool val) except +
         csv_writer_options_builder& rows_per_chunk(size_type val) except +

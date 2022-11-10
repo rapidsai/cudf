@@ -1,0 +1,207 @@
+# Dependency list for https://github.com/rapidsai/dependency-file-generator
+files:
+  all:
+    output: conda
+    matrix:
+      cuda: ["11.5"]
+      arch: [x86_64]
+    includes:
+      - build
+      - cudatoolkit
+      - develop
+      - doc
+      - notebook
+      - run
+      - test_python
+  test_cpp:
+    output: none
+    includes:
+      - cudatoolkit
+  test_python:
+    output: none
+    includes:
+      - cudatoolkit
+      - py_version
+      - test_python
+  checks:
+    output: none
+    includes:
+      - build
+      - develop
+      - py_version
+channels:
+  - rapidsai
+  - rapidsai-nightly
+  - dask/label/dev
+  - conda-forge
+  - nvidia
+dependencies:
+  build:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - cmake>=3.23.1
+          - cuda-python>=11.7.1,<12.0
+          - cython>=0.29,<0.30
+          - dlpack>=0.5,<0.6.0a0
+          - pyarrow=9.0.0
+          - rmm=22.12.*
+          - scikit-build>=0.13.1
+      - output_types: conda
+        packages:
+          - arrow-cpp=9
+          - c-compiler
+          - cxx-compiler
+          - librdkafka=1.7.0
+          - protobuf>=3.20.1,<3.21.0a0
+          - python>=3.8,<3.10
+    specific:
+      - output_types: conda
+        matrices:
+        - matrix:
+            arch: x86_64
+          packages:
+            - gcc_linux-64=9.*
+            - sysroot_linux-64==2.17
+        - matrix:
+            arch: aarch64
+          packages:
+            - gcc_linux-aarch64=9.*
+            - sysroot_linux-aarch64==2.17
+      - output_types: conda
+        matrices:
+        - matrix:
+            arch: x86_64
+            cuda: "11.5"
+          packages:
+            - nvcc_linux-64=11.5
+        - matrix:
+            arch: aarch64
+            cuda: "11.5"
+          packages:
+            - nvcc_linux-aarch64=11.5
+  cudatoolkit:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.2"
+            packages:
+              - cudatoolkit=11.2
+          - matrix:
+              cuda: "11.4"
+            packages:
+              - cudatoolkit=11.4
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cudatoolkit=11.5
+  develop:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - pre-commit
+      - output_types: conda
+        packages:
+          - doxygen=1.8.20  # pre-commit hook needs a specific version.
+  doc:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - myst-nb
+          - nbsphinx
+          - numpydoc
+          - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
+          - pydata-sphinx-theme
+          - sphinx
+          - sphinx-autobuild
+          - sphinx-copybutton
+          - sphinx-markdown-tables
+          - sphinxcontrib-websupport
+  notebook:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - ipython
+          - notebook>=0.5.0
+  py_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              py: "3.8"
+            packages:
+              - python=3.8
+          - matrix:
+              py: "3.9"
+            packages:
+              - python=3.9
+  run:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - cachetools
+          - dask>=2022.9.2
+          - distributed>=2022.9.2
+          - fsspec>=0.6.0
+          - numba>=0.56.2
+          - numpy
+          - nvtx>=0.2.1
+          - packaging
+          - pandas>=1.0,<1.6.0dev0
+          - python-confluent-kafka=1.7.0
+          - streamz
+          - typing_extensions
+      - output_types: conda
+        packages:
+          - cubinlinker
+          - cupy>=9.5.0,<12.0.0a0
+          - pip
+          - pip:
+              - git+https://github.com/python-streamz/streamz.git@master
+              - pyorc
+          - ptxcompiler
+          - rmm=22.12.*
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          # This index is needed for rmm, cubinlinker, ptxcompiler.
+          - --extra-index-url=https://pypi.ngc.nvidia.com
+          - cubinlinker-cu11
+          - git+https://github.com/python-streamz/streamz.git@master
+          - ptxcompiler-cu11
+          - pyorc
+          - rmm-cu11=22.12.*
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              arch: x86_64
+            packages:
+              - cupy-cuda115>=9.5.0,<12.0.0a0  # TODO: This might change to cupy-cuda11x?
+          - matrix:
+              arch: aarch64
+            packages:
+              - cupy-cuda11x -f https://pip.cupy.dev/aarch64  # TODO: Verify that this works.
+  test_python:
+    common:
+      - output_types: [conda, requirements]
+        packages:
+          - aiobotocore>=2.2.0
+          - boto3>=1.21.21
+          - botocore>=1.24.21
+          - dask-cuda=22.12.*
+          - fastavro>=0.22.9
+          - hypothesis
+          - mimesis>=4.1.0
+          - moto>=4.0.8
+          - pytest
+          - pytest-benchmark
+          - pytest-cases
+          - pytest-cov
+          - pytest-xdist
+          - python-snappy>=0.6.0
+          - pytorch<1.12.0  # We should check and fix all "<=" pinnings
+          - s3fs>=2022.3.0
+          - scipy
+          - transformers

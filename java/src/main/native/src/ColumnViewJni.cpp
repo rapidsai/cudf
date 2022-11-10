@@ -69,7 +69,7 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
@@ -1294,6 +1294,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, j
     cudf::strings_column_view strings_column(*column_view);
     cudf::jni::native_jstring pattern(env, patternObj);
     return release_as_jlong(cudf::strings::contains_re(strings_column, pattern.get()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_like(JNIEnv *env, jobject j_object,
+                                                            jlong j_view_handle, jlong pattern,
+                                                            jlong escapeChar) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
+  JNI_NULL_CHECK(env, pattern, "pattern is null", false);
+  JNI_NULL_CHECK(env, escapeChar, "escape character is null", false);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const column_view = reinterpret_cast<cudf::column_view const *>(j_view_handle);
+    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const pattern_scalar = reinterpret_cast<cudf::string_scalar const *>(pattern);
+    auto const escape_scalar = reinterpret_cast<cudf::string_scalar const *>(escapeChar);
+    return release_as_jlong(cudf::strings::like(strings_column, *pattern_scalar, *escape_scalar));
   }
   CATCH_STD(env, 0);
 }

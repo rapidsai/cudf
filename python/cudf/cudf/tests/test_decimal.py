@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import decimal
 from decimal import Decimal
@@ -377,3 +377,9 @@ def test_decimal_invalid_precision():
 
     with pytest.raises(pa.ArrowInvalid):
         _ = cudf.Series([Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
+
+
+def test_decimal_overflow():
+    s = cudf.Series([Decimal("0.0009384233522166997927180531650178250")])
+    result = s * s
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=37), result.dtype)

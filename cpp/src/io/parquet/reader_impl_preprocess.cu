@@ -41,8 +41,9 @@
 #include <thrust/transform.h>
 #include <thrust/unique.h>
 
-namespace cudf::io::detail::parquet {
+#include <numeric>
 
+namespace cudf::io::detail::parquet {
 namespace {
 
 /**
@@ -172,7 +173,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
  * @brief Function that returns the required the number of bits to store a value.
  */
 template <typename T = uint8_t>
-T required_bits(uint32_t max_level)
+[[nodiscard]] T required_bits(uint32_t max_level)
 {
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
@@ -182,11 +183,11 @@ T required_bits(uint32_t max_level)
  *
  * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
  */
-std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
-                                                     type_id timestamp_type_id,
-                                                     parquet::Type physical,
-                                                     int8_t converted,
-                                                     int32_t length)
+[[nodiscard]] std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
+                                                                   type_id timestamp_type_id,
+                                                                   parquet::Type physical,
+                                                                   int8_t converted,
+                                                                   int32_t length)
 {
   int32_t type_width = (physical == parquet::FIXED_LEN_BYTE_ARRAY) ? length : 0;
   int32_t clock_rate = 0;
@@ -222,10 +223,10 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
  *
  * @return A future object for reading synchronization
  */
-std::future<void> read_column_chunks_async(
+[[nodiscard]] std::future<void> read_column_chunks_async(
   std::vector<std::unique_ptr<datasource>> const& sources,
   std::vector<std::unique_ptr<datasource::buffer>>& page_data,
-  hostdevice_vector<gpu::ColumnChunkDesc>& chunks,  // TODO const?
+  hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   size_t begin_chunk,
   size_t end_chunk,
   const std::vector<size_t>& column_chunk_offsets,
@@ -290,8 +291,8 @@ std::future<void> read_column_chunks_async(
  *
  * @return The total number of pages
  */
-size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                          rmm::cuda_stream_view stream)
+[[nodiscard]] size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+                                        rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
 
@@ -339,9 +340,10 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
  *
  * @return Device buffer to decompressed page data
  */
-rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                        hostdevice_vector<gpu::PageInfo>& pages,
-                                        rmm::cuda_stream_view stream)
+[[nodiscard]] rmm::device_buffer decompress_page_data(
+  hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+  hostdevice_vector<gpu::PageInfo>& pages,
+  rmm::cuda_stream_view stream)
 {
   auto for_each_codec_page = [&](parquet::Compression codec, const std::function<void(size_t)>& f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -549,7 +551,6 @@ void reader::impl::allocate_nesting_info()
     auto& schema                          = _metadata->get_schema(src_col_schema);
     auto const per_page_nesting_info_size = std::max(
       schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -736,10 +737,11 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
   for (auto& task : read_rowgroup_tasks) {
     task.wait();
   }
-  assert(remaining_rows <= 0);
+
+  CUDF_EXPECTS(remaining_rows <= 0, "All rows data must be read.");
 
   // Process dataset chunk pages into output columns
-  const auto total_pages = count_page_headers(chunks, _stream);
+  auto const total_pages = count_page_headers(chunks, _stream);
   pages_info             = hostdevice_vector<gpu::PageInfo>(total_pages, total_pages, _stream);
 
   if (total_pages > 0) {

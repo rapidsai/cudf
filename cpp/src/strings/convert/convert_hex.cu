@@ -206,11 +206,10 @@ struct dispatch_integers_to_hex_fn {
 }  // namespace
 
 // This will convert a strings column into any integer column type.
-std::unique_ptr<column> hex_to_integers(
-  strings_column_view const& strings,
-  data_type output_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
+                                        data_type output_type,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(output_type);

@@ -179,6 +179,7 @@ Reindexing / selection / label manipulation
    DataFrame.tail
    DataFrame.take
    DataFrame.tile
+   DataFrame.truncate
 
 .. _api.dataframe.missing:
 
@@ -210,6 +211,7 @@ Reshaping, sorting, transposing
    DataFrame.interleave_columns
    DataFrame.partition_by_hash
    DataFrame.pivot
+   DataFrame.pivot_table
    DataFrame.scatter_by_map
    DataFrame.sort_values
    DataFrame.sort_index
