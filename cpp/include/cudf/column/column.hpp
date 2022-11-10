@@ -133,6 +133,7 @@ class column {
       _null_count{null_count},
       _children{std::move(children)}
   {
+    CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   }
 
   /**
