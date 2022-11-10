@@ -284,6 +284,5 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
   *udf_str_ptr = result;
-  printf("%s\n", result.data());
   return 0;
 }
