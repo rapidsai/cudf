@@ -41,6 +41,12 @@ def _declare_binary_func(lhs, rhs, out, name):
     )
 
 
+def _declare_strip_func(name):
+    return cuda.declare_device(
+        name, size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+    )
+
+
 # A binary function of the form f(string, string) -> bool
 _declare_bool_str_str_func = partial(
     _declare_binary_func, _STR_VIEW_PTR, _STR_VIEW_PTR, types.boolean
@@ -62,15 +68,10 @@ _string_view_endswith = _declare_bool_str_str_func("endswith")
 _string_view_find = _declare_size_type_str_str_func("find")
 _string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
-_string_view_strip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
-_string_view_lstrip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
-_string_view_rstrip = cuda.declare_device(
-    "strip", types.int32(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
-)
+_string_view_strip = _declare_strip_func("strip")
+_string_view_lstrip = _declare_strip_func("lstrip")
+_string_view_rstrip = _declare_strip_func("rstrip")
+
 
 # A binary function of the form f(string, int) -> bool
 _declare_bool_str_int_func = partial(
@@ -211,7 +212,11 @@ def create_binary_string_func(binary_func, retty):
                 # binary function of two strings yielding a new string
                 # example: str.strip(other) -> str
                 # shim functions can not return a struct due to C linkage
-                # so we operate on an extra void ptr and throw away nb_retval
+                # so we create a new udf_string and pass a pointer to it
+                # for the shim function to write the output to. The return
+                # value of compile_internal is therefore discarded (although
+                # this may change in the future if we need to return error
+                # codes, for instance).
                 udf_str_ptr = builder.alloca(
                     default_manager[udf_string].get_value_type()
                 )

@@ -13,7 +13,7 @@ from strings_udf._typing import (
     id_unary_funcs,
     int_binary_funcs,
     size_type,
-    string_binary_funcs,
+    string_return_attrs,
     string_unary_funcs,
     string_view,
     udf_string,
@@ -175,7 +175,7 @@ for func in int_binary_funcs:
         create_masked_binary_attr(f"MaskedType.{func}", size_type),
     )
 
-for func in string_binary_funcs:
+for func in string_return_attrs:
     setattr(
         MaskedStringViewAttrs,
         f"resolve_{func}",

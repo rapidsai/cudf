@@ -63,9 +63,10 @@ sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/cudf/source
 sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/conf.py
 
 # bump rmm & dask-cuda
-for FILE in conda/environments/*.yml; do
-  sed_runner "s/rmm=${CURRENT_SHORT_TAG}/rmm=${NEXT_SHORT_TAG}/g" ${FILE};
+for FILE in conda/environments/*.yaml dependencies.yaml; do
   sed_runner "s/dask-cuda=${CURRENT_SHORT_TAG}/dask-cuda=${NEXT_SHORT_TAG}/g" ${FILE};
+  sed_runner "s/rmm=${CURRENT_SHORT_TAG}/rmm=${NEXT_SHORT_TAG}/g" ${FILE};
+  sed_runner "s/rmm-cu11=${CURRENT_SHORT_TAG}/rmm-cu11=${NEXT_SHORT_TAG}/g" ${FILE};
 done
 
 # Doxyfile update

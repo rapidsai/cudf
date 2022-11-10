@@ -23,9 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace detail {
-
 namespace tdigest {
+namespace detail {
 
 /**
  * @brief Generate a tdigest column from a grouped set of numeric input values.
@@ -328,6 +327,6 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
 
-}  // namespace tdigest
 }  // namespace detail
+}  // namespace tdigest
 }  // namespace cudf
