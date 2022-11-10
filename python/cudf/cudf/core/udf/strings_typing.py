@@ -13,7 +13,9 @@ from strings_udf._typing import (
     id_unary_funcs,
     int_binary_funcs,
     size_type,
+    string_return_attrs,
     string_view,
+    udf_string,
 )
 
 from cudf.core.udf import masked_typing
@@ -170,6 +172,13 @@ for func in int_binary_funcs:
         MaskedStringViewAttrs,
         f"resolve_{func}",
         create_masked_binary_attr(f"MaskedType.{func}", size_type),
+    )
+
+for func in string_return_attrs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", udf_string),
     )
 
 for func in id_unary_funcs:
