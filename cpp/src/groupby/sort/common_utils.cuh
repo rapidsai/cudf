@@ -24,7 +24,7 @@ namespace cudf::groupby::detail {
  * This is useful to identify unique elements in a sorted order table, when the permutation order is
  * the sorted order of the table.
  */
-template <typename ComparatorT>
+template <typename ComparatorT, typename Iterator>
 struct permuted_row_equality_comparator {
   /**
    * @brief Constructs a permuted comparator object which compares two rows of the table in given
@@ -34,8 +34,7 @@ struct permuted_row_equality_comparator {
    * @param permutation The permutation map that specifies the effective ordering of
    * `t`. Must be the same size as `t.num_rows()`
    */
-  permuted_row_equality_comparator(ComparatorT const& comparator,
-                                   cudf::size_type const* permutation)
+  permuted_row_equality_comparator(ComparatorT const& comparator, Iterator const permutation)
     : _comparator{comparator}, _permutation{permutation}
   {
   }
@@ -58,6 +57,6 @@ struct permuted_row_equality_comparator {
 
  private:
   ComparatorT const _comparator;
-  cudf::size_type const* const _permutation;
+  Iterator const _permutation;
 };
 }  // namespace cudf::groupby::detail
