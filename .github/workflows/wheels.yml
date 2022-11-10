@@ -33,9 +33,18 @@ jobs:
   cudf-wheels:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
     with:
-      package-name: cudf
+      repo: rapidsai/rmm
+
+      build-type: ${{ inputs.build-type }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+
       package-dir: python/cudf
+      package-name: cudf
+
       python-package-versioneer-override: ${{ inputs.versioneer-override }}
+      python-package-build-tag: ${{ inputs.build-tag }}
 
       cibw-before-all-amd64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
       cibw-before-all-arm64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
@@ -51,11 +60,20 @@ jobs:
     needs: cudf-wheels
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/wheel-ci-actions-2
     with:
-      package-name: dask_cudf
-      package-dir: python/dask_cudf
-      python-package-versioneer-override: ${{ inputs.versioneer-override }}
+      repo: rapidsai/rmm
 
+      build-type: ${{ inputs.build-type }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+
+      package-dir: python/dask_cudf
+      package-name: dask_cudf
+
+      python-package-versioneer-override: ${{ inputs.versioneer-override }}
+      python-package-build-tag: ${{ inputs.build-tag }}
+
+      test-extras:  test
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      test-extras:  "test"
       test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
     secrets: inherit
