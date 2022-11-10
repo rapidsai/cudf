@@ -33,7 +33,7 @@ jobs:
   cudf-wheels:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
     with:
-      repo: rapidsai/rmm
+      repo: rapidsai/cudf
 
       build-type: ${{ inputs.build-type }}
       branch: ${{ inputs.branch }}
