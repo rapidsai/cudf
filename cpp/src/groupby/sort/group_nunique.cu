@@ -97,7 +97,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   auto const d_values_view      = column_device_view::create(values, stream);
   auto const is_unique_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
-    is_unique_iterator_fn<nullate::DYNAMIC>{nullate::DYNAMIC{values.has_nulls()},
+    is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
                                             *d_values_view,
                                             d_equal,
                                             null_handling,
