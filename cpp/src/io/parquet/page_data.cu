@@ -1464,9 +1464,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   // how many rows we've processed in the page so far
   int input_row_count = s->input_row_count;
 
-  // how many valid leaves we've processed
-  // int input_leaf_valid_count = s->input_leaf_valid_count;
-
   while (input_value_count < target_input_value_count) {
     int start_depth, end_depth, d;
     get_nesting_bounds(
@@ -1512,15 +1509,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
       int const in_nesting_bounds =
         (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
       uint32_t const count_mask = ballot(in_nesting_bounds);
-      if (!t) { pni->size += __popc(count_mask); }
-
-      /*
-      if (s_idx == max_depth - 1) {
-        bool const is_valid = is_new_leaf && in_nesting_bounds;
-        uint32_t const warp_leaf_valid_mask = ballot(is_valid);
-        input_leaf_valid_count += __popc(warp_leaf_valid_mask);
-      }
-      */
+      if (!t) { pni->batch_size += __popc(count_mask); }
     }
 
     input_value_count += min(32, (target_input_value_count - input_value_count));
@@ -1570,7 +1559,7 @@ __global__ void __launch_bounds__(block_size)
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
                       size_t num_rows,
-                      bool compute_num_rows_pass,
+                      bool base_pass,
                       bool compute_string_sizes)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -1582,35 +1571,6 @@ __global__ void __launch_bounds__(block_size)
 
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
 
-  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
-  // containing lists anywhere within).
-  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
-  compute_string_sizes =
-    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);
-
-  // reasons we might want to early out:
-  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
-  // to do
-  //   the expensive work of traversing the level data to determine sizes.  we can just compute it
-  //   directly.
-  // - if this is the trim pass and we have no rows to output for this page.
-  if (!has_repetition && !compute_string_sizes) {
-    if (!t) {
-      // note: doing this for all nesting levels because we can still have structs even if we don't
-      // have lists.
-      for (size_type idx = 0; idx < pp->num_nesting_levels; idx++) {
-        pp->nesting[idx].size = pp->num_input_values;
-      }
-    }
-    return;
-  }
-
-  // zero sizes
-  int d = 0;
-  while (d < s->page.num_nesting_levels) {
-    if (d + t < s->page.num_nesting_levels) { s->page.nesting[d + t].size = 0; }
-    d += blockDim.x;
-  }
   if (!t) {
     s->page.skipped_values      = -1;
     s->page.skipped_leaf_values = 0;
@@ -1618,15 +1578,71 @@ __global__ void __launch_bounds__(block_size)
     s->input_row_count          = 0;
     s->input_value_count        = 0;
 
-    // if we're computing the number of rows, make sure we visit absolutely everything
-    if (compute_num_rows_pass) {
+    // in the base pass, we're computing the number of rows, make sure we visit absolutely
+    // everything
+    if (base_pass) {
       s->first_row             = 0;
       s->num_rows              = INT_MAX;
       s->row_index_lower_bound = -1;
     }
   }
-  // if we have no work to do for this page.
-  if (!compute_num_rows_pass && s->num_rows == 0) { return; }
+
+  // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
+  // containing lists anywhere within).
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+  compute_string_sizes =
+    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);
+
+  // various early out optimizations:
+
+  // - if this is a flat hierarchy (no lists) and is not a string column. in this case we don't need
+  // to do
+  //   the expensive work of traversing the level data to determine sizes.  we can just compute it
+  //   directly.
+  if (!has_repetition && !compute_string_sizes) {
+    int d = 0;
+    while (d < s->page.num_nesting_levels) {
+      auto const i = d + t;
+      if (i < s->page.num_nesting_levels) {
+        if (base_pass) { pp->nesting[i].size = pp->num_input_values; }
+        pp->nesting[i].batch_size = pp->num_input_values;
+      }
+      d += blockDim.x;
+    }
+    return;
+  }
+
+  // - if this page is not at the beginning or end of the trim bounds, the batch size is
+  //   the full page size
+  if (!base_pass && s->num_rows == s->page.num_rows) {
+    int d = 0;
+    while (d < s->page.num_nesting_levels) {
+      auto const i = d + t;
+      if (i < s->page.num_nesting_levels) { pp->nesting[i].batch_size = pp->nesting[i].size; }
+      d += blockDim.x;
+    }
+    return;
+  }
+
+  // - if this page is completely trimmed, zero out sizes.
+  if (!base_pass && s->num_rows == 0) {
+    int d = 0;
+    while (d < s->page.num_nesting_levels) {
+      auto const i = d + t;
+      if (i < s->page.num_nesting_levels) { pp->nesting[i].batch_size = 0; }
+      d += blockDim.x;
+    }
+    return;
+  }
+
+  // at this point we are going to be fully recomputing batch information
+
+  // zero sizes
+  int d = 0;
+  while (d < s->page.num_nesting_levels) {
+    if (d + t < s->page.num_nesting_levels) { s->page.nesting[d + t].batch_size = 0; }
+    d += blockDim.x;
+  }
   __syncthreads();
 
   // optimization : it might be useful to have a version of gpuDecodeStream that could go wider than
@@ -1651,7 +1667,7 @@ __global__ void __launch_bounds__(block_size)
                                               : s->lvl_count[level_type::DEFINITION];
 
       // process what we got back
-      gpuUpdatePageSizes(s, actual_input_count, t, !compute_num_rows_pass);
+      gpuUpdatePageSizes(s, actual_input_count, t, !base_pass);
       if (compute_string_sizes) {
         auto const str_len = gpuGetStringSizes(s, s->input_leaf_count, t);
         if (!t) { s->page.str_bytes += str_len; }
@@ -1661,9 +1677,26 @@ __global__ void __launch_bounds__(block_size)
       __syncwarp();
     }
   }
-  // update # rows in the actual page
+
+  // update output results:
+  // - real number of rows for the whole page
+  // - nesting sizes for the whole page
+  // - skipped value information for trimmed pages
+  // - string bytes
+  if (base_pass) {
+    // nesting level 0 is the root column, so the size is also the # of rows
+    if (!t) { pp->num_rows = s->page.nesting[0].batch_size; }
+
+    // store off this batch size as the "full" size
+    int d = 0;
+    while (d < s->page.num_nesting_levels) {
+      auto const i = d + t;
+      if (i < s->page.num_nesting_levels) { pp->nesting[i].size = pp->nesting[i].batch_size; }
+      d += blockDim.x;
+    }
+  }
+
   if (!t) {
-    if (compute_num_rows_pass) { pp->num_rows = s->page.nesting[0].size; }
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
     pp->str_bytes           = s->page.str_bytes;
