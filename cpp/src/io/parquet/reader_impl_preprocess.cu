@@ -897,7 +897,7 @@ struct cumulative_row_sum {
  * @brief Functor which computes the total data size for a given type of cudf column.
  *
  * In the case of strings, the return size does not include the chars themselves. That
- * information is tracked seperately (see PageInfo::str_bytes).
+ * information is tracked separately (see PageInfo::str_bytes).
  */
 struct row_size_functor {
   __device__ size_t validity_size(size_t num_rows, bool nullable)

@@ -1518,14 +1518,6 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
         (s_idx >= start_depth && s_idx <= end_depth && in_row_bounds) ? 1 : 0;
       uint32_t const count_mask = ballot(in_nesting_bounds);
       if (!t) { pni->batch_size += __popc(count_mask); }
-
-      /*
-      if (s_idx == max_depth - 1) {
-        bool const is_valid = is_new_leaf && in_nesting_bounds;
-        uint32_t const warp_leaf_valid_mask = ballot(is_valid);
-        input_leaf_valid_count += __popc(warp_leaf_valid_mask);
-      }
-      */
     }
 
     input_value_count += min(32, (target_input_value_count - input_value_count));
@@ -1585,6 +1577,7 @@ __global__ void __launch_bounds__(block_size)
   PageInfo* pp          = &pages[page_idx];
 
   if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, false)) { return; }
+
   if (!t) {
     s->page.skipped_values      = -1;
     s->page.skipped_leaf_values = 0;
@@ -1710,6 +1703,7 @@ __global__ void __launch_bounds__(block_size)
       d += blockDim.x;
     }
   }
+
   if (!t) {
     pp->skipped_values      = s->page.skipped_values;
     pp->skipped_leaf_values = s->page.skipped_leaf_values;
