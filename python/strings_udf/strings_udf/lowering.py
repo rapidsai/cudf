@@ -26,6 +26,10 @@ _UDF_STRING_PTR = types.CPointer(udf_string)
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
 
+_string_view_at = cuda.declare_device(
+    "at", size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, size_type)
+)
+
 
 def _declare_binary_func(lhs, rhs, out, name):
     # Declare a binary function
@@ -158,6 +162,29 @@ def len_impl(context, builder, sig, args):
     )
 
     return result
+
+
+def call_string_view_at(result, st, idx):
+    return _string_view_at(result, st, idx)
+
+
+@cuda_lower(operator.getitem, string_view, types.Integer)
+def masked_dstring_substring(context, builder, sig, args):
+    st_ptr = builder.alloca(args[0].type)
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+
+    builder.store(args[0], st_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_string_view_at,
+        size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, types.int64),
+        (udf_str_ptr, st_ptr, args[1]),
+    )
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
 
 
 def create_binary_string_func(binary_func, retty):

@@ -148,7 +148,7 @@ class StringSubstring(AbstractTemplate):
         ):
             # __getitem__ is actually a two
             # argument function: (val, idx) -> ret
-            return nb_signature(udf_string, udf_string, args[1])
+            return nb_signature(string_view, args[0], args[1])
 
 
 def register_stringview_binaryop(op, retty):
