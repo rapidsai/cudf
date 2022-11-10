@@ -136,6 +136,21 @@ class StringLength(AbstractTemplate):
             return nb_signature(size_type, args[0])
 
 
+@cuda_decl_registry.register_global(operator.getitem)
+class StringSubstring(AbstractTemplate):
+    """
+    Typing for st[idx], st[:idx], etc
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], any_string_ty) and isinstance(
+            args[1], (types.Integer, types.SliceType)
+        ):
+            # __getitem__ is actually a two
+            # argument function: (val, idx) -> ret
+            return nb_signature(udf_string, udf_string, args[1])
+
+
 def register_stringview_binaryop(op, retty):
     """
     Helper function wrapping numba's low level extension API. Provides
