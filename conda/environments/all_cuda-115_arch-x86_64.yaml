@@ -4,6 +4,7 @@ channels:
 - rapidsai
 - rapidsai-nightly
 - dask/label/dev
+- pytorch
 - conda-forge
 - nvidia
 dependencies:
