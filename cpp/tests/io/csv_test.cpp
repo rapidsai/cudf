@@ -2244,4 +2244,29 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
 }
 
+TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
+{
+  std::string csv_in{"12,9., 10\n\n"};
+
+  {
+    cudf::io::csv_reader_options no_header_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .header(-1);
+    // No header, getting column names/count from first row
+    auto result = cudf::io::read_csv(no_header_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 3);
+  }
+  {
+    cudf::io::csv_reader_options header_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()});
+    // Getting column names/count from header
+    auto result = cudf::io::read_csv(header_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 3);
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()

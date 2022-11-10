@@ -236,6 +236,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/json.hpp
         - test -f $PREFIX/include/cudf/strings/padding.hpp
         - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
+        - test -f $PREFIX/include/cudf/strings/regex/regex_program.hpp
         - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
         - test -f $PREFIX/include/cudf/strings/replace.hpp
         - test -f $PREFIX/include/cudf/strings/replace_re.hpp
