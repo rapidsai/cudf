@@ -36,6 +36,9 @@ abstract public class MemoryBuffer implements AutoCloseable {
     /**
      * `onClosed` is invoked with the updated `refCount` during `close`.
      * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `MemoryBuffer`'s lock held.
+     *
      * @param refCount - the updated ref count for this MemoryBuffer at the time
      *                 of invocation
      */
@@ -212,12 +215,14 @@ abstract public class MemoryBuffer implements AutoCloseable {
   /**
    * Set an event handler for this buffer. This method can be invoked with null
    * to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
    */
-  public synchronized void setEventHandler(EventHandler handler) {
-    if (this.eventHandler != null && handler != null) {
-      throw new IllegalStateException("EventHandler is already set for this buffer");
-    }
-    this.eventHandler = handler;
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
   }
 
   /**

@@ -203,14 +203,16 @@ public class MemoryBufferTest extends CudfTestBase {
   }
 
   @Test
-  public void testEventHandlerDisallowsResetting() {
+  public void testEventHandlerReturnsPreviousHandlerOnReset() {
     try (DeviceMemoryBuffer b = DeviceMemoryBuffer.allocate(256)) {
-      b.setEventHandler(refCount -> {});
-      b.setEventHandler(null); // ok - unsets it
+      MemoryBuffer.EventHandler handler = refCount -> {};
+      MemoryBuffer.EventHandler handler2 = refCount -> {};
 
-      b.setEventHandler(refCount -> {}); // ok - resets it because it was null before
-      // we cannot reset the handler without having set it to null first
-      assertThrows(IllegalStateException.class, () -> b.setEventHandler(refCount -> {}));
+      assertNull(b.setEventHandler(handler));
+      assertEquals(handler, b.setEventHandler(null));
+
+      assertNull(b.setEventHandler(handler2));
+      assertEquals(handler2, b.setEventHandler(handler));
     }
   }
 }
