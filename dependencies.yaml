@@ -254,4 +254,5 @@ dependencies:
           - pytorch<1.12.0 # We should check and fix all "<=" pinnings
           - s3fs>=2022.3.0
           - scipy
-          - transformers
+          - tokenizers==0.13.1
+          - transformers==4.24.0
