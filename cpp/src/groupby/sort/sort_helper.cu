@@ -152,8 +152,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   decltype(_group_offsets->begin()) result_end;
 
   result_end = thrust::unique_copy(rmm::exec_policy(stream),
-                                   thrust::make_counting_iterator<size_type>(0),
-                                   thrust::make_counting_iterator<size_type>(num_keys(stream)),
+                                   thrust::counting_iterator<size_type>(0),
+                                   thrust::counting_iterator<size_type>(num_keys(stream)),
                                    _group_offsets->begin(),
                                    permuted_row_equality_comparator(d_key_equal, sorted_order));
 

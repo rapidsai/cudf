@@ -94,15 +94,15 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   auto const d_equal     = comparator.equal_to(
     cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
 
-  auto const d_values_view      = column_device_view::create(values, stream);
-  auto const is_unique_iterator = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
-                                            *d_values_view,
-                                            d_equal,
-                                            null_handling,
-                                            group_offsets.data(),
-                                            group_labels.data()});
+  auto const d_values_view = column_device_view::create(values, stream);
+  auto const is_unique_iterator =
+    thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0),
+                                    is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
+                                                          *d_values_view,
+                                                          d_equal,
+                                                          null_handling,
+                                                          group_offsets.data(),
+                                                          group_labels.data()});
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
