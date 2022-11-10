@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import _pandas_read_orc, assert_eq
+from cudf.testing._utils import assert_eq
 
 gcsfs = pytest.importorskip("gcsfs")
 
@@ -69,5 +69,5 @@ def test_write_orc(pdf, monkeypatch, tmpdir):
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
     gdf.to_orc(f"gcs://{gcs_fname}")
 
-    got = _pandas_read_orc(local_filepath)
+    got = pd.read_orc(local_filepath)
     assert_eq(pdf, got)

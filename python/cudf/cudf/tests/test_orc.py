@@ -18,7 +18,6 @@ import cudf
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
-    _pandas_read_orc,
     assert_eq,
     gen_rand_series,
     supported_numpy_dtypes,
@@ -86,7 +85,7 @@ def path_or_buf(datadir):
 def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     path = datadir / inputfile
 
-    expect = _pandas_read_orc(path, columns=columns)
+    expect = pd.read_orc(path, columns=columns)
     got = cudf.read_orc(
         path, engine=engine, columns=columns, use_index=use_index
     )
@@ -116,7 +115,7 @@ def test_orc_reader_local_filepath():
 def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     cols = ["int1", "long1", "float1", "double1"]
 
-    expect = _pandas_read_orc(path_or_buf("filepath"), columns=cols)
+    expect = pd.read_orc(path_or_buf("filepath"), columns=cols)
     got = cudf.read_orc(path_or_buf(src), columns=cols)
 
     assert_eq(expect, got)
@@ -125,7 +124,7 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
 
-    expect = _pandas_read_orc(path).fillna(0)
+    expect = pd.read_orc(path).fillna(0)
     got = cudf.read_orc(path).fillna(0)
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
@@ -157,7 +156,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
 def test_orc_reader_strings(datadir):
     path = datadir / "TestOrcFile.testStringAndBinaryStatistics.orc"
 
-    expect = _pandas_read_orc(path, columns=["string1"])
+    expect = pd.read_orc(path, columns=["string1"])
     got = cudf.read_orc(path, columns=["string1"])
 
     assert_eq(expect, got, check_categorical=False)
@@ -274,7 +273,7 @@ def test_orc_read_stripes(datadir, engine):
 def test_orc_read_rows(datadir, skiprows, num_rows):
     path = datadir / "TestOrcFile.decimal.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path, skiprows=skiprows, num_rows=num_rows)
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
@@ -314,7 +313,7 @@ def test_orc_read_skiprows():
     skiprows = 10
 
     expected = (
-        _pandas_read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
+        pd.read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
     )
     got = cudf.read_orc(buff, skiprows=skiprows)
     assert_eq(expected, got)
@@ -323,7 +322,7 @@ def test_orc_read_skiprows():
 def test_orc_reader_uncompressed_block(datadir):
     path = datadir / "uncompressed_snappy.orc"
 
-    expect = _pandas_read_orc(path)
+    expect = pd.read_orc(path)
     got = cudf.read_orc(path)
 
     assert_eq(expect, got, check_categorical=False)
@@ -332,7 +331,7 @@ def test_orc_reader_uncompressed_block(datadir):
 def test_orc_reader_nodata_block(datadir):
     path = datadir / "nodata.orc"
 
-    expect = _pandas_read_orc(path)
+    expect = pd.read_orc(path)
     got = cudf.read_orc(path, num_rows=1)
 
     assert_eq(expect, got, check_categorical=False)
@@ -361,9 +360,9 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
-    expect = cudf.from_pandas(_pandas_read_orc(pdf_fname, columns=columns))
+    expect = cudf.from_pandas(pd.read_orc(pdf_fname, columns=columns))
     expect.to_orc(gdf_fname.strpath, compression=compression)
-    got = cudf.from_pandas(_pandas_read_orc(gdf_fname, columns=columns))
+    got = cudf.from_pandas(pd.read_orc(gdf_fname, columns=columns))
 
     assert_frame_equal(expect, got)
 
@@ -374,9 +373,9 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
-    expect = cudf.from_pandas(_pandas_read_orc(pdf_fname))
+    expect = cudf.from_pandas(pd.read_orc(pdf_fname))
     expect.to_orc(gdf_fname.strpath, statistics=stats_freq)
-    got = cudf.from_pandas(_pandas_read_orc(gdf_fname))
+    got = cudf.from_pandas(pd.read_orc(gdf_fname))
 
     assert_frame_equal(expect, got)
 
@@ -396,7 +395,7 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         "float1",
         "double1",
     ]
-    pdf = _pandas_read_orc(pdf_fname, columns=columns)
+    pdf = pd.read_orc(pdf_fname, columns=columns)
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
@@ -405,7 +404,7 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
     writer.write_table(gdf)
     writer.close()
 
-    got = _pandas_read_orc(gdf_fname)
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -435,7 +434,7 @@ def test_chunked_orc_writer(
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 
-    pdf = _pandas_read_orc(pdf_fname, columns=columns)
+    pdf = pd.read_orc(pdf_fname, columns=columns)
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
@@ -444,7 +443,7 @@ def test_chunked_orc_writer(
     writer.write_table(gdf)
     writer.close()
 
-    got = _pandas_read_orc(gdf_fname, columns=columns)
+    got = pd.read_orc(gdf_fname, columns=columns)
     assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
 
 
@@ -462,7 +461,7 @@ def test_orc_writer_strings(tmpdir, dtypes):
 
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
-    got = _pandas_read_orc(gdf_fname)
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -487,7 +486,7 @@ def test_chunked_orc_writer_strings(tmpdir, dtypes):
     writer.write_table(gdf)
     writer.close()
 
-    got = _pandas_read_orc(gdf_fname)
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -518,7 +517,7 @@ def test_orc_writer_sliced(tmpdir):
 def test_orc_reader_decimal_type(datadir, orc_file):
     file_path = datadir / orc_file
 
-    pdf = _pandas_read_orc(file_path)
+    pdf = pd.read_orc(file_path)
     df = cudf.read_orc(file_path)
 
     assert_eq(pdf, df)
@@ -528,7 +527,7 @@ def test_orc_decimal_precision_fail(datadir):
     file_path = datadir / "TestOrcFile.int_decimal.precision_19.orc"
 
     # Shouldn't cause failure if decimal column is not chosen to be read.
-    pdf = _pandas_read_orc(file_path, columns=["int"])
+    pdf = pd.read_orc(file_path, columns=["int"])
     gdf = cudf.read_orc(file_path, columns=["int"])
 
     assert_eq(pdf, gdf)
@@ -545,7 +544,7 @@ def test_orc_decimal_precision_fail(datadir):
 def test_orc_reader_boolean_type(datadir, orc_file):
     file_path = datadir / orc_file
 
-    pdf = _pandas_read_orc(file_path)
+    pdf = pd.read_orc(file_path)
     df = cudf.read_orc(file_path).to_pandas()
 
     assert_eq(pdf, df)
@@ -556,7 +555,7 @@ def test_orc_reader_tzif_timestamps(datadir):
     # Other timedate tests only cover "future" times
     path = datadir / "TestOrcFile.lima_timezone.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
@@ -810,7 +809,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 def test_orc_reader_gmt_timestamps(datadir):
     path = datadir / "TestOrcFile.gmt.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
     assert_eq(pdf, gdf)
 
@@ -837,7 +836,7 @@ def test_orc_bool_encode_fail():
     okay_df.to_orc(buffer)
 
     # Also validate data
-    pdf = _pandas_read_orc(buffer)
+    pdf = pd.read_orc(buffer)
 
     assert_eq(okay_df.to_pandas(nullable=True), pdf)
 
@@ -852,7 +851,7 @@ def test_nanoseconds_overflow():
     cudf_got = cudf.read_orc(buffer)
     assert_eq(expected, cudf_got)
 
-    pandas_got = _pandas_read_orc(buffer)
+    pandas_got = pd.read_orc(buffer)
     assert_eq(expected, pandas_got)
 
 
@@ -866,7 +865,7 @@ def test_empty_dataframe():
         cudf.read_orc(buffer, columns=["a"])
 
     got_df = cudf.read_orc(buffer)
-    expected_pdf = _pandas_read_orc(buffer)
+    expected_pdf = pd.read_orc(buffer)
 
     assert_eq(expected, got_df)
     assert_eq(expected_pdf, got_df)
@@ -881,7 +880,7 @@ def test_empty_string_columns(data):
     expected = cudf.DataFrame({"string": data}, dtype="str")
     expected.to_orc(buffer)
 
-    expected_pdf = _pandas_read_orc(buffer)
+    expected_pdf = pd.read_orc(buffer)
     got_df = cudf.read_orc(buffer)
 
     assert_eq(expected, got_df)
@@ -907,7 +906,7 @@ def test_orc_writer_decimal(tmpdir, scale, decimal_type):
 
     expected.to_orc(fname)
 
-    got = _pandas_read_orc(fname)
+    got = pd.read_orc(fname)
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
 
 
@@ -916,8 +915,8 @@ def test_orc_reader_multiple_files(datadir, num_rows):
 
     path = datadir / "TestOrcFile.testSnappy.orc"
 
-    df_1 = _pandas_read_orc(path)
-    df_2 = _pandas_read_orc(path)
+    df_1 = pd.read_orc(path)
+    df_2 = pd.read_orc(path)
     df = pd.concat([df_1, df_2], ignore_index=True)
 
     gdf = cudf.read_orc([path, path], num_rows=num_rows).to_pandas()
@@ -943,7 +942,7 @@ def test_orc_reader_multi_file_multi_stripe(datadir):
 
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
     gdf = cudf.read_orc([path, path], stripes=[[0, 1], [2]])
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     assert_eq(pdf, gdf)
 
 
@@ -1130,7 +1129,7 @@ def test_skip_rows_for_nested_types(columns, list_struct_buff):
 def test_pyspark_struct(datadir):
     path = datadir / "TestOrcFile.testPySparkStruct.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
@@ -1315,7 +1314,7 @@ def test_map_type_read(columns, num_rows, use_index):
 def test_orc_reader_decimal(datadir):
     path = datadir / "TestOrcFile.decimal.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
@@ -1326,7 +1325,7 @@ def test_orc_reader_decimal(datadir):
 def test_orc_timestamp_read(datadir):
     path = datadir / "TestOrcFile.timestamp.issue.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
@@ -1397,7 +1396,7 @@ def test_orc_writer_lists(data):
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
 
-    pdf_out = _pandas_read_orc(buffer)
+    pdf_out = pd.read_orc(buffer)
     assert_eq(pdf_out, pdf_in)
 
 
@@ -1419,7 +1418,7 @@ def test_chunked_orc_writer_lists():
     writer.write_table(gdf)
     writer.close()
 
-    got = _pandas_read_orc(buffer)
+    got = pd.read_orc(buffer)
     assert_eq(expect, got)
 
 
@@ -1427,9 +1426,9 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
     pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
     gdf_fname = tmpdir.join("gdf.orc")
 
-    expect = _pandas_read_orc(pdf_fname)
+    expect = pd.read_orc(pdf_fname)
     cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
-    got = _pandas_read_orc(gdf_fname)
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -1502,7 +1501,7 @@ def test_orc_writer_lists_empty_rg(data):
     df = cudf.read_orc(buffer)
     assert_eq(df, cudf_in)
 
-    pdf_out = _pandas_read_orc(buffer)
+    pdf_out = pd.read_orc(buffer)
     assert_eq(pdf_in, pdf_out)
 
 
@@ -1666,7 +1665,7 @@ def test_orc_writer_nvcomp(compression):
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
     else:
-        got = _pandas_read_orc(buff)
+        got = pd.read_orc(buff)
         assert_eq(expected, got)
 
 
@@ -1692,7 +1691,7 @@ def test_orc_columns_and_index_param(index_obj, index, columns):
     )
     df.to_orc(buffer, index=index)
 
-    expected = _pandas_read_orc(buffer, columns=columns)
+    expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
     if columns:
@@ -1749,7 +1748,7 @@ def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
     buffer = BytesIO()
     df.to_orc(buffer, cols_as_map_type=cols_as_map_type)
 
-    got = _pandas_read_orc(buffer)
+    got = pd.read_orc(buffer)
     expected = pd.DataFrame(expected_data)
 
     assert_eq(got, expected)
@@ -1795,14 +1794,14 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
 
-    assert_eq(negative_timestamp_df, _pandas_read_orc(buffer))
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
     assert_eq(negative_timestamp_df, pyarrow.orc.ORCFile(buffer).read())
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
     path = datadir / "TestOrcFile.apache_timestamp.orc"
 
-    pdf = _pandas_read_orc(path)
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
