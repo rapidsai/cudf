@@ -177,6 +177,7 @@ Reindexing / selection / label manipulation
    Series.take
    Series.tail
    Series.tile
+   Series.truncate
    Series.where
    Series.mask
 
