@@ -1398,7 +1398,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringS(JNIEnv *env, jclass,
-                                                                 jlong column_view, jint start) {
+                                                                  jlong column_view, jint start) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
