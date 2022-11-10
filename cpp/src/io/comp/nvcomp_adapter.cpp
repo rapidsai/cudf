@@ -369,7 +369,7 @@ feature_status_parameters::feature_status_parameters()
   int device;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
   CUDF_CUDA_TRY(
-    cudaDeviceGetAttribute(&compute_capability, cudaDevAttrComputeCapabilityMajor, device));
+    cudaDeviceGetAttribute(&compute_capability_major, cudaDevAttrComputeCapabilityMajor, device));
 }
 
 std::optional<std::string> is_compression_disabled(compression_type compression,
@@ -430,7 +430,7 @@ std::optional<std::string> is_zstd_decomp_disabled(feature_status_parameters con
 
   if (NVCOMP_ZSTD_IS_DISABLED_ON_PASCAL(
         params.lib_major_version, params.lib_minor_version, params.lib_patch_version) and
-      params.compute_capability == 6) {
+      params.compute_capability_major == 6) {
     return "Zstandard decompression is disabled on Pascal GPUs";
   }
   return std::nullopt;

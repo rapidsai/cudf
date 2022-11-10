@@ -40,17 +40,17 @@ struct feature_status_parameters {
   int lib_patch_version;
   bool are_all_integrations_enabled;
   bool are_stable_integrations_enabled;
-  int compute_capability;
+  int compute_capability_major;
 
   feature_status_parameters();
   feature_status_parameters(
-    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc)
+    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
     : lib_major_version{major},
       lib_minor_version{minor},
       lib_patch_version{patch},
       are_all_integrations_enabled{all_enabled},
       are_stable_integrations_enabled{stable_enabled},
-      compute_capability{cc}
+      compute_capability_major{cc_major}
   {
   }
 };
