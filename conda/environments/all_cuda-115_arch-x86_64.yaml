@@ -50,6 +50,7 @@ dependencies:
 - ptxcompiler
 - pyarrow=9.0.0
 - pydata-sphinx-theme
+- pyorc
 - pytest
 - pytest-benchmark
 - pytest-cases
@@ -74,5 +75,4 @@ dependencies:
 - typing_extensions
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
-  - pyorc
 name: all_cuda-115_arch-x86_64

@@ -210,7 +210,6 @@ dependencies:
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-              - pyorc
           - ptxcompiler
           - rmm=22.12.*
       - output_types: requirements
@@ -221,7 +220,6 @@ dependencies:
           - cubinlinker-cu11
           - git+https://github.com/python-streamz/streamz.git@master
           - ptxcompiler-cu11
-          - pyorc
           - rmm-cu11=22.12.*
     specific:
       - output_types: requirements
@@ -246,6 +244,7 @@ dependencies:
           - hypothesis
           - mimesis>=4.1.0
           - moto>=4.0.8
+          - pyorc
           - pytest
           - pytest-benchmark
           - pytest-cases
