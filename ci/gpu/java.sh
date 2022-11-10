@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # ucx-py version
-export UCX_PY_VERSION='0.29.*'
+export UCX_PY_VERSION='0.30.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
