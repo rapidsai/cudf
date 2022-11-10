@@ -19,6 +19,7 @@ from strings_udf._typing import size_type, string_view, udf_string
 character_flags_table_ptr = get_character_flags_table_ptr()
 
 _STR_VIEW_PTR = types.CPointer(string_view)
+_UDF_STRING_PTR = types.CPointer(udf_string)
 
 
 # CUDA function declarations
@@ -31,6 +32,12 @@ def _declare_binary_func(lhs, rhs, out, name):
     return cuda.declare_device(
         name,
         out(lhs, rhs),
+    )
+
+
+def _declare_strip_func(name):
+    return cuda.declare_device(
+        name, size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
     )
 
 
@@ -55,6 +62,9 @@ _string_view_endswith = _declare_bool_str_str_func("endswith")
 _string_view_find = _declare_size_type_str_str_func("find")
 _string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
+_string_view_strip = _declare_strip_func("strip")
+_string_view_lstrip = _declare_strip_func("lstrip")
+_string_view_rstrip = _declare_strip_func("rstrip")
 
 
 # A binary function of the form f(string, int) -> bool
@@ -162,17 +172,44 @@ def create_binary_string_func(binary_func, retty):
         def binary_func_impl(context, builder, sig, args):
             lhs_ptr = builder.alloca(args[0].type)
             rhs_ptr = builder.alloca(args[1].type)
-
             builder.store(args[0], lhs_ptr)
             builder.store(args[1], rhs_ptr)
-            result = context.compile_internal(
-                builder,
-                cuda_func,
-                nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
-                (lhs_ptr, rhs_ptr),
-            )
 
-            return result
+            # these conditional statements should compile out
+            if retty != udf_string:
+                # binary function of two strings yielding a fixed-width type
+                # example: str.startswith(other) -> bool
+                # shim functions can return the value through nb_retval
+                result = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (lhs_ptr, rhs_ptr),
+                )
+                return result
+            else:
+                # binary function of two strings yielding a new string
+                # example: str.strip(other) -> str
+                # shim functions can not return a struct due to C linkage
+                # so we create a new udf_string and pass a pointer to it
+                # for the shim function to write the output to. The return
+                # value of compile_internal is therefore discarded (although
+                # this may change in the future if we need to return error
+                # codes, for instance).
+                udf_str_ptr = builder.alloca(
+                    default_manager[udf_string].get_value_type()
+                )
+
+                _ = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (udf_str_ptr, lhs_ptr, rhs_ptr),
+                )
+                result = cgutils.create_struct_proxy(udf_string)(
+                    context, builder, value=builder.load(udf_str_ptr)
+                )
+                return result._getvalue()
 
         return binary_func_impl
 
@@ -212,6 +249,21 @@ def gt_impl(st, rhs):
 @create_binary_string_func(operator.lt, types.boolean)
 def lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
+
+
+@create_binary_string_func("StringView.strip", udf_string)
+def strip_impl(result, to_strip, strip_char):
+    return _string_view_strip(result, to_strip, strip_char)
+
+
+@create_binary_string_func("StringView.lstrip", udf_string)
+def lstrip_impl(result, to_strip, strip_char):
+    return _string_view_lstrip(result, to_strip, strip_char)
+
+
+@create_binary_string_func("StringView.rstrip", udf_string)
+def rstrip_impl(result, to_strip, strip_char):
+    return _string_view_rstrip(result, to_strip, strip_char)
 
 
 @create_binary_string_func("StringView.startswith", types.boolean)
