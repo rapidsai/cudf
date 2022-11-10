@@ -512,9 +512,11 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto get_key  = [] __device__(auto const& element) { return element.first; };  // first = key
-  auto key_itr  = thrust::make_transform_iterator(map.data(), get_key);
-  auto key_used = [unused = map.get_unused_key()] __device__(auto key) { return key != unused; };
+  auto const get_key = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
+    return key != unused;
+  };
+  auto key_itr = thrust::make_transform_iterator(map.data(), get_key);
 
   // thrust::copy_if has a bug where it cannot iterate over int-max values
   // so if map.capacity() > int-max we'll call thrust::copy_if in chunks instead
