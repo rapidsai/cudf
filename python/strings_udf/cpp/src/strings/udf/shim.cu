@@ -279,9 +279,9 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
   auto udf_str_ptr = reinterpret_cast<udf_string*>(udf_str);
 
   // struct allocated by numba is not initialized
-  memset(udf_str_ptr, 0, sizeof(udf_string))
+  memset(udf_str_ptr, 0, sizeof(udf_string));
 
-    udf_string result;
+  udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
   *udf_str_ptr = result;
   printf("%s\n", result.data());
