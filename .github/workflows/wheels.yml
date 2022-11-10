@@ -1,6 +1,9 @@
 name: cuDF wheels
 
 on:
+  push:
+    branches:
+      - 'pull-request/[0-9]+'
   workflow_call:
     inputs:
       versioneer-override:
