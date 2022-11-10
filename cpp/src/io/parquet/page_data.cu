@@ -45,7 +45,7 @@ inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
   return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
 }
 
-inline __device__ int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
+constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
 namespace cudf {
 namespace io {
