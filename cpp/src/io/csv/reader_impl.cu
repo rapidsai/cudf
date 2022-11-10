@@ -134,7 +134,6 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
   if (header.size() <= 1) { return col_names; }
 
   std::vector<char> first_row = header;
-  int num_cols                = 0;
 
   bool quotation = false;
   for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
@@ -163,17 +162,16 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
 
         const string new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
-
-        // Stop parsing when we hit the line terminator; relevant when there is
-        // a blank line following the header. In this case, first_row includes
-        // multiple line terminators at the end, as the new recStart belongs to
-        // a line that comes after the blank line(s)
-        if (!quotation && first_row[pos] == parse_opts.terminator) { break; }
       } else {
         // This is the first data row, add the automatically generated name
-        col_names.push_back(prefix + std::to_string(num_cols));
+        col_names.push_back(prefix + std::to_string(col_names.size()));
       }
-      num_cols++;
+
+      // Stop parsing when we hit the line terminator; relevant when there is
+      // a blank line following the header. In this case, first_row includes
+      // multiple line terminators at the end, as the new recStart belongs to
+      // a line that comes after the blank line(s)
+      if (!quotation && first_row[pos] == parse_opts.terminator) { break; }
 
       // Skip adjacent delimiters if delim_whitespace is set
       while (parse_opts.multi_delimiter && pos < first_row.size() &&

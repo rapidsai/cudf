@@ -84,12 +84,8 @@ def path_or_buf(datadir):
 )
 def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     path = datadir / inputfile
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read(columns=columns).to_pandas()
+    expect = pd.read_orc(path, columns=columns)
     got = cudf.read_orc(
         path, engine=engine, columns=columns, use_index=use_index
     )
@@ -119,8 +115,7 @@ def test_orc_reader_local_filepath():
 def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     cols = ["int1", "long1", "float1", "double1"]
 
-    orcfile = pa.orc.ORCFile(path_or_buf("filepath"))
-    expect = orcfile.read(columns=cols).to_pandas()
+    expect = pd.read_orc(path_or_buf("filepath"), columns=cols)
     got = cudf.read_orc(path_or_buf(src), columns=cols)
 
     assert_eq(expect, got)
@@ -128,12 +123,8 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
 
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read().to_pandas().fillna(0)
+    expect = pd.read_orc(path).fillna(0)
     got = cudf.read_orc(path).fillna(0)
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
@@ -164,12 +155,8 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
 
 def test_orc_reader_strings(datadir):
     path = datadir / "TestOrcFile.testStringAndBinaryStatistics.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read(columns=["string1"])
+    expect = pd.read_orc(path, columns=["string1"])
     got = cudf.read_orc(path, columns=["string1"])
 
     assert_eq(expect, got, check_categorical=False)
@@ -285,12 +272,8 @@ def test_orc_read_stripes(datadir, engine):
 @pytest.mark.parametrize("skiprows", [0, 1, 3000])
 def test_orc_read_rows(datadir, skiprows, num_rows):
     path = datadir / "TestOrcFile.decimal.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    pdf = orcfile.read().to_pandas()
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path, skiprows=skiprows, num_rows=num_rows)
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
@@ -329,19 +312,17 @@ def test_orc_read_skiprows():
     # repro for other sizes of data
     skiprows = 10
 
-    expected = cudf.read_orc(buff)[skiprows:].reset_index(drop=True)
+    expected = (
+        pd.read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
+    )
     got = cudf.read_orc(buff, skiprows=skiprows)
     assert_eq(expected, got)
 
 
 def test_orc_reader_uncompressed_block(datadir):
     path = datadir / "uncompressed_snappy.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    expect = orcfile.read().to_pandas()
+    expect = pd.read_orc(path)
     got = cudf.read_orc(path)
 
     assert_eq(expect, got, check_categorical=False)
@@ -349,15 +330,8 @@ def test_orc_reader_uncompressed_block(datadir):
 
 def test_orc_reader_nodata_block(datadir):
     path = datadir / "nodata.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
 
-    expect = orcfile.read().to_pandas()
+    expect = pd.read_orc(path)
     got = cudf.read_orc(path, num_rows=1)
 
     assert_eq(expect, got, check_categorical=False)
@@ -386,19 +360,9 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
-    try:
-        orcfile = pa.orc.ORCFile(pdf_fname)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
-
-    expect = cudf.from_pandas(orcfile.read(columns=columns).to_pandas())
+    expect = cudf.from_pandas(pd.read_orc(pdf_fname, columns=columns))
     expect.to_orc(gdf_fname.strpath, compression=compression)
-    got = cudf.from_pandas(
-        pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
-    )
+    got = cudf.from_pandas(pd.read_orc(gdf_fname, columns=columns))
 
     assert_frame_equal(expect, got)
 
@@ -409,17 +373,9 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
-    try:
-        orcfile = pa.orc.ORCFile(pdf_fname)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
-
-    expect = cudf.from_pandas(orcfile.read().to_pandas())
+    expect = cudf.from_pandas(pd.read_orc(pdf_fname))
     expect.to_orc(gdf_fname.strpath, statistics=stats_freq)
-    got = cudf.from_pandas(pa.orc.ORCFile(gdf_fname).read().to_pandas())
+    got = cudf.from_pandas(pd.read_orc(gdf_fname))
 
     assert_frame_equal(expect, got)
 
@@ -430,14 +386,6 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 
-    try:
-        orcfile = pa.orc.ORCFile(pdf_fname)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
-
     columns = [
         "boolean1",
         "byte1",
@@ -447,7 +395,7 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         "float1",
         "double1",
     ]
-    pdf = orcfile.read(columns=columns).to_pandas()
+    pdf = pd.read_orc(pdf_fname, columns=columns)
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
@@ -456,7 +404,7 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
     writer.write_table(gdf)
     writer.close()
 
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -486,15 +434,7 @@ def test_chunked_orc_writer(
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 
-    try:
-        orcfile = pa.orc.ORCFile(pdf_fname)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
-
-    pdf = orcfile.read(columns=columns).to_pandas()
+    pdf = pd.read_orc(pdf_fname, columns=columns)
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
@@ -503,7 +443,7 @@ def test_chunked_orc_writer(
     writer.write_table(gdf)
     writer.close()
 
-    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    got = pd.read_orc(gdf_fname, columns=columns)
     assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
 
 
@@ -521,7 +461,7 @@ def test_orc_writer_strings(tmpdir, dtypes):
 
     expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     expect.to_orc(gdf_fname)
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -546,7 +486,7 @@ def test_chunked_orc_writer_strings(tmpdir, dtypes):
     writer.write_table(gdf)
     writer.close()
 
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -577,13 +517,8 @@ def test_orc_writer_sliced(tmpdir):
 def test_orc_reader_decimal_type(datadir, orc_file):
     file_path = datadir / orc_file
 
-    try:
-        orcfile = pa.orc.ORCFile(file_path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    pdf = orcfile.read().to_pandas()
-    df = cudf.read_orc(file_path).to_pandas()
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path)
 
     assert_eq(pdf, df)
 
@@ -591,13 +526,8 @@ def test_orc_reader_decimal_type(datadir, orc_file):
 def test_orc_decimal_precision_fail(datadir):
     file_path = datadir / "TestOrcFile.int_decimal.precision_19.orc"
 
-    try:
-        orcfile = pa.orc.ORCFile(file_path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
     # Shouldn't cause failure if decimal column is not chosen to be read.
-    pdf = orcfile.read(columns=["int"]).to_pandas()
+    pdf = pd.read_orc(file_path, columns=["int"])
     gdf = cudf.read_orc(file_path, columns=["int"])
 
     assert_eq(pdf, gdf)
@@ -624,13 +554,9 @@ def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
     path = datadir / "TestOrcFile.lima_timezone.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path).to_pandas()
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
 
@@ -882,13 +808,9 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
 def test_orc_reader_gmt_timestamps(datadir):
     path = datadir / "TestOrcFile.gmt.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path).to_pandas()
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
     assert_eq(pdf, gdf)
 
 
@@ -914,7 +836,7 @@ def test_orc_bool_encode_fail():
     okay_df.to_orc(buffer)
 
     # Also validate data
-    pdf = pa.orc.ORCFile(buffer).read().to_pandas()
+    pdf = pd.read_orc(buffer)
 
     assert_eq(okay_df.to_pandas(nullable=True), pdf)
 
@@ -929,8 +851,8 @@ def test_nanoseconds_overflow():
     cudf_got = cudf.read_orc(buffer)
     assert_eq(expected, cudf_got)
 
-    pyarrow_got = pa.orc.ORCFile(buffer).read()
-    assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
+    pandas_got = pd.read_orc(buffer)
+    assert_eq(expected, pandas_got)
 
 
 def test_empty_dataframe():
@@ -1207,7 +1129,7 @@ def test_skip_rows_for_nested_types(columns, list_struct_buff):
 def test_pyspark_struct(datadir):
     path = datadir / "TestOrcFile.testPySparkStruct.orc"
 
-    pdf = pa.orc.ORCFile(path).read().to_pandas()
+    pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
@@ -1391,13 +1313,9 @@ def test_map_type_read(columns, num_rows, use_index):
 
 def test_orc_reader_decimal(datadir):
     path = datadir / "TestOrcFile.decimal.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
 
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path).to_pandas()
+    pdf = pd.read_orc(path)
+    gdf = cudf.read_orc(path)
 
     assert_eq(pdf, gdf)
 
@@ -1478,7 +1396,7 @@ def test_orc_writer_lists(data):
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
 
-    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    pdf_out = pd.read_orc(buffer)
     assert_eq(pdf_out, pdf_in)
 
 
@@ -1500,7 +1418,7 @@ def test_chunked_orc_writer_lists():
     writer.write_table(gdf)
     writer.close()
 
-    got = pa.orc.ORCFile(buffer).read().to_pandas()
+    got = pd.read_orc(buffer)
     assert_eq(expect, got)
 
 
@@ -1508,17 +1426,9 @@ def test_writer_timestamp_stream_size(datadir, tmpdir):
     pdf_fname = datadir / "TestOrcFile.largeTimestamps.orc"
     gdf_fname = tmpdir.join("gdf.orc")
 
-    try:
-        orcfile = pa.orc.ORCFile(pdf_fname)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
-
-    expect = orcfile.read().to_pandas()
+    expect = pd.read_orc(pdf_fname)
     cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    got = pd.read_orc(gdf_fname)
 
     assert_eq(expect, got)
 
@@ -1591,7 +1501,7 @@ def test_orc_writer_lists_empty_rg(data):
     df = cudf.read_orc(buffer)
     assert_eq(df, cudf_in)
 
-    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    pdf_out = pd.read_orc(buffer)
     assert_eq(pdf_in, pdf_out)
 
 
@@ -1696,7 +1606,7 @@ def test_orc_writer_rle_stream_size(datadir, tmpdir):
 
     # Segfaults when RLE stream sizes don't account for varint length
     pa_out = pa.orc.ORCFile(reencoded).read()
-    assert_eq(df.to_pandas(), pa_out)
+    assert df.to_arrow().equals(pa_out)
 
 
 def test_empty_columns():
