@@ -614,7 +614,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result | libcudf.unary.is_nan(self)
 
@@ -625,7 +625,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result & libcudf.unary.is_non_nan(self)
 

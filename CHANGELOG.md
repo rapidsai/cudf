@@ -47,7 +47,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.12.00a for the late
 - Build `cudf` locally before building `strings_udf` conda packages in CI ([#11785](https://github.com/rapidsai/cudf/pull/11785)) [@brandon-b-miller](https://github.com/brandon-b-miller)
 - Fix an issue in cudf::row_bit_count involving structs and lists at multiple levels. ([#11779](https://github.com/rapidsai/cudf/pull/11779)) [@nvdbaranec](https://github.com/nvdbaranec)
 - Fix return type of `Index.isna` &amp; `Index.notna` ([#11769](https://github.com/rapidsai/cudf/pull/11769)) [@galipremsagar](https://github.com/galipremsagar)
-- Fix issue with set-item incase of `list` and `struct` types ([#11760](https://github.com/rapidsai/cudf/pull/11760)) [@galipremsagar](https://github.com/galipremsagar)
+- Fix issue with set-item in case of `list` and `struct` types ([#11760](https://github.com/rapidsai/cudf/pull/11760)) [@galipremsagar](https://github.com/galipremsagar)
 - Ensure all libcudf APIs run on cudf&#39;s default stream ([#11759](https://github.com/rapidsai/cudf/pull/11759)) [@vyasr](https://github.com/vyasr)
 - Resolve dask_cudf failures caused by upstream groupby changes ([#11755](https://github.com/rapidsai/cudf/pull/11755)) [@rjzamora](https://github.com/rjzamora)
 - Fix ORC string sum statistics ([#11740](https://github.com/rapidsai/cudf/pull/11740)) [@vuule](https://github.com/vuule)
@@ -3001,7 +3001,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.12.00a for the late
 
 ## Bug Fixes
 
-- PR #6073 Fix issue related to `.loc` incase of `DatetimeIndex`
+- PR #6073 Fix issue related to `.loc` in case of `DatetimeIndex`
 - PR #6081 Fix issue where fsspec thinks it has a protocol string
 - PR #6100 Fix issue in `Series.factorize` to correctly pick `na_sentinel` value
 - PR #6106 Fix datetime limit in csv due to 32-bit arithmetic
@@ -3022,7 +3022,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.12.00a for the late
 - PR #6182 Fix cmake build of arrow
 - PR #6288 Fix gcc-9 compilation error with `ColumnVectorJni.cpp`
 - PR #6173 Fix normalize_characters offset logic on sliced strings column
-- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.appened`
+- PR #6159 Fix issue related to empty `Dataframe` with columns input to `DataFrame.append`
 - PR #6199 Fix index preservation for dask_cudf parquet
 - PR #6207 Remove shared libs from Java sources jar
 - PR #6217 Fixed missing bounds checking when storing validity in parquet reader
@@ -3661,7 +3661,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.12.00a for the late
 - PR #4761 Fix issues with `nan_as_null` in certain case
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API
-- PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
+- PR #4720 Fix issue related to `dtype` param not being adhered in case of cuda arrays
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
@@ -4048,7 +4048,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.12.00a for the late
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 - PR #4596 Fix `_popn` issue with performance
-- PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4526 Fix index slicing issue for index in case of an empty dataframe
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4669 Fix `dask_cudf` categorical nonempty meta handling
