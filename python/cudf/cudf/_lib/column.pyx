@@ -89,13 +89,6 @@ cdef class Column:
         return self._base_data
 
     @property
-    def base_data_ptr(self):
-        if self.base_data is None:
-            return 0
-        else:
-            return self.base_data.ptr
-
-    @property
     def data(self):
         if self.base_data is None:
             return None
