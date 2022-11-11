@@ -148,28 +148,6 @@ class Buffer(Serializable):
         # Create from device memory
         return cls._from_device_memory(buf)
 
-    @classmethod
-    def _from_any_memory(cls: Type[T], data: Any) -> T:
-        """Create a Buffer from device or host memory
-
-        If data exposes `__cuda_array_interface__`, we deligate to the
-        `_from_device_memory` constructor otherwise `_from_host_memory`.
-
-        Parameters
-        ----------
-        data : Any
-            An object that represens device or host memory.
-
-        Returns
-        -------
-        Buffer
-            Buffer representing `data`.
-        """
-
-        if hasattr(data, "__cuda_array_interface__"):
-            return cls._from_device_memory(data)
-        return cls._from_host_memory(data)
-
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
         Sub-classes can overwrite this to implement __getitem__

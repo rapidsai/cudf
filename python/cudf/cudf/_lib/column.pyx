@@ -531,9 +531,9 @@ cdef class Column:
                                      size=(size+offset) * dtype_itemsize)
                 )
             elif (
-                # This is an optimization to avoid creating a new
-                # SpillableBuffer that represent the same memory
-                # as the owner.
+                # This is an optimization of the most common case where
+                # from_column_view creates a "view" that is identical to
+                # the owner.
                 column_owner and
                 isinstance(data_owner, SpillableBuffer) and
                 # We have to make sure that `data_owner` is already spill
