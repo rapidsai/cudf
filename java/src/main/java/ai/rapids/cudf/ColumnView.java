@@ -3985,7 +3985,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substring(long columnView, int start, int end) throws CudfException;
 
   /**
-   * Native method to calculate substring from a given string column. 0 indexing.
+   * Native method to extract substrings from a given strings column.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param start      first character index to begin the substrings (inclusive).
    */
