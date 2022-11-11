@@ -288,7 +288,8 @@ def test_ptr_restricted(manager: SpillManager):
     buf.get_ptr(spill_lock=slock1)
     assert not buf.spillable
     assert len(buf._spill_locks) == 1
-    slock2 = buf.spill_lock()
+    slock2 = SpillLock()
+    buf.spill_lock(spill_lock=slock2)
     buf.get_ptr(spill_lock=slock2)
     assert not buf.spillable
     assert len(buf._spill_locks) == 2

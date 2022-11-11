@@ -229,13 +229,23 @@ class SpillableBuffer(Buffer):
             self._last_accessed = time.monotonic()
             return self._ptr
 
-    def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
+    def spill_lock(self, spill_lock: SpillLock) -> None:
+        """Spill lock the buffer
+
+        Mark the buffer as unspillable while `spill_lock` is alive,
+        which is tracked by monitoring a weakref to `spill_lock`.
+
+        Parameters
+        ----------
+        spill_lock : SpillLock
+            The object that defines the scope of the lock.
+        """
+
         if spill_lock is None:
             spill_lock = SpillLock()
         with self.lock:
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
-        return spill_lock
 
     def get_ptr(self, spill_lock: SpillLock = None) -> int:
         """Get a device pointer to the memory of the buffer.
@@ -446,5 +456,5 @@ class SpillableBufferSlice(SpillableBuffer):
     def spillable(self) -> bool:
         return self._base.spillable
 
-    def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
-        return self._base.spill_lock(spill_lock=spill_lock)
+    def spill_lock(self, spill_lock: SpillLock) -> None:
+        self._base.spill_lock(spill_lock=spill_lock)
