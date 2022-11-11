@@ -121,15 +121,10 @@ class SpillManager:
         already locked buffers.
         """
 
-        # Keep spilling until `nbytes` been spilled
-        total_spilled = 0
-        while total_spilled < nbytes:
-            spilled = self.spill_device_memory()
-            if spilled == 0:
-                break  # No more to spill!
-            total_spilled += spilled
+        # Let's try to spill device memory
+        spilled = self.spill_device_memory(nbytes=nbytes)
 
-        if total_spilled > 0:
+        if spilled > 0:
             return True  # Ask RMM to retry the allocation
 
         if retry_once:
@@ -182,26 +177,34 @@ class SpillManager:
             ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
         return ret
 
-    def spill_device_memory(self) -> int:
+    def spill_device_memory(self, nbytes: int) -> int:
         """Try to spill device memory
 
         This function is safe to call doing spill-on-demand
         since it does not lock buffers already locked.
 
+        Parameters
+        ----------
+        nbytes : int
+            Number of bytes to try to spill
+
         Return
         ------
         int
-            Number of bytes spilled.
+            Number of actually bytes spilled.
         """
+        spilled = 0
         for buf in self.buffers(order_by_access_time=True):
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
                         buf.__spill__(target="cpu")
-                        return buf.size
+                        spilled += buf.size
+                        if spilled >= nbytes:
+                            break
                 finally:
                     buf.lock.release()
-        return 0
+        return spilled
 
     def spill_to_device_limit(self, device_limit: int = None) -> int:
         """Spill until device limit
@@ -232,7 +235,7 @@ class SpillManager:
             )
             if unspilled < limit:
                 break
-            nbytes = self.spill_device_memory()
+            nbytes = self.spill_device_memory(nbytes=limit - unspilled)
             if nbytes == 0:
                 break  # No more to spill
             ret += nbytes
