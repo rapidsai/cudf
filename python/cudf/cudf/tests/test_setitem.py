@@ -115,7 +115,7 @@ def test_series_setitem_singleton_range():
     sr.iloc[:1] = value
     psr.iloc[:1] = value
     assert_eq(sr, cudf.Series([7, 2, 3], dtype=np.int64))
-    assert_eq(sr, psr)
+    assert_eq(sr, psr, check_dtype=True)
 
 
 @pytest.mark.parametrize(
