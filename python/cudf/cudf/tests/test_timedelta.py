@@ -400,12 +400,7 @@ def test_timedelta_dataframe_ops(df, op):
         [1],
         [12, 11, 232, 223432411, 2343241, 234324, 23234],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        pytest.param(
-            [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/5938"
-            ),
-        ),
+        [1.321, 1132.324, 23223231.11, 233.41, 332, 323],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     ],
 )
@@ -489,6 +484,36 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         expected = other_scalars % psr
         actual = other_scalars % gsr
 
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "reverse",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "timedelta modulo by zero is dubiously defined in "
+                    "both pandas and cuDF "
+                    "(see https://github.com/rapidsai/cudf/issues/5938)"
+                ),
+            ),
+        ),
+    ],
+)
+def test_timedelta_series_mod_with_scalar_zero(reverse):
+    gsr = cudf.Series(data=[0.2434], dtype=np.timedelta64(1, "ns"))
+    psr = gsr.to_pandas()
+    scalar = datetime.timedelta(days=768)
+    if reverse:
+        expected = scalar % psr
+        actual = scalar % gsr
+    else:
+        expected = psr % scalar
+        actual = gsr % scalar
     assert_eq(expected, actual)
 
 
@@ -594,6 +619,37 @@ def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
         expected = cpu_scalar % psr
         actual = gpu_scalar % gsr
 
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "reverse",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "timedelta modulo by zero is dubiously defined in "
+                    "both pandas and cuDF "
+                    "(see https://github.com/rapidsai/cudf/issues/5938)"
+                ),
+            ),
+        ),
+    ],
+)
+def test_timedelta_series_mod_with_cudf_scalar_zero(reverse):
+    gsr = cudf.Series(data=[0.2434], dtype=np.timedelta64(1, "ns"))
+    psr = gsr.to_pandas()
+    scalar = datetime.timedelta(days=768)
+    gpu_scalar = cudf.Scalar(scalar)
+    if reverse:
+        expected = scalar % psr
+        actual = gpu_scalar % gsr
+    else:
+        expected = psr % scalar
+        actual = gsr % gpu_scalar
     assert_eq(expected, actual)
 
 
@@ -873,12 +929,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         "add",
         "sub",
         "truediv",
-        pytest.param(
-            "floordiv",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/5938"
-            ),
-        ),
+        "floordiv",
     ],
 )
 @pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
