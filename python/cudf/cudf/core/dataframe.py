@@ -2079,55 +2079,50 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a  b   1  3
            c   2  4
         """  # noqa: E501
-        index = None
+
         orient = orient.lower()
         if orient == "index":
-
-            if len(data) > 0:
-                data_list = list(data.values())
-                if isinstance(data_list[0], Series):
-                    data = DataFrame.from_dict(data=data).T
-                elif isinstance(data_list[0], (pd.Series, dict)):
-                    new_data: defaultdict = defaultdict(dict)
-                    for i, s in data.items():
-                        for col, v in s.items():
-                            new_data[col][i] = v
-                    data = new_data
-                else:
-                    index = list(data.keys())
-                    data = data_list
-            df = cudf.DataFrame(data=data, index=index, columns=columns)
-            if dtype:
-                return df.astype(dtype)
-            return df
-        elif orient == "columns" or orient == "tight":
+            if len(data) > 0 and isinstance(
+                next(iter(data.values())), (cudf.Series, cupy.ndarray)
+            ):
+                result = cls(data).T
+                result.columns = columns
+                if dtype is not None:
+                    result = result.astype(dtype)
+                return result
+            else:
+                return cls.from_pandas(
+                    pd.DataFrame.from_dict(
+                        data=data,
+                        orient=orient,
+                        dtype=dtype,
+                        columns=columns,
+                    )
+                )
+        elif orient == "columns":
             if columns is not None:
                 raise ValueError(
-                    f"cannot use columns parameter with orient='{orient}'"
+                    "Cannot use columns parameter with orient='columns'"
                 )
+            return cls(data, columns=None, dtype=dtype)
+        elif orient == "tight":
+            if columns is not None:
+                raise ValueError(
+                    "Cannot use columns parameter with orient='right'"
+                )
+
+            index = _from_dict_create_index(
+                data["index"], data["index_names"], cudf
+            )
+            columns = _from_dict_create_index(
+                data["columns"], data["column_names"], pd
+            )
+            return cls(data["data"], index=index, columns=columns, dtype=dtype)
         else:
             raise ValueError(
-                f"Expected 'index', 'columns' or 'tight' for orient "
+                "Expected 'index', 'columns' or 'tight' for orient "
                 f"parameter. Got '{orient}' instead"
             )
-
-        if orient != "tight":
-            return cls(data, index=index, columns=columns, dtype=dtype)
-        else:
-            realdata = data["data"]
-
-            def create_index(indexlist, namelist, library):
-                if len(namelist) > 1:
-                    index = library.MultiIndex.from_tuples(
-                        indexlist, names=namelist
-                    )
-                else:
-                    index = library.Index(indexlist, name=namelist[0])
-                return index
-
-            index = create_index(data["index"], data["index_names"], cudf)
-            columns = create_index(data["columns"], data["column_names"], pd)
-            return cls(realdata, index=index, columns=columns, dtype=dtype)
 
     @_cudf_nvtx_annotate
     def to_dict(
@@ -7691,3 +7686,11 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
+
+
+def _from_dict_create_index(indexlist, namelist, library):
+    if len(namelist) > 1:
+        index = library.MultiIndex.from_tuples(indexlist, names=namelist)
+    else:
+        index = library.Index(indexlist, name=namelist[0])
+    return index
