@@ -57,8 +57,6 @@ inline rmm::device_buffer create_data(data_type type,
   rmm::device_buffer data(data_size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
 
-  printf("created column buffer data of size %d from new data %p\n", size, data.data());
-
   return data;
 }
 
@@ -73,10 +71,7 @@ struct column_buffer {
 
   // construct without a known size. call create() later to actually
   // allocate memory
-  column_buffer(data_type _type, bool _is_nullable) : type(_type), is_nullable(_is_nullable)
-  {
-    printf("column_buffer constructor with no data size\n");
-  }
+  column_buffer(data_type _type, bool _is_nullable) : type(_type), is_nullable(_is_nullable) {}
 
   // construct with a known size. allocates memory
   column_buffer(data_type _type,
@@ -86,7 +81,6 @@ struct column_buffer {
                 rmm::mr::device_memory_resource* mr)
     : type(_type), is_nullable(_is_nullable)
   {
-    printf("column_buffer constructor with known size, allocating data\n");
     create(_size, stream, mr);
   }
 
@@ -105,8 +99,6 @@ struct column_buffer {
   auto data() { return _strings ? _strings->data() : _data.data(); }
   auto data_size() const { return _strings ? _strings->size() : _data.size(); }
 
-  ~column_buffer() { printf("destroying column buffer with %d size at %p\n", size, _data.data()); };
-
   template <typename T = uint32_t>
   auto null_mask()
   {
@@ -115,6 +107,19 @@ struct column_buffer {
   auto null_mask_size() { return _null_mask.size(); };
 
   auto& null_count() { return _null_count; }
+
+  /**
+   * @brief Sets the stream to be used for deallocation of internal buffers
+   */
+  void set_stream(rmm::cuda_stream_view stream) noexcept
+  {
+    if (_strings) _strings->set_stream(stream);
+    _data.set_stream(stream);
+    _null_mask.set_stream(stream);
+    for (auto& child : children) {
+      child.set_stream(stream);
+    }
+  }
 
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};

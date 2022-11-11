@@ -168,12 +168,6 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
     } break;
 
     default: {
-      printf("making column from buffer %p of size %d\n", buffer._data.data(), buffer.size);
-      auto st = rmm::detail::stack_trace();
-      std::ostringstream oss;
-      oss << "callstack:" << std::endl << st;
-      printf("%s", oss.str().c_str());
-
       return std::make_unique<column>(buffer.type,
                                       buffer.size,
                                       std::move(buffer._data),

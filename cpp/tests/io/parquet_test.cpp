@@ -439,15 +439,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
   {
     auto result = cudf::io::read_parquet(in_opts);
 
-    cudaDeviceSynchronize();
-
-    printf("read:\n");
-    cudf::test::print(result.tbl->view().column(0));
-    printf("all\n");
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-    printf("result leaving scope\n");
   }
-  printf("others leaving scope\n");
 }
 
 TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
@@ -470,13 +463,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
 
-  printf("read:\n");
-  cudf::test::print(result.tbl->view().column(0));
-  printf("all\n");
-
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  printf("done, destructor time!\n");
 }
 
 template <typename mask_op_t>

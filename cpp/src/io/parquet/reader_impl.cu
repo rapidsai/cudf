@@ -26,6 +26,7 @@
 #include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
+#include <io/utilities/thread_pool.hpp>
 #include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -1404,7 +1405,6 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? total_rows + 1 : total_rows,
           stream,
           _mr);
-        printf("created buffer %p in input cols\n", out_buf.data());
       }
     }
   }
@@ -1841,12 +1841,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
     };
 
-    constexpr auto num_streams = 2;
+    constexpr auto num_streams         = 2;
+    constexpr auto num_read_threads    = 2;
+    constexpr auto num_process_threads = 2;
 
     auto stream_pool = rmm::cuda_stream_pool(num_streams);
     auto streams     = get_streams(num_streams, stream_pool);
 
-    std::array<rowgroup_data, 2> concurrent_tasks;
+    std::array<rowgroup_data, num_streams> concurrent_tasks;
     concurrent_tasks[0].stream = streams[0];
     concurrent_tasks[1].stream = streams[1];
     auto& read_task            = concurrent_tasks[0];
@@ -1874,6 +1876,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
     // create the final output cudf columns
     for (size_t i = 0; i < _output_columns.size(); ++i) {
+      _output_columns[i].set_stream(_stream);
       column_name_info& col_name = out_metadata.schema_info.emplace_back("");
       auto const metadata =
         _reader_column_schema.has_value()
