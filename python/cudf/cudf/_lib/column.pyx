@@ -102,11 +102,7 @@ cdef class Column:
         if self._data is None:
             start = self.offset * self.dtype.itemsize
             end = start + self.size * self.dtype.itemsize
-            if start == 0 and end == self.base_data.size:
-                # `data` spans all of `base_data`
-                self._data = self.base_data
-            else:
-                self._data = self.base_data[start:end]
+            self._data = self.base_data[start:end]
         return self._data
 
     @property

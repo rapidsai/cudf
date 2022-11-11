@@ -26,7 +26,11 @@ from cudf.core.buffer.spill_manager import (
     get_rmm_memory_resource_stack,
     set_global_manager,
 )
-from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
+from cudf.core.buffer.spillable_buffer import (
+    SpillableBuffer,
+    SpillableBufferSlice,
+    SpillLock,
+)
 from cudf.testing._utils import assert_eq
 
 
@@ -135,7 +139,7 @@ def test_spillable_df_groupby(manager: SpillManager):
     gb = df.groupby("x")
     # `gb` holds a reference to the device memory, which makes
     # the buffer unspillable
-    assert len(df._data._data["x"].data._spill_locks) == 1
+    assert len(df._data._data["x"].base_data._spill_locks) == 1
     assert not df._data._data["x"].data.spillable
     del gb
     assert df._data._data["x"].data.spillable
@@ -405,8 +409,8 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     header, frames = protocol.serialize(
         df1, serializers=("cuda",), on_error="raise"
     )
-    buf: SpillableBuffer = gen_df.buffer(df1)
-    assert len(buf._spill_locks) == 1
+    buf: SpillableBufferSlice = gen_df.buffer(df1)
+    assert len(buf._base._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
     assert frames[0].ptr == buf.ptr
