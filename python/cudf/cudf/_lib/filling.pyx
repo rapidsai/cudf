@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import with_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -15,6 +17,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
+@with_spill_lock()
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
     cdef mutable_column_view c_destination = destination.mutable_view()
     cdef size_type c_begin = <size_type> begin

@@ -336,7 +336,14 @@ cdef class Column:
         cdef vector[mutable_column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.base_data_ptr)
+        if col.base_data is None:
+            data = NULL
+        elif isinstance(col.base_data, SpillableBuffer):
+            data = <void*><uintptr_t>(col.base_data).get_ptr(
+                spill_lock=get_spill_lock()
+            )
+        else:
+            data = <void*><uintptr_t>(col.base_data.ptr)
 
         cdef Column child_column
         if col.base_children:

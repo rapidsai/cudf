@@ -86,6 +86,7 @@ def copy_column(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
+@with_spill_lock()
 def _copy_range_in_place(Column input_column,
                          Column target_column,
                          size_type input_begin,
