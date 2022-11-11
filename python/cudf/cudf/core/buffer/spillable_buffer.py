@@ -87,6 +87,19 @@ class SpillableBuffer(Buffer):
     _manager: SpillManager
 
     def _finalize_init(self, ptr_desc: Dict[str, Any], exposed: bool) -> None:
+        """Finish initialization of the spillable buffer
+
+        This implements the common initialization that `_from_device_memory`
+        and `_from_host_memory` are missing.
+
+        Parameters
+        ----------
+        ptr_desc : dict
+            Description of the memory.
+        exposed : bool, optional
+            Mark the buffer as permanently exposed (unspillable).
+        """
+
         from cudf.core.buffer.spill_manager import get_global_manager
 
         self.lock = RLock()
