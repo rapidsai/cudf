@@ -61,7 +61,7 @@ class SpillableBuffer(Buffer):
     """A spillable buffer that implements DeviceBufferLike.
 
     This buffer supports spilling the represented data to host memory.
-    Spilling can be done manually by calling `.__spill__(target="cpu")` but
+    Spilling can be done manually by calling `.spill(target="cpu")` but
     usually the associated spilling manager triggers spilling based on current
     device memory usage see `cudf.core.buffer.spill_manager.SpillManager`.
     Unspill is triggered automatically when accessing the data of the buffer.
@@ -174,7 +174,7 @@ class SpillableBuffer(Buffer):
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
 
-    def __spill__(self, target: str = "cpu") -> None:
+    def spill(self, target: str = "cpu") -> None:
         """Spill or un-spill this buffer in-place
 
         Parameters
@@ -202,7 +202,7 @@ class SpillableBuffer(Buffer):
             elif (ptr_type, target) == ("cpu", "gpu"):
                 # Notice, this operation is prone to deadlock because the RMM
                 # allocation might trigger spilling-on-demand which in turn
-                # trigger a new call to this buffer's `__spill__()`.
+                # trigger a new call to this buffer's `spill()`.
                 # Therefore, it is important that spilling-on-demand doesn't
                 # try to unspill an already locked buffer!
                 dev_mem = rmm.DeviceBuffer.to_device(
@@ -228,7 +228,7 @@ class SpillableBuffer(Buffer):
 
         self._manager.spill_to_device_limit()
         with self._lock:
-            self.__spill__(target="gpu")
+            self.spill(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()
             return self._ptr
@@ -237,7 +237,7 @@ class SpillableBuffer(Buffer):
         if spill_lock is None:
             spill_lock = SpillLock()
         with self._lock:
-            self.__spill__(target="gpu")
+            self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
         return spill_lock
 
@@ -304,7 +304,7 @@ class SpillableBuffer(Buffer):
         size = self._size if size is None else size
         with self._lock:
             if self.spillable:
-                self.__spill__(target="cpu")
+                self.spill(target="cpu")
                 return self._ptr_desc["memoryview"][offset : offset + size]
             else:
                 assert self._ptr_desc["type"] == "gpu"
@@ -435,8 +435,8 @@ class SpillableBufferSlice(SpillableBuffer):
         )
 
     # The rest of the methods delegate to the base buffer.
-    def __spill__(self, target: str = "cpu") -> None:
-        return self._base.__spill__(target=target)
+    def spill(self, target: str = "cpu") -> None:
+        return self._base.spill(target=target)
 
     @property
     def is_spilled(self) -> bool:

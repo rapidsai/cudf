@@ -198,7 +198,7 @@ class SpillManager:
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
-                        buf.__spill__(target="cpu")
+                        buf.spill(target="cpu")
                         spilled += buf.size
                         if spilled >= nbytes:
                             break

@@ -37,7 +37,7 @@ from cudf.testing._utils import assert_eq
 def gen_df(target="gpu") -> cudf.DataFrame:
     ret = cudf.DataFrame({"a": [1, 2, 3]})
     if target != "gpu":
-        gen_df.buffer(ret).__spill__(target=target)
+        gen_df.buffer(ret).spill(target=target)
     return ret
 
 
@@ -102,7 +102,7 @@ def test_spillable_buffer(manager: SpillManager):
         "exposed",
         "spillable",
         "spill_lock",
-        "__spill__",
+        "spill",
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
@@ -147,12 +147,12 @@ def test_spillable_df_groupby(manager: SpillManager):
 
 def test_spilling_buffer(manager: SpillManager):
     buf = as_buffer(rmm.DeviceBuffer(size=10), exposed=False)
-    buf.__spill__(target="cpu")
+    buf.spill(target="cpu")
     assert buf.is_spilled
     buf.ptr  # Expose pointer and trigger unspill
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
-        buf.__spill__(target="cpu")
+        buf.spill(target="cpu")
 
 
 def test_environment_variables(monkeypatch):
@@ -267,7 +267,7 @@ def test_modify_spilled_views(manager):
     df = gen_df()
     df_view = df.iloc[1:]
     buf = gen_df.buffer(df)
-    buf.__spill__(target="cpu")
+    buf.spill(target="cpu")
 
     # modify the spilled df and check that the changes are reflected
     # in the view
@@ -347,7 +347,7 @@ def test_serialize_device(manager, target, view):
     df1 = gen_df()
     if view is not None:
         df1 = df1.iloc[view]
-    gen_df.buffer(df1).__spill__(target=target)
+    gen_df.buffer(df1).spill(target=target)
 
     header, frames = df1.device_serialize()
     assert len(frames) == 1
@@ -371,7 +371,7 @@ def test_serialize_host(manager, target, view):
     df1 = gen_df()
     if view is not None:
         df1 = df1.iloc[view]
-    gen_df.buffer(df1).__spill__(target=target)
+    gen_df.buffer(df1).spill(target=target)
 
     # Unspilled df becomes spilled after host serialization
     header, frames = df1.host_serialize()
