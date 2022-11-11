@@ -137,7 +137,7 @@ class SpillableBuffer(Buffer):
         SpillableBuffer
             Buffer representing the same device memory as `data`
         """
-        ret = super(SpillableBuffer, cls)._from_device_memory(data)
+        ret = super()._from_device_memory(data)
         ret._finalize_init(ptr_desc={"type": "gpu"}, exposed=exposed)
         return ret
 
