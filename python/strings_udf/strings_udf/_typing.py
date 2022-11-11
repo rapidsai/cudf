@@ -181,7 +181,7 @@ def create_binary_attr(attrname, retty):
     return attr
 
 
-def create_identifier_attr(attrname):
+def create_identifier_attr(attrname, retty):
     """
     Helper function wrapping numba's low level extension API. Provides
     the boilerplate needed to register a unary function of a string
@@ -192,7 +192,7 @@ def create_identifier_attr(attrname):
         key = f"StringView.{attrname}"
 
         def generic(self, args, kws):
-            return nb_signature(types.boolean, recvr=self.this)
+            return nb_signature(retty, recvr=self.this)
 
     def attr(self, mod):
         return types.BoundFunction(StringViewIdentifierAttr, string_view)
@@ -229,6 +229,7 @@ id_unary_funcs = [
     "isnumeric",
     "istitle",
 ]
+string_return_attrs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
     setattr(
@@ -237,12 +238,24 @@ for func in bool_binary_funcs:
         create_binary_attr(func, types.boolean),
     )
 
+for func in string_return_attrs:
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attr(func, udf_string),
+    )
+
+
 for func in int_binary_funcs:
     setattr(
         StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type)
     )
 
 for func in id_unary_funcs:
-    setattr(StringViewAttrs, f"resolve_{func}", create_identifier_attr(func))
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attr(func, types.boolean),
+    )
 
 cuda_decl_registry.register_attr(StringViewAttrs)

@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
@@ -96,16 +97,16 @@ struct extract_fn {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_all_record(strings_column_view const& input,
-                                           std::string_view pattern,
-                                           regex_flags const flags,
+                                           regex_program const& prog,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
 
-  // Compile regex into device object.
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "extract_all requires group indicators in the regex pattern.");
@@ -170,7 +171,16 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, pattern, flags, cudf::get_default_stream(), mr);
+  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
+  return detail::extract_all_record(strings, *h_prog, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
+                                           regex_program const& prog,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_all_record(strings, prog, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

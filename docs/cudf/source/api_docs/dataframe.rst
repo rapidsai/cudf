@@ -179,6 +179,7 @@ Reindexing / selection / label manipulation
    DataFrame.tail
    DataFrame.take
    DataFrame.tile
+   DataFrame.truncate
 
 .. _api.dataframe.missing:
 

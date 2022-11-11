@@ -123,7 +123,7 @@ int32_t reprog::add_class(reclass const& cls)
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
 
-reclass& reprog::class_at(int32_t id) { return _classes[id]; }
+reclass const& reprog::class_at(int32_t id) const { return _classes[id]; }
 
 void reprog::set_start_inst(int32_t id) { _startinst_id = id; }
 
