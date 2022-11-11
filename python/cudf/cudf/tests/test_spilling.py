@@ -45,9 +45,9 @@ gen_df.buffer_size = gen_df.buffer(gen_df()).size
 
 def spilled_and_unspilled(manager: SpillManager) -> Tuple[int, int]:
     """Get bytes spilled and unspilled known by the manager"""
-    spilled = sum(buf.size for buf in manager.base_buffers() if buf.is_spilled)
+    spilled = sum(buf.size for buf in manager.buffers() if buf.is_spilled)
     unspilled = sum(
-        buf.size for buf in manager.base_buffers() if not buf.is_spilled
+        buf.size for buf in manager.buffers() if not buf.is_spilled
     )
     return spilled, unspilled
 
@@ -247,7 +247,7 @@ def test_external_memory_never_spills(manager):
 
     a = cupy.asarray([1, 2, 3])
     s = cudf.Series(a)
-    assert len(manager.base_buffers()) == 0
+    assert len(manager.buffers()) == 0
     assert not s._data[None].data.spillable
 
 

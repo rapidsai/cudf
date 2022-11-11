@@ -70,7 +70,7 @@ class SpillManager:
         of `CUDF_SPILL_DEVICE_LIMIT` or None.
     """
 
-    _base_buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class SpillManager:
         device_memory_limit: int = None,
     ) -> None:
         self._lock = threading.Lock()
-        self._base_buffers = weakref.WeakValueDictionary()
+        self._buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
@@ -157,11 +157,11 @@ class SpillManager:
         """
         if buffer.size > 0 and not buffer.exposed:
             with self._lock:
-                self._base_buffers[self._id_counter] = buffer
+                self._buffers[self._id_counter] = buffer
                 self._id_counter += 1
         self.spill_to_device_limit()
 
-    def base_buffers(
+    def buffers(
         self, order_by_access_time: bool = False
     ) -> Tuple[SpillableBuffer, ...]:
         """Get all managed buffers
@@ -177,7 +177,7 @@ class SpillManager:
             Tuple of buffers
         """
         with self._lock:
-            ret = tuple(self._base_buffers.values())
+            ret = tuple(self._buffers.values())
         if order_by_access_time:
             ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
         return ret
@@ -193,7 +193,7 @@ class SpillManager:
         int
             Number of bytes spilled.
         """
-        for buf in self.base_buffers(order_by_access_time=True):
+        for buf in self.buffers(order_by_access_time=True):
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
@@ -228,7 +228,7 @@ class SpillManager:
         ret = 0
         while True:
             unspilled = sum(
-                buf.size for buf in self.base_buffers() if not buf.is_spilled
+                buf.size for buf in self.buffers() if not buf.is_spilled
             )
             if unspilled < limit:
                 break
@@ -239,14 +239,12 @@ class SpillManager:
         return ret
 
     def __repr__(self) -> str:
-        spilled = sum(
-            buf.size for buf in self.base_buffers() if buf.is_spilled
-        )
+        spilled = sum(buf.size for buf in self.buffers() if buf.is_spilled)
         unspilled = sum(
-            buf.size for buf in self.base_buffers() if not buf.is_spilled
+            buf.size for buf in self.buffers() if not buf.is_spilled
         )
         unspillable = 0
-        for buf in self.base_buffers():
+        for buf in self.buffers():
             if not (buf.is_spilled or buf.spillable):
                 unspillable += buf.size
         unspillable_ratio = unspillable / unspilled if unspilled else 0
@@ -274,9 +272,9 @@ def set_global_manager(manager: Optional[SpillManager]) -> None:
     global _global_manager, _global_manager_uninitialized
     if _global_manager is not None:
         gc.collect()
-        base_buffers = _global_manager.base_buffers()
-        if len(base_buffers) > 0:
-            warnings.warn(f"overwriting non-empty manager: {base_buffers}")
+        buffers = _global_manager.buffers()
+        if len(buffers) > 0:
+            warnings.warn(f"overwriting non-empty manager: {buffers}")
 
     _global_manager = manager
     _global_manager_uninitialized = False
