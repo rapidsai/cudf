@@ -164,7 +164,11 @@ def default_float_bitwidth(request):
 def pytest_runtest_makereport(item, call):
     """Hook to make result information available in fixtures
 
-    See <https://docs.pytest.org/en/latest/example/simple.html>
+    This makes it possible for a pytest.fixture to access the current test
+    state through `request.node.report`.
+    See the `manager` fixture in `test_spilling.py` for an example.
+
+    Pytest doc: <https://docs.pytest.org/en/latest/example/simple.html>
     """
     outcome = yield
     rep = outcome.get_result()

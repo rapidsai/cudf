@@ -97,7 +97,8 @@ class SpillableBuffer(Buffer):
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
-                f"cannot create {self.__class__} without a global spill manager"
+                f"cannot create {self.__class__} without "
+                "a global spill manager"
             )
 
         self._manager = manager
