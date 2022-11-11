@@ -96,6 +96,7 @@ cdef class GroupBy:
 
         with with_spill_lock() as spill_lock:
             keys_view = table_view_from_columns(keys)
+            # We spill lock the columns while this GroupBy instance is alive.
             self._spill_lock = spill_lock
 
         with nogil:

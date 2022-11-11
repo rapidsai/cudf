@@ -137,8 +137,9 @@ def test_creations(manager: SpillManager):
 def test_spillable_df_groupby(manager: SpillManager):
     df = cudf.DataFrame({"x": [1, 1, 1]})
     gb = df.groupby("x")
-    # `gb` holds a reference to the device memory, which makes
-    # the buffer unspillable
+    assert len(df._data._data["x"].base_data._spill_locks) == 0
+    gb._groupby
+    # `gb._groupby`, which is cached on `gb`, holds a spill lock
     assert len(df._data._data["x"].base_data._spill_locks) == 1
     assert not df._data._data["x"].data.spillable
     del gb
