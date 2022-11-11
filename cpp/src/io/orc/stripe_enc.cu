@@ -1332,11 +1332,11 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
 
   if (compression == SNAPPY) {
     try {
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
+        gpu_snap(comp_in, comp_out, comp_res, stream);
+      } else {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      } else {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
     } catch (...) {
       // There was an error in compressing so set an error status for each block
@@ -1348,12 +1348,18 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
       // writing without compression
     }
-  } else if (compression == ZLIB and
-             nvcomp::is_compression_enabled(nvcomp::compression_type::DEFLATE)) {
+  } else if (compression == ZLIB) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
     nvcomp::batched_compress(
       nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_res, stream);
-  } else if (compression == ZSTD and
-             nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
+  } else if (compression == ZSTD) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
