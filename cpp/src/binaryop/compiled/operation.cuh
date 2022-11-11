@@ -91,11 +91,33 @@ struct TrueDiv {
 };
 
 struct FloorDiv {
-  template <typename T1, typename T2>
-  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs)
-    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
+                      (cudf::is_fixed_point<TypeLhs>() and std::is_same_v<TypeLhs, TypeRhs>) or
+                      is_duration<TypeLhs>())>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
-    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+    return x / y;
+  }
+
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, float>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> float
+  {
+    return floorf(x / y);
+  }
+
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+  {
+    return floor(x / y);
   }
 };
 
