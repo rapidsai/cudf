@@ -219,6 +219,30 @@ device to host to enable out-of-memory computation, i.e., computing on objects t
 available on the GPU.
 
 
+Spilling can be enabled in two ways (it is disabled by default):
+  - setting the environment variable `CUDF_SPILL=on`, or
+  - setting the `spill` option in `cudf` by doing `cudf.set_option("spill", True)`.
+
+Additionally, parameters are:
+  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory error handler that spills buffers in order to free up memory.
+  - `CUDF_SPILL_DEVICE_LIMIT=...` / `cudf.set_option("spill_device_limit", ...)`, which sets a device memory limit in bytes.
+
+
+#### Design
+
+Spilling consists of two components:
+  - A new buffer sub-class, `SpillableBuffer`, that implements moving of its data from host to device memory in-place.
+  - A spill manager that tracks all instances of `SpillableBuffer` and spills them on demand.
+A global spill manager is used throughout cudf when spilling is enabled, which makes `as_buffer()` return `SpillableBuffer` instead of the default `Buffer` instances.
+
+Accessing `Buffer.ptr`, we get the device memory pointer of the buffer. This is unproblematic in the case of `Buffer` but what happens when accessing `SpillableBuffer.ptr`, which might have spilled its device memory? In this case, `SpillableBuffer` needs to unspill the memory before returning its device memory pointer. Furthermore, while this device memory pointer is being used (or could be used), `SpillableBuffer`  cannot spill its memory back to host memory because doing so would invalidate the device pointer.
+
+To address this, we mark the `SpillableBuffer` as unspillable, we say that the buffer has been _exposed_. This can either be permanent if the device pointer is exposed to external projects or temporary while `libcudf` accesses the device memory.
+
+The `SpillableBuffer.get_ptr()` returns the device pointer of the buffer memory just like `.ptr` but if given an instance of `SpillLock`, the buffer is only unspillable as long as the instance of `SpillLock` is alive.
+
+For convenience, one can use the decorator/context `with_spill_lock` to associate a `SpillLock` with a lifetime bound to the context automatically.
+
 ## The Cython layer
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
