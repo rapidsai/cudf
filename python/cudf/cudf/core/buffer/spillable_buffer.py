@@ -97,7 +97,7 @@ class SpillableBuffer(Buffer):
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
-                f"cannot create {self.__class__} with a global spill manager"
+                f"cannot create {self.__class__} without a global spill manager"
             )
 
         self._manager = manager
@@ -203,7 +203,7 @@ class SpillableBuffer(Buffer):
                 # allocation might trigger spilling-on-demand which in turn
                 # trigger a new call to this buffer's `__spill__()`.
                 # Therefore, it is important that spilling-on-demand doesn't
-                # tries to unspill an already locked buffer!
+                # try to unspill an already locked buffer!
                 dev_mem = rmm.DeviceBuffer.to_device(
                     self._ptr_desc.pop("memoryview")
                 )
@@ -418,7 +418,7 @@ class SpillableBufferSlice(SpillableBuffer):
     def deserialize(cls, header: dict, frames: list):
         # TODO: because of the hack in `SpillableBuffer.serialize()` where
         # frames are of type `Buffer`, we always deserialize as if they are
-        # `SpillableBufferbuffer`. In the future, we should be able to
+        # `SpillableBuffer`. In the future, we should be able to
         # deserialize into `SpillableBufferSlice` when the frames hasn't been
         # copied.
         return SpillableBuffer.deserialize(header, frames)

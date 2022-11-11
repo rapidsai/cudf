@@ -63,8 +63,7 @@ class SpillManager:
     Parameters
     ----------
     spill_on_demand : bool
-        Enable spill on demand. The global manager sets this to the value of
-        `CUDF_SPILL_ON_DEMAND` or False.
+        Enable spill on demand.
     device_memory_limit: int, optional
         If not None, this is the device memory limit in bytes that triggers
         device to host spilling. The global manager sets this to the value
