@@ -231,7 +231,7 @@ class NumericalColumn(NumericalBaseColumn):
                                 or (
                                     isinstance(tmp, cudf.Scalar)
                                     # host to device copy
-                                    and (tmp.value is not pd.NA)
+                                    and tmp.is_valid()
                                 )
                             )
                             and (0 == tmp)
