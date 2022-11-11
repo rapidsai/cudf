@@ -252,7 +252,7 @@ dependencies:
           - pytest-cov
           - pytest-xdist
           - python-snappy>=0.6.0
-          - pytorch<1.12.0 # We should check and fix all "<=" pinnings
+          - pytorch
           - s3fs>=2022.3.0
           - scipy
           - tokenizers==0.13.1
