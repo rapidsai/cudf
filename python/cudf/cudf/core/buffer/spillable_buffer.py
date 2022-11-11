@@ -79,7 +79,7 @@ class SpillableBuffer(Buffer):
     Use the factory function `as_buffer` to create a SpillableBuffer instance.
     """
 
-    _lock: RLock
+    lock: RLock
     _spill_locks: weakref.WeakSet
     _last_accessed: float
     _ptr_desc: Dict[str, Any]
@@ -89,7 +89,7 @@ class SpillableBuffer(Buffer):
     def _finalize_init(self, ptr_desc: Dict[str, Any], exposed: bool) -> None:
         from cudf.core.buffer.spill_manager import get_global_manager
 
-        self._lock = RLock()
+        self.lock = RLock()
         self._spill_locks = weakref.WeakSet()
         self._last_accessed = time.monotonic()
         self._ptr_desc = ptr_desc
@@ -167,10 +167,6 @@ class SpillableBuffer(Buffer):
         return ret
 
     @property
-    def lock(self) -> RLock:
-        return self._lock
-
-    @property
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
 
@@ -183,7 +179,7 @@ class SpillableBuffer(Buffer):
             The target of the spilling.
         """
 
-        with self._lock:
+        with self.lock:
             ptr_type = self._ptr_desc["type"]
             if ptr_type == target:
                 return
@@ -227,7 +223,7 @@ class SpillableBuffer(Buffer):
         """
 
         self._manager.spill_to_device_limit()
-        with self._lock:
+        with self.lock:
             self.spill(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()
@@ -236,7 +232,7 @@ class SpillableBuffer(Buffer):
     def spill_lock(self, spill_lock: SpillLock = None) -> SpillLock:
         if spill_lock is None:
             spill_lock = SpillLock()
-        with self._lock:
+        with self.lock:
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
         return spill_lock
@@ -302,7 +298,7 @@ class SpillableBuffer(Buffer):
 
     def memoryview(self, *, offset: int = 0, size: int = None) -> memoryview:
         size = self._size if size is None else size
-        with self._lock:
+        with self.lock:
             if self.spillable:
                 self.spill(target="cpu")
                 return self._ptr_desc["memoryview"][offset : offset + size]
@@ -338,7 +334,7 @@ class SpillableBuffer(Buffer):
         """
         header: Dict[Any, Any]
         frames: List[Buffer | memoryview]
-        with self._lock:
+        with self.lock:
             header = {}
             header["type-serialized"] = pickle.dumps(self.__class__)
             header["frame_count"] = 1
@@ -401,7 +397,7 @@ class SpillableBufferSlice(SpillableBuffer):
         self._offset = offset
         self._size = size
         self._owner = base
-        self._lock = base.lock
+        self.lock = base.lock
 
     @property
     def ptr(self) -> int:
