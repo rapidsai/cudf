@@ -508,7 +508,7 @@ cdef class Column:
         size = cv.size()
         offset = cv.offset()
         dtype = dtype_from_column_view(cv)
-        dtype_itemsize = dtype.itemsize if hasattr(dtype, "itemsize") else 1
+        dtype_itemsize = getattr(dtype, "itemsize", 1)
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None
@@ -547,7 +547,7 @@ cdef class Column:
                 # TODO: try to discover their relationship and create a
                 #       SpillableBufferSlice instead.
                 data = as_buffer(
-                    data_ptr,
+                    data=data_ptr,
                     size=base_nbytes,
                     owner=data_owner,
                     exposed=True,
