@@ -961,10 +961,6 @@ struct get_cumulative_row_info {
     auto iter =
       cudf::detail::make_counting_transform_iterator(0, [page, index] __device__(size_type i) {
         auto const& pni = page.nesting[i];
-        if (index == 1) {
-          auto const size =
-            cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
-        }
         return cudf::type_dispatcher(
           data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
       });
@@ -1123,12 +1119,13 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
   // key
   rmm::device_uvector<size_type> key_offsets(page_keys.size() + 1, stream);
-  auto [_, key_offsets_end]    = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                    page_keys.begin(),
-                                                    page_keys.end(),
-                                                    thrust::make_constant_iterator(1),
-                                                    thrust::make_discard_iterator(),
-                                                    key_offsets.begin());
+  auto const key_offsets_end = thrust::reduce_by_key(rmm::exec_policy(stream),
+                                                     page_keys.begin(),
+                                                     page_keys.end(),
+                                                     thrust::make_constant_iterator(1),
+                                                     thrust::make_discard_iterator(),
+                                                     key_offsets.begin())
+                                 .second;
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
   thrust::exclusive_scan(
     rmm::exec_policy(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());

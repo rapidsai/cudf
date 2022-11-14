@@ -287,7 +287,8 @@ __device__ void gpuDecodeStream(
  * 31)
  * @param[in] t Warp1 thread ID (0..31)
  *
- * @return The new output position
+ * @return A pair containing the new output position, and the total length of strings decoded (this
+ * will only be valid on thread 0 and if sizes_only is true)
  */
 template <bool sizes_only>
 __device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
@@ -343,9 +344,10 @@ __device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s*
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
 
-    int len = 0;
+    // compute dictionary index.
+    int dict_idx = 0;
     if (t < batch_len) {
-      int dict_idx = s->dict_val;
+      dict_idx = s->dict_val;
       if (is_literal) {
         int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
         const uint8_t* p = s->data_start + (ofs >> 3);
@@ -366,27 +368,26 @@ __device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s*
         }
       }
 
-      // if we're computing indices, store it off.
-      if constexpr (sizes_only) {
-        len = [&]() {
-          // we may end up decoding more indices than we asked for. so don't include those in the
-          // size calculation
-          if (pos + t >= target_pos) { return 0; }
-          // TODO:  refactor this with gpuGetStringData / gpuGetStringSize
-          uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
-          if (target_pos && dict_pos < (uint32_t)s->dict_size) {
-            const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
-            return src->second;
-          }
-          return 0;
-        }();
-      } else {
-        s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
-      }
+      // if we're not computing sizes, store off the dictionary index
+      if constexpr (!sizes_only) { s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx; }
     }
 
-    // if we're computing sizes, sum it
+    // if we're computing sizes, add the length(s)
     if constexpr (sizes_only) {
+      int const len = [&]() {
+        if (t >= batch_len) { return 0; }
+        // we may end up decoding more indices than we asked for. so don't include those in the
+        // size calculation
+        if (pos + t >= target_pos) { return 0; }
+        // TODO:  refactor this with gpuGetStringData / gpuGetStringSize
+        uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
+        if (target_pos && dict_pos < (uint32_t)s->dict_size) {
+          const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+          return src->second;
+        }
+        return 0;
+      }();
+
       typedef cub::WarpReduce<size_type> WarpReduce;
       __shared__ typename WarpReduce::TempStorage temp_storage;
       // note: str_len will only be valid on thread 0.
@@ -1774,9 +1775,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
       // WARP1: Decode dictionary indices, booleans or string positions
       if (s->dict_base) {
-        auto const [new_target_pos, _] =
-          gpuDecodeDictionaryIndices<false>(s, src_target_pos, t & 0x1f);
-        src_target_pos = new_target_pos;
+        src_target_pos = gpuDecodeDictionaryIndices<false>(s, src_target_pos, t & 0x1f).first;
       } else if ((s->col.data_type & 7) == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, src_target_pos, t & 0x1f);
       } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
