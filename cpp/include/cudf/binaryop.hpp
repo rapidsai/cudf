@@ -42,7 +42,8 @@ enum class binary_operator : int32_t {
   DIV,          ///< operator / using common type of lhs and rhs
   TRUE_DIV,     ///< operator / after promoting type to floating point
   FLOOR_DIV,    ///< operator //
-                ///< standard integer division if both arguments are integral
+                ///< integer division rounding towards negative
+                ///< infinity if both arguments are integral;
                 ///< floor division for floating types (using C++ type
                 ///< promotion for mixed integral/floating arguments)
                 ///< If different promotion semantics are required, it

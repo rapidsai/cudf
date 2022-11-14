@@ -99,7 +99,13 @@ struct FloorDiv {
                       is_duration<TypeLhs>())>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
-    return x / y;
+    if ((x ^ y) >= 0) {
+      return x / y;
+    } else {
+      const auto quotient  = x / y;
+      const auto remainder = x % y;
+      return quotient - !!remainder;
+    }
   }
 
   template <
