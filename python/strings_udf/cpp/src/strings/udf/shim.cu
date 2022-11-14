@@ -271,17 +271,14 @@ extern "C" __device__ int rstrip(int* nb_retval,
   return 0;
 }
 
-extern "C" __device__ int at(int* nb_retval, void* result, void const* src_str, int idx)
+extern "C" __device__ int at(int* nb_retval, void* udf_str, void const* src_str, int idx)
 {
-  auto src_str_ptr    = reinterpret_cast<cudf::string_view const*>(src_str);
-  auto result_str_ptr = reinterpret_cast<cudf::string_view*>(result);
-  memset(result_str_ptr, 0, sizeof(cudf::string_view));
+  auto src_str_ptr = reinterpret_cast<cudf::string_view const*>(src_str);
+  auto udf_str_ptr = reinterpret_cast<udf_string*>(udf_str);
 
-  cudf::char_utf8 result_char = (*src_str_ptr)[idx];
-  // todo
-  cudf::string_view result_view;
+  cudf::string_view result_view = src_str_ptr->substr(idx, 1);
 
-  *result_str_ptr = result_view;
+  *udf_str_ptr = udf_string(result_view);
 
   return 0;
 }

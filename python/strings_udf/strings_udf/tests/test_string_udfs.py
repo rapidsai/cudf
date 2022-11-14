@@ -305,7 +305,7 @@ def test_string_udf_rstrip(data, strip_char):
 
 
 @pytest.mark.parametrize("data", [["abcd", "12345", "    "]])
-@pytest.mark.parametrize("index", [0, 1, -1, slice(0, 2)])
+@pytest.mark.parametrize("index", [0, 1, -1])
 def test_string_udf_substring(data, index):
     def func(st):
         return st[index]

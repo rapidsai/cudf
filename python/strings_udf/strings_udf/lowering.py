@@ -169,9 +169,11 @@ def call_string_view_at(result, st, idx):
 
 
 @cuda_lower(operator.getitem, string_view, types.Integer)
-def masked_dstring_substring(context, builder, sig, args):
+def udf_string_substring(context, builder, sig, args):
     st_ptr = builder.alloca(args[0].type)
-    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+    udf_str_ptr = cgutils.alloca_once(
+        builder, default_manager[udf_string].get_value_type(), zfill=True
+    )
 
     builder.store(args[0], st_ptr)
 
