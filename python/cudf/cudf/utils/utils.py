@@ -294,7 +294,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
         return as_buffer(dbuf)
-    return as_buffer(mask_buf, exposed=True)
+    return as_buffer(mask_buf)
 
 
 def _isnat(val):
