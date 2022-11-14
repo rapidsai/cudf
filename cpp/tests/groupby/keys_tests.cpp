@@ -234,12 +234,11 @@ TYPED_TEST(groupby_keys_test, mismatch_num_rows)
   fixed_width_column_wrapper<K> keys{1, 2, 3};
   fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4};
 
+  // Verify that scan throws an error when given data of mismatched sizes.
   auto agg = cudf::make_count_aggregation<groupby_aggregation>();
-  CUDF_EXPECT_THROW_MESSAGE(test_single_agg(keys, vals, keys, vals, std::move(agg)),
-                            "Size mismatch between request values and groupby keys.");
+  EXPECT_THROW(test_single_agg(keys, vals, keys, vals, std::move(agg)), cudf::logic_error);
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>();
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, keys, vals, std::move(agg2)),
-                            "Size mismatch between request values and groupby keys.");
+  EXPECT_THROW(test_single_scan(keys, vals, keys, vals, std::move(agg2)), cudf::logic_error);
 }
 
 template <typename T>

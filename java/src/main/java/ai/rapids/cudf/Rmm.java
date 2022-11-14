@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,14 +185,30 @@ public class Rmm {
    * @throws RmmException if an active handler is already set
    */
   public static void setEventHandler(RmmEventHandler handler) throws RmmException {
+    setEventHandler(handler, false);
+  }
+
+  /**
+   * Sets the event handler to be called on RMM events (e.g.: allocation failure) and
+   * optionally enable debug mode (callbacks on every allocate and deallocate)
+   *
+   * NOTE: Only enable debug mode when necessary, as code will run much slower!
+   *
+   * @param handler event handler to invoke on RMM events or null to clear an existing handler
+   * @param enableDebug if true enable debug callbacks in RmmEventHandler
+   *                    (onAllocated, onDeallocated)
+   * @throws RmmException if an active handler is already set
+   */
+  public static void setEventHandler(RmmEventHandler handler,
+                                     boolean enableDebug) throws RmmException {
     long[] allocThresholds = (handler != null) ? sortThresholds(handler.getAllocThresholds()) : null;
     long[] deallocThresholds = (handler != null) ? sortThresholds(handler.getDeallocThresholds()) : null;
-    setEventHandlerInternal(handler, allocThresholds, deallocThresholds);
+    setEventHandlerInternal(handler, allocThresholds, deallocThresholds, enableDebug);
   }
 
   /** Clears the active RMM event handler if one is set. */
   public static void clearEventHandler() throws RmmException {
-    setEventHandlerInternal(null, null, null);
+    setEventHandlerInternal(null, null, null, false);
   }
 
   private static long[] sortThresholds(long[] thresholds) {
@@ -300,7 +316,8 @@ public class Rmm {
   static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
 
   static native void setEventHandlerInternal(RmmEventHandler handler,
-      long[] allocThresholds, long[] deallocThresholds) throws RmmException;
+      long[] allocThresholds, long[] deallocThresholds,
+      boolean enableDebug) throws RmmException;
 
   /**
    * Allocate device memory using `cudaMalloc` and return a pointer to device memory.

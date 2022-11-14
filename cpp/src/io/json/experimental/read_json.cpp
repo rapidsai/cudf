@@ -19,6 +19,7 @@
 #include <io/comp/io_uncomp.hpp>
 #include <io/json/nested_json.hpp>
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <numeric>
@@ -42,6 +43,7 @@ std::vector<uint8_t> ingest_raw_input(host_span<std::unique_ptr<datasource>> con
                                       size_t range_offset,
                                       size_t range_size)
 {
+  CUDF_FUNC_RANGE();
   // Iterate through the user defined sources and read the contents into the local buffer
   auto const total_source_size = sources_size(sources, range_offset, range_size);
   auto buffer                  = std::vector<uint8_t>(total_source_size);
@@ -153,6 +155,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (not should_load_whole_source(reader_opts)) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
                  "specifying a byte range is supported only for json lines");
