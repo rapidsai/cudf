@@ -237,7 +237,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return std::nullopt; }
+  if (!all_digits_valid) { return std::optional<T>{}; }
 
   return value * sign;
 }
