@@ -197,8 +197,9 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
                                         cudf::io::io_type::HOST_BUFFER,
                                         cudf::io::io_type::VOID>;
 
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
+using compression_list = nvbench::enum_type_list<cudf::io::compression_type::SNAPPY,
+                                                 cudf::io::compression_type::ZSTD,
+                                                 cudf::io::compression_type::NONE>;
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
