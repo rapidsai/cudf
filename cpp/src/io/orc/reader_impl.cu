@@ -379,8 +379,10 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
-        // See https://github.com/rapidsai/cudf/issues/11812
-        if (false) {
+        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
+          gpuinflate(
+            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
+        } else {
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
                                      inflate_in_view,
                                      inflate_out_view,
@@ -388,13 +390,12 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
-        } else {
-          gpuinflate(
-            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
         }
         break;
       case compression_type::SNAPPY:
-        if (nvcomp_integration::is_stable_enabled()) {
+        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::SNAPPY)) {
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
+        } else {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,
@@ -402,11 +403,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
-        } else {
-          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
         }
         break;
       case compression_type::ZSTD:
+        if (auto const reason = nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD);
+            reason) {
+          CUDF_FAIL("Decompression error: " + reason.value());
+        }
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    inflate_in_view,
                                    inflate_out_view,
@@ -522,8 +525,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
         auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
         uint32_t* dst_idx_ptr = dst_idx.data();
-        // Copy child valid bits from child column to valid indexes, this will merge both child and
-        // parent null masks
+        // Copy child valid bits from child column to valid indexes, this will merge both child
+        // and parent null masks
         thrust::for_each(rmm::exec_policy(stream),
                          thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(0) + dst_idx.size(),

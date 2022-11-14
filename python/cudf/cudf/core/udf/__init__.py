@@ -32,7 +32,11 @@ try:
             column_from_udf_string_array,
             column_to_string_view_array,
         )
-        from strings_udf._typing import str_view_arg_handler, string_view
+        from strings_udf._typing import (
+            str_view_arg_handler,
+            string_view,
+            udf_string,
+        )
 
         from . import strings_typing  # isort: skip
         from . import strings_lowering  # isort: skip
@@ -41,7 +45,7 @@ try:
             masked_lowering.masked_constructor
         )
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
-        _supported_masked_types |= {string_view}
+        _supported_masked_types |= {string_view, udf_string}
 
         utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
         utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
@@ -49,6 +53,9 @@ try:
         row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes
 
         utils.arg_handlers.append(str_view_arg_handler)
+
+        masked_typing.MASKED_INIT_MAP[udf_string] = udf_string
+
         _STRING_UDFS_ENABLED = True
 
 except ImportError as e:
