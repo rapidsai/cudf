@@ -2257,11 +2257,11 @@ TEST_F(CsvReaderTest, EmptyColumns)
   auto result = cudf::io::read_csv(in_opts);
 
   const auto result_table = result.tbl->view();
-  ASSERT_EQ(result_table.num_columns(), 4);
+  EXPECT_EQ(result_table.num_columns(), 4);
   // All columns should contain only nulls; expect INT8 type to use as little memory as possible
   for (auto& column : result_table) {
-    ASSERT_EQ(column.type(), data_type{type_id::INT8});
-    ASSERT_EQ(column.null_count(), 2);
+    EXPECT_EQ(column.type(), data_type{type_id::INT8});
+    EXPECT_EQ(column.null_count(), 2);
   }
 }
 
