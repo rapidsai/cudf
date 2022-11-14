@@ -65,6 +65,12 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
+    # TODO: We need this to be dynamic, so it doesn't work to put it into
+    # pyproject.toml, but setup_requires is deprecated so we need to find a
+    # better solution for this.
+    setup_requires=[
+        f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    ],
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
