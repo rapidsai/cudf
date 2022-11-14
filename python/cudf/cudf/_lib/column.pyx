@@ -249,8 +249,7 @@ cdef class Column:
     @property
     def null_count(self):
         if self._null_count is None:
-            with with_spill_lock():
-                self._null_count = self.compute_null_count()
+            self._null_count = self.compute_null_count()
         return self._null_count
 
     @property
@@ -315,7 +314,8 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
+        with with_spill_lock():
+            return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
