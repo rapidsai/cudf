@@ -355,7 +355,7 @@ def create_upper_or_lower(id_func):
     def deco(cuda_func):
         @cuda_lower(id_func, string_view)
         def id_func_impl(context, builder, sig, args):
-            str_ptr = builder.alloca(args[0].type)
+            str_ptr = cgutils.alloca(args[0].type)
             builder.store(args[0], str_ptr)
 
             # Lookup table required for conversion functions
@@ -371,8 +371,10 @@ def create_upper_or_lower(id_func):
                 types.int64, special_case_mapping_table_ptr
             )
 
-            udf_str_ptr = builder.alloca(
-                default_manager[udf_string].get_value_type()
+            udf_str_ptr = cgutils.alloca_once(
+                builder,
+                default_manager[udf_string].get_value_type(),
+                zfill=True,
             )
 
             _ = context.compile_internal(
