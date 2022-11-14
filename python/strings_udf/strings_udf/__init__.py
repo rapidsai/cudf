@@ -96,7 +96,7 @@ STRINGS_UDF_HEAP_SIZE = os.environ.get(
 heap_size = 0
 
 
-def set_malloc_heap_size(size=STRINGS_UDF_DEFAULT_HEAP_SIZE):
+def set_malloc_heap_size(size=STRINGS_UDF_HEAP_SIZE):
     """
     Heap size control for strings_udf, size in bytes.
     """
