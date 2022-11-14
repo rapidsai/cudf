@@ -70,6 +70,7 @@ std::unique_ptr<column> make_empty_column(type_id id);
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Constructed numeric column
+ * @throws cudf::logic_error if `size < 0`
  */
 std::unique_ptr<column> make_numeric_column(
   data_type type,
@@ -127,6 +128,7 @@ std::unique_ptr<column> make_numeric_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  * @return Constructed fixed-point type column
+ * @throws cudf::logic_error if `size < 0`
  */
 std::unique_ptr<column> make_fixed_point_column(
   data_type type,
@@ -184,6 +186,7 @@ std::unique_ptr<column> make_fixed_point_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Constructed timestamp type column
+ * @throws cudf::logic_error if `size < 0`
  */
 std::unique_ptr<column> make_timestamp_column(
   data_type type,
@@ -242,6 +245,7 @@ std::unique_ptr<column> make_timestamp_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Constructed duration type column
+ * @throws cudf::logic_error if `size < 0`
  */
 std::unique_ptr<column> make_duration_column(
   data_type type,
@@ -300,6 +304,7 @@ std::unique_ptr<column> make_duration_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return Constructed fixed-width type column
+ * @throws cudf::logic_error if `size < 0`
  */
 std::unique_ptr<column> make_fixed_width_column(
   data_type type,
@@ -366,7 +371,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
-  * @return Constructed strings column
+ * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<thrust::pair<const char*, size_type> const> strings,

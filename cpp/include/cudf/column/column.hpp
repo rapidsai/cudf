@@ -118,6 +118,7 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
+   * @throws cudf::logic_error if `size < 0`
    */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype,
