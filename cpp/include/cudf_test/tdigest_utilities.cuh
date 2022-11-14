@@ -21,7 +21,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/device_vector.h>
@@ -267,7 +267,7 @@ void tdigest_simple_all_nulls_aggregation(Func op)
     static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -558,9 +558,9 @@ template <typename MergeFunc>
 void tdigest_merge_empty(MergeFunc merge_op)
 {
   // 3 empty tdigests all in the same group
-  auto a = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
-  auto b = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
-  auto c = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto a = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto b = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
+  auto c = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
   std::vector<column_view> cols;
   cols.push_back(*a);
   cols.push_back(*b);
@@ -570,7 +570,7 @@ void tdigest_merge_empty(MergeFunc merge_op)
   auto const delta = 1000;
   auto result      = merge_op(*values, delta);
 
-  auto expected = cudf::detail::tdigest::make_empty_tdigest_column(cudf::get_default_stream());
+  auto expected = cudf::tdigest::detail::make_empty_tdigest_column(cudf::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
 }

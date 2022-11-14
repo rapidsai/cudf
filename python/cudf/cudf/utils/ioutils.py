@@ -1953,7 +1953,15 @@ def _fsspec_data_transfer(
 
     # Calculate total file size
     if file_like:
-        file_size = path_or_fob.size
+        try:
+            file_size = path_or_fob.size
+        except AttributeError:
+            # Find file size if there is no `size`
+            # attribute
+            old_file_position = path_or_fob.tell()
+            path_or_fob.seek(0, os.SEEK_END)
+            file_size = path_or_fob.tell()
+            path_or_fob.seek(old_file_position, os.SEEK_SET)
     file_size = file_size or fs.size(path_or_fob)
 
     # Check if a direct read makes the most sense

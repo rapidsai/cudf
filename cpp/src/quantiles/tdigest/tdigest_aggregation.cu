@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <quantiles/tdigest/tdigest_util.cuh>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -26,7 +28,6 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -52,10 +53,8 @@
 #include <thrust/tuple.h>
 
 namespace cudf {
-namespace detail {
 namespace tdigest {
-
-using namespace cudf::tdigest;
+namespace detail {
 
 namespace {
 
@@ -596,7 +595,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
 
   // if there are no stub tdigests, we can return immediately.
   if (num_stubs == 0) {
-    return cudf::detail::tdigest::make_tdigest_column(num_rows,
+    return cudf::tdigest::detail::make_tdigest_column(num_rows,
                                                       std::move(means),
                                                       std::move(weights),
                                                       std::move(offsets),
@@ -642,7 +641,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
                          0);
 
   // assemble final column
-  return cudf::detail::tdigest::make_tdigest_column(num_rows,
+  return cudf::tdigest::detail::make_tdigest_column(num_rows,
                                                     std::move(_means),
                                                     std::move(_weights),
                                                     std::move(offsets),
@@ -708,7 +707,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   //   double       // max
   // }
   //
-  if (total_clusters == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
+  if (total_clusters == 0) { return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr); }
 
   // each input group represents an individual tdigest.  within each tdigest, we want the keys
   // to represent cluster indices (for example, if a tdigest had 100 clusters, the keys should fall
@@ -1067,9 +1066,10 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   // generate min and max values
   auto merged_min_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
-  auto min_iter = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(tdv.min_begin(), tdv.size_begin())),
-    tdigest_min{});
+  auto min_iter =
+    thrust::make_transform_iterator(thrust::make_zip_iterator(thrust::make_tuple(
+                                      tdv.min_begin(), cudf::tdigest::detail::size_begin(tdv))),
+                                    tdigest_min{});
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels,
                         group_labels + num_group_labels,
@@ -1081,9 +1081,10 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
-  auto max_iter = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(tdv.max_begin(), tdv.size_begin())),
-    tdigest_max{});
+  auto max_iter =
+    thrust::make_transform_iterator(thrust::make_zip_iterator(thrust::make_tuple(
+                                      tdv.max_begin(), cudf::tdigest::detail::size_begin(tdv))),
+                                    tdigest_max{});
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels,
                         group_labels + num_group_labels,
@@ -1190,7 +1191,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_scalar(stream, mr); }
+  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr); }
 
   // since this isn't coming out of a groupby, we need to sort the inputs in ascending
   // order with nulls at the end.
@@ -1209,7 +1210,7 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 {
   tdigest_column_view tdv(input);
 
-  if (input.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_scalar(stream, mr); }
+  if (input.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr); }
 
   auto h_group_offsets = cudf::detail::make_counting_transform_iterator(
     0, [size = input.size()](size_type i) { return i == 0 ? 0 : size; });
@@ -1238,7 +1239,7 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
+  if (col.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr); }
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(col.type(),
@@ -1264,7 +1265,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   tdigest_column_view tdv(input);
 
   if (num_groups == 0 || input.size() == 0) {
-    return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr);
+    return cudf::tdigest::detail::make_empty_tdigest_column(stream, mr);
   }
 
   // bring group offsets back to the host
@@ -1286,6 +1287,6 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                         mr);
 }
 
-}  // namespace tdigest
 }  // namespace detail
+}  // namespace tdigest
 }  // namespace cudf
