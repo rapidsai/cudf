@@ -11,7 +11,6 @@ missing-data
 groupby
 guide-to-udfs
 cupy-interop
-dask-cudf
 options
 PandasCompat
 ```

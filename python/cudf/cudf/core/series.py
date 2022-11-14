@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_dtype,
     is_scalar,
+    is_string_dtype,
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
@@ -214,19 +215,20 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = column.as_column(value)
 
         if (
-            not isinstance(
-                self._frame._column.dtype,
-                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+            (
+                _is_non_decimal_numeric_dtype(self._frame._column.dtype)
+                or is_string_dtype(self._frame._column.dtype)
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
-            if not is_integer(key):
-                to_dtype = np.result_type(
-                    value.dtype, self._frame._column.dtype
-                )
-                value = value.astype(to_dtype)
+            # In contrast to Column.__setitem__ (which downcasts the value to
+            # the dtype of the column) here we upcast the series to the
+            # larger data type mimicking pandas
+            to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
+            value = value.astype(to_dtype)
+            if to_dtype != self._frame._column.dtype:
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )

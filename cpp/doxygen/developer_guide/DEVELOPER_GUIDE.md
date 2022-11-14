@@ -403,6 +403,14 @@ Functions like merge or groupby in libcudf make no guarantees about the order of
 Promising deterministic ordering is not, in general, conducive to fast parallel algorithms.
 Calling code is responsible for performing sorts after the fact if sorted outputs are needed.
 
+## libcudf does not promise specific exception messages
+
+libcudf documents the exceptions that will be thrown by an API for different kinds of invalid inputs.
+The types of those exceptions (e.g. `cudf::logic_error`) are part of the public API.
+However, the explanatory string returned by the `what` method of those exceptions is not part of the API and is subject to change.
+Calling code should not rely on the contents of libcudf error messages to determine the nature of the error.
+For information on the types of exceptions that libcudf throws under different circumstances, see the [section on error handling](#errors).
+
 # libcudf API and Implementation
 
 ## Streams
@@ -837,7 +845,7 @@ description of what has broken from the past release. Label pull requests that c
 with the "non-breaking" tag.
 
 
-# Error Handling
+# Error Handling {#errors}
 
 libcudf follows conventions (and provides utilities) enforcing compile-time and run-time
 conditions and detecting and handling CUDA errors. Communication of errors is always via C++
