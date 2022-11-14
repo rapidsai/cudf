@@ -1018,9 +1018,22 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   return comp_page_sizes;
 }
 
+size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
+{
+  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
+
+  auto const ncomp_type   = to_nvcomp_compression_type(compression);
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
+
+  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+}
+
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                               host_span<gpu::parquet_column_device_view const> col_desc,
                               device_2dspan<gpu::PageFragment const> frags,
+                              Compression compression,
                               rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
@@ -1076,6 +1089,17 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
       if (ck.plain_data_size <= dict_enc_size) { return {false, 0}; }
+
+      // don't use dictionary if it gets too large for the given compression codec.
+      // but in the case where the dictionary encoding is giving large savings, prefer
+      // that over compression.
+      // TODO(ets): add an option to always prefer dictionary for pathological cases
+      constexpr int dict_threshold = 4;  // FIXME: need a defensible value here
+      if (static_cast<size_t>(ck.uniq_data_size) >
+            max_page_bytes(compression, ck.uniq_data_size) and
+          (ck.plain_data_size / dict_enc_size) < dict_threshold) {
+        return {false, 0};
+      }
 
       return {true, nbits};
     }();
@@ -1242,18 +1266,6 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
   // calculating this per-chunk because the sizes can be wildly different.
   constexpr size_t padding = 7;
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
-}
-
-size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
-{
-  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
-
-  auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
-                              ? std::nullopt
-                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
-
-  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
 }
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
@@ -1531,7 +1543,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   fragments.host_to_device(stream);
-  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, stream);
+  auto dict_info_owner =
+    build_chunk_dictionaries(chunks, col_desc, fragments, compression_, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
       size_t global_rg = global_rowgroup_base[p] + rg;
