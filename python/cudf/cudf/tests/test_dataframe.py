@@ -6889,15 +6889,16 @@ def test_dataframe_from_dict(data, orient, dtype, columns):
     assert_eq(expected, actual)
 
 
-def test_dataframe_from_dict_transposed():
+@pytest.mark.parametrize("dtype", ["int64", "str", None])
+def test_dataframe_from_dict_transposed(dtype):
     pd_data = {"a": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}
     gd_data = {key: cudf.Series(val) for key, val in pd_data.items()}
 
-    expected = pd.DataFrame.from_dict(pd_data, orient="index")
-    actual = cudf.DataFrame.from_dict(gd_data, orient="index")
+    expected = pd.DataFrame.from_dict(pd_data, orient="index", dtype=dtype)
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
 
     gd_data = {key: cupy.asarray(val) for key, val in pd_data.items()}
-    actual = cudf.DataFrame.from_dict(gd_data, orient="index")
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
     assert_eq(expected, actual)
 
 
