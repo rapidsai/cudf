@@ -70,7 +70,7 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_
                    cudf::table_view const& right,                                      \
                    cudf::ast::operation binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                \
-      return cudf::conditional_inner_join(left, right, binary_pred);                   \
+      return cudf::conditional_full_join(left, right, binary_pred);                    \
     };                                                                                 \
     constexpr bool is_conditional = true;                                              \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);               \
