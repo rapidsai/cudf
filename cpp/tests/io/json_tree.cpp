@@ -750,9 +750,9 @@ TEST_F(JsonTest, TreeRepresentationError)
     cudf::io::json::detail::get_token_stream(d_input, options, stream);
 
   // Get the JSON's tree representation
-  CUDF_EXPECT_THROW_MESSAGE(
-    cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream),
-    "JSON Parser encountered an invalid format at location 6");
+  // This JSON is invalid and will raise an exception.
+  EXPECT_THROW(cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream),
+               cudf::logic_error);
 }
 
 /**

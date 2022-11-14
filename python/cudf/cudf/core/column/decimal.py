@@ -399,4 +399,12 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 # to try the next dtype
                 continue
 
-    raise OverflowError("Maximum supported decimal type is Decimal128")
+    # Instead of raising an overflow error, we create a `Decimal128Dtype`
+    # with max possible scale & precision, see example of this demonstration
+    # here: https://learn.microsoft.com/en-us/sql/t-sql/data-types/
+    # precision-scale-and-length-transact-sql?view=sql-server-ver16#examples
+    scale = min(
+        scale, cudf.Decimal128Dtype.MAX_PRECISION - (precision - scale)
+    )
+    precision = min(cudf.Decimal128Dtype.MAX_PRECISION, max_precision)
+    return cudf.Decimal128Dtype(precision=precision, scale=scale)

@@ -35,6 +35,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_dtype,
     is_scalar,
+    is_string_dtype,
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
@@ -214,19 +215,20 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = column.as_column(value)
 
         if (
-            not isinstance(
-                self._frame._column.dtype,
-                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+            (
+                _is_non_decimal_numeric_dtype(self._frame._column.dtype)
+                or is_string_dtype(self._frame._column.dtype)
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
-            if not is_integer(key):
-                to_dtype = np.result_type(
-                    value.dtype, self._frame._column.dtype
-                )
-                value = value.astype(to_dtype)
+            # In contrast to Column.__setitem__ (which downcasts the value to
+            # the dtype of the column) here we upcast the series to the
+            # larger data type mimicking pandas
+            to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
+            value = value.astype(to_dtype)
+            if to_dtype != self._frame._column.dtype:
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
@@ -283,6 +285,10 @@ class _SeriesLocIndexer(_FrameIndexer):
         self._frame.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        if isinstance(arg, tuple) and arg and isinstance(arg[0], slice):
+            if len(arg) > 1:
+                raise IndexError("Too many Indexers")
+            arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
@@ -724,6 +730,45 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().drop(
             labels, axis, index, columns, level, inplace, errors
         )
+
+    @_cudf_nvtx_annotate
+    def to_dict(self, into: type[dict] = dict) -> dict:
+        """
+        Convert Series to {label -> value} dict or dict-like object.
+
+        Parameters
+        ----------
+        into : class, default dict
+            The collections.abc.Mapping subclass to use as the return
+            object. Can be the actual class or an empty
+            instance of the mapping type you want.  If you want a
+            collections.defaultdict, you must pass it initialized.
+
+        Returns
+        -------
+        collections.abc.Mapping
+            Key-value representation of Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.to_dict()
+        {0: 1, 1: 2, 2: 3, 3: 4}
+        >>> from collections import OrderedDict, defaultdict
+        >>> s.to_dict(OrderedDict)
+        OrderedDict([(0, 1), (1, 2), (2, 3), (3, 4)])
+        >>> dd = defaultdict(list)
+        >>> s.to_dict(dd)
+        defaultdict(<class 'list'>, {0: 1, 1: 2, 2: 3, 3: 4})
+        """
+        return self.to_pandas().to_dict(into=into)
 
     @_cudf_nvtx_annotate
     def append(self, to_append, ignore_index=False, verify_integrity=False):

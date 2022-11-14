@@ -392,4 +392,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
+        if self.dtype == dtype:
+            return self
         return Scalar(self.value, dtype)

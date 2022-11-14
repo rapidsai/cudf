@@ -16,6 +16,7 @@
 
 #include "backref_re.cuh"
 
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -102,19 +103,18 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string_vie
 
 //
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
-                                              std::string_view pattern,
+                                              regex_program const& prog,
                                               std::string_view replacement,
-                                              regex_flags const flags,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
+  CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
@@ -152,8 +152,18 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+  auto const h_prog = regex_program::create(pattern, flags, capture_groups::EXTRACT);
   return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, cudf::get_default_stream(), mr);
+    strings, *h_prog, replacement, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
+                                              regex_program const& prog,
+                                              std::string_view replacement,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_with_backrefs(strings, prog, replacement, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
