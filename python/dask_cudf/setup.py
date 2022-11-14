@@ -6,7 +6,6 @@ import versioneer
 from setuptools import find_packages, setup
 
 install_requires = [
-    "cudf",
     "dask==2022.9.2",
     "distributed==2022.9.2",
     "fsspec>=0.6.0",
@@ -22,8 +21,6 @@ extras_require = {
         "pandas>=1.0,<1.6.0dev0",
         "pytest",
         "numba>=0.54",
-        "dask>=2021.09.1",
-        "distributed>=2021.09.1",
     ]
 }
 
