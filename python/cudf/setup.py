@@ -65,9 +65,6 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
-    setup_requires=[
-        f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-    ],
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,
