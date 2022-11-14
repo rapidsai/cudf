@@ -452,3 +452,15 @@ def test_df_transpose(manager: SpillManager):
     assert df1._data._data["x"].data.exposed
     assert df2._data._data[0].data.exposed
     assert df2._data._data[1].data.exposed
+
+
+@pytest.mark.parametrize("dtype", ["uint8", "uint64"])
+def test_memoryview_slice(manager: SpillManager, dtype):
+    """Check .memoryview() of a sliced spillable buffer"""
+
+    data = np.arange(10, dtype=dtype)
+    # memoryview of a sliced spillable buffer
+    m1 = as_buffer(data=data)[1:-1].memoryview()
+    # sliced memoryview of data as bytes
+    m2 = memoryview(data).cast("B")[1:-1]
+    assert m1 == m2

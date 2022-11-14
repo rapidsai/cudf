@@ -168,6 +168,7 @@ class SpillableBuffer(Buffer):
         data = memoryview(numpy.array(data, copy=False, subok=True))
         if not data.c_contiguous:
             raise ValueError("Buffer data must be C-contiguous")
+        data = data.cast("B")  # Make sure itemsize==1
 
         # Create an already spilled buffer
         ret = cls.__new__(cls)
