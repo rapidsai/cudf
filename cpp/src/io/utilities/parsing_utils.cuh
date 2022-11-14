@@ -578,9 +578,9 @@ struct ConvertFunctor {
       return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
                     : cudf::io::parse_numeric<T>(begin, end, opts);
     }();
-    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
-    return value.has_value();
+    return true;
   }
 
   /**
@@ -630,9 +630,9 @@ struct ConvertFunctor {
       }
       return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
-    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
-    return value.has_value();
+    return true;
   }
 
   /**
@@ -659,7 +659,7 @@ struct ConvertFunctor {
       }
       return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
-    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
     return value.has_value() and !std::isnan(*value);
   }
