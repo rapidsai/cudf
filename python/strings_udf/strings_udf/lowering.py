@@ -115,7 +115,9 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
 @cuda_lowering_registry.lower_cast(string_view, udf_string)
 def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
     sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
-    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
+    udf_str_ptr = cgutils.alloca_once(
+        builder, default_manager[toty].get_value_type(), zfill=True
+    )
     builder.store(val, sv_ptr)
     _ = context.compile_internal(
         builder,
@@ -196,8 +198,10 @@ def create_binary_string_func(binary_func, retty):
                 # value of compile_internal is therefore discarded (although
                 # this may change in the future if we need to return error
                 # codes, for instance).
-                udf_str_ptr = builder.alloca(
-                    default_manager[udf_string].get_value_type()
+                udf_str_ptr = cgutils.alloca_once(
+                    builder,
+                    default_manager[udf_string].get_value_type(),
+                    zfill=True,
                 )
 
                 _ = context.compile_internal(
