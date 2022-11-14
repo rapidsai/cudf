@@ -35,7 +35,7 @@ jobs:
     with:
       repo: rapidsai/cudf
 
-      build-type: ${{ inputs.build-type }}
+      build-type: ${{ inputs.build-type || 'pull-request' }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
