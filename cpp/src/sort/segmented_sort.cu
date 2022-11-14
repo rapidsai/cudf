@@ -28,7 +28,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <cub/cub.cuh>
+#include <cub/device/device_segmented_sort.cuh>
 
 namespace cudf {
 namespace detail {
@@ -40,11 +40,11 @@ namespace {
 enum class sort_method { STABLE, UNSTABLE };
 
 /**
- * @brief Functor performs faster sort on eligible columns
+ * @brief Functor performs faster segmented sort on eligible columns
  */
 struct column_fast_sort_fn {
   /**
-   * @brief Run-time check for faster sort on an eligible column
+   * @brief Run-time check for faster segmented sort on an eligible column
    *
    * Fast segmented sort can handle integral types including
    * decimal types if dispatch_storage_type is used but it does not support int128.
@@ -57,7 +57,7 @@ struct column_fast_sort_fn {
   }
 
   /**
-   * @brief Compile-time check for supporting fast sort for a specific type
+   * @brief Compile-time check for supporting fast segmented sort for a specific type
    *
    * The dispatch_storage_type means we can check for integral types to
    * include fixed-point types but the CUB limitation means we need to exclude int128.
@@ -245,7 +245,7 @@ std::unique_ptr<column> segmented_sorted_order_common(
   // - not stable-sort
   // - no nulls and allowable fixed-width type
   // - size and width are limited -- based on benchmark results
-  if (keys.num_columns() == 0 and sorting == sort_method::UNSTABLE and
+  if (keys.num_columns() == 1 and sorting == sort_method::UNSTABLE and
       column_fast_sort_fn::is_fast_sort_supported(keys.column(0)) and
       (segment_offsets.size() > 0) and
       (((keys.num_rows() / segment_offsets.size()) < MAX_AVG_LIST_SIZE_FOR_FAST_SORT) or
