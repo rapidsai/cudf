@@ -1487,27 +1487,54 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
       0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
   };
 
-  constexpr int iNA    = -1;
-  constexpr double dNA = std::numeric_limits<double>::quiet_NaN();
-  constexpr bool bNA   = false;
+  constexpr int int_NA       = 0;
+  constexpr double double_NA = std::numeric_limits<double>::quiet_NaN();
+  constexpr bool bool_NA     = false;
 
-  std::vector<int> const validity_int   = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
-  std::vector<int> const validity_float = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
-  std::vector<int> const validity_bool  = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
+  std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
 
-  auto int_col = int_wrapper{{0, 0, iNA, 1, 1, iNA, iNA, iNA, iNA, 1, 0, iNA, 1, 0, iNA, iNA},
-                             make_validity(validity_int)};
-  auto float_col =
-    float_wrapper{{0.0, 0.0, dNA, 1.0, 1.0, dNA, dNA, dNA, dNA, 1.0, 0.0, dNA, 1.0, 0.0, dNA, dNA},
-                  make_validity(validity_float)};
+  auto int_col = int_wrapper{
+    {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
+    make_validity(validity)};
+  auto float_col = float_wrapper{{0.0,
+                                  0.0,
+                                  double_NA,
+                                  1.0,
+                                  1.0,
+                                  double_NA,
+                                  double_NA,
+                                  double_NA,
+                                  double_NA,
+                                  1.0,
+                                  0.0,
+                                  double_NA,
+                                  1.0,
+                                  0.0,
+                                  double_NA,
+                                  double_NA},
+                                 make_validity(validity)};
   auto str_col =
     cudf::test::strings_column_wrapper{// clang-format off
     {"0", "0", " 0", "1", "1", " 1", "a", "z", "", "true", "false", "null", "true", "false", "nan", "nan"},
      cudf::test::iterators::nulls_at(std::vector<int>{8})};
   // clang-format on
-  auto bool_col = bool_wrapper{
-    {false, false, bNA, true, true, bNA, bNA, bNA, bNA, true, false, bNA, true, false, bNA, bNA},
-    make_validity(validity_bool)};
+  auto bool_col = bool_wrapper{{false,
+                                false,
+                                bool_NA,
+                                true,
+                                true,
+                                bool_NA,
+                                bool_NA,
+                                bool_NA,
+                                bool_NA,
+                                true,
+                                false,
+                                bool_NA,
+                                true,
+                                false,
+                                bool_NA,
+                                bool_NA},
+                               make_validity(validity)};
 
   // Types to test
   const std::vector<data_type> dtypes = {

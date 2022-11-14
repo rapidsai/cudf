@@ -237,7 +237,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return {}; }
+  if (!all_digits_valid) { return std::nullopt; }
 
   return value * sign;
 }
@@ -622,8 +622,12 @@ struct ConvertFunctor {
     auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
       return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
     if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
@@ -647,8 +651,12 @@ struct ConvertFunctor {
     auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
       return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
     if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
