@@ -2244,7 +2244,7 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
 }
 
-< < < < < < < < < Temporary merge branch 1 TEST_F(CsvReaderTest, EmptyColumns)
+TEST_F(CsvReaderTest, EmptyColumns)
 {
   // First column only has empty fields. second column contains only "null" literals
   std::string csv_in{",null\n,null"};
