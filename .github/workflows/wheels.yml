@@ -72,6 +72,7 @@ jobs:
 
       python-package-versioneer-override: ${{ inputs.versioneer-override }}
       python-package-build-tag: ${{ inputs.build-tag }}
+      python-package-cuda-suffix: "-cu11"
 
       test-extras:  test
       test-before: "pip install rmm-cu11 cudf-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
