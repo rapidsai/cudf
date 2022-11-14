@@ -25,9 +25,12 @@ _UDF_STRING_PTR = types.CPointer(udf_string)
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
-
 _string_view_at = cuda.declare_device(
     "at", size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, size_type)
+)
+_string_view_substring = cuda.declare_device(
+    "substring",
+    size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, size_type, size_type),
 )
 
 
@@ -180,8 +183,39 @@ def udf_string_substring(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_string_view_at,
-        size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, types.int64),
+        size_type(
+            _UDF_STRING_PTR,
+            _STR_VIEW_PTR,
+            types.int64,
+        ),
         (udf_str_ptr, st_ptr, args[1]),
+    )
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
+
+
+def call_string_view_substring(result, st, start, stop):
+    return _string_view_substring(result, st, start, stop)
+
+
+@cuda_lower(operator.getitem, string_view, types.SliceType)
+def udf_string_substring_slice(context, builder, sig, args):
+    st_ptr = builder.alloca(args[0].type)
+    udf_str_ptr = cgutils.alloca_once(
+        builder, default_manager[udf_string].get_value_type(), zfill=True
+    )
+    builder.store(args[0], st_ptr)
+
+    slc = cgutils.create_struct_proxy(sig.args[1])(
+        context, builder, value=args[1]
+    )
+    _ = context.compile_internal(
+        builder,
+        call_string_view_substring,
+        size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, types.int64, types.int64),
+        (udf_str_ptr, st_ptr, slc.start, slc.stop),
     )
     result = cgutils.create_struct_proxy(udf_string)(
         context, builder, value=builder.load(udf_str_ptr)

@@ -282,3 +282,21 @@ extern "C" __device__ int at(int* nb_retval, void* udf_str, void const* src_str,
 
   return 0;
 }
+
+extern "C" __device__ int substring(
+  int* nb_retval, void* udf_str, void* const* src_str, int start, int stop)
+{
+  auto src_str_ptr = reinterpret_cast<cudf::string_view const*>(src_str);
+  auto udf_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+
+  printf("%i\n", start);
+  printf("%i\n", stop);
+
+  cudf::string_view result_view = src_str_ptr->substr(start, stop - start);
+  udf_string result             = udf_string(result_view);
+  printf("%s\n", result.data());
+
+  *udf_str_ptr = udf_string(result_view);
+
+  return 0;
+}
