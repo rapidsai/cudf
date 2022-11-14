@@ -130,6 +130,10 @@ def test_groupby_agg(func, aggregation, pdf):
 
     assert_cudf_groupby_layers(actual)
 
+    # groupby.agg should add an explicit getitem layer
+    # to improve/enable column projection
+    assert hlg_layer(actual.dask, "getitem")
+
     dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
 

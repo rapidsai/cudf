@@ -130,7 +130,7 @@ void reprog_device::destroy() { delete this; }
 
 std::size_t reprog_device::working_memory_size(int32_t num_threads) const
 {
-  return compute_working_memory_size(insts_counts(), num_threads);
+  return compute_working_memory_size(num_threads, insts_counts());
 }
 
 std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(

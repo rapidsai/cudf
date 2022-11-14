@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
 
 #include "compact_protocol_reader.hpp"
@@ -926,7 +927,7 @@ auto to_nvcomp_compression_type(Compression codec)
 auto page_alignment(Compression codec)
 {
   if (codec == Compression::UNCOMPRESSED or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(codec))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(codec))) {
     return 1u;
   }
 
@@ -1171,19 +1172,22 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   gpu::EncodePages(batch_pages, comp_in, comp_out, comp_res, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
+        gpu_snap(comp_in, comp_out, comp_res, stream);
+      } else {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      } else {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
       break;
-    case parquet::Compression::ZSTD:
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+    case parquet::Compression::ZSTD: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
       }
+      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+
       break;
+    }
     case parquet::Compression::UNCOMPRESSED: break;
     default: CUDF_FAIL("invalid compression type");
   }
@@ -1245,9 +1249,9 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
   if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
 
   auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
-                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
-                              : std::nullopt;
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
   return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
 }

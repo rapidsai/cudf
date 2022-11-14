@@ -132,36 +132,37 @@ def _copy_range(Column input_column,
     return Column.from_unique_ptr(move(c_result))
 
 
-def copy_range(Column input_column,
+def copy_range(Column source_column,
                Column target_column,
-               size_type input_begin,
-               size_type input_end,
+               size_type source_begin,
+               size_type source_end,
                size_type target_begin,
                size_type target_end,
                bool inplace):
     """
-    Copy input_column from input_begin to input_end to
-    target_column from target_begin to target_end
+    Copy a contiguous range from a source to a target column
+
+    Notes
+    -----
+    Expects the source and target ranges to have been sanitised to be
+    in-range for the source and target column respectively. For
+    example via ``slice.indices``.
     """
 
-    if abs(target_end - target_begin) <= 1:
+    assert (
+        source_end - source_begin == target_end - target_begin,
+        "Source and target ranges must be same length"
+    )
+    if target_end >= target_begin and inplace:
+        # FIXME: Are we allowed to do this when inplace=False?
         return target_column
 
-    if target_begin < 0:
-        target_begin = target_begin + target_column.size
-
-    if target_end < 0:
-        target_end = target_end + target_column.size
-
-    if target_begin > target_end:
-        return target_column
-
-    if inplace is True:
-        _copy_range_in_place(input_column, target_column,
-                             input_begin, input_end, target_begin)
+    if inplace:
+        _copy_range_in_place(source_column, target_column,
+                             source_begin, source_end, target_begin)
     else:
-        return _copy_range(input_column, target_column,
-                           input_begin, input_end, target_begin)
+        return _copy_range(source_column, target_column,
+                           source_begin, source_end, target_begin)
 
 
 def gather(

@@ -2632,12 +2632,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * Overloading subString to support if end index is not provided. Appending -1 to indicate to
-   * read until end of string.
+   * The character positions to retrieve in each string are `[start, <the string end>)`..
+   *
    * @param start first character index to begin the substring(inclusive).
    */
   public final ColumnVector substring(int start) {
-    return substring(start, -1);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(substringS(getNativeView(), start));
   }
 
   /**
@@ -3982,6 +3983,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end        last character index to stop the substring(exclusive).
    */
   private static native long substring(long columnView, int start, int end) throws CudfException;
+
+  /**
+   * Native method to extract substrings from a given strings column.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substrings (inclusive).
+   */
+  private static native long substringS(long columnView, int start) throws CudfException;
 
   /**
    * Native method to calculate substring from a given string column.
