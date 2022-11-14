@@ -532,9 +532,10 @@ cdef class Column:
                 # the owner.
                 column_owner and
                 isinstance(data_owner, SpillableBuffer) and
-                # We have to make sure that `data_owner` is already spill
-                # locked and that its pointer is the same as `data_ptr`
-                # _without_ exposing the buffer permanently.
+                # We check that `data_owner` is spill locked (not spillable)
+                # and that its pointer is the same as `data_ptr` _without_
+                # exposing the buffer permanently (calling get_ptr with a
+                # dummy SpillLock).
                 not data_owner.spillable and
                 data_owner.get_ptr(spill_lock=SpillLock()) == data_ptr and
                 data_owner.size == base_nbytes
