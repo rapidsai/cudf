@@ -1908,8 +1908,10 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    pages.device_ptr(), chunks, min_row, num_rows);
+  if (pages.size() > 0) {
+    gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows);
+  }
 }
 
 }  // namespace gpu
