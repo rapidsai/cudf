@@ -128,7 +128,7 @@ TEST_F(JsonReaderTest, ByteRange)
     auto result = cudf::concatenate(table_views);
 
     // Verify that the data read via chunked reader matches the data read via nested JSON reader
-    // cannot use EQUAL due to concatenate
-    CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), result->view());
+    // cannot use EQUAL due to concatenate removing null mask
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
   }
 }
