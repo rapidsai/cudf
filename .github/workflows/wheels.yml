@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   cudf-wheels:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/pure-python-wheels
     with:
       repo: rapidsai/cudf
 
