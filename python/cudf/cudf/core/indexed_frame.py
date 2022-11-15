@@ -270,13 +270,6 @@ class IndexedFrame(Frame):
         # to ensure that this constructor is always invoked with an index.
         self._index = index
 
-    def to_dict(self, *args, **kwargs):  # noqa: D102
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     @property
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
