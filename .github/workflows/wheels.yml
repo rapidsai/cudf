@@ -46,9 +46,6 @@ jobs:
       python-package-versioneer-override: ${{ inputs.versioneer-override }}
       python-package-build-tag: ${{ inputs.build-tag }}
 
-      cibw-before-all-amd64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-      cibw-before-all-arm64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
-
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
       test-extras:  test
