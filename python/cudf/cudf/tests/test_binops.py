@@ -2163,19 +2163,13 @@ def test_binops_decimal(args):
         ),
     ],
 )
-def test_binops_reflect_decimal(args):
-    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
+def test_binops_reflect_decimal(
+    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype
+):
 
     a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
-    expect = (
-        utils._decimal_series(expect, expect_dtype)
-        if isinstance(
-            expect_dtype,
-            (cudf.Decimal64Dtype, cudf.Decimal32Dtype, cudf.Decimal128Dtype),
-        )
-        else cudf.Series(expect, dtype=expect_dtype)
-    )
+    expect = utils._decimal_series(expect, expect_dtype)
 
     got = getattr(a, op)(b)
     assert expect.dtype == got.dtype
