@@ -2141,8 +2141,8 @@ def test_binops_with_NA_consistent(dtype, op):
 )
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 
-    if l_dtype is None:
-        # cudf doesn't support binops with between
+    if isinstance(lhs, (int, float)):
+        # cudf doesn't support binops between
         # arbitrary int/float and decimal column,
         # hence need to construct a decimal scalar
         # of same bit-width
