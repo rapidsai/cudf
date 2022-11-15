@@ -25,6 +25,7 @@ requirements:
     - cmake >=3.23.1
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python

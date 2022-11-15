@@ -36,6 +36,7 @@ dependencies:
 - moto>=4.0.8
 - myst-nb
 - nbsphinx
+- ninja
 - notebook>=0.5.0
 - numba>=0.56.2
 - numpy

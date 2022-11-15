@@ -34,6 +34,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
+    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm {{ minor_version }}.*
