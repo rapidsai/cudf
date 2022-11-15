@@ -181,7 +181,7 @@ TEST_F(StringsExtractTests, MultiLine)
 
   pattern = std::string("^([a-c]+)$");
   results = cudf::strings::extract(view, pattern);
-  cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", ""}, {0, 0, 1, 0, 0});
+  cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", "abc"}, {0, 0, 1, 0, 1});
   expected = cudf::table_view{{expected_default}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
   prog    = cudf::strings::regex_program::create(pattern);
