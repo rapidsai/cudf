@@ -2126,6 +2126,74 @@ def test_binops_decimal(args):
     "args",
     [
         (
+            "radd",
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["3.0", "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=4),
+        ),
+        (
+            "rsub",
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=10),
+            ["0.1", "0.2"],
+            cudf.Decimal64Dtype(scale=6, precision=10),
+            ["-99.9", "-199.8"],
+            cudf.Decimal128Dtype(scale=6, precision=19),
+        ),
+        (
+            "rmul",
+            ["1000", "2000"],
+            cudf.Decimal64Dtype(scale=-3, precision=4),
+            ["0.343", "0.500"],
+            cudf.Decimal64Dtype(scale=3, precision=3),
+            ["343.0", "1000.0"],
+            cudf.Decimal64Dtype(scale=0, precision=8),
+        ),
+        (
+            "rtruediv",
+            ["1.5", "0.5"],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            ["1.0", "4.0"],
+            cudf.Decimal64Dtype(scale=10, precision=16),
+        ),
+    ],
+)
+def test_binops_reflect_decimal(args):
+    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
+
+    a = utils._decimal_series(lhs, l_dtype)
+    b = utils._decimal_series(rhs, r_dtype)
+    expect = (
+        utils._decimal_series(expect, expect_dtype)
+        if isinstance(
+            expect_dtype,
+            (cudf.Decimal64Dtype, cudf.Decimal32Dtype, cudf.Decimal128Dtype),
+        )
+        else cudf.Series(expect, dtype=expect_dtype)
+    )
+
+    got = getattr(a, op)(b)
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)
+
+
+def test_binops_raise_error():
+    s = cudf.Series([decimal.Decimal("1.324324")])
+    with pytest.raises(NotImplementedError):
+        s**1
+    with pytest.raises(NotImplementedError):
+        s // 1
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (
             operator.eq,
             ["100", "41", None],
             cudf.Decimal64Dtype(scale=0, precision=5),
