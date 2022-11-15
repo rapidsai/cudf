@@ -46,7 +46,10 @@ jobs:
       python-package-versioneer-override: ${{ inputs.versioneer-override }}
       python-package-build-tag: ${{ inputs.build-tag }}
 
-      skbuild-configure-options: "--debug-find -DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      cibw-before-all-amd64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+      cibw-before-all-arm64: "tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C /opt/_internal"
+
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
       test-extras:  test
       test-before-amd64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
