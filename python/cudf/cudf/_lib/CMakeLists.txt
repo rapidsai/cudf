@@ -71,7 +71,11 @@ rapids_cython_create_modules(
 # libpython.so and therefore Development cannot be found. Until we upgrade to CMake 3.24, we should
 # use FindNumpy.cmake instead (provided by scikit-build). When we switch to 3.24 we can try
 # switching back, but it may not work if that implicitly still requires Python libraries. In that
-# case we'll need to follow up with the CMake team to remove that dependency.
+# case we'll need to follow up with the CMake team to remove that dependency.  The stopgap solution
+# is to unpack the static lib tarballs in the wheel building jobs so that there are at least static
+# libs to be found, but that should be a last resort since it implies a dependency that isn't really
+# necessary. The relevant command is tar -xf /opt/_internal/static-libs-for-embedding-only.tar.xz -C
+# /opt/_internal"
 find_package(NumPy REQUIRED)
 set(targets_using_numpy interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)
