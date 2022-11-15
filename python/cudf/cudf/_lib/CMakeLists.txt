@@ -64,7 +64,7 @@ rapids_cython_create_modules(
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
 # CMake 3.24, so we can remove the Development component once we upgrade to CMake 3.24.
-find_package(Python REQUIRED COMPONENTS Development NumPy)
+find_package(Python REQUIRED COMPONENTS Development NumPy HINTS Python_USE_STATIC_LIBS FALSE)
 set(targets_using_numpy interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
