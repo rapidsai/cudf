@@ -538,8 +538,7 @@ void infer_column_types(parse_options const& parse_opts,
     auto const& stats = column_stats[inf_col_idx++];
     unsigned long long int_count_total =
       stats.big_int_count + stats.negative_small_int_count + stats.positive_small_int_count;
-
-    if (stats.null_count == num_records) {
+    if (stats.null_count == num_records or stats.total_count() == 0) {
       // Entire column is NULL; allocate the smallest amount of memory
       column_types[col_idx] = data_type(cudf::type_id::INT8);
     } else if (stats.string_count > 0L) {
