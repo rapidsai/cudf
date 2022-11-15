@@ -1418,6 +1418,9 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
   auto const& chunks = _file_itm_data.chunks;
   auto& pages        = _file_itm_data.pages_info;
 
+  // Should not reach here if there is no page data.
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to parse");
+
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to

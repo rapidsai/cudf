@@ -28,6 +28,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   auto& pages        = _file_itm_data.pages_info;
   auto& page_nesting = _file_itm_data.page_nesting_info;
 
+  // Should not reach here if there is no page data.
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
+
   size_t const sum_max_depths = std::accumulate(
     chunks.begin(), chunks.end(), 0, [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
       return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);

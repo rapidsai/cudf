@@ -1903,7 +1903,7 @@ void __host__ DecodePageData(hostdevice_vector<PageInfo>& pages,
                              size_t min_row,
                              rmm::cuda_stream_view stream)
 {
-  if (pages.size() == 0) { return; }
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
