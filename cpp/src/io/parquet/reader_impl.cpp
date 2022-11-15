@@ -245,8 +245,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  //  if (_chunk_read_limit > 0)
-  {
+  // Don't need to do it if we read the file all at once.
+  if (_chunk_read_limit > 0) {
     for (auto const& buff : _output_buffers) {
       auto& new_buff =
         _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
@@ -364,10 +364,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 table_with_metadata reader::impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
-  _output_buffers.resize(0);
-  for (auto const& buff : _output_buffers_template) {
-    auto& new_buff = _output_buffers.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
+  // Don't need to do it if we read the file all at once.
+  if (_chunk_read_limit > 0) {
+    _output_buffers.resize(0);
+    for (auto const& buff : _output_buffers_template) {
+      auto& new_buff = _output_buffers.emplace_back(column_buffer(buff.type, buff.is_nullable));
+      copy_output_buffer(buff, new_buff);
+    }
   }
 
   prepare_data(0 /*skip_rows*/,
