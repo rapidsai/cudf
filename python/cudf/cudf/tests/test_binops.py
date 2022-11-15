@@ -1789,7 +1789,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.add,
             2,
-            None,
+            cudf.Decimal64Dtype(scale=2, precision=3),
             ["1.5", "2.0"],
             cudf.Decimal64Dtype(scale=2, precision=3),
             ["3.5", "4.0"],
@@ -1843,7 +1843,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.sub,
             2,
-            None,
+            cudf.Decimal64Dtype(scale=3, precision=4),
             ["2.25", "1.005"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["-0.25", "0.995"],
@@ -1879,7 +1879,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.mul,
             200,
-            None,
+            cudf.Decimal64Dtype(scale=3, precision=6),
             ["0.343", "0.500"],
             cudf.Decimal64Dtype(scale=3, precision=6),
             ["68.60", "100.0"],
@@ -1915,7 +1915,7 @@ def test_binops_with_NA_consistent(dtype, op):
         (
             operator.truediv,
             20,
-            None,
+            cudf.Decimal128Dtype(scale=2, precision=6),
             ["20", "20"],
             cudf.Decimal128Dtype(scale=2, precision=6),
             ["1.0", "1.0"],
@@ -2142,11 +2142,7 @@ def test_binops_with_NA_consistent(dtype, op):
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 
     if isinstance(lhs, (int, float)):
-        # cudf doesn't support binops between
-        # arbitrary int/float and decimal column,
-        # hence need to construct a decimal scalar
-        # of same bit-width
-        a = cudf.Scalar(lhs, r_dtype)
+        a = cudf.Scalar(lhs, l_dtype)
     else:
         a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
