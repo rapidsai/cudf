@@ -2123,7 +2123,7 @@ def test_binops_decimal(args):
 
 
 @pytest.mark.parametrize(
-    "args",
+    "op,lhs,l_dtype,rhs,r_dtype,expect,expect_dtype",
     [
         (
             "radd",
