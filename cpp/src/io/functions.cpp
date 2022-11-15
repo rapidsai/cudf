@@ -523,12 +523,22 @@ chunked_parquet_reader::~chunked_parquet_reader() = default;
 /**
  * @copydoc cudf::io::chunked_parquet_reader::has_next
  */
-bool chunked_parquet_reader::has_next() { return reader->has_next(); }
+bool chunked_parquet_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
 
 /**
  * @copydoc cudf::io::chunked_parquet_reader::read_chunk
  */
-table_with_metadata chunked_parquet_reader::read_chunk() { return reader->read_chunk(); }
+table_with_metadata chunked_parquet_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
+}
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer

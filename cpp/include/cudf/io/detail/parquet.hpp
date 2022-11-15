@@ -87,7 +87,7 @@ class reader {
  * This class intentionally subclasses the `reader` class with private inheritance to hide the
  * `reader::read()` API. As such, only chunked reading APIs are supported.
  */
-class chunked_reader : reader {
+class chunked_reader : private reader {
  public:
   /**
    * @brief Constructor from a read size limit and an array of data sources with reader options.
@@ -119,18 +119,22 @@ class chunked_reader : reader {
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header.
+   *
+   * Since the declaration of the internal `_impl` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
    */
   ~chunked_reader();
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
-  bool has_next();
+  [[nodiscard]] bool has_next() const;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::read_chunk
    */
-  table_with_metadata read_chunk();
+  [[nodiscard]] table_with_metadata read_chunk() const;
 };
 
 /**

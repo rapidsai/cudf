@@ -141,8 +141,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
 
-  _stream.synchronize();
-
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
@@ -210,7 +208,20 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream), _mr(mr), _sources(std::move(sources))
+  : impl(0 /*chunk_read_limit*/,
+         std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+         options,
+         stream,
+         mr)
+{
+}
+
+reader::impl::impl(std::size_t chunk_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   parquet_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _stream{stream}, _mr{mr}, _sources{std::move(sources)}, _chunk_read_limit{chunk_read_limit}
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
@@ -232,25 +243,15 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               _timestamp_type.id());
-}
-
-reader::impl::impl(std::size_t chunk_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   parquet_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : impl(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-         options,
-         stream,
-         mr)
-{
-  _chunk_read_limit = chunk_read_limit;
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    auto& new_buff =
-      _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
+  //  if (_chunk_read_limit > 0)
+  {
+    for (auto const& buff : _output_buffers) {
+      auto& new_buff =
+        _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
+      copy_output_buffer(buff, new_buff);
+    }
   }
 }
 
@@ -369,13 +370,19 @@ table_with_metadata reader::impl::read_chunk()
     copy_output_buffer(buff, new_buff);
   }
 
-  prepare_data(0, -1, true, {});
+  prepare_data(0 /*skip_rows*/,
+               -1 /*num_rows, `-1` means unlimited*/,
+               true /*uses_custom_row_bounds*/,
+               {} /*row_group_indices, empty means read all row groups*/);
   return read_chunk_internal(true);
 }
 
 bool reader::impl::has_next()
 {
-  prepare_data(0, -1, true, {});
+  prepare_data(0 /*skip_rows*/,
+               -1 /*num_rows, `-1` means unlimited*/,
+               true /*uses_custom_row_bounds*/,
+               {} /*row_group_indices, empty means read all row groups*/);
   return _current_read_chunk < _chunk_read_info.size();
 }
 

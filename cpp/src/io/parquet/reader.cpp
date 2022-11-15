@@ -51,8 +51,8 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
 
 chunked_reader::~chunked_reader() = default;
 
-bool chunked_reader::has_next() { return _impl->has_next(); }
+bool chunked_reader::has_next() const { return _impl->has_next(); }
 
-table_with_metadata chunked_reader::read_chunk() { return _impl->read_chunk(); }
+table_with_metadata chunked_reader::read_chunk() const { return _impl->read_chunk(); }
 
 }  // namespace cudf::io::detail::parquet

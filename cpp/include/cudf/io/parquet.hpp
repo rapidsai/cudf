@@ -436,6 +436,10 @@ class chunked_parquet_reader {
 
   /**
    * @brief Destructor, destroying the internal reader instance.
+   *
+   * Since the declaration of the internal `reader` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
    */
   ~chunked_parquet_reader();
 
@@ -444,7 +448,7 @@ class chunked_parquet_reader {
    *
    * @return A boolean value indicating if there is any data left to read
    */
-  bool has_next();
+  [[nodiscard]] bool has_next() const;
 
   /**
    * @brief Read a chunk of rows in the given Parquet file.
@@ -457,7 +461,7 @@ class chunked_parquet_reader {
    *
    * @return An output `cudf::table` along with its metadata
    */
-  table_with_metadata read_chunk();
+  [[nodiscard]] table_with_metadata read_chunk() const;
 
  private:
   std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
