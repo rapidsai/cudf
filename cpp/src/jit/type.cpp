@@ -79,7 +79,7 @@ std::string get_jit_type_name(data_type type)
     default: break;
   }
 
-  return type_to_name(type);
+  return cudf::type_to_name(type);
 }
 
 }  // namespace jit
