@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,9 +53,10 @@ TYPED_TEST(groupby_count_scan_test, basic)
   result_wrapper expect_vals{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
   // clang-format on
 
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
-                            "Unsupported groupby scan aggregation");
+  EXPECT_THROW(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
+               cudf::logic_error);
 
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>(null_policy::INCLUDE);
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
@@ -181,13 +182,13 @@ TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
   auto const expect_vals = result_wrapper{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
   // clang-format on
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     vals,
-                     expect_keys,
-                     expect_vals,
-                     cudf::make_count_aggregation<groupby_scan_aggregation>()),
-    "Unsupported groupby scan aggregation");
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
+  EXPECT_THROW(test_single_scan(keys,
+                                vals,
+                                expect_keys,
+                                expect_vals,
+                                cudf::make_count_aggregation<groupby_scan_aggregation>()),
+               cudf::logic_error);
 
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>(null_policy::INCLUDE);
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg2));
@@ -209,9 +210,10 @@ TEST_F(groupby_dictionary_count_scan_test, basic)
   result_wrapper expect_vals{0, 0, 0, 1, 0, 1};
   // clang-format on
 
+  // Count groupby aggregation is only supported with null_policy::EXCLUDE
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
-                            "Unsupported groupby scan aggregation");
+  EXPECT_THROW(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
+               cudf::logic_error);
   test_single_scan(keys,
                    vals,
                    expect_keys,

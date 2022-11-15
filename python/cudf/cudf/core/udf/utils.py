@@ -10,6 +10,8 @@ from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
+import rmm
+
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
@@ -31,6 +33,9 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 arg_handlers: List[Any] = []
 ptx_files: List[Any] = []
+masked_array_types: Dict[Any, Any] = {}
+launch_arg_getters: Dict[Any, Any] = {}
+output_col_getters: Dict[Any, Any] = {}
 
 
 @_cudf_nvtx_annotate
@@ -54,6 +59,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(func, compile_sig)
+
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
@@ -64,6 +70,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
         if not isinstance(numba_output_type, MaskedType)
         else numba_output_type.value_type
     )
+    result = result if result.is_internal else result.return_type
 
     # _get_udf_return_type will throw a TypingError if the user tries to use
     # a field in the row containing an unsupported dtype, except in the
@@ -112,9 +119,6 @@ def _supported_cols_from_frame(frame):
     }
 
 
-masked_array_types: Dict[Any, Any] = {}
-
-
 def _masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
@@ -142,9 +146,12 @@ def _construct_signature(frame, return_type, args):
     actually JIT the kernel itself later, accounting for types
     and offsets. Skips columns with unsupported dtypes.
     """
-
+    if not return_type.is_internal:
+        return_type = CPointer(return_type)
+    else:
+        return_type = return_type[::1]
     # Tuple of arrays, first the output data array, then the mask
-    return_type = Tuple((return_type[::1], boolean[::1]))
+    return_type = Tuple((return_type, boolean[::1]))
     offsets = []
     sig = [return_type, int64]
     for col in _supported_cols_from_frame(frame).values():
@@ -213,7 +220,12 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    np_return_type = (
+        numpy_support.as_dtype(scalar_return_type)
+        if scalar_return_type.is_internal
+        else scalar_return_type.np_dtype
+    )
+
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -228,9 +240,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
     kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
 
     return kernel
-
-
-launch_arg_getters: Dict[Any, Any] = {}
 
 
 def _get_input_args_from_frame(fr):
@@ -254,8 +263,12 @@ def _get_input_args_from_frame(fr):
 
 
 def _return_arr_from_dtype(dt, size):
+    if extensionty := masked_array_types.get(dt):
+        return rmm.DeviceBuffer(size=size * extensionty.return_type.size_bytes)
     return cp.empty(size, dtype=dt)
 
 
 def _post_process_output_col(col, retty):
+    if getter := output_col_getters.get(retty):
+        col = getter(col)
     return as_column(col, retty)
