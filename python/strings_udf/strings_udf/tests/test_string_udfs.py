@@ -302,3 +302,21 @@ def test_string_udf_rstrip(data, strip_char):
         return st.rstrip(strip_char)
 
     run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("data", [["abcd", "12345", "    "]])
+@pytest.mark.parametrize("index", [0, 1, -1])
+def test_string_udf_at(data, index):
+    def func(st):
+        return st[index]
+
+    run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("data", [["abcd", "12345", "    "]])
+@pytest.mark.parametrize("slc", [slice(1, 2), slice(0, -1)])
+def test_string_udf_substring(data, slc):
+    def func(st):
+        return st[slc]
+
+    run_udf_test(data, func, "str")
