@@ -18,7 +18,7 @@
 function(find_and_configure_jitify)
   rapids_cpm_find(
     jitify 2.0.0
-    GIT_REPOSITORY https://github.com/NVIDIA/jitify.git
+    GIT_REPOSITORY https://github.com/rapidsai/jitify.git
     GIT_TAG jitify2
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
