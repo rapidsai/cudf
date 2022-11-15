@@ -2746,6 +2746,10 @@ def df_ngroup():
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.xfail(
+    condition=not PANDAS_LT_140,
+    reason="1.4 bug will nullable columns",
+)
 def test_groupby_ngroup(by, ascending, df_ngroup):
     by = by()
     expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)

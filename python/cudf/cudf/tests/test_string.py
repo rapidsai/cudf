@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -2008,6 +2008,10 @@ def test_string_table_view_creation():
 @pytest.mark.parametrize(
     "pat",
     ["", None, " ", "a", "abc", "cat", "$", "\n"],
+)
+@pytest.mark.xfail(
+    condition=not PANDAS_LT_140,
+    reason="Error msg [None-data0] is 'Expected to fail with an Exception'",
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
