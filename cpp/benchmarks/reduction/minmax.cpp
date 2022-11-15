@@ -30,13 +30,12 @@ void BM_reduction(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, row_count{column_size});
-  table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
-  cudf::column_view input_column(table->view().column(0));
+  auto const input_column =
+    create_random_column(dtype, row_count{column_size}, data_profile_builder().no_validity());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::minmax(input_column);
+    auto result = cudf::minmax(*input_column);
   }
 }
 

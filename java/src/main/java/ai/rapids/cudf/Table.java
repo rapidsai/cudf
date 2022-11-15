@@ -239,16 +239,20 @@ public final class Table implements AutoCloseable {
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
 
+  private static native long readAndInferJSON(long address, long length,
+      boolean dayFirst, boolean lines) throws CudfException;
+
   /**
    * Read in Parquet formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
    *                           all of them
+   * @param binaryToString     whether to convert this column to String if binary
    * @param filePath           the path of the file to read, or null if no path should be read.
    * @param address            the address of the buffer to read from or 0 if we should not.
    * @param length             the length of the buffer to read from.
    * @param timeUnit           return type of TimeStamp in units
    */
-  private static native long[] readParquet(String[] filterColumnNames, String filePath,
+  private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
                                            long address, long length, int timeUnit) throws CudfException;
 
   /**
@@ -276,6 +280,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -290,6 +295,7 @@ public final class Table implements AutoCloseable {
                                                    boolean[] isInt96,
                                                    int[] precisions,
                                                    boolean[] isMapValues,
+                                                   boolean[] isBinaryValues,
                                                    boolean[] hasParquetFieldIds,
                                                    int[] parquetFieldIds,
                                                    String filename) throws CudfException;
@@ -308,6 +314,7 @@ public final class Table implements AutoCloseable {
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
+   * @param isBinaryValues  true if a column is a binary
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -322,6 +329,7 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
+                                                     boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
                                                      HostBufferConsumer consumer) throws CudfException;
@@ -549,9 +557,6 @@ public final class Table implements AutoCloseable {
   private static native long[] merge(long[] tableHandles, int[] sortKeyIndexes,
                                      boolean[] isDescending, boolean[] areNullsSmallest) throws CudfException;
 
-  private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                        int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
@@ -561,9 +566,6 @@ public final class Table implements AutoCloseable {
 
   private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
                                                                long outputRowCount) throws CudfException;
-
-  private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
@@ -575,9 +577,6 @@ public final class Table implements AutoCloseable {
   private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
                                                                 long outputRowCount) throws CudfException;
 
-  private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
-                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
@@ -588,14 +587,8 @@ public final class Table implements AutoCloseable {
   private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
                                                                long outputRowCount) throws CudfException;
 
-  private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
-
   private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
-
-  private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
-      int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
@@ -713,10 +706,10 @@ public final class Table implements AutoCloseable {
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] scatterTable(long srcTableHandle, long scatterView,
-                                            long targetTableHandle, boolean checkBounds)
+                                            long targetTableHandle)
                                             throws CudfException;
   private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
-                                             long targetTableHandle, boolean checkBounds)
+                                             long targetTableHandle)
                                              throws CudfException;
 
   private static native long[] convertToRows(long nativeHandle);
@@ -730,8 +723,7 @@ public final class Table implements AutoCloseable {
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
-                                                 long columnHandle,
-                                                 boolean checkCount);
+                                                 long columnHandle);
 
   private static native long rowBitCount(long tableHandle) throws CudfException;
 
@@ -747,12 +739,13 @@ public final class Table implements AutoCloseable {
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
 
-  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+  private static native ContigSplitGroupByResult contiguousSplitGroups(long inputTable,
                                                                 int[] keyIndices,
                                                                 boolean ignoreNullKeys,
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
-                                                                boolean[] keysNullSmallest);
+                                                                boolean[] keysNullSmallest,
+                                                                boolean genUniqKeys);
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
@@ -934,6 +927,26 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read JSON formatted data and infer the column names and schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU and the metadata for the table returned.
+   */
+  public static TableWithMeta readJSON(JSONOptions opts, HostMemoryBuffer buffer,
+      long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
    * Read JSON formatted data.
    * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
    * @param opts various JSON parsing options.
@@ -971,7 +984,7 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    return new Table(readParquet(opts.getIncludeColumnNames(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
@@ -1031,7 +1044,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readParquet(opts.getIncludeColumnNames(),
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
@@ -1204,6 +1217,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1221,6 +1235,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           outputFile.getAbsolutePath());
@@ -1231,6 +1246,7 @@ public final class Table implements AutoCloseable {
       boolean[] columnNullabilities = options.getFlatIsNullable();
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
+      boolean[] isBinaryValues = options.getFlatIsBinary();
       int[] precisions = options.getFlatPrecision();
       boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
       int[] parquetFieldIds = options.getFlatParquetFieldId();
@@ -1248,6 +1264,7 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          isBinaryValues,
           hasParquetFieldIds,
           parquetFieldIds,
           consumer);
@@ -1668,22 +1685,7 @@ public final class Table implements AutoCloseable {
    * @throws CudfException on any error.
    */
   public Table repeat(ColumnView counts) {
-    return repeat(counts, true);
-  }
-
-  /**
-   * Create a new table by repeating each row of this table. The number of
-   * repetitions of each row is defined by the corresponding value in counts.
-   * @param counts the number of times to repeat each row. Cannot have nulls, must be an
-   *               Integer type, and must have one entry for each row in the table.
-   * @param checkCount should counts be checked for errors before processing. Be careful if you
-   *                   disable this because if you pass in bad data you might just get back an
-   *                   empty table or bad data.
-   * @return the new Table.
-   * @throws CudfException on any error.
-   */
-  public Table repeat(ColumnView counts, boolean checkCount) {
-    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+    return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView()));
   }
 
   /**
@@ -2331,14 +2333,11 @@ public final class Table implements AutoCloseable {
    *
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
    * @param target The table into which rows from the current table are to be scattered out-of-place.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
-   *                    an exception if any of its values are out of bounds.
    * @return A new table which is the result of out-of-place scattering the source table into the
    *         target table.
    */
-  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
-    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
-        checkBounds));
+  public Table scatter(ColumnView scatterMap, Table target) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView()));
   }
 
   /**
@@ -2358,20 +2357,17 @@ public final class Table implements AutoCloseable {
    * @param source The input scalars containing values to be scattered into the target table.
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
    * @param target The table into which the values from source are to be scattered out-of-place.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
-   *                    an exception if any of its values are out of bounds.
    * @return A new table which is the result of out-of-place scattering the source values into the
    *         target table.
    */
-  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
-                              boolean checkBounds) {
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target) {
     long[] srcScalarHandles = new long[source.length];
     for(int i = 0; i < source.length; ++i) {
       assert source[i] != null : "Scalar vectors passed in should not contain null";
       srcScalarHandles[i] = source[i].getScalarHandle();
     }
     return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
-        target.getNativeView(), checkBounds));
+        target.getNativeView()));
   }
 
   private static GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
@@ -3898,10 +3894,13 @@ public final class Table implements AutoCloseable {
           case TIMESTAMP_DAYS:
           case TIMESTAMP_NANOSECONDS:
           case TIMESTAMP_MICROSECONDS:
+          case DECIMAL32:
+          case DECIMAL64:
+          case DECIMAL128:
             break;
           default:
             throw new IllegalArgumentException("Expected range-based window orderBy's " +
-                "type: integral (Boolean-exclusive) and timestamp");
+                "type: integral (Boolean-exclusive), decimal, and timestamp");
         }
 
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -4101,13 +4100,44 @@ public final class Table implements AutoCloseable {
      * for the memory to be released.
      */
     public ContiguousTable[] contiguousSplitGroups() {
-      return Table.contiguousSplitGroups(
+      try (ContigSplitGroupByResult ret = Table.contiguousSplitGroups(
           operation.table.nativeHandle,
           operation.indices,
           groupByOptions.getIgnoreNullKeys(),
           groupByOptions.getKeySorted(),
           groupByOptions.getKeysDescending(),
-          groupByOptions.getKeysNullSmallest());
+          groupByOptions.getKeysNullSmallest(),
+          false) // not generate uniq key table
+      ) {
+        // take the ownership of the `groups` in ContigSplitGroupByResult
+        return ret.releaseGroups();
+      }
+    }
+
+    /**
+     * Similar to {@link #contiguousSplitGroups}, return an extra uniq key table in which
+     * each row is corresponding to a group split.
+     *
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * Example, see the example in {@link #contiguousSplitGroups}
+     * The `uniqKeysTable` in ContigSplitGroupByResult is:
+     *    a
+     *    b
+     *  Note: only 2 rows because of only has 2 split groups
+     *
+     * @return The split groups and uniq key table.
+     */
+    public ContigSplitGroupByResult contiguousSplitGroupsAndGenUniqKeys() {
+      return Table.contiguousSplitGroups(
+              operation.table.nativeHandle,
+              operation.indices,
+              groupByOptions.getIgnoreNullKeys(),
+              groupByOptions.getKeySorted(),
+              groupByOptions.getKeysDescending(),
+              groupByOptions.getKeysNullSmallest(),
+              true); // generate uniq key table
     }
   }
 
@@ -4117,161 +4147,6 @@ public final class Table implements AutoCloseable {
 
     TableOperation(final Table table, final int... indices) {
       operation = new Operation(table, indices);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table leftJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table leftJoin(TableOperation rightJoinIndices) {
-        return leftJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table innerJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table innerJoin(TableOperation rightJoinIndices) {
-      return innerJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table fullJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.fullJoin(operation.table.nativeHandle, operation.indices,
-              rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-              compareNullsEqual));
-    }
-
-    /**
-     * Joins two tables on the join columns that are passed in.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).fullJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the joined table.  The order of the columns returned will be join columns,
-     * left non-join columns, right non-join columns.
-     */
-    public Table fullJoin(TableOperation rightJoinIndices) {
-      return fullJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Performs a semi-join between a left table and a right table, returning only the rows from
-     * the left table that match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the left semi-joined table.
-     */
-    public Table leftSemiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Performs a semi-join between a left table and a right table, returning only the rows from
-     * the left table that match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the left semi-joined table.
-     */
-    public Table leftSemiJoin(TableOperation rightJoinIndices) {
-      return leftSemiJoin(rightJoinIndices, true);
-    }
-
-    /**
-     * Performs an anti-join between a left table and a right table, returning only the rows from
-     * the left table that do not match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @param compareNullsEqual - Whether null join-key values should match or not.
-     * @return the left anti-joined table.
-     */
-    public Table leftAntiJoin(TableOperation rightJoinIndices, boolean compareNullsEqual) {
-      return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices,
-          compareNullsEqual));
-    }
-
-    /**
-     * Performs an anti-join between a left table and a right table, returning only the rows from
-     * the left table that do not match rows in the right table on the join keys.
-     * Usage:
-     * Table t1 ...
-     * Table t2 ...
-     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
-     * @param rightJoinIndices - Indices of the right table to join on
-     * @return the left anti-joined table.
-     */
-    public Table leftAntiJoin(TableOperation rightJoinIndices) {
-      return leftAntiJoin(rightJoinIndices, true);
     }
 
     /**

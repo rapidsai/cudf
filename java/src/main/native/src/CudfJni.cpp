@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,6 +164,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  if (!cudf::jni::cache_contig_split_group_by_result_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate group by table result methods needed by JNI");
+    }
+    return JNI_ERR;
+  }
+
   if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
     if (!env->ExceptionCheck()) {
       env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
@@ -183,6 +191,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
 
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
+  cudf::jni::release_contig_split_group_by_result_jni(env);
   cudf::jni::release_host_memory_buffer_jni(env);
 }
 

@@ -19,6 +19,8 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 using TestingTypes = cudf::test::NumericTypes;
 
@@ -109,13 +111,14 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
 
   // this can be computed with a single reduce and without a temporary output vector
   // but the approach increases the compile time by ~2x
-  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::default_stream_value);
-  thrust::transform(thrust::device,
+  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::get_default_stream());
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     it_dev_squared,
                     it_dev_squared + d_col->size(),
                     results.begin(),
                     optional_to_meanvar<T_output>{});
-  auto result = thrust::reduce(thrust::device, results.begin(), results.end(), T_output{});
+  auto result = thrust::reduce(
+    rmm::exec_policy(cudf::get_default_stream()), results.begin(), results.end(), T_output{});
 
   if (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result) << "optional iterator reduction sum";

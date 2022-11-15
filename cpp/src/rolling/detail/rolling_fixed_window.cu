@@ -19,6 +19,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <thrust/extrema.h>
 #include <thrust/iterator/constant_iterator.h>
 
 namespace cudf::detail {

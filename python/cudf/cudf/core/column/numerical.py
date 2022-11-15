@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
@@ -31,10 +30,12 @@ from cudf._typing import (
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
+    is_integer,
     is_integer_dtype,
     is_number,
+    is_scalar,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, as_buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -125,6 +126,43 @@ class NumericalColumn(NumericalBaseColumn):
             self.nan_count != 0 if include_nan else False
         )
 
+    def __setitem__(self, key: Any, value: Any):
+        """
+        Set the value of ``self[key]`` to ``value``.
+
+        If ``value`` and ``self`` are of different types, ``value`` is coerced
+        to ``self.dtype``.
+        """
+
+        # Normalize value to scalar/column
+        device_value = (
+            cudf.Scalar(
+                value,
+                dtype=self.dtype
+                if cudf._lib.scalar._is_null_host_scalar(value)
+                else None,
+            )
+            if is_scalar(value)
+            else as_column(value)
+        )
+
+        if not is_bool_dtype(self.dtype) and is_bool_dtype(device_value.dtype):
+            raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
+        else:
+            device_value = device_value.astype(self.dtype)
+
+        out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
+        if isinstance(key, slice):
+            out = self._scatter_by_slice(key, device_value)
+        else:
+            key = as_column(key)
+            if not isinstance(key, cudf.core.column.NumericalColumn):
+                raise ValueError(f"Invalid scatter map type {key.dtype}.")
+            out = self._scatter_by_column(key, device_value)
+
+        if out:
+            self._mimic_inplace(out, inplace=True)
+
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
@@ -136,19 +174,16 @@ class NumericalColumn(NumericalBaseColumn):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
 
         return output
 
@@ -219,7 +254,15 @@ class NumericalColumn(NumericalBaseColumn):
             if is_bool_dtype(self.dtype) or is_bool_dtype(other):
                 out_dtype = "bool"
 
+        if (
+            op == "__pow__"
+            and is_integer_dtype(self.dtype)
+            and (is_integer(other) or is_integer_dtype(other.dtype))
+        ):
+            op = "INT_POW"
+
         lhs, rhs = (other, self) if reflect else (self, other)
+
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
@@ -257,7 +300,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
-                    data=Buffer(ary),
+                    data=as_buffer(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

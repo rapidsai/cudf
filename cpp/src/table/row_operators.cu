@@ -17,7 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/column.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -25,6 +25,8 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <jit/type.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace experimental {
@@ -253,6 +255,24 @@ auto decompose_structs(table_view table,
                          std::move(verticalized_col_depths));
 }
 
+/*
+ * This helper function generates dremel data for any list-type columns in a
+ * table. This data is necessary for lexicographic comparisons.
+ */
+auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
+{
+  std::vector<detail::dremel_data> dremel_data;
+  std::vector<detail::dremel_device_view> dremel_device_views;
+  for (auto const& col : table) {
+    if (col.type().id() == type_id::LIST) {
+      dremel_data.push_back(detail::get_dremel_data(col, {}, false, stream));
+      dremel_device_views.push_back(dremel_data.back());
+    }
+  }
+  auto d_dremel_device_views = detail::make_device_uvector_sync(dremel_device_views, stream);
+  return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
+}
+
 using column_checker_fn_t = std::function<void(column_view const&)>;
 
 /**
@@ -262,17 +282,24 @@ using column_checker_fn_t = std::function<void(column_view const&)>;
  */
 void check_lex_compatibility(table_view const& input)
 {
-  // Basically check if there's any LIST hiding anywhere in the table
+  // Basically check if there's any LIST of STRUCT or STRUCT of LIST hiding anywhere in the table
   column_checker_fn_t check_column = [&](column_view const& c) {
-    CUDF_EXPECTS(c.type().id() != type_id::LIST,
-                 "Cannot lexicographic compare a table with a LIST column");
+    if (c.type().id() == type_id::LIST) {
+      auto const& list_col = lists_column_view(c);
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
+                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
+      check_column(list_col.child());
+    } else if (c.type().id() == type_id::STRUCT) {
+      for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
+        check_column(*child);
+      }
+    }
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +
                      jit::get_type_name(c.type()));
-    }
-    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
-      check_column(*child);
     }
   };
   for (column_view const& c : input) {
@@ -334,8 +361,21 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
   auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
-    std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
+  if (detail::has_nested_columns(t)) {
+    auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(verticalized_lhs, stream);
+    return std::shared_ptr<preprocessed_table>(
+      new preprocessed_table(std::move(d_t),
+                             std::move(d_column_order),
+                             std::move(d_null_precedence),
+                             std::move(d_depths),
+                             std::move(dremel_data),
+                             std::move(d_dremel_device_view)));
+  } else {
+    return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t),
+                                                                      std::move(d_column_order),
+                                                                      std::move(d_null_precedence),
+                                                                      std::move(d_depths)));
+  }
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,
@@ -358,13 +398,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 {
   check_eq_compatibility(t);
 
-  auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
-  auto struct_offset_removed_table    = remove_struct_child_offsets(std::get<0>(null_pushed_table));
-  auto [verticalized_lhs, _, __, ___] = decompose_structs(struct_offset_removed_table);
+  auto [null_pushed_table, null_masks] = structs::detail::superimpose_parent_nulls(t, stream);
+  auto struct_offset_removed_table     = remove_struct_child_offsets(null_pushed_table);
+  auto [verticalized_lhs, _, __, ___]  = decompose_structs(struct_offset_removed_table);
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
   return std::shared_ptr<preprocessed_table>(
-    new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
+    new preprocessed_table(std::move(d_t), std::move(null_masks)));
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,

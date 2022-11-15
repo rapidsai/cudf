@@ -1826,6 +1826,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
         " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
+
+  /**
+   * Concatenates all strings in the column into one new string delimited
+   * by an optional separator string.
+   *
+   * This returns a column with one string. Any null entries are ignored unless
+   * the narep parameter specifies a replacement string (not a null value).
+   *
+   * @param separator what to insert to separate each row.
+   * @param narep what to replace nulls with
+   * @return a ColumnVector with a single string in it.
+   */
+  public final ColumnVector joinStrings(Scalar separator, Scalar narep) {
+    if (DType.STRING.equals(type) &&
+        DType.STRING.equals(separator.getType()) &&
+        DType.STRING.equals(narep.getType())) {
+      return new ColumnVector(joinStrings(getNativeView(), separator.getScalarHandle(),
+          narep.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("The column, separator, and narep all need to be STRINGs");
+  }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
@@ -2611,12 +2632,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * Overloading subString to support if end index is not provided. Appending -1 to indicate to
-   * read until end of string.
+   * The character positions to retrieve in each string are `[start, <the string end>)`..
+   *
    * @param start first character index to begin the substring(inclusive).
    */
   public final ColumnVector substring(int start) {
-    return substring(start, -1);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(substringS(getNativeView(), start));
   }
 
   /**
@@ -3239,12 +3261,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Extracts all strings that match the given regular expression and corresponds to the 
+   * Extracts all strings that match the given regular expression and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
-   * 
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
-   
    * @param pattern The regex pattern
    * @param idx The regex group index
    * @return A new column vector of extracted matches
@@ -3254,6 +3275,46 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert idx >= 0 : "group index must be at least 0";
 
     return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given like pattern.
+   *
+   * The like pattern expects only 2 wildcard special characters
+   * - `%` any number of any character (including no characters)
+   * - `_` any single character
+   *
+   * ```
+   * cv = ["azaa", "ababaabba", "aaxa"]
+   * r = cv.like("%a_aa%", "\\")
+   * r is now [true, true, false]
+   * r = cv.like("a__a", "\\")
+   * r is now [true, false, true]
+   * ```
+   *
+   * The escape character is specified to include either `%` or `_` in the search,
+   * which is expected to be either 0 or 1 character.
+   * If more than one character is specified, only the first character is used.
+   *
+   * ```
+   * cv = ["abc_def", "abc1def", "abc_"]
+   * r = cv.like("abc/_d%", "/")
+   * r is now [true, false, false]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param pattern Like pattern to match to each string.
+   * @param escapeChar Character specifies the escape prefix; default is "\\".
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector like(Scalar pattern, Scalar escapeChar) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert pattern != null : "pattern scalar must not be null";
+    assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
+    assert escapeChar != null : "escapeChar scalar must not be null";
+    assert escapeChar.getType().equals(DType.STRING) : "escapeChar scalar must be a string scalar";
+    return new ColumnVector(like(getNativeView(), pattern.getScalarHandle(), escapeChar.getScalarHandle()));
   }
 
 
@@ -3292,7 +3353,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   private static void assertIsSupportedMapKeyType(DType keyType) {
-    boolean isSupportedKeyType = 
+    boolean isSupportedKeyType =
       !keyType.equals(DType.EMPTY) && !keyType.equals(DType.LIST) && !keyType.equals(DType.STRUCT);
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
@@ -3310,7 +3371,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
   }
 
-  /** 
+  /**
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
@@ -3519,6 +3580,88 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  /**
+   * For each pair of lists from the input lists columns, check if they have any common non-null
+   * elements.
+   *
+   * A null input row in any of the input columns will result in a null output row. During checking
+   * for common elements, nulls within each list are considered as different values while
+   * floating-point NaN values are considered as equal.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A column of type BOOL8 containing the check result
+   */
+  public static ColumnVector listsHaveOverlap(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsHaveOverlap(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the intersection without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list intersection, nulls and floating-point NaN values within each list are
+   * considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the intersection result
+   */
+  public static ColumnVector listsIntersectDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsIntersectDistinct(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the union without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list union, nulls and floating-point NaN values within each list are considered as
+   * equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the union result
+   */
+  public static ColumnVector listsUnionDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsUnionDistinct(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  /**
+   * Find the difference of lists of the left column against lists of the right column.
+   * Specifically, find the elements (without duplicates) from each list of the left column that
+   * do not exist in the corresponding list of the right column.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding, nulls and floating-point NaN values within each list are considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the difference result
+   */
+  public static ColumnVector listsDifferenceDistinct(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listsDifferenceDistinct(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -3842,6 +3985,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substring(long columnView, int start, int end) throws CudfException;
 
   /**
+   * Native method to extract substrings from a given strings column.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substrings (inclusive).
+   */
+  private static native long substringS(long columnView, int start) throws CudfException;
+
+  /**
    * Native method to calculate substring from a given string column.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param startColumn handle of cudf::column_view which has start indices of each string.
@@ -3931,6 +4081,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in like pattern
+   * and escape character.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param patternHandle handle of scalar containing the string like pattern.
+   * @param escapeCharHandle handle of scalar containing the string escape character.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long like(long cudfViewHandle, long patternHandle, long escapeCharHandle) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
@@ -4068,6 +4228,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
 
+  private static native long listsHaveOverlap(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsIntersectDistinct(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsUnionDistinct(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long listsDifferenceDistinct(long lhsViewHandle, long rhsViewHandle);
+
   private static native long getElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
@@ -4201,6 +4369,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected static native long title(long handle);
 
   private static native long capitalize(long strsColHandle, long delimitersHandle);
+
+  private static native long joinStrings(long strsHandle, long sepHandle, long narepHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 

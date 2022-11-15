@@ -26,6 +26,8 @@
 
 #include <cub/cub.cuh>
 
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf {
 namespace detail {
 /**

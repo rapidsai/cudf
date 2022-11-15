@@ -28,6 +28,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
@@ -112,7 +114,7 @@ inline void test_hash_based_sum_agg(column_view const& keys,
   // resulting table: `t [num_rows, 2 * num_rows - 1]`
   auto combined_table = cudf::concatenate(std::vector{expected_kv, result_kv});
   auto preprocessed_t = cudf::experimental::row::hash::preprocessed_table::create(
-    combined_table->view(), cudf::default_stream_value);
+    combined_table->view(), cudf::get_default_stream());
   cudf::experimental::row::equality::self_comparator comparator(preprocessed_t);
 
   auto const null_keys_are_equal =
@@ -122,7 +124,8 @@ inline void test_hash_based_sum_agg(column_view const& keys,
 
   // For each row in expected table `t[0, num_rows)`, there must be a match
   // in the resulting table `t[num_rows, 2 * num_rows)`
-  EXPECT_TRUE(thrust::all_of(thrust::make_counting_iterator<cudf::size_type>(0),
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
+                             thrust::make_counting_iterator<cudf::size_type>(0),
                              thrust::make_counting_iterator<cudf::size_type>(num_rows),
                              func));
 }

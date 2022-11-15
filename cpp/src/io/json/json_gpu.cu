@@ -16,14 +16,11 @@
 
 #include "json_gpu.hpp"
 
-#include <io/csv/datetime.cuh>
 #include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
@@ -36,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/detail/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
@@ -105,179 +103,6 @@ __device__ std::pair<char const*, char const*> get_next_key(char const* begin,
 }
 
 /**
- * @brief Decodes a numeric value base on templated cudf type T with specified
- * base.
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T, int base>
-__inline__ __device__ T decode_value(const char* begin,
-                                     uint64_t end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
-}
-
-/**
- * @brief Decodes a numeric value base on templated cudf type T
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T,
-          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(const char* begin,
-                                     const char* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return to_timestamp<T>(begin, end, opts.dayfirst);
-}
-
-template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
-{
-  return to_duration<T>(begin, end);
-}
-
-// The purpose of these is merely to allow compilation ONLY
-template <>
-__inline__ __device__ cudf::string_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::string_view{};
-}
-
-template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return cudf::dictionary32{};
-}
-
-template <>
-__inline__ __device__ cudf::list_view decode_value(const char*,
-                                                   const char*,
-                                                   parse_options_view const&)
-{
-  return cudf::list_view{};
-}
-template <>
-__inline__ __device__ cudf::struct_view decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&)
-{
-  return cudf::struct_view{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal32{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&)
-{
-  return numeric::decimal64{};
-}
-
-template <>
-__inline__ __device__ numeric::decimal128 decode_value(const char*,
-                                                       const char*,
-                                                       parse_options_view const&)
-{
-  return numeric::decimal128{};
-}
-
-/**
- * @brief Functor for converting plain text data to cuDF data type value.
- */
-struct ConvertFunctor {
-  /**
-   * @brief Template specialization for operator() for types whose values can be
-   * convertible to a 0 or 1 to represent false/true. The converting is done by
-   * checking against the default and user-specified true/false values list.
-   *
-   * It is handled here rather than within convertStrToValue() as that function
-   * is used by other types (ex. timestamp) that aren't 'booleable'.
-   */
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
-  {
-    T& value{static_cast<T*>(output_column)[row]};
-
-    value = [&opts, end, begin]() -> T {
-      // Check for user-specified true/false values
-      auto const len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, len})) { return 1; }
-      if (serialized_trie_contains(opts.trie_false, {begin, len})) { return 0; }
-      return decode_value<T>(begin, end, opts);
-    }();
-
-    return true;
-  }
-
-  /**
-   * @brief Dispatch for floating points, which are set to NaN if the input
-   * is not valid. In such case, the validity mask is set to zero too.
-   */
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      parse_options_view const& opts)
-  {
-    T const value                    = decode_value<T>(begin, end, opts);
-    static_cast<T*>(out_buffer)[row] = value;
-
-    return !std::isnan(value);
-  }
-
-  /**
-   * @brief Default template operator() dispatch specialization all data types
-   * (including wrapper types) that is not covered by above.
-   */
-  template <typename T,
-            std::enable_if_t<!std::is_floating_point_v<T> and !std::is_integral_v<T>>* = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* output_column,
-                                                      cudf::size_type row,
-                                                      const parse_options_view& opts)
-  {
-    static_cast<T*>(output_column)[row] = decode_value<T>(begin, end, opts);
-
-    return true;
-  }
-};
-
-/**
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
@@ -331,6 +156,7 @@ struct field_descriptor {
   cudf::size_type column;
   char const* value_begin;
   char const* value_end;
+  bool is_quoted;
 };
 
 /**
@@ -353,7 +179,10 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
   auto const desc_pre_trim =
     col_map.capacity() == 0
       // No key - column and begin are trivial
-      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
+      ? field_descriptor{field_idx,
+                         begin,
+                         cudf::io::gpu::seek_field_end(begin, end, opts, true),
+                         false}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = cudf::detail::MurmurHash3_32<cudf::string_view>{}(
@@ -364,14 +193,23 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
 
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
-          return field_descriptor{
-            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts, true)};
+          return field_descriptor{column,
+                                  value_begin,
+                                  cudf::io::gpu::seek_field_end(value_begin, end, opts, true),
+                                  false};
         }();
 
   // Modify start & end to ignore whitespace and quotechars
   auto const trimmed_value_range =
-    trim_whitespaces_quotes(desc_pre_trim.value_begin, desc_pre_trim.value_end, opts.quotechar);
-  return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
+    trim_whitespaces(desc_pre_trim.value_begin, desc_pre_trim.value_end);
+  bool const is_quoted =
+    thrust::distance(trimmed_value_range.first, trimmed_value_range.second) >= 2 and
+    *trimmed_value_range.first == opts.quotechar and
+    *thrust::prev(trimmed_value_range.second) == opts.quotechar;
+  return {desc_pre_trim.column,
+          trimmed_value_range.first + static_cast<std::ptrdiff_t>(is_quoted),
+          trimmed_value_range.second - static_cast<std::ptrdiff_t>(is_quoted),
+          is_quoted};
 }
 
 /**
@@ -430,13 +268,14 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
     auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
+    auto const is_quoted = static_cast<std::ptrdiff_t>(desc.is_quoted);
 
     current = desc.value_end + 1;
 
     using string_index_pair = thrust::pair<const char*, size_type>;
 
-    // Empty fields are not legal values
-    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
+    if (!serialized_trie_contains(opts.trie_na,
+                                  {desc.value_begin - is_quoted, value_len + is_quoted * 2})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_index_pair*>(output_columns[desc.column]);
@@ -453,7 +292,9 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
                                   desc.value_end,
                                   output_columns[desc.column],
                                   rec_id,
-                                  opts)) {
+                                  column_types[desc.column],
+                                  opts,
+                                  false)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[desc.column], rec_id);
           atomicAdd(&num_valid_fields[desc.column], 1);
@@ -518,7 +359,7 @@ __global__ void detect_data_types_kernel(
       atomicAdd(&column_infos[desc.column].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
-    if (*(desc.value_begin - 1) == opts.quotechar && *desc.value_end == opts.quotechar) {
+    if (desc.is_quoted) {
       atomicAdd(&column_infos[desc.column].string_count, 1);
       continue;
     }

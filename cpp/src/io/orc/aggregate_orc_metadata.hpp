@@ -17,6 +17,7 @@
 #include "orc.hpp"
 
 #include <map>
+#include <optional>
 #include <vector>
 
 namespace cudf::io::orc::detail {
@@ -126,10 +127,11 @@ class aggregate_orc_metadata {
    * Paths are in format "grandparent_col.parent_col.child_col", where the root ORC column is
    * omitted to match the cuDF table hierarchy.
    *
-   * @param column_paths List of full column names (i.e. paths) to select from the ORC file
+   * @param column_paths List of full column names (i.e. paths) to select from the ORC file;
+   * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::vector<std::string> const& column_paths);
+  column_hierarchy select_columns(std::optional<std::vector<std::string>> const& column_paths);
 };
 
 }  // namespace cudf::io::orc::detail

@@ -2,8 +2,6 @@
 
 from enum import IntEnum
 
-import numpy as np
-
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -11,7 +9,6 @@ from libcpp.utility cimport move
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 
-from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
@@ -55,6 +52,9 @@ class BinaryOperation(IntEnum):
     )
     POW = (
         <underlying_type_t_binary_operator> binary_operator.POW
+    )
+    INT_POW = (
+        <underlying_type_t_binary_operator> binary_operator.INT_POW
     )
     EQ = (
         <underlying_type_t_binary_operator> binary_operator.EQUAL
@@ -162,7 +162,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     # TODO: Shouldn't have to keep special-casing. We need to define a separate
     # pipeline for libcudf binops that don't map to Python binops.
-    if op != "NULL_EQUALS":
+    if op not in {"INT_POW", "NULL_EQUALS"}:
         op = op[2:-2]
 
     op = BinaryOperation[op.upper()]

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <strings/regex/regex_program_impl.h>
 #include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -100,22 +101,20 @@ struct replace_regex_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  std::string_view pattern,
-  string_scalar const& replacement,
-  std::optional<size_type> max_replace_count,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_re(strings_column_view const& input,
+                                   regex_program const& prog,
+                                   string_scalar const& replacement,
+                                   std::optional<size_type> max_replace_count,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   string_view d_repl(replacement.data(), replacement.size());
 
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const maxrepl = max_replace_count.value_or(-1);
 
@@ -143,8 +142,20 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+  auto const h_prog = regex_program::create(pattern, flags, capture_groups::NON_CAPTURE);
   return detail::replace_re(
-    strings, pattern, replacement, max_replace_count, flags, cudf::default_stream_value, mr);
+    strings, *h_prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> replace_re(strings_column_view const& strings,
+                                   regex_program const& prog,
+                                   string_scalar const& replacement,
+                                   std::optional<size_type> max_replace_count,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_re(
+    strings, prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

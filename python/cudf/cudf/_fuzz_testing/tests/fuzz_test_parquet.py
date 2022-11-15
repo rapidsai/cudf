@@ -28,29 +28,19 @@ def parquet_reader_test(parquet_buffer):
     params={
         "columns": ALL_POSSIBLE_VALUES,
         "use_pandas_metadata": [True, False],
-        "skiprows": ALL_POSSIBLE_VALUES,
-        "num_rows": ALL_POSSIBLE_VALUES,
     },
 )
-def parquet_reader_columns(
-    parquet_buffer, columns, use_pandas_metadata, skiprows, num_rows
-):
+def parquet_reader_columns(parquet_buffer, columns, use_pandas_metadata):
     pdf = pd.read_parquet(
         parquet_buffer,
         columns=columns,
         use_pandas_metadata=use_pandas_metadata,
     )
 
-    pdf = pdf.iloc[skiprows:]
-    if num_rows is not None:
-        pdf = pdf.head(num_rows)
-
     gdf = cudf.read_parquet(
         parquet_buffer,
         columns=columns,
         use_pandas_metadata=use_pandas_metadata,
-        skiprows=skiprows,
-        num_rows=num_rows,
     )
 
     compare_dataframe(gdf, pdf)

@@ -35,6 +35,7 @@
 
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/uniform_int_distribution.h>
 
@@ -85,7 +86,9 @@ static void BM_join(state_type& state, Join JoinFunc)
     // roughly 75% nulls
     auto validity =
       thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
-    return cudf::detail::valid_if(validity, validity + size, thrust::identity<bool>{}).first;
+    return cudf::detail::valid_if(
+             validity, validity + size, thrust::identity<bool>{}, cudf::get_default_stream())
+      .first;
   };
 
   std::unique_ptr<cudf::column> build_key_column0 = [&]() {
@@ -141,19 +144,18 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Benchmark the inner join operation
   if constexpr (std::is_same_v<state_type, benchmark::State> and (not is_conditional)) {
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::default_stream_value);
+      cuda_event_timer raii(state, true, cudf::get_default_stream());
 
-      auto result = JoinFunc(
-        probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
+      auto result = JoinFunc(probe_table.select(columns_to_join),
+                             build_table.select(columns_to_join),
+                             cudf::null_equality::UNEQUAL);
     }
   }
   if constexpr (std::is_same_v<state_type, nvbench::state> and (not is_conditional)) {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       rmm::cuda_stream_view stream_view{launch.get_stream()};
-      auto result = JoinFunc(probe_table,
-                             build_table,
-                             columns_to_join,
-                             columns_to_join,
+      auto result = JoinFunc(probe_table.select(columns_to_join),
+                             build_table.select(columns_to_join),
                              cudf::null_equality::UNEQUAL,
                              stream_view);
     });
@@ -168,7 +170,7 @@ static void BM_join(state_type& state, Join JoinFunc)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::default_stream_value);
+      cuda_event_timer raii(state, true, cudf::get_default_stream());
 
       auto result =
         JoinFunc(probe_table, build_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);

@@ -8,7 +8,10 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
 from collections import OrderedDict
+
+cimport cudf._lib.cpp.lists.lists_column_view as cpp_lists_column_view
 
 try:
     import ujson as json
@@ -17,7 +20,6 @@ except ImportError:
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
@@ -32,7 +34,6 @@ from cudf._lib.cpp.io.orc_metadata cimport (
 )
 from cudf._lib.cpp.io.types cimport (
     column_in_metadata,
-    column_name_info,
     compression_type,
     data_sink,
     sink_info,
@@ -47,20 +48,12 @@ from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_column_struct_field_names,
-    update_struct_field_names,
 )
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.types cimport underlying_type_t_type_id
-
-import numpy as np
-
-from cudf._lib.utils cimport (
-    data_from_unique_ptr,
-    get_column_names,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
 
@@ -103,7 +96,7 @@ cpdef read_orc(object filepaths_or_buffers,
     """
     cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
         filepaths_or_buffers,
-        columns or [],
+        columns,
         stripes or [],
         get_size_t_arg(skip_rows, "skip_rows"),
         get_size_t_arg(num_rows, "num_rows"),
@@ -127,15 +120,15 @@ cpdef read_orc(object filepaths_or_buffers,
         c_result = move(libcudf_read_orc(c_orc_reader_options))
 
     names = [name.decode() for name in c_result.metadata.column_names]
-    actual_index_names, names, is_range_index, reset_index_name, range_idx = \
-        _get_index_from_metadata(c_result.metadata.user_data,
-                                 names,
-                                 skip_rows,
-                                 num_rows)
+    actual_index_names, col_names, is_range_index, reset_index_name, \
+        range_idx = _get_index_from_metadata(c_result.metadata.user_data,
+                                             names,
+                                             skip_rows,
+                                             num_rows)
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
-        names,
+        col_names if columns is None else names,
         actual_index_names
     )
 
@@ -161,6 +154,8 @@ cdef compression_type _get_comp_type(object compression):
         return compression_type.SNAPPY
     elif compression == "ZLIB":
         return compression_type.ZLIB
+    elif compression == "ZSTD":
+        return compression_type.ZSTD
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
@@ -238,13 +233,15 @@ cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
 
 cpdef write_orc(table,
                 object path_or_buf,
-                object compression=None,
+                object compression="snappy",
                 object statistics="ROWGROUP",
                 object stripe_size_bytes=None,
                 object stripe_size_rows=None,
-                object row_index_stride=None):
+                object row_index_stride=None,
+                object cols_as_map_type=None,
+                object index=None):
     """
-    Cython function to call into libcudf API, see `write_orc`.
+    Cython function to call into libcudf API, see `cudf::io::write_orc`.
 
     See Also
     --------
@@ -256,10 +253,12 @@ cpdef write_orc(table,
     cdef unique_ptr[table_input_metadata] tbl_meta
     cdef map[string, string] user_data
     user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(
-        table, None)
+        table, index)
     )
 
-    if not isinstance(table._index, cudf.RangeIndex):
+    if index is True or (
+        index is None and not isinstance(table._index, cudf.RangeIndex)
+    ):
         tv = table_view_from_table(table)
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
@@ -274,10 +273,16 @@ cpdef write_orc(table,
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
+    if cols_as_map_type is not None:
+        cols_as_map_type = set(cols_as_map_type)
+
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         tbl_meta.get().column_metadata[i].set_name(name.encode())
-        _set_col_children_names(
-            table[name]._column, tbl_meta.get().column_metadata[i]
+        _set_col_children_metadata(
+            table[name]._column,
+            tbl_meta.get().column_metadata[i],
+            (cols_as_map_type is not None)
+            and (name in cols_as_map_type),
         )
 
     cdef orc_writer_options c_orc_writer_options = move(
@@ -325,16 +330,11 @@ cdef orc_reader_options make_orc_reader_options(
     for i, datasource in enumerate(filepaths_or_buffers):
         if isinstance(datasource, NativeFile):
             filepaths_or_buffers[i] = NativeFileDatasource(datasource)
-    cdef vector[string] c_column_names
     cdef vector[vector[size_type]] strps = stripes
-    c_column_names.reserve(len(column_names))
-    for col in column_names:
-        c_column_names.push_back(str(col).encode())
     cdef orc_reader_options opts
     cdef source_info src = make_source_info(filepaths_or_buffers)
     opts = move(
         orc_reader_options.builder(src)
-        .columns(c_column_names)
         .stripes(strps)
         .skip_rows(skip_rows)
         .num_rows(num_rows)
@@ -342,6 +342,13 @@ cdef orc_reader_options make_orc_reader_options(
         .use_index(use_index)
         .build()
     )
+
+    cdef vector[string] c_column_names
+    if column_names is not None:
+        c_column_names.reserve(len(column_names))
+        for col in column_names:
+            c_column_names.push_back(str(col).encode())
+        opts.set_columns(c_column_names)
 
     return opts
 
@@ -363,13 +370,21 @@ cdef class ORCWriter:
     cdef compression_type comp_type
     cdef object index
     cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef object cols_as_map_type
 
-    def __cinit__(self, object path, object index=None,
-                  object compression=None, object statistics="ROWGROUP"):
+    def __cinit__(self,
+                  object path,
+                  object index=None,
+                  object compression="snappy",
+                  object statistics="ROWGROUP",
+                  object cols_as_map_type=None):
+
         self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_orc_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
+        self.cols_as_map_type = cols_as_map_type \
+            if cols_as_map_type is None else set(cols_as_map_type)
         self.initialized = False
 
     def write_table(self, table):
@@ -426,8 +441,11 @@ cdef class ORCWriter:
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
             self.tbl_meta.get().column_metadata[i].set_name(name.encode())
-            _set_col_children_names(
-                table[name]._column, self.tbl_meta.get().column_metadata[i]
+            _set_col_children_metadata(
+                table[name]._column,
+                self.tbl_meta.get().column_metadata[i],
+                (self.cols_as_map_type is not None)
+                and (name in self.cols_as_map_type),
             )
 
         cdef map[string, string] user_data
@@ -448,14 +466,24 @@ cdef class ORCWriter:
 
         self.initialized = True
 
-cdef _set_col_children_names(Column col, column_in_metadata& col_meta):
+cdef _set_col_children_metadata(Column col,
+                                column_in_metadata& col_meta,
+                                list_column_as_map=False):
     if is_struct_dtype(col):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
             col_meta.child(i).set_name(name.encode())
-            _set_col_children_names(child_col, col_meta.child(i))
+            _set_col_children_metadata(
+                child_col, col_meta.child(i), list_column_as_map
+            )
     elif is_list_dtype(col):
-        _set_col_children_names(col.children[1], col_meta.child(1))
+        if list_column_as_map:
+            col_meta.set_list_column_as_map()
+        _set_col_children_metadata(
+            col.children[cpp_lists_column_view.child_column_index],
+            col_meta.child(cpp_lists_column_view.child_column_index),
+            list_column_as_map
+        )
     else:
         return

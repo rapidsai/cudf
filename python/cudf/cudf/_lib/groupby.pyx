@@ -1,11 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from collections import defaultdict
-
-import numpy as np
 from pandas.core.groupby.groupby import DataError
-
-import rmm
 
 from cudf.api.types import (
     is_categorical_dtype,
@@ -22,16 +17,9 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-import cudf
-
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -44,13 +32,11 @@ from cudf._lib.aggregation cimport (
     make_groupby_scan_aggregation,
 )
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.utilities.host_span cimport host_span
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -121,13 +107,36 @@ cdef class GroupBy:
         self.dropna = dropna
 
     def groups(self, list values):
+        """
+        Perform a sort groupby, using ``self.keys`` as the key columns
+        and ``values`` as the value columns.
+
+        Parameters
+        ----------
+        values: list of Columns
+            The value columns
+
+        Returns
+        -------
+        grouped_keys: list of Columns
+            The grouped key columns
+        grouped_values: list of Columns
+            The grouped value columns
+        offsets: list of integers
+            Integer offsets such that offsets[i+1] - offsets[i]
+            represents the size of group `i`.
+        """
         cdef table_view values_view = table_view_from_columns(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
 
         grouped_key_cols = columns_from_unique_ptr(move(c_groups.keys))
-        grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+
+        if values:
+            grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+        else:
+            grouped_value_cols = []
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
     def aggregate_internal(self, values, aggregations):

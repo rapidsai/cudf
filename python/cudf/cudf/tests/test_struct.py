@@ -332,3 +332,63 @@ def test_nested_struct_from_pandas_empty():
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(pdf, gdf)
+
+
+def _nested_na_replace(struct_scalar):
+    """
+    Replace `cudf.NA` with `None` in the dict
+    """
+    for key, value in struct_scalar.items():
+        if value is cudf.NA:
+            struct_scalar[key] = None
+    return struct_scalar
+
+
+@pytest.mark.parametrize(
+    "data, idx, expected",
+    [
+        (
+            [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}],
+            0,
+            {"f1": "a", "f2": {"a": "sf21"}},
+        ),
+        (
+            [
+                {"f2": {"a": "sf21"}},
+                {"f1": "sf12", "f2": None},
+            ],
+            0,
+            {"f1": cudf.NA, "f2": {"a": "sf21"}},
+        ),
+        (
+            [{"a": "123"}, {"a": "sf12", "b": {"a": {"b": "c"}}}],
+            1,
+            {"a": "sf12", "b": {"a": {"b": "c"}}},
+        ),
+    ],
+)
+def test_nested_struct_extract_host_scalars(data, idx, expected):
+    series = cudf.Series(data)
+
+    assert _nested_na_replace(series[idx]) == _nested_na_replace(expected)
+
+
+def test_struct_memory_usage():
+    s = cudf.Series([{"a": 1, "b": 10}, {"a": 2, "b": 20}, {"a": 3, "b": 30}])
+    df = s.struct.explode()
+
+    assert_eq(s.memory_usage(), df.memory_usage().sum())
+
+
+def test_struct_with_null_memory_usage():
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, -1, -1, 3], dtype="int64"),
+            "b": cudf.Series([10, 20, -1, -1, 30], dtype="int64"),
+        }
+    )
+    s = df.to_struct()
+    assert s.memory_usage() == 80
+
+    s[2:4] = None
+    assert s.memory_usage() == 272

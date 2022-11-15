@@ -25,7 +25,7 @@ class ColumnParameters:
     """Parameters for generating column of data
 
     Attributes
-    ---
+    ----------
     cardinality : int or None
         Size of a random set of values that generated data is sampled from.
         The values in the random set are derived from the given generator.
@@ -65,7 +65,7 @@ class Parameters:
     """Parameters for random dataset generation
 
     Attributes
-    ---
+    ----------
     num_rows : int
         Number of rows to generate
     column_parameters : List[ColumnParams]
@@ -502,7 +502,7 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=lambda cardinality=cardinality: [
-                            mimesis.random.random.schoice(
+                            mimesis.random.random.generate_string(
                                 string.printable,
                                 np.random.randint(
                                     low=0,
@@ -684,7 +684,7 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
         values = float_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind in ("U", "O"):
         values = [
-            mimesis.random.random.schoice(
+            mimesis.random.random.generate_string(
                 string.printable,
                 100,
             )

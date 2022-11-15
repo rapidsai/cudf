@@ -41,7 +41,7 @@ namespace cudf::jni {
  */
 std::unique_ptr<cudf::column>
 extract_chunk32(cudf::column_view const &col, cudf::data_type dtype, int chunk_idx,
-                rmm::cuda_stream_view stream = cudf::default_stream_value);
+                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Reassemble a 128-bit column from four 64-bit integer columns with overflow detection.
@@ -65,6 +65,6 @@ extract_chunk32(cudf::column_view const &col, cudf::data_type dtype, int chunk_i
  */
 std::unique_ptr<cudf::table>
 assemble128_from_sum(cudf::table_view const &chunks_table, cudf::data_type output_type,
-                     rmm::cuda_stream_view stream = cudf::default_stream_value);
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 } // namespace cudf::jni

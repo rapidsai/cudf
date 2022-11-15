@@ -119,7 +119,7 @@ class container {
   T get_encoded();
 
  public:
-  bool parse(file_metadata* md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);
+  bool parse(file_metadata* md, size_t max_num_rows = 0x7fff'ffff, size_t first_row = 0);
 
  protected:
   const uint8_t* m_base;

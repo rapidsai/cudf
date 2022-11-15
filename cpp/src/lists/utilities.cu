@@ -23,10 +23,11 @@ namespace cudf::lists::detail {
 
 std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                         size_type n_elements,
-                                        rmm::cuda_stream_view stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   auto labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream);
+    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream, mr);
   auto const labels_begin = labels->mutable_view().template begin<size_type>();
   cudf::detail::label_segments(
     input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + n_elements, stream);

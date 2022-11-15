@@ -168,11 +168,12 @@ std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)
+void expect_tables_prop_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
 {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  for (cudf::size_type index = 0; index < lhs.num_columns(); index++)
+  for (cudf::size_type index = 0; index < lhs.num_columns(); index++) {
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs.column(index), rhs.column(index));
+  }
 }
 
 struct EmptyLikeTableTest : public cudf::test::BaseFixture {
@@ -183,7 +184,7 @@ TEST_F(EmptyLikeTableTest, TableTest)
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   cudf::size_type size   = 10;
   auto input             = create_table(size, state);
-  auto expected          = create_table(0, cudf::mask_state::UNINITIALIZED);
+  auto expected          = create_table(0, cudf::mask_state::ALL_VALID);
   auto got               = cudf::empty_like(input->view());
 
   expect_tables_prop_equal(got->view(), expected->view());
@@ -192,7 +193,6 @@ TEST_F(EmptyLikeTableTest, TableTest)
 template <typename T>
 struct AllocateLikeTest : public cudf::test::BaseFixture {
 };
-;
 
 TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 
@@ -203,7 +203,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   auto input    = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
   auto expected = make_numeric_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::UNINITIALIZED);
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
   auto got = cudf::allocate_like(input->view());
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
 }
@@ -215,10 +215,9 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
   cudf::size_type specified_size = 5;
   cudf::mask_state state         = cudf::mask_state::ALL_VALID;
   auto input    = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()}, size, state);
-  auto expected = make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                      specified_size,
-                                      cudf::mask_state::UNINITIALIZED);
-  auto got      = cudf::allocate_like(input->view(), specified_size);
+  auto expected = make_numeric_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, specified_size, cudf::mask_state::ALL_VALID);
+  auto got = cudf::allocate_like(input->view(), specified_size);
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*expected, *got);
 }
 

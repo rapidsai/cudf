@@ -289,10 +289,23 @@ def read_orc(
     use_index=True,
     timestamp_type=None,
     use_python_file_object=True,
-    **kwargs,
+    storage_options=None,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
     from cudf import DataFrame
+
+    if skiprows is not None:
+        warnings.warn(
+            "skiprows is deprecated and will be removed.",
+            FutureWarning,
+        )
+
+    if num_rows is not None:
+        warnings.warn(
+            "num_rows is deprecated and will be removed.",
+            FutureWarning,
+        )
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -314,11 +327,13 @@ def read_orc(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
-        if ioutils.is_directory(source, **kwargs):
+        if ioutils.is_directory(
+            path_or_data=source, storage_options=storage_options
+        ):
             fs = ioutils._ensure_filesystem(
                 passed_filesystem=None,
                 path=source,
-                **kwargs,
+                storage_options=storage_options,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -327,7 +342,8 @@ def read_orc(
             path_or_data=source,
             compression=None,
             use_python_file_object=use_python_file_object,
-            **kwargs,
+            storage_options=storage_options,
+            bytes_per_thread=bytes_per_thread,
         )
         if compression is not None:
             raise ValueError(
@@ -395,21 +411,18 @@ def read_orc(
 def to_orc(
     df,
     fname,
-    compression=None,
+    compression="snappy",
     statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
-    **kwargs,
+    cols_as_map_type=None,
+    storage_options=None,
+    index=None,
 ):
     """{docstring}"""
 
     for col in df._data.columns:
-        if isinstance(col, cudf.core.column.StructColumn):
-            warnings.warn(
-                "Support for writing tables with struct columns is "
-                "currently experimental."
-            )
         if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
@@ -422,8 +435,11 @@ def to_orc(
             "Categorical columns."
         )
 
+    if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):
+        raise TypeError("cols_as_map_type must be a list of column names.")
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=fname, mode="wb", **kwargs
+        path_or_data=fname, mode="wb", storage_options=storage_options
     )
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
@@ -436,6 +452,8 @@ def to_orc(
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
+                cols_as_map_type,
+                index,
             )
     else:
         liborc.write_orc(
@@ -446,6 +464,8 @@ def to_orc(
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,
+            cols_as_map_type,
+            index,
         )
 
 

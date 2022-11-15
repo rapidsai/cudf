@@ -185,7 +185,7 @@ struct list_child_constructor {
                                                       mr);
 
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(child_column->size()),
       child_column->mutable_view().begin<T>(),
@@ -202,6 +202,8 @@ struct list_child_constructor {
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
         return actual_list_row.template element<T>(intra_index);
       });
+
+    child_column->set_null_count(child_null_mask.second);
 
     return child_column;
   }
@@ -235,7 +237,7 @@ struct list_child_constructor {
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(string_views.size()),
       string_views.begin(),
@@ -302,7 +304,7 @@ struct list_child_constructor {
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
     // child list_device_view instances.
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(child_list_views.size()),
       child_list_views.begin(),

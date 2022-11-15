@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,11 @@ namespace {
 
 jclass Contiguous_table_jclass;
 jmethodID From_packed_table_method;
+
+#define GROUP_BY_RESULT_CLASS "ai/rapids/cudf/ContigSplitGroupByResult"
+jclass Contig_split_group_by_result_jclass;
+jfieldID Contig_split_group_by_result_groups_field;
+jfieldID Contig_split_group_by_result_uniq_key_columns_field;
 
 } // anonymous namespace
 
@@ -54,6 +59,52 @@ void release_contiguous_table_jni(JNIEnv *env) {
     env->DeleteGlobalRef(Contiguous_table_jclass);
     Contiguous_table_jclass = nullptr;
   }
+}
+
+bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
+  jclass cls = env->FindClass(GROUP_BY_RESULT_CLASS);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  Contig_split_group_by_result_groups_field =
+      env->GetFieldID(cls, "groups", "[Lai/rapids/cudf/ContiguousTable;");
+  if (Contig_split_group_by_result_groups_field == nullptr) {
+    return false;
+  }
+  Contig_split_group_by_result_uniq_key_columns_field =
+      env->GetFieldID(cls, "uniqKeyColumns", "[J");
+  if (Contig_split_group_by_result_uniq_key_columns_field == nullptr) {
+    return false;
+  }
+
+  // Convert local reference to global so it cannot be garbage collected.
+  Contig_split_group_by_result_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Contig_split_group_by_result_jclass == nullptr) {
+    return false;
+  }
+  return true;
+}
+
+void release_contig_split_group_by_result_jni(JNIEnv *env) {
+  if (Contig_split_group_by_result_jclass != nullptr) {
+    env->DeleteGlobalRef(Contig_split_group_by_result_jclass);
+    Contig_split_group_by_result_jclass = nullptr;
+  }
+}
+
+jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups) {
+  jobject gbr = env->AllocObject(Contig_split_group_by_result_jclass);
+  env->SetObjectField(gbr, Contig_split_group_by_result_groups_field, groups);
+  return gbr;
+}
+
+jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
+                                          jlongArray &uniq_key_columns) {
+  jobject gbr = env->AllocObject(Contig_split_group_by_result_jclass);
+  env->SetObjectField(gbr, Contig_split_group_by_result_groups_field, groups);
+  env->SetObjectField(gbr, Contig_split_group_by_result_uniq_key_columns_field, uniq_key_columns);
+  return gbr;
 }
 
 jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count) {

@@ -129,6 +129,7 @@
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
  *   @defgroup strings_json JSON
+ *   @defgroup strings_regex Regex
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -150,8 +151,9 @@
  *   @defgroup lists_contains Searching
  *   @defgroup lists_gather Gathering
  *   @defgroup lists_elements Counting
- *   @defgroup lists_drop_duplicates Filtering
+ *   @defgroup lists_filtering Filtering
  *   @defgroup lists_sort Sorting
+ *   @defgroup set_operations Set Operations
  * @}
  * @defgroup nvtext_apis NVText
  * @{

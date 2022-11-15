@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>22.08.0-SNAPSHOT</version>
+    <version>22.12.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -147,7 +147,7 @@
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <version>3.2.3</version>
+            <version>3.2.4</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

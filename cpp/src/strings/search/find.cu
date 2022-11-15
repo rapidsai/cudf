@@ -32,6 +32,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/fill.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -100,13 +102,12 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> find(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> find(strings_column_view const& strings,
+                             string_scalar const& target,
+                             size_type start,
+                             size_type stop,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
@@ -120,13 +121,12 @@ std::unique_ptr<column> find(
   return find_fn(strings, target, start, stop, pfn, stream, mr);
 }
 
-std::unique_ptr<column> rfind(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> rfind(strings_column_view const& strings,
+                              string_scalar const& target,
+                              size_type start,
+                              size_type stop,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
@@ -151,7 +151,7 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find(strings, target, start, stop, cudf::default_stream_value, mr);
+  return detail::find(strings, target, start, stop, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> rfind(strings_column_view const& strings,
@@ -161,7 +161,7 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rfind(strings, target, start, stop, cudf::default_stream_value, mr);
+  return detail::rfind(strings, target, start, stop, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -364,11 +364,10 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
 
 }  // namespace
 
-std::unique_ptr<column> contains(
-  strings_column_view const& input,
-  string_scalar const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains(strings_column_view const& input,
+                                 string_scalar const& target,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // use warp parallel when the average string width is greater than the threshold
   if (!input.is_empty() && ((input.chars_size() / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
@@ -382,11 +381,10 @@ std::unique_ptr<column> contains(
   return contains_fn(input, target, pfn, stream, mr);
 }
 
-std::unique_ptr<column> contains(
-  strings_column_view const& strings,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> contains(strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return d_string.find(d_target) != string_view::npos;
@@ -394,11 +392,10 @@ std::unique_ptr<column> contains(
   return contains_fn(strings, targets, pfn, stream, mr);
 }
 
-std::unique_ptr<column> starts_with(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> starts_with(strings_column_view const& strings,
+                                    string_scalar const& target,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
@@ -407,11 +404,10 @@ std::unique_ptr<column> starts_with(
   return contains_fn(strings, target, pfn, stream, mr);
 }
 
-std::unique_ptr<column> starts_with(
-  strings_column_view const& strings,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> starts_with(strings_column_view const& strings,
+                                    strings_column_view const& targets,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
@@ -420,11 +416,10 @@ std::unique_ptr<column> starts_with(
   return contains_fn(strings, targets, pfn, stream, mr);
 }
 
-std::unique_ptr<column> ends_with(
-  strings_column_view const& strings,
-  string_scalar const& target,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> ends_with(strings_column_view const& strings,
+                                  string_scalar const& target,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
@@ -436,11 +431,10 @@ std::unique_ptr<column> ends_with(
   return contains_fn(strings, target, pfn, stream, mr);
 }
 
-std::unique_ptr<column> ends_with(
-  strings_column_view const& strings,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> ends_with(strings_column_view const& strings,
+                                  strings_column_view const& targets,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
@@ -461,7 +455,7 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, target, cudf::default_stream_value, mr);
+  return detail::contains(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
@@ -469,7 +463,7 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(strings, targets, cudf::default_stream_value, mr);
+  return detail::contains(strings, targets, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
@@ -477,7 +471,7 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, target, cudf::default_stream_value, mr);
+  return detail::starts_with(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
@@ -485,7 +479,7 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::starts_with(strings, targets, cudf::default_stream_value, mr);
+  return detail::starts_with(strings, targets, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -493,7 +487,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, target, cudf::default_stream_value, mr);
+  return detail::ends_with(strings, target, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -501,7 +495,7 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ends_with(strings, targets, cudf::default_stream_value, mr);
+  return detail::ends_with(strings, targets, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -76,10 +76,8 @@ void BM_table(benchmark::State& state)
   auto const column_size{static_cast<cudf::size_type>(state.range(1))};
   auto const values_size = column_size;
 
-  data_profile profile;
-  profile.set_cardinality(0);
-  profile.set_null_frequency(0.1);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  data_profile profile = data_profile_builder().cardinality(0).null_probability(0.1).distribution(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
   auto data_table = create_random_table(
     cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{column_size}, profile);
   auto values_table = create_random_table(

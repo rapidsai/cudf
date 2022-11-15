@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
+#include <quantiles/tdigest/tdigest_util.cuh>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -41,8 +43,8 @@
 using namespace cudf::tdigest;
 
 namespace cudf {
-namespace detail {
 namespace tdigest {
+namespace detail {
 
 // https://developer.nvidia.com/blog/lerp-faster-cuda/
 template <typename T>
@@ -337,7 +339,7 @@ std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
     std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
 }
 
-}  // namespace tdigest.
+}  // namespace detail
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
@@ -351,13 +353,18 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // output is a list column with each row containing percentiles.size() percentile values
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto row_size_iter = thrust::make_constant_iterator(percentiles.size());
+  auto const all_empty_rows =
+    thrust::count_if(rmm::exec_policy(stream),
+                     detail::size_begin(input),
+                     detail::size_begin(input) + input.size(),
+                     [] __device__(auto const x) { return x == 0; }) == input.size();
+  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
                          offsets->mutable_view().begin<offset_type>());
 
-  if (percentiles.size() == 0) {
+  if (percentiles.size() == 0 || all_empty_rows) {
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
@@ -373,7 +380,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // uninitialized)
   auto [bitmask, null_count] = [stream, mr, &tdv]() {
     auto tdigest_is_empty = thrust::make_transform_iterator(
-      tdv.size_begin(),
+      detail::size_begin(tdv),
       [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; });
     auto const null_count =
       thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
@@ -384,23 +391,23 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       tdigest_is_empty, tdigest_is_empty + tdv.size(), thrust::logical_not{}, stream, mr);
   }();
 
-  return cudf::make_lists_column(
-    input.size(),
-    std::move(offsets),
-    tdigest::compute_approx_percentiles(input, percentiles, stream, mr),
-    null_count,
-    std::move(bitmask),
-    stream,
-    mr);
+  return cudf::make_lists_column(input.size(),
+                                 std::move(offsets),
+                                 detail::compute_approx_percentiles(input, percentiles, stream, mr),
+                                 null_count,
+                                 std::move(bitmask),
+                                 stream,
+                                 mr);
 }
 
-}  // namespace detail
+}  // namespace tdigest
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::mr::device_memory_resource* mr)
 {
-  return percentile_approx(input, percentiles, cudf::default_stream_value, mr);
+  CUDF_FUNC_RANGE();
+  return tdigest::percentile_approx(input, percentiles, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

@@ -9,6 +9,7 @@ import re
 import string
 import textwrap
 import warnings
+from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
@@ -18,6 +19,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from numba import cuda
+from packaging import version
 
 import cudf
 from cudf.core._compat import (
@@ -286,6 +288,62 @@ def test_axes(data):
 
     for e, a in zip(expected, actual):
         assert_eq(e, a)
+
+
+def test_dataframe_truncate_axis_0():
+    df = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf = df.to_pandas()
+
+    expected = pdf.truncate(before=2, after=4, axis="index")
+    actual = df.truncate(before=2, after=4, axis="index")
+    assert_eq(actual, expected)
+
+    expected = pdf.truncate(before=1, after=4, axis=0)
+    actual = df.truncate(before=1, after=4, axis=0)
+    assert_eq(expected, actual)
+
+
+def test_dataframe_truncate_axis_1():
+    df = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf = df.to_pandas()
+
+    expected = pdf.truncate(before="A", after="B", axis="columns")
+    actual = df.truncate(before="A", after="B", axis="columns")
+    assert_eq(actual, expected)
+
+    expected = pdf.truncate(before="A", after="B", axis=1)
+    actual = df.truncate(before="A", after="B", axis=1)
+    assert_eq(actual, expected)
+
+
+def test_dataframe_truncate_datetimeindex():
+    dates = cudf.date_range(
+        "2021-01-01 23:45:00", "2021-01-01 23:46:00", freq="s"
+    )
+    df = cudf.DataFrame(data={"A": 1, "B": 2}, index=dates)
+    pdf = df.to_pandas()
+    expected = pdf.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+    actual = df.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+
+    assert_eq(actual, expected)
 
 
 def test_series_init_none():
@@ -2024,8 +2082,26 @@ def gdf(pdf):
             "y": [np.nan, np.nan, np.nan],
             "z": [np.nan, np.nan, np.nan],
         },
-        {"x": [], "y": [], "z": []},
-        {"x": []},
+        pytest.param(
+            {"x": [], "y": [], "z": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
+        pytest.param(
+            {"x": []},
+            marks=pytest.mark.xfail(
+                condition=version.parse("11")
+                <= version.parse(cupy.__version__)
+                < version.parse("11.1"),
+                reason="Zero-sized array passed to cupy reduction, "
+                "https://github.com/cupy/cupy/issues/6937",
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
@@ -3090,7 +3166,7 @@ def test_to_frame(pdf, gdf):
     gdf_new_name = gdf.x.to_frame(name=name)
     pdf_new_name = pdf.x.to_frame(name=name)
     assert_eq(gdf_new_name, pdf_new_name)
-    assert gdf_new_name.columns[0] is name
+    assert gdf_new_name.columns[0] == np.bool(name)
 
 
 def test_dataframe_empty_sort_index():
@@ -4270,26 +4346,26 @@ def test_series_values_property(data):
         pytest.param(
             {"A": [1, None, 3], "B": [1, 2, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
             marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+                reason="Nulls not supported by values accessor"
             ),
         ),
         {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
             marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+                reason="str or categorical not supported by values accessor"
             ),
         ),
     ],
@@ -4408,8 +4484,8 @@ def test_isin_dataframe(data, values):
         except ValueError as e:
             if str(e) == "Lengths must match.":
                 pytest.xfail(
-                    not PANDAS_GE_110,
-                    "https://github.com/pandas-dev/pandas/issues/34256",
+                    condition=not PANDAS_GE_110,
+                    reason="https://github.com/pandas-dev/pandas/issues/34256",
                 )
         except TypeError as e:
             # Can't do isin with different categories
@@ -6746,27 +6822,172 @@ def test_cudf_isclose_different_index():
     assert_eq(expected, cudf.isclose(s1, s2))
 
 
-def test_dataframe_to_dict_error():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
-        ),
-    ):
-        df.to_dict()
+@pytest.mark.parametrize(
+    "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
+)
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_dataframe_to_dict(orient, into):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]}, index=[10, 11, 12])
+    pdf = df.to_pandas()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
+    actual = df.to_dict(orient=orient, into=into)
+    expected = pdf.to_dict(orient=orient, into=into)
+    if orient == "series":
+        assert actual.keys() == expected.keys()
+        for key in actual.keys():
+            assert_eq(expected[key], actual[key])
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, orient, dtype, columns",
+    [
+        (
+            {"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]},
+            "columns",
+            None,
+            None,
         ),
-    ):
-        df["a"].to_dict()
+        ({"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}, "index", None, None),
+        (
+            {"col_1": [None, 2, 1, 0], "col_2": [3, None, 1, 0]},
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": ["ab", "cd", "ef", "gh"],
+                "col_2": ["zx", "one", "two", "three"],
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [[1, 3], [2, 4]],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict(data, orient, dtype, columns):
+
+    expected = pd.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str", None])
+def test_dataframe_from_dict_transposed(dtype):
+    pd_data = {"a": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}
+    gd_data = {key: cudf.Series(val) for key, val in pd_data.items()}
+
+    expected = pd.DataFrame.from_dict(pd_data, orient="index", dtype=dtype)
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+
+    gd_data = {key: cupy.asarray(val) for key, val in pd_data.items()}
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pd_data, gd_data, orient, dtype, columns",
+    [
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "columns",
+            None,
+            None,
+        ),
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "index",
+            None,
+            None,
+        ),
+        (
+            {
+                "col_1": np.array([None, 2, 1, 0]),
+                "col_2": np.array([3, None, 1, 0]),
+            },
+            {
+                "col_1": cupy.array([np.nan, 2, 1, 0]),
+                "col_2": cupy.array([3, np.nan, 1, 0]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [np.array([1, 3]), np.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [cupy.array([1, 3]), cupy.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict_cp_np_arrays(
+    pd_data, gd_data, orient, dtype, columns
+):
+
+    expected = pd.DataFrame.from_dict(
+        data=pd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=gd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual, check_dtype=dtype is not None)
 
 
 @pytest.mark.parametrize(
@@ -9473,3 +9694,83 @@ def test_value_counts(
 
     with pytest.raises(KeyError):
         gdf.value_counts(subset=["not_a_column_name"])
+
+
+@pytest.fixture
+def wildcard_df():
+    midx = cudf.MultiIndex.from_tuples(
+        [(c1, c2) for c1 in "abc" for c2 in "ab"]
+    )
+    df = cudf.DataFrame({f"{i}": [i] for i in range(6)})
+    df.columns = midx
+    return df
+
+
+def test_multiindex_wildcard_selection_all(wildcard_df):
+    expect = wildcard_df.to_pandas().loc[:, (slice(None), "b")]
+    got = wildcard_df.loc[:, (slice(None), "b")]
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="Not yet properly supported.")
+def test_multiindex_wildcard_selection_partial(wildcard_df):
+    expect = wildcard_df.to_pandas().loc[:, (slice("a", "b"), "b")]
+    got = wildcard_df.loc[:, (slice("a", "b"), "b")]
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(reason="Not yet properly supported.")
+def test_multiindex_wildcard_selection_three_level_all():
+    midx = cudf.MultiIndex.from_tuples(
+        [(c1, c2, c3) for c1 in "abcd" for c2 in "abc" for c3 in "ab"]
+    )
+    df = cudf.DataFrame({f"{i}": [i] for i in range(24)})
+    df.columns = midx
+
+    expect = df.to_pandas().loc[:, (slice("a", "c"), slice("a", "b"), "b")]
+    got = df.loc[:, (slice(None), "b")]
+    assert_eq(expect, got)
+
+
+def test_dataframe_assign_scalar_to_empty_series():
+    expected = pd.DataFrame({"a": []})
+    actual = cudf.DataFrame({"a": []})
+    expected.a = 0
+    actual.a = 0
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: [1, 2, 3], 2: [10, 11, 23]},
+        {("a", "b"): [1, 2, 3], ("2",): [10, 11, 23]},
+    ],
+)
+def test_non_string_column_name_to_arrow(data):
+    df = cudf.DataFrame(data)
+
+    expected = df.to_arrow()
+    actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)
+
+
+def test_complex_types_from_arrow():
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
+
+    assert expected.equals(actual)

@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+from functools import cached_property
+
 import pandas as pd
 import pyarrow as pa
 
@@ -47,9 +49,7 @@ class StructColumn(ColumnBase):
         )
 
         if self.nullable:
-            nbuf = self.mask.to_host_array().view("int8")
-            nbuf = pa.py_buffer(nbuf)
-            buffers = (nbuf,)
+            buffers = (pa.py_buffer(self.mask.memoryview()),)
         else:
             buffers = (None,)
 
@@ -66,6 +66,17 @@ class StructColumn(ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
+
+    @cached_property
+    def memory_usage(self):
+        n = 0
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
+
+        for child in self.children:
+            n += child.memory_usage
+
+        return n
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)

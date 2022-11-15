@@ -3,25 +3,20 @@
 import os
 import re
 import shutil
-import subprocess
-import sys
-from distutils.spawn import find_executable
-
-from setuptools import find_packages
-from skbuild import setup
-from skbuild.command.build_ext import build_ext
 
 import versioneer
+from setuptools import find_packages
+from skbuild import setup
 
 install_requires = [
     "cachetools",
     "cuda-python>=11.5,<11.7.1",
     "fsspec>=0.6.0",
-    "numba>=0.53.1",
+    "numba>=0.56.2",
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=1.0,<1.5.0dev0",
+    "pandas>=1.0,<1.6.0dev0",
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
 ]
@@ -32,7 +27,7 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis",
-        "mimesis",
+        "mimesis>=4.1.0",
         "fastavro>=0.22.9",
         "python-snappy>=0.6.0",
         "pyorc",
@@ -79,52 +74,11 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 install_requires.append(
-    "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
+    "cupy-cuda"
+    + get_cuda_version_from_header(cuda_include_dir)
+    + ">=9.5.0,<12.0.0a0"
 )
 
-
-class build_ext_and_proto(build_ext):
-    def run(self):
-        # Get protoc
-        protoc = None
-        if "PROTOC" in os.environ and os.path.exists(os.environ["PROTOC"]):
-            protoc = os.environ["PROTOC"]
-        else:
-            protoc = find_executable("protoc")
-        if protoc is None:
-            sys.stderr.write("protoc not found")
-            sys.exit(1)
-
-        # Build .proto file
-        for source in ["cudf/utils/metadata/orc_column_statistics.proto"]:
-            output = source.replace(".proto", "_pb2.py")
-
-            if not os.path.exists(output) or (
-                os.path.getmtime(source) > os.path.getmtime(output)
-            ):
-                with open(output, "a") as src:
-                    src.write("# flake8: noqa" + os.linesep)
-                    src.write("# fmt: off" + os.linesep)
-                subprocess.check_call([protoc, "--python_out=.", source])
-                with open(output, "r+") as src:
-                    new_src_content = (
-                        "# flake8: noqa"
-                        + os.linesep
-                        + "# fmt: off"
-                        + os.linesep
-                        + src.read()
-                        + "# fmt: on"
-                        + os.linesep
-                    )
-                    src.seek(0)
-                    src.write(new_src_content)
-
-        # Run original Cython build_ext command
-        super().run()
-
-
-cmdclass = versioneer.get_cmdclass()
-cmdclass["build_ext"] = build_ext_and_proto
 
 setup(
     name="cudf",
@@ -146,7 +100,7 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
     },
-    cmdclass=cmdclass,
+    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,

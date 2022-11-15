@@ -26,11 +26,21 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Output parameters for the decompression interface
+ * @brief Status of a compression/decompression operation.
  */
-struct decompress_status {
+enum class compression_status : uint8_t {
+  SUCCESS,          ///< Successful, output is valid
+  FAILURE,          ///< Failed, output is invalid (e.g. input is unsupported in some way)
+  SKIPPED,          ///< Operation skipped (if conversion, uncompressed data can be used)
+  OUTPUT_OVERFLOW,  ///< Output buffer is too small; operation can succeed with larger output
+};
+
+/**
+ * @brief Descriptor of compression/decompression result.
+ */
+struct compression_result {
   uint64_t bytes_written;
-  uint32_t status;
+  compression_status status;
   uint32_t reserved;
 };
 
@@ -44,13 +54,13 @@ enum class gzip_header_included { NO, YES };
  *
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
+ * @param[out] results List of output status structures
  * @param[in] parse_hdr Whether or not to parse GZIP header
  * @param[in] stream CUDA stream to use
  */
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream);
 
@@ -73,12 +83,12 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
  *
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
+ * @param[out] results List of output status structures
  * @param[in] stream CUDA stream to use
  */
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> results,
                 rmm::cuda_stream_view stream);
 
 /**
@@ -98,14 +108,14 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  *
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
+ * @param[out] results List of output status structures
  * @param[in] scratch Temporary memory for intermediate work
  * @param[in] scratch_size Size in bytes of the temporary memory
  * @param[in] stream CUDA stream to use
  */
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<decompress_status> statuses,
+                  device_span<compression_result> results,
                   void* scratch,
                   size_t scratch_size,
                   rmm::cuda_stream_view stream);
@@ -118,12 +128,12 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
  *
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
- * @param[out] statuses List of output status structures
+ * @param[out] results List of output status structures
  * @param[in] stream CUDA stream to use
  */
 void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<decompress_status> statuses,
+              device_span<compression_result> results,
               rmm::cuda_stream_view stream);
 
 }  // namespace io

@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from setuptools import find_packages, setup
-
 import versioneer
+from setuptools import find_packages, setup
 
 install_requires = ["cudf_kafka", "cudf"]
 

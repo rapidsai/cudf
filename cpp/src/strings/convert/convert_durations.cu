@@ -17,11 +17,10 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <strings/convert/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -749,7 +748,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, cudf::default_stream_value, mr);
+  return detail::from_durations(durations, format, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
@@ -758,7 +757,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(strings, duration_type, format, cudf::default_stream_value, mr);
+  return detail::to_durations(strings, duration_type, format, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

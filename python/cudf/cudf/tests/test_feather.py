@@ -1,7 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import os
-from distutils.version import LooseVersion
 from string import ascii_letters
 
 import numpy as np
@@ -11,15 +10,6 @@ import pytest
 
 import cudf
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
-
-if LooseVersion(pd.__version__) < LooseVersion("0.24"):
-    try:
-        import feather  # noqa F401
-    except ImportError:
-        pytest.skip(
-            "Feather is not installed and is required for Pandas <" " 0.24",
-            allow_module_level=True,
-        )
 
 
 @pytest.fixture(params=[0, 1, 10, 100])

@@ -21,12 +21,10 @@
 
 #include <cudf/io/csv.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 256 << 20;
 constexpr cudf::size_type num_cols = 64;
-
-namespace cudf_io = cudf::io;
 
 class CsvWrite : public cudf::benchmark {
 };
@@ -44,9 +42,9 @@ void BM_csv_write_varying_inout(benchmark::State& state)
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::csv_writer_options options =
-      cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view).include_header(true);
-    cudf_io::write_csv(options);
+    cudf::io::csv_writer_options options =
+      cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view);
+    cudf::io::write_csv(options);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
@@ -74,12 +72,11 @@ void BM_csv_write_varying_options(benchmark::State& state)
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::csv_writer_options options =
-      cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-        .include_header(true)
+    cudf::io::csv_writer_options options =
+      cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view)
         .na_rep(na_per)
         .rows_per_chunk(rows_per_chunk);
-    cudf_io::write_csv(options);
+    cudf::io::write_csv(options);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());

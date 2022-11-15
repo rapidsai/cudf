@@ -41,14 +41,16 @@ def bench_merge(benchmark, dataframe, num_key_cols):
 @pytest.mark.parametrize(
     "values",
     [
-        range(1000),
-        {f"key{i}": range(1000) for i in range(10)},
-        cudf.DataFrame({f"key{i}": range(1000) for i in range(10)}),
-        cudf.Series(range(1000)),
+        lambda: range(50),
+        lambda: {f"{string.ascii_lowercase[i]}": range(50) for i in range(10)},
+        lambda: cudf.DataFrame(
+            {f"{string.ascii_lowercase[i]}": range(50) for i in range(10)}
+        ),
+        lambda: cudf.Series(range(50)),
     ],
 )
 def bench_isin(benchmark, dataframe, values):
-    benchmark(dataframe.isin, values)
+    benchmark(dataframe.isin, values())
 
 
 @pytest.fixture(

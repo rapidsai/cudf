@@ -18,6 +18,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf::detail {
 
 /**

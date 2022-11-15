@@ -23,31 +23,34 @@
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
 
-namespace detail {
-namespace parquet {
+namespace detail::parquet {
 
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
- private:
+ protected:
   class impl;
   std::unique_ptr<impl> _impl;
+
+  /**
+   * @brief Default constructor, needed for subclassing.
+   */
+  reader();
 
  public:
   /**
@@ -55,27 +58,27 @@ class reader {
    *
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
+                  rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~reader();
+  virtual ~reader();
 
   /**
    * @brief Reads the dataset as per given options.
    *
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options,
-                           rmm::cuda_stream_view stream = cudf::default_stream_value);
+  table_with_metadata read(parquet_reader_options const& options);
 };
 
 /**
@@ -154,7 +157,5 @@ class writer {
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 
-};  // namespace parquet
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace detail::parquet
+}  // namespace cudf::io

@@ -60,6 +60,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
+#include <cuda/std/climits>
 #include <cuda/std/limits>
 
 #include <memory>
@@ -121,10 +122,8 @@ struct DeviceRolling {
     using AggOp = typename corresponding_operator<op>::type;
     AggOp agg_op;
 
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-    OutputType val                 = AggOp::template identity<OutputType>();
+    cudf::size_type count = 0;
+    OutputType val        = AggOp::template identity<OutputType>();
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -189,11 +188,9 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     using AggOp     = typename corresponding_operator<op>::type;
     AggOp agg_op;
 
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-    InputType val                  = AggOp::template identity<InputType>();
-    OutputType val_index           = default_output;
+    cudf::size_type count = 0;
+    InputType val         = AggOp::template identity<InputType>();
+    OutputType val_index  = default_output;
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -283,13 +280,11 @@ struct DeviceRollingCountValid {
                              size_type end_index,
                              size_type current_index)
   {
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect
-    // results for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-
     bool output_is_valid = ((end_index - start_index) >= min_periods);
 
     if (output_is_valid) {
+      cudf::size_type count = 0;
+
       if (!has_nulls) {
         count = end_index - start_index;
       } else {
@@ -1032,7 +1027,7 @@ __launch_bounds__(block_size) __global__
 
   size_type warp_valid_count{0};
 
-  auto active_threads = __ballot_sync(0xffffffff, i < input.size());
+  auto active_threads = __ballot_sync(0xffff'ffffu, i < input.size());
   while (i < input.size()) {
     // to prevent overflow issues when computing bounds use int64_t
     int64_t const preceding_window = preceding_window_begin[i];

@@ -3,9 +3,7 @@
 import pickle
 import warnings
 
-import pandas as pd
-
-from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -14,7 +12,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, as_buffer
 
 from cudf._lib.column cimport Column
 
@@ -42,7 +40,6 @@ from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
 )
 
@@ -135,36 +132,37 @@ def _copy_range(Column input_column,
     return Column.from_unique_ptr(move(c_result))
 
 
-def copy_range(Column input_column,
+def copy_range(Column source_column,
                Column target_column,
-               size_type input_begin,
-               size_type input_end,
+               size_type source_begin,
+               size_type source_end,
                size_type target_begin,
                size_type target_end,
                bool inplace):
     """
-    Copy input_column from input_begin to input_end to
-    target_column from target_begin to target_end
+    Copy a contiguous range from a source to a target column
+
+    Notes
+    -----
+    Expects the source and target ranges to have been sanitised to be
+    in-range for the source and target column respectively. For
+    example via ``slice.indices``.
     """
 
-    if abs(target_end - target_begin) <= 1:
+    assert (
+        source_end - source_begin == target_end - target_begin,
+        "Source and target ranges must be same length"
+    )
+    if target_end >= target_begin and inplace:
+        # FIXME: Are we allowed to do this when inplace=False?
         return target_column
 
-    if target_begin < 0:
-        target_begin = target_begin + target_column.size
-
-    if target_end < 0:
-        target_end = target_end + target_column.size
-
-    if target_begin > target_end:
-        return target_column
-
-    if inplace is True:
-        _copy_range_in_place(input_column, target_column,
-                             input_begin, input_end, target_begin)
+    if inplace:
+        _copy_range_in_place(source_column, target_column,
+                             source_begin, source_end, target_begin)
     else:
-        return _copy_range(input_column, target_column,
-                           input_begin, input_end, target_begin)
+        return _copy_range(source_column, target_column,
+                           source_begin, source_end, target_begin)
 
 
 def gather(
@@ -194,8 +192,7 @@ def gather(
 
 cdef scatter_scalar(list source_device_slrs,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef vector[reference_wrapper[constscalar]] c_source
     cdef DeviceScalar d_slr
     cdef unique_ptr[table] c_result
@@ -212,7 +209,6 @@ cdef scatter_scalar(list source_device_slrs,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
 
@@ -221,8 +217,7 @@ cdef scatter_scalar(list source_device_slrs,
 
 cdef scatter_column(list source_columns,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef table_view c_source = table_view_from_columns(source_columns)
     cdef unique_ptr[table] c_result
 
@@ -232,7 +227,6 @@ cdef scatter_column(list source_columns,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
     return columns_from_unique_ptr(move(c_result))
@@ -257,14 +251,24 @@ def scatter(list sources, Column scatter_map, list target_columns,
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = table_view_from_columns(target_columns)
 
+    if bounds_check:
+        n_rows = len(target_columns[0])
+        if not (
+            (scatter_map >= -n_rows).all()
+            and (scatter_map < n_rows).all()
+        ):
+            raise IndexError(
+                f"index out of bounds for column of size {n_rows}"
+            )
+
     if isinstance(sources[0], Column):
         return scatter_column(
-            sources, scatter_map_view, target_table_view, bounds_check
+            sources, scatter_map_view, target_table_view
         )
     else:
         source_scalars = [as_device_scalar(slr) for slr in sources]
         return scatter_scalar(
-            source_scalars, scatter_map_view, target_table_view, bounds_check
+            source_scalars, scatter_map_view, target_table_view
         )
 
 
@@ -718,7 +722,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(self.gpu_data_ptr, self.gpu_data_size, self)
+        gpu_data = as_buffer(
+            data=self.gpu_data_ptr,
+            size=self.gpu_data_size,
+            owner=self
+        )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)

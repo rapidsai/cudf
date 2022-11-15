@@ -16,6 +16,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.utils.dtypes import (
     _can_cast,
+    _dtype_can_hold_element,
     find_common_type,
     is_mixed_with_object_dtype,
 )
@@ -82,6 +83,12 @@ def _check_and_cast_columns_with_other(
 
     if _is_non_decimal_numeric_dtype(source_dtype) and _can_cast(
         other, source_dtype
+    ):
+        common_dtype = source_dtype
+    elif (
+        isinstance(source_col, cudf.core.column.NumericalColumn)
+        and other_is_scalar
+        and _dtype_can_hold_element(source_dtype, other)
     ):
         common_dtype = source_dtype
     else:

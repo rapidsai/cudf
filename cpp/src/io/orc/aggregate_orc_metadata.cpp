@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <optional>
 
 namespace cudf::io::orc::detail {
 
@@ -249,17 +250,17 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
 }
 
 column_hierarchy aggregate_orc_metadata::select_columns(
-  std::vector<std::string> const& column_paths)
+  std::optional<std::vector<std::string>> const& column_paths)
 {
   auto const& pfm = per_file_metadata[0];
 
   column_hierarchy::nesting_map selected_columns;
-  if (column_paths.empty()) {
+  if (not column_paths.has_value()) {
     for (auto const& col_id : pfm.ff.types[0].subtypes) {
       add_column_to_mapping(selected_columns, pfm, col_id);
     }
   } else {
-    for (const auto& path : column_paths) {
+    for (const auto& path : column_paths.value()) {
       bool name_found = false;
       for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
         if (pfm.column_path(col_id) == path) {

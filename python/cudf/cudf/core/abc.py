@@ -1,19 +1,9 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
-import sys
-
-import rmm
+import pickle
 
 import cudf
-
-if sys.version_info < (3, 8):
-    try:
-        import pickle5 as pickle
-    except ImportError:
-        import pickle  # type: ignore
-else:
-    import pickle  # type: ignore
 
 
 class Serializable:
@@ -90,13 +80,15 @@ class Serializable:
         header : dict
             The metadata required to reconstruct the object.
         frames : list
-            The Buffers or memoryviews that the object should contain.
+            The Buffer or memoryview objects that the object
+            should contain.
 
         :meta private:
         """
         header, frames = self.serialize()
         assert all(
-            (type(f) in [cudf.core.buffer.Buffer, memoryview]) for f in frames
+            isinstance(f, (cudf.core.buffer.Buffer, memoryview))
+            for f in frames
         )
         header["type-serialized"] = pickle.dumps(type(self))
         header["is-cuda"] = [
@@ -130,18 +122,10 @@ class Serializable:
         """
         typ = pickle.loads(header["type-serialized"])
         frames = [
-            cudf.core.buffer.Buffer(f) if c else memoryview(f)
+            cudf.core.buffer.as_buffer(f) if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
-        assert all(
-            (type(f._owner) is rmm.DeviceBuffer)
-            if c
-            else (type(f) is memoryview)
-            for c, f in zip(header["is-cuda"], frames)
-        )
-        obj = typ.deserialize(header, frames)
-
-        return obj
+        return typ.deserialize(header, frames)
 
     def host_serialize(self):
         """Serialize data and metadata associated with host memory.
@@ -158,7 +142,7 @@ class Serializable:
         header, frames = self.device_serialize()
         header["writeable"] = len(frames) * (None,)
         frames = [
-            f.to_host_array().data if c else memoryview(f)
+            f.memoryview() if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         return header, frames
@@ -184,7 +168,7 @@ class Serializable:
         :meta private:
         """
         frames = [
-            rmm.DeviceBuffer.to_device(f) if c else f
+            cudf.core.buffer.as_buffer(f) if c else f
             for c, f in zip(header["is-cuda"], map(memoryview, frames))
         ]
         obj = cls.device_deserialize(header, frames)

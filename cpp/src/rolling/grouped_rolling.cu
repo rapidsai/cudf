@@ -211,7 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         following_window_bounds,
                                         min_periods,
                                         aggr,
-                                        cudf::default_stream_value,
+                                        cudf::get_default_stream(),
                                         mr);
 }
 
@@ -224,47 +224,49 @@ namespace {
 /**
  * @brief Add `delta` to value, and cap at numeric_limits::max(), for signed types.
  */
-template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
-  return (value < 0 || (std::numeric_limits<T>::max() - value) >= delta)
+  return (value < 0 || (cuda::std::numeric_limits<T>::max() - value) >= delta)
            ? (value + delta)
-           : std::numeric_limits<T>::max();
+           : cuda::std::numeric_limits<T>::max();
 }
 
 /**
  * @brief Add `delta` to value, and cap at numeric_limits::max(), for unsigned types.
  */
-template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
 __device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
-  return ((std::numeric_limits<T>::max() - value) >= delta) ? (value + delta)
-                                                            : std::numeric_limits<T>::max();
+  return ((cuda::std::numeric_limits<T>::max() - value) >= delta)
+           ? (value + delta)
+           : cuda::std::numeric_limits<T>::max();
 }
 
 /**
  * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for signed types.
  */
-template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
-  return (value >= 0 || (value - std::numeric_limits<T>::min()) >= delta)
+  return (value >= 0 || (value - cuda::std::numeric_limits<T>::min()) >= delta)
            ? (value - delta)
-           : std::numeric_limits<T>::min();
+           : cuda::std::numeric_limits<T>::min();
 }
 
 /**
  * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for unsigned types.
  */
-template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(not cuda::std::numeric_limits<T>::is_signed)>
 __device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
-  return ((value - std::numeric_limits<T>::min()) >= delta) ? (value - delta)
-                                                            : std::numeric_limits<T>::min();
+  return ((value - cuda::std::numeric_limits<T>::min()) >= delta)
+           ? (value - delta)
+           : cuda::std::numeric_limits<T>::min();
 }
 
 /// Given a single, ungrouped order-by column, return the indices corresponding
@@ -292,16 +294,15 @@ std::tuple<size_type, size_type> get_null_bounds_for_orderby_column(
 template <typename Calculator>
 std::unique_ptr<column> expand_to_column(Calculator const& calc,
                                          size_type const& num_rows,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::cuda_stream_view stream)
 {
-  auto window_column = cudf::make_fixed_width_column(
-    cudf::data_type{type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto window_column = cudf::make_numeric_column(
+    cudf::data_type{type_to_id<offset_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
 
   auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
 
   thrust::copy_n(
-    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
+    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<offset_type>());
 
   return window_column;
 }
@@ -356,7 +357,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
+  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
   auto following_calculator =
     [nulls_begin_idx = h_nulls_begin_idx,
@@ -387,7 +388,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
+  auto following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -527,7 +528,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
+  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
   auto following_calculator =
     [d_group_offsets = group_offsets.data(),
@@ -568,7 +569,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
+  auto following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -626,7 +627,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
+  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
   auto following_calculator =
     [nulls_begin_idx = h_nulls_begin_idx,
@@ -660,7 +661,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
+  auto following_column = expand_to_column(following_calculator, input.size(), stream);
 
   return cudf::detail::rolling_window(
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
@@ -724,7 +725,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
+  auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream);
 
   auto following_calculator =
     [d_group_offsets = group_offsets.data(),
@@ -767,7 +768,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
            1;
   };
 
-  auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
+  auto following_column = expand_to_column(following_calculator, input.size(), stream);
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     CUDF_FAIL("Ranged rolling window does NOT (yet) support UDF.");
@@ -781,7 +782,7 @@ template <typename OrderByT>
 std::unique_ptr<column> grouped_range_rolling_window_impl(
   column_view const& input,
   column_view const& orderby_column,
-  cudf::order const& timestamp_ordering,
+  cudf::order const& order_of_orderby_column,
   rmm::device_uvector<cudf::size_type> const& group_offsets,
   rmm::device_uvector<cudf::size_type> const& group_labels,
   range_window_bounds const& preceding_window,
@@ -791,10 +792,12 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto preceding_value = detail::range_comparable_value<OrderByT>(preceding_window);
-  auto following_value = detail::range_comparable_value<OrderByT>(following_window);
+  auto preceding_value =
+    detail::range_comparable_value<OrderByT>(preceding_window, orderby_column.type(), stream);
+  auto following_value =
+    detail::range_comparable_value<OrderByT>(following_window, orderby_column.type(), stream);
 
-  if (timestamp_ordering == cudf::order::ASCENDING) {
+  if (order_of_orderby_column == cudf::order::ASCENDING) {
     return group_offsets.is_empty() ? range_window_ASC(input,
                                                        orderby_column,
                                                        preceding_value,
@@ -857,7 +860,7 @@ struct dispatch_grouped_range_rolling_window {
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& orderby_column,
-             cudf::order const& timestamp_ordering,
+             cudf::order const& order_of_orderby_column,
              rmm::device_uvector<cudf::size_type> const& group_offsets,
              rmm::device_uvector<cudf::size_type> const& group_labels,
              range_window_bounds const& preceding_window,
@@ -869,7 +872,7 @@ struct dispatch_grouped_range_rolling_window {
   {
     return grouped_range_rolling_window_impl<OrderByColumnType>(input,
                                                                 orderby_column,
-                                                                timestamp_ordering,
+                                                                order_of_orderby_column,
                                                                 group_offsets,
                                                                 group_labels,
                                                                 preceding_window,
@@ -1034,18 +1037,20 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type());
   auto following = to_range_bounds(following_window_in_days, timestamp_column.type());
 
-  return grouped_range_rolling_window(group_keys,
-                                      timestamp_column,
-                                      timestamp_order,
-                                      input,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      aggr,
-                                      mr);
+  return detail::grouped_range_rolling_window(group_keys,
+                                              timestamp_column,
+                                              timestamp_order,
+                                              input,
+                                              preceding,
+                                              following,
+                                              min_periods,
+                                              aggr,
+                                              cudf::get_default_stream(),
+                                              mr);
 }
 
 /**
@@ -1070,21 +1075,22 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   range_window_bounds preceding =
     to_range_bounds(preceding_window_in_days, timestamp_column.type());
   range_window_bounds following =
     to_range_bounds(following_window_in_days, timestamp_column.type());
 
-  return grouped_range_rolling_window(group_keys,
-                                      timestamp_column,
-                                      timestamp_order,
-                                      input,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      aggr,
-                                      cudf::default_stream_value,
-                                      mr);
+  return detail::grouped_range_rolling_window(group_keys,
+                                              timestamp_column,
+                                              timestamp_order,
+                                              input,
+                                              preceding,
+                                              following,
+                                              min_periods,
+                                              aggr,
+                                              cudf::get_default_stream(),
+                                              mr);
 }
 
 /**
@@ -1109,6 +1115,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      rolling_aggregation const& aggr,
                                                      rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::grouped_range_rolling_window(group_keys,
                                               timestamp_column,
                                               timestamp_order,
@@ -1117,7 +1124,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               following,
                                               min_periods,
                                               aggr,
-                                              cudf::default_stream_value,
+                                              cudf::get_default_stream(),
                                               mr);
 }
 

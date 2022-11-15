@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
         }));
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*p_ret, expected);
   }
 };
 

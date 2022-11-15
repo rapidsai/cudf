@@ -16,6 +16,8 @@
 
 #include "json_gpu.hpp"
 
+#include "experimental/read_json.hpp"
+
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <io/comp/io_uncomp.hpp>
@@ -24,6 +26,7 @@
 #include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
@@ -220,6 +223,7 @@ std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> c
                                       size_t range_size,
                                       size_t range_size_padded)
 {
+  CUDF_FUNC_RANGE();
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
   for (const auto& source : sources) {
@@ -311,6 +315,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
                                                 rmm::device_uvector<uint64_t>& rec_starts,
                                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   size_t end_offset = h_data.size();
 
   // Trim lines that are outside range
@@ -430,6 +435,18 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                            return it->second;
                          });
           return sorted_dtypes;
+        },
+        [&](const std::map<std::string, schema_element>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second.type;
+                         });
+          return sorted_dtypes;
         }},
       reader_opts.get_dtypes());
   } else {
@@ -478,7 +495,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
 
 table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                           std::vector<data_type> const& dtypes,
-                                          std::vector<std::string> const& column_names,
+                                          std::vector<std::string>&& column_names,
                                           col_map_type* column_map,
                                           device_span<uint64_t const> rec_starts,
                                           device_span<char const> data,
@@ -538,7 +555,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], nullptr, stream, mr);
+    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream, mr);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
@@ -548,13 +565,20 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
     }
   }
 
+  std::vector<column_name_info> column_infos;
+  column_infos.reserve(column_names.size());
+  std::transform(std::make_move_iterator(column_names.begin()),
+                 std::make_move_iterator(column_names.end()),
+                 std::back_inserter(column_infos),
+                 [](auto const& col_name) { return column_name_info{col_name}; });
+
   // This is to ensure the stream-ordered make_stream_column calls above complete before
   // the temporary std::vectors are destroyed on exit from this function.
   stream.synchronize();
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_names}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {{}, column_infos}};
 }
 
 /**
@@ -571,6 +595,11 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+  if (reader_opts.is_enabled_experimental()) {
+    return experimental::read_json(sources, reader_opts, stream, mr);
+  }
+
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
 
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
@@ -622,8 +651,14 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
 
   CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(
-    parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, d_data, stream, mr);
+  return convert_data_to_table(parse_opts.view(),
+                               dtypes,
+                               std::move(column_names),
+                               column_map.get(),
+                               rec_starts,
+                               d_data,
+                               stream,
+                               mr);
 }
 
 }  // namespace json
