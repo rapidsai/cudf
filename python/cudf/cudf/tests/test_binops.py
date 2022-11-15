@@ -47,6 +47,8 @@ _binops_compare = [
     operator.ge,
 ]
 
+pytestmark = pytest.mark.spilling
+
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)

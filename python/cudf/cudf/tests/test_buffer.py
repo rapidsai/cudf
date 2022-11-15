@@ -5,6 +5,8 @@ import pytest
 
 from cudf.core.buffer import Buffer, as_buffer
 
+pytestmark = pytest.mark.spilling
+
 arr_len = 10
 
 
