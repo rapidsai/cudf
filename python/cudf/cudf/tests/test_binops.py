@@ -2220,9 +2220,9 @@ def test_binops_reflect_decimal(
 
 def test_binops_raise_error():
     s = cudf.Series([decimal.Decimal("1.324324")])
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         s**1
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         s // 1
 
 
