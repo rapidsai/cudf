@@ -33,6 +33,11 @@ struct column_type_histogram {
   cudf::size_type positive_small_int_count{};
   cudf::size_type big_int_count{};
   cudf::size_type bool_count{};
+  auto total_count() const
+  {
+    return null_count + float_count + datetime_count + string_count + negative_small_int_count +
+           positive_small_int_count + big_int_count + bool_count;
+  }
 };
 
 }  // namespace io

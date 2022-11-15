@@ -250,10 +250,12 @@ Serialization / IO / conversion
    :toctree: api/
 
    DataFrame.from_arrow
+   DataFrame.from_dict
    DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_values
    DataFrame.to_arrow
+   DataFrame.to_dict
    DataFrame.to_dlpack
    DataFrame.to_parquet
    DataFrame.to_csv

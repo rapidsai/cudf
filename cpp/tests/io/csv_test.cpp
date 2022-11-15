@@ -2244,6 +2244,27 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
 }
 
+TEST_F(CsvReaderTest, EmptyColumns)
+{
+  // First column only has empty fields. second column contains only "null" literals
+  std::string csv_in{",null\n,null"};
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+      .names({"a", "b", "c", "d"})
+      .header(-1);
+  // More elements in `names` than in the file; additional columns are filled with nulls
+  auto result = cudf::io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  EXPECT_EQ(result_table.num_columns(), 4);
+  // All columns should contain only nulls; expect INT8 type to use as little memory as possible
+  for (auto& column : result_table) {
+    EXPECT_EQ(column.type(), data_type{type_id::INT8});
+    EXPECT_EQ(column.null_count(), 2);
+  }
+}
+
 TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
 {
   std::string csv_in{"12,9., 10\n\n"};

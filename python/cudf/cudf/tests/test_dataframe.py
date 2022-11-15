@@ -9,6 +9,7 @@ import re
 import string
 import textwrap
 import warnings
+from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
@@ -6818,27 +6819,172 @@ def test_cudf_isclose_different_index():
     assert_eq(expected, cudf.isclose(s1, s2))
 
 
-def test_dataframe_to_dict_error():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
-        ),
-    ):
-        df.to_dict()
+@pytest.mark.parametrize(
+    "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
+)
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_dataframe_to_dict(orient, into):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]}, index=[10, 11, 12])
+    pdf = df.to_pandas()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
+    actual = df.to_dict(orient=orient, into=into)
+    expected = pdf.to_dict(orient=orient, into=into)
+    if orient == "series":
+        assert actual.keys() == expected.keys()
+        for key in actual.keys():
+            assert_eq(expected[key], actual[key])
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, orient, dtype, columns",
+    [
+        (
+            {"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]},
+            "columns",
+            None,
+            None,
         ),
-    ):
-        df["a"].to_dict()
+        ({"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}, "index", None, None),
+        (
+            {"col_1": [None, 2, 1, 0], "col_2": [3, None, 1, 0]},
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": ["ab", "cd", "ef", "gh"],
+                "col_2": ["zx", "one", "two", "three"],
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [[1, 3], [2, 4]],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict(data, orient, dtype, columns):
+
+    expected = pd.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str", None])
+def test_dataframe_from_dict_transposed(dtype):
+    pd_data = {"a": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}
+    gd_data = {key: cudf.Series(val) for key, val in pd_data.items()}
+
+    expected = pd.DataFrame.from_dict(pd_data, orient="index", dtype=dtype)
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+
+    gd_data = {key: cupy.asarray(val) for key, val in pd_data.items()}
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pd_data, gd_data, orient, dtype, columns",
+    [
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "columns",
+            None,
+            None,
+        ),
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "index",
+            None,
+            None,
+        ),
+        (
+            {
+                "col_1": np.array([None, 2, 1, 0]),
+                "col_2": np.array([3, None, 1, 0]),
+            },
+            {
+                "col_1": cupy.array([np.nan, 2, 1, 0]),
+                "col_2": cupy.array([3, np.nan, 1, 0]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [np.array([1, 3]), np.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [cupy.array([1, 3]), cupy.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict_cp_np_arrays(
+    pd_data, gd_data, orient, dtype, columns
+):
+
+    expected = pd.DataFrame.from_dict(
+        data=pd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=gd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual, check_dtype=dtype is not None)
 
 
 @pytest.mark.parametrize(
