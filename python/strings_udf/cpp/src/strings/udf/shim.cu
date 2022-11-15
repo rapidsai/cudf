@@ -289,10 +289,7 @@ extern "C" __device__ int upper(int* nb_retval,
   auto special_table_ptr =
     reinterpret_cast<cudf::strings::detail::special_case_mapping*>(special_table);
 
-  cudf::strings::udf::chars_tables tables;
-  tables.flags_table                = flags_table_ptr;
-  tables.cases_table                = cases_table_ptr;
-  tables.special_case_mapping_table = special_table_ptr;
+  cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
 
   *udf_str_ptr = to_upper(tables, *st_ptr);
 
@@ -316,11 +313,7 @@ extern "C" __device__ int lower(int* nb_retval,
   auto special_table_ptr =
     reinterpret_cast<cudf::strings::detail::special_case_mapping*>(special_table);
 
-  cudf::strings::udf::chars_tables tables;
-  tables.flags_table                = flags_table_ptr;
-  tables.cases_table                = cases_table_ptr;
-  tables.special_case_mapping_table = special_table_ptr;
-
+  cudf::strings::udf::chars_tables tables{flags_table_ptr, cases_table_ptr, special_table_ptr};
   *udf_str_ptr = to_lower(tables, *st_ptr);
 
   return 0;
