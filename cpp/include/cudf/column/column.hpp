@@ -109,6 +109,8 @@ class column {
    * @note This constructor is primarily intended for use in column factory
    * functions.
    *
+   * @throws cudf::logic_error if `size < 0`
+   *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
    * @param[in] data The column's data
@@ -118,7 +120,6 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
-   * @throws cudf::logic_error if `size < 0`
    */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype,
