@@ -1254,7 +1254,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
       cuda_source +=
         cudf::jit::parse_single_function_ptx(udf_agg._source,
                                              udf_agg._function_name,
-                                             cudf::jit::get_type_name(udf_agg._output_type),
+                                             cudf::jit::get_jit_type_name(udf_agg._output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
@@ -1271,8 +1271,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   std::string kernel_name =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
-      .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
-                   cudf::jit::get_type_name(output->type()),
+      .instantiate(cudf::jit::get_jit_type_name(input.type()),  // list of template arguments
+                   cudf::jit::get_jit_type_name(output->type()),
                    udf_agg._operator_name,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());

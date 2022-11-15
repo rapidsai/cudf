@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ const void* get_data_ptr(scalar const& s);
  * @brief Maps a `cudf::data_type` to the name of its corresponding C++ type
  *
  * When passed a `cudf::data_type`, returns the `std::string` name of the C++
- * type used to represent the data.
+ * type used to represent the data. This function should only be used for JIT
+ * instantiation, otherwise prefer `cudf::type_to_name`.
  *
  * Example:
  * @code
@@ -48,7 +49,7 @@ const void* get_data_ptr(scalar const& s);
  * @param type The data type
  * @return std::string Name of the data type in string
  */
-std::string get_type_name(data_type type);
+std::string get_jit_type_name(data_type type);
 
 }  // namespace jit
 }  // namespace cudf

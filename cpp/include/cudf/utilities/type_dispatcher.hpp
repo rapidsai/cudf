@@ -63,7 +63,7 @@ inline constexpr type_id type_to_id()
  * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
  *
  */
-struct type_to_name {
+struct type_to_name_impl {
   /**
    * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
    *
@@ -139,20 +139,20 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
  * @param Id The `cudf::type_id` enum
  */
 #ifndef CUDF_TYPE_MAPPING
-#define CUDF_TYPE_MAPPING(Type, Id)                   \
-  template <>                                         \
-  constexpr inline type_id type_to_id<Type>()         \
-  {                                                   \
-    return Id;                                        \
-  }                                                   \
-  template <>                                         \
-  inline std::string type_to_name::operator()<Type>() \
-  {                                                   \
-    return CUDF_STRINGIFY(Type);                      \
-  }                                                   \
-  template <>                                         \
-  struct id_to_type_impl<Id> {                        \
-    using type = Type;                                \
+#define CUDF_TYPE_MAPPING(Type, Id)                        \
+  template <>                                              \
+  constexpr inline type_id type_to_id<Type>()              \
+  {                                                        \
+    return Id;                                             \
+  }                                                        \
+  template <>                                              \
+  inline std::string type_to_name_impl::operator()<Type>() \
+  {                                                        \
+    return CUDF_STRINGIFY(Type);                           \
+  }                                                        \
+  template <>                                              \
+  struct id_to_type_impl<Id> {                             \
+    using type = Type;                                     \
   };
 #endif
 
@@ -178,7 +178,7 @@ CUDF_TYPE_MAPPING(cudf::duration_s, type_id::DURATION_SECONDS)
 CUDF_TYPE_MAPPING(cudf::duration_ms, type_id::DURATION_MILLISECONDS)
 CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS)
 CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS)
-CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32)
+CUDF_TYPE_MAPPING(cudf::dictionary32, type_id::DICTIONARY32)
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING)
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST)
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32)
@@ -590,6 +590,20 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) double_type_dispatcher
                                     type2,
                                     std::forward<F>(f),
                                     std::forward<Ts>(args)...);
+}
+
+/**
+ * @brief Return a name for a given type.
+ *
+ * The returned type names are intended for error messages and are not
+ * guaranteed to be stable.
+ *
+ * @param type The `data_type`
+ * @return Name of the type
+ */
+std::string type_to_name(data_type type)
+{
+  return cudf::type_dispatcher(type, type_to_name_impl{});
 }
 
 /** @} */  // end of group

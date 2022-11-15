@@ -299,7 +299,7 @@ void check_lex_compatibility(table_view const& input)
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +
-                     jit::get_type_name(c.type()));
+                     cudf::type_to_name(c.type()));
     }
   };
   for (column_view const& c : input) {
@@ -318,7 +318,7 @@ void check_eq_compatibility(table_view const& input)
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_equality_comparable(c.type()),
                    "Cannot compare equality for a table with a column of type " +
-                     jit::get_type_name(c.type()));
+                     cudf::type_to_name(c.type()));
     }
     for (auto child = c.child_begin(); child < c.child_end(); ++child) {
       check_column(*child);
