@@ -247,7 +247,7 @@ def test_categorical_setitem_invalid():
         # Following workaround is needed because:
         # https://github.com/pandas-dev/pandas/issues/46646
         with pytest.raises(
-            ValueError,
+            TypeError,
             match="Cannot setitem on a Categorical with a new category, set "
             "the categories first",
         ):

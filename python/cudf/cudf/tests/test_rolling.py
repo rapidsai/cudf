@@ -8,12 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150, PANDAS_LT_140
 from cudf.testing._utils import _create_pandas_series, assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -220,7 +215,7 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
 
 
 @pytest.mark.xfail(
-    condition=not PANDAS_GE_130,
+    condition=not PANDAS_LT_140,
     reason="https://github.com/pandas-dev/pandas/issues/37051",
 )
 def test_rolling_var_uniform_window():
