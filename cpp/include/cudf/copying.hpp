@@ -1019,7 +1019,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  * the same as input.
  *
  * The purge operation only applies directly to LIST and STRING columns, but it applies indirectly
- * to STRUCT/DICTIONARY columns as well, since these columns may have child/descendant columns that
+ * to STRUCT/DICTIONARY columns as well, since these columns may have child columns that
  * are LIST or STRING.
  *
  * Examples:
