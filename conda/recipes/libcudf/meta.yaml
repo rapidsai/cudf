@@ -334,6 +334,7 @@ outputs:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
+        - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
