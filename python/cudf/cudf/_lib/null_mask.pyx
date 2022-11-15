@@ -103,6 +103,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     return buf
 
 
+@acquire_spill_lock()
 def bitmask_and(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result
@@ -115,6 +116,7 @@ def bitmask_and(columns: list):
     return buf, c_result.second
 
 
+@acquire_spill_lock()
 def bitmask_or(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result

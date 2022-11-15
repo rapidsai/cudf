@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -14,6 +16,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def ngrams_tokenize(
     Column strings,
     int ngrams,

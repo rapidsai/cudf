@@ -3,6 +3,8 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -10,6 +12,7 @@ from cudf._lib.cpp.strings cimport repeat as cpp_repeat
 from cudf._lib.cpp.types cimport size_type
 
 
+@acquire_spill_lock()
 def repeat_scalar(Column source_strings,
                   size_type repeats):
     """
@@ -29,6 +32,7 @@ def repeat_scalar(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def repeat_sequence(Column source_strings,
                     Column repeats):
     """
