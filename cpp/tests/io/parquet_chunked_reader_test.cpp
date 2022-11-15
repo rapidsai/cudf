@@ -70,7 +70,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
   if (nullable) {
     // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
     auto const valid_iter = cudf::detail::make_counting_transform_iterator(
-      0, [](cudf::size_type i) { return i % 4 == 3 ? 0 : 1; });
+      0, [](cudf::size_type i) { return i % 4 != 3; });
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
