@@ -348,8 +348,8 @@ def create_unary_identifier_func(id_func):
 def create_upper_or_lower(id_func):
     """
     Provide a wrapper around numba's low-level extension API which
-    produces the boilerplate needed to implement a unary function
-    of a string.
+    produces the boilerplate needed to implement either the upper
+    or lower attrs of a string view.
     """
 
     def deco(cuda_func):
