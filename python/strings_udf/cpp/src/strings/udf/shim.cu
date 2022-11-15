@@ -273,13 +273,13 @@ extern "C" __device__ int rstrip(int* nb_retval,
 }
 
 extern "C" __device__ int upper(int* nb_retval,
-                                void* result,
+                                void* udf_str,
                                 void* const* st,
                                 std::int64_t flags_table,
                                 std::int64_t cases_table,
                                 std::int64_t special_table)
 {
-  auto udf_str_ptr = reinterpret_cast<udf_string*>(result);
+  auto udf_str_ptr = new (udf_str) udf_string;
   auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
@@ -300,13 +300,13 @@ extern "C" __device__ int upper(int* nb_retval,
 }
 
 extern "C" __device__ int lower(int* nb_retval,
-                                void* result,
+                                void* udf_str,
                                 void* const* st,
                                 std::int64_t flags_table,
                                 std::int64_t cases_table,
                                 std::int64_t special_table)
 {
-  auto udf_str_ptr = reinterpret_cast<udf_string*>(result);
+  auto udf_str_ptr = new (udf_str) udf_string;
   auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
 
   auto flags_table_ptr =
