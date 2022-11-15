@@ -38,6 +38,12 @@ from cudf.core.buffer.spillable_buffer import (
 )
 from cudf.testing._utils import assert_eq
 
+if get_global_manager() is not None:
+    pytest.skip(
+        "cannot test spilling when enabled globally, set `CUDF_SPILL=off`",
+        allow_module_level=True,
+    )
+
 
 def gen_df(target="gpu") -> cudf.DataFrame:
     ret = cudf.DataFrame({"a": [1, 2, 3]})
