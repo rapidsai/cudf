@@ -370,11 +370,8 @@ def create_upper_or_lower(id_func):
             special_tbl_ptr = context.get_constant(
                 types.int64, special_case_mapping_table_ptr
             )
-
-            udf_str_ptr = cgutils.alloca_once(
-                builder,
-                default_manager[udf_string].get_value_type(),
-                zfill=True,
+            udf_str_ptr = builder.alloca(
+                default_manager[udf_string].get_value_type()
             )
 
             _ = context.compile_internal(
