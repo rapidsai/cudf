@@ -1775,7 +1775,7 @@ def test_binops_with_NA_consistent(dtype, op):
 
 
 @pytest.mark.parametrize(
-    "args",
+    "op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype",
     [
         (
             operator.add,
@@ -1784,6 +1784,15 @@ def test_binops_with_NA_consistent(dtype, op):
             ["1.5", "2.0"],
             cudf.Decimal64Dtype(scale=2, precision=3),
             ["3.0", "4.0"],
+            cudf.Decimal64Dtype(scale=2, precision=4),
+        ),
+        (
+            operator.add,
+            2,
+            None,
+            ["1.5", "2.0"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["3.5", "4.0"],
             cudf.Decimal64Dtype(scale=2, precision=4),
         ),
         (
@@ -1832,6 +1841,15 @@ def test_binops_with_NA_consistent(dtype, op):
             cudf.Decimal128Dtype(scale=6, precision=19),
         ),
         (
+            operator.sub,
+            2,
+            None,
+            ["2.25", "1.005"],
+            cudf.Decimal64Dtype(scale=3, precision=4),
+            ["-0.25", "0.995"],
+            cudf.Decimal64Dtype(scale=3, precision=5),
+        ),
+        (
             operator.mul,
             ["1.5", "2.0"],
             cudf.Decimal64Dtype(scale=2, precision=3),
@@ -1859,6 +1877,15 @@ def test_binops_with_NA_consistent(dtype, op):
             cudf.Decimal64Dtype(scale=0, precision=8),
         ),
         (
+            operator.mul,
+            200,
+            None,
+            ["0.343", "0.500"],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            ["68.60", "100.0"],
+            cudf.Decimal64Dtype(scale=6, precision=13),
+        ),
+        (
             operator.truediv,
             ["1.5", "2.0"],
             cudf.Decimal64Dtype(scale=2, precision=4),
@@ -1884,6 +1911,15 @@ def test_binops_with_NA_consistent(dtype, op):
             cudf.Decimal64Dtype(scale=2, precision=8),
             ["56.77", "1.79"],
             cudf.Decimal128Dtype(scale=13, precision=25),
+        ),
+        (
+            operator.truediv,
+            20,
+            None,
+            ["20", "20"],
+            cudf.Decimal128Dtype(scale=2, precision=6),
+            ["1.0", "1.0"],
+            cudf.Decimal128Dtype(scale=9, precision=15),
         ),
         (
             operator.add,
@@ -2103,10 +2139,16 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
     ],
 )
-def test_binops_decimal(args):
-    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
+def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 
-    a = utils._decimal_series(lhs, l_dtype)
+    if l_dtype is None:
+        # cudf doesn't support binops with between
+        # arbitrary int/float and decimal column,
+        # hence need to construct a decimal scalar
+        # of same bit-width
+        a = cudf.Scalar(lhs, r_dtype)
+    else:
+        a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
     expect = (
         utils._decimal_series(expect, expect_dtype)
