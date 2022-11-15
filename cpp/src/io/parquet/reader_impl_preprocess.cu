@@ -844,7 +844,7 @@ void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
 }
 
 void print_cumulative_row_info(
-  std::vector<cumulative_row_info> const& sizes,
+  host_span<cumulative_row_info const> sizes,
   std::string const& label,
   std::optional<std::vector<gpu::chunk_read_info>> splits = std::nullopt)
 {
@@ -950,7 +950,7 @@ __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, boo
 struct get_cumulative_row_info {
   gpu::PageInfo const* const pages;
 
-  cumulative_row_info operator() __device__(size_type index)
+  __device__ cumulative_row_info operator()(size_type index)
   {
     auto const& page = pages[index];
     if (page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {

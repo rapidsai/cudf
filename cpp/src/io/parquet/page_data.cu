@@ -18,7 +18,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/detail/iterator.cuh>
+#include <cuda/std/tuple>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -28,9 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -291,9 +289,9 @@ __device__ void gpuDecodeStream(
  * will only be valid on thread 0 and if sizes_only is true)
  */
 template <bool sizes_only>
-__device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
-                                                          int target_pos,
-                                                          int t)
+__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s* s,
+                                                                int target_pos,
+                                                                int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -388,7 +386,7 @@ __device__ std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_state_s*
         return 0;
       }();
 
-      typedef cub::WarpReduce<size_type> WarpReduce;
+      using WarpReduce = cub::WarpReduce<size_type>;
       __shared__ typename WarpReduce::TempStorage temp_storage;
       // note: str_len will only be valid on thread 0.
       str_len += WarpReduce(temp_storage).Sum(len);
@@ -463,13 +461,14 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
 }
 
 /**
- * @brief Parses the length and position of strings
+ * @brief Parses the length and position of strings and returns total length of all strings
+ * processed
  *
  * @param[in,out] s Page state input/output
  * @param[in] target_pos Target output position
  * @param[in] t Thread ID
  *
- * @return The new output position
+ * @return Total length of strings processed
  */
 __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int target_pos, int t)
 {
@@ -504,8 +503,16 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
   return total_len;
 }
 
-inline __device__ std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s,
-                                                                  int src_pos)
+/**
+ * @brief Retrieves string information for a string at the specified source position
+ *
+ * @param[in] s Page state input
+ * @param[in] src_pos Source position
+ *
+ * @return A pair containing a pointer to the string and it's length
+ */
+inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s,
+                                                                        int src_pos)
 {
   const char* ptr = nullptr;
   size_t len      = 0;
@@ -1534,7 +1541,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
   }
 }
 
-__device__ size_type gpuGetStringSizes(page_state_s* s, int target_count, int t)
+__device__ size_type gpuGetStringSize(page_state_s* s, int target_count, int t)
 {
   auto dict_target_pos = target_count;
   size_type str_len    = 0;
@@ -1678,7 +1685,7 @@ __global__ void __launch_bounds__(block_size)
       // process what we got back
       gpuUpdatePageSizes(s, actual_input_count, t, !base_pass);
       if (compute_string_sizes) {
-        auto const str_len = gpuGetStringSizes(s, s->input_leaf_count, t);
+        auto const str_len = gpuGetStringSize(s, s->input_leaf_count, t);
         if (!t) { s->page.str_bytes += str_len; }
       }
 
