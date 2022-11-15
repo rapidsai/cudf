@@ -129,7 +129,7 @@ extern "C" __device__ int lt(bool* nb_retval, void const* str, void const* rhs)
   return 0;
 }
 
-extern "C" __device__ int pyislower(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyislower(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -138,7 +138,7 @@ extern "C" __device__ int pyislower(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyisupper(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisupper(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -147,7 +147,7 @@ extern "C" __device__ int pyisupper(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyisspace(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisspace(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -156,7 +156,7 @@ extern "C" __device__ int pyisspace(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyisdecimal(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisdecimal(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -165,7 +165,7 @@ extern "C" __device__ int pyisdecimal(bool* nb_retval, void const* str, std::int
   return 0;
 }
 
-extern "C" __device__ int pyisnumeric(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisnumeric(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -174,7 +174,7 @@ extern "C" __device__ int pyisnumeric(bool* nb_retval, void const* str, std::int
   return 0;
 }
 
-extern "C" __device__ int pyisdigit(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisdigit(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -183,7 +183,7 @@ extern "C" __device__ int pyisdigit(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyisalnum(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisalnum(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -192,7 +192,7 @@ extern "C" __device__ int pyisalnum(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyisalpha(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyisalpha(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -201,7 +201,7 @@ extern "C" __device__ int pyisalpha(bool* nb_retval, void const* str, std::int64
   return 0;
 }
 
-extern "C" __device__ int pyistitle(bool* nb_retval, void const* str, std::int64_t chars_table)
+extern "C" __device__ int pyistitle(bool* nb_retval, void const* str, std::uintptr_t chars_table)
 {
   auto str_view = reinterpret_cast<cudf::string_view const*>(str);
 
@@ -275,9 +275,9 @@ extern "C" __device__ int rstrip(int* nb_retval,
 extern "C" __device__ int upper(int* nb_retval,
                                 void* udf_str,
                                 void* const* st,
-                                std::int64_t flags_table,
-                                std::int64_t cases_table,
-                                std::int64_t special_table)
+                                std::uintptr_t flags_table,
+                                std::uintptr_t cases_table,
+                                std::uintptr_t special_table)
 {
   auto udf_str_ptr = new (udf_str) udf_string;
   auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);
@@ -302,9 +302,9 @@ extern "C" __device__ int upper(int* nb_retval,
 extern "C" __device__ int lower(int* nb_retval,
                                 void* udf_str,
                                 void* const* st,
-                                std::int64_t flags_table,
-                                std::int64_t cases_table,
-                                std::int64_t special_table)
+                                std::uintptr_t flags_table,
+                                std::uintptr_t cases_table,
+                                std::uintptr_t special_table)
 {
   auto udf_str_ptr = new (udf_str) udf_string;
   auto st_ptr      = reinterpret_cast<cudf::string_view const*>(st);

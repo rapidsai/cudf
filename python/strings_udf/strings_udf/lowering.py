@@ -85,9 +85,9 @@ def _declare_upper_or_lower(func):
         types.void(
             _UDF_STRING_PTR,
             _STR_VIEW_PTR,
-            types.int64,
-            types.int64,
-            types.int64,
+            types.uintp,
+            types.uintp,
+            types.uintp,
         ),
     )
 
@@ -329,12 +329,12 @@ def create_unary_identifier_func(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             tbl_ptr = context.get_constant(
-                types.int64, character_flags_table_ptr
+                types.uintp, character_flags_table_ptr
             )
             result = context.compile_internal(
                 builder,
                 cuda_func,
-                nb_signature(types.boolean, _STR_VIEW_PTR, types.int64),
+                nb_signature(types.boolean, _STR_VIEW_PTR, types.uintp),
                 (str_ptr, tbl_ptr),
             )
 
@@ -362,13 +362,13 @@ def create_upper_or_lower(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             flags_tbl_ptr = context.get_constant(
-                types.int64, character_flags_table_ptr
+                types.uintp, character_flags_table_ptr
             )
             cases_tbl_ptr = context.get_constant(
-                types.int64, character_cases_table_ptr
+                types.uintp, character_cases_table_ptr
             )
             special_tbl_ptr = context.get_constant(
-                types.int64, special_case_mapping_table_ptr
+                types.uintp, special_case_mapping_table_ptr
             )
             udf_str_ptr = builder.alloca(
                 default_manager[udf_string].get_value_type()
@@ -380,9 +380,9 @@ def create_upper_or_lower(id_func):
                 types.void(
                     _UDF_STRING_PTR,
                     _STR_VIEW_PTR,
-                    types.int64,
-                    types.int64,
-                    types.int64,
+                    types.uintp,
+                    types.uintp,
+                    types.uintp,
                 ),
                 (
                     udf_str_ptr,

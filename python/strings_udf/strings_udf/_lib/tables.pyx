@@ -13,14 +13,14 @@ import numpy as np
 
 def get_character_flags_table_ptr():
     cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
-    return np.uint64(<uintptr_t>tbl_ptr)
+    return np.uintp(<uintptr_t>tbl_ptr)
 
 
 def get_character_cases_table_ptr():
     cdef const uint16_t* tbl_ptr = cpp_get_character_cases_table()
-    return np.uint64(<uintptr_t>tbl_ptr)
+    return np.uintp(<uintptr_t>tbl_ptr)
 
 
 def get_special_case_mapping_table_ptr():
     cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
-    return np.uint64(<uintptr_t>tbl_ptr)
+    return np.uintp(<uintptr_t>tbl_ptr)
