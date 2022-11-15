@@ -148,6 +148,16 @@ struct is_unsigned_impl {
  */
 bool is_unsigned(data_type type) { return cudf::type_dispatcher(type, is_unsigned_impl{}); }
 
+struct is_integral_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_integral<T>();
+  }
+};
+
+bool is_integral(data_type type) { return cudf::type_dispatcher(type, is_integral_impl{}); }
+
 struct is_floating_point_impl {
   template <typename T>
   constexpr bool operator()()
