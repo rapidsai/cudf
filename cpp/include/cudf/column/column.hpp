@@ -109,6 +109,8 @@ class column {
    * @note This constructor is primarily intended for use in column factory
    * functions.
    *
+   * @throws cudf::logic_error if `size < 0`
+   *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
    * @param[in] data The column's data
@@ -133,6 +135,7 @@ class column {
       _null_count{null_count},
       _children{std::move(children)}
   {
+    CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   }
 
   /**
