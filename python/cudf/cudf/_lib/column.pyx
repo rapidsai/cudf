@@ -12,9 +12,9 @@ from cudf.core.buffer import (
     Buffer,
     SpillableBuffer,
     SpillLock,
+    acquire_spill_lock,
     as_buffer,
     get_spill_lock,
-    with_spill_lock,
 )
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -314,7 +314,7 @@ cdef class Column:
             return other_col
 
     cdef libcudf_types.size_type compute_null_count(self) except? 0:
-        with with_spill_lock():
+        with acquire_spill_lock():
             return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:

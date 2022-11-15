@@ -10,7 +10,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core.buffer import with_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -94,7 +94,7 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        with with_spill_lock() as spill_lock:
+        with acquire_spill_lock() as spill_lock:
             keys_view = table_view_from_columns(keys)
             # We spill lock the columns while this GroupBy instance is alive.
             self._spill_lock = spill_lock

@@ -22,7 +22,7 @@ from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
 from cudf.api.types import is_scalar, is_string_dtype
-from cudf.core.buffer import with_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator
@@ -157,7 +157,7 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
@@ -205,7 +205,7 @@ def binaryop(lhs, rhs, op, dtype):
     return result
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     """
     Apply a user-defined binary operator (a UDF) defined in `udf_ptx` on

@@ -19,7 +19,12 @@ import cudf
 import cudf.core.buffer.spill_manager
 import cudf.options
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer, get_spill_lock, with_spill_lock
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    as_buffer,
+    get_spill_lock,
+)
 from cudf.core.buffer.spill_manager import (
     SpillManager,
     get_global_manager,
@@ -302,7 +307,7 @@ def test_ptr_restricted(manager: SpillManager):
 
 
 def test_get_spill_lock(manager: SpillManager):
-    @with_spill_lock()
+    @acquire_spill_lock()
     def f(sleep=False, nest=0):
         if sleep:
             time.sleep(random.random() / 100)
@@ -335,7 +340,7 @@ def test_get_spill_lock(manager: SpillManager):
 def test_get_spill_lock_no_manager():
     """When spilling is disabled, get_spill_lock() should return None always"""
 
-    @with_spill_lock()
+    @acquire_spill_lock()
     def f():
         return get_spill_lock()
 

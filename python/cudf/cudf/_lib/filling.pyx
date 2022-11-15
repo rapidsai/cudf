@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from cudf.core.buffer import with_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -17,7 +17,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
     cdef mutable_column_view c_destination = destination.mutable_view()
     cdef size_type c_begin = <size_type> begin
@@ -32,7 +32,7 @@ def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
     )
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def fill(Column destination, int begin, int end, DeviceScalar value):
     cdef column_view c_destination = destination.view()
     cdef size_type c_begin = <size_type> begin
@@ -51,7 +51,7 @@ def fill(Column destination, int begin, int end, DeviceScalar value):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def repeat(list inp, object count):
     if isinstance(count, Column):
         return _repeat_via_column(inp, count)
@@ -86,7 +86,7 @@ def _repeat_via_size_type(list inp, size_type count):
     return columns_from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def sequence(int size, DeviceScalar init, DeviceScalar step):
     cdef size_type c_size = size
     cdef const scalar* c_init = init.get_raw_ptr()

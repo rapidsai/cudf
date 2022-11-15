@@ -4,7 +4,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf.api.types import is_scalar
-from cudf.core.buffer import with_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
@@ -211,7 +211,7 @@ def clip(Column input_col, object lo, object hi):
     return clamp(input_col, lo_scalar, hi_scalar)
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def normalize_nans_and_zeros_inplace(Column input_col):
     """
     Inplace normalizing

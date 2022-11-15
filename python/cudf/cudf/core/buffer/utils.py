@@ -102,7 +102,7 @@ def _pop_thread_spill_lock() -> None:
     _thread_spill_locks[_id] = (spill_lock, count - 1)
 
 
-class with_spill_lock(ContextDecorator):
+class acquire_spill_lock(ContextDecorator):
     """Decorator and context to set spill lock automatically.
 
     All calls to `get_spill_lock()` within the decorated function or context
@@ -118,7 +118,7 @@ class with_spill_lock(ContextDecorator):
 
 
 def get_spill_lock() -> Union[SpillLock, None]:
-    """Return a spill lock within the context of `with_spill_lock` or None
+    """Return a spill lock within the context of `acquire_spill_lock` or None
 
     Returns None, if spilling is disabled.
     """

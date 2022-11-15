@@ -4,7 +4,7 @@ from enum import Enum
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-from cudf.core.buffer import as_buffer, with_spill_lock
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
@@ -35,7 +35,7 @@ class MaskState(Enum):
     ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def copy_bitmask(Column col):
     """
     Copies column's validity mask buffer into a new buffer, shifting by the

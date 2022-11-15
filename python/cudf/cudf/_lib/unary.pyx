@@ -3,7 +3,7 @@
 from enum import IntEnum
 
 from cudf.api.types import is_decimal_dtype
-from cudf.core.buffer import with_spill_lock
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -44,7 +44,7 @@ class UnaryOp(IntEnum):
     NOT = <underlying_type_t_unary_op> unary_operator.NOT
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
     cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
@@ -62,7 +62,7 @@ def unary_operation(Column input, object op):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def is_null(Column input):
     cdef column_view c_input = input.view()
     cdef unique_ptr[column] c_result
@@ -73,7 +73,7 @@ def is_null(Column input):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def is_valid(Column input):
     cdef column_view c_input = input.view()
     cdef unique_ptr[column] c_result
@@ -84,7 +84,7 @@ def is_valid(Column input):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def cast(Column input, object dtype=np.float64):
     cdef column_view c_input = input.view()
     cdef data_type c_dtype = dtype_to_data_type(dtype)
@@ -100,7 +100,7 @@ def cast(Column input, object dtype=np.float64):
     return result
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def is_nan(Column input):
     cdef column_view c_input = input.view()
     cdef unique_ptr[column] c_result
@@ -111,7 +111,7 @@ def is_nan(Column input):
     return Column.from_unique_ptr(move(c_result))
 
 
-@with_spill_lock()
+@acquire_spill_lock()
 def is_non_nan(Column input):
     cdef column_view c_input = input.view()
     cdef unique_ptr[column] c_result
