@@ -20,6 +20,7 @@ extras_require = {
         "numpy",
         "pandas>=1.0,<1.6.0dev0",
         "pytest",
+        "pytest-xdist",
         "numba>=0.54",
     ]
 }
