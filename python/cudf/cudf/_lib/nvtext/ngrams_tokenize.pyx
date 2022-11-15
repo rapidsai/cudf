@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
