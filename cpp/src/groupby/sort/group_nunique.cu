@@ -60,7 +60,7 @@ struct is_unique_iterator_fn {
   {
   }
 
-  __device__ size_type operator()(size_type i)
+  __device__ size_type operator()(size_type i) const
   {
     auto const is_input_countable =
       !nulls || (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
