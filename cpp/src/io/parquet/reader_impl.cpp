@@ -22,28 +22,6 @@
 
 namespace cudf::io::detail::parquet {
 
-namespace {
-
-/**
- * @brief Recursively copy the output buffer from one to another.
- *
- * This only copies `name` and `user_data` fields, which are generated during reader construction.
- *
- * @param buff The old output buffer
- * @param new_buff The new output buffer
- */
-void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
-{
-  new_buff.name      = buff.name;
-  new_buff.user_data = buff.user_data;
-  for (auto const& child : buff.children) {
-    auto& new_child = new_buff.children.emplace_back(column_buffer(child.type, child.is_nullable));
-    copy_output_buffer(child, new_child);
-  }
-}
-
-}  // namespace
-
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
   auto& chunks       = _file_itm_data.chunks;
@@ -248,9 +226,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // Don't need to do it if we read the file all at once.
   if (_chunk_read_limit > 0) {
     for (auto const& buff : _output_buffers) {
-      auto& new_buff =
-        _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
-      copy_output_buffer(buff, new_buff);
+      _output_buffers_template.emplace_back(column_buffer::empty_like(buff));
     }
   }
 }
@@ -368,8 +344,7 @@ table_with_metadata reader::impl::read_chunk()
   if (_chunk_read_limit > 0) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
-      auto& new_buff = _output_buffers.emplace_back(column_buffer(buff.type, buff.is_nullable));
-      copy_output_buffer(buff, new_buff);
+      _output_buffers.emplace_back(column_buffer::empty_like(buff));
     }
   }
 
