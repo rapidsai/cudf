@@ -26,7 +26,7 @@ on:
         default: nightly
 
 concurrency:
-  group: "${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}"
+  group: "cudf-${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
 jobs:
