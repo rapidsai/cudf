@@ -23,7 +23,7 @@
 
 namespace cudf::io::detail::json::experimental {
 
-// Extract the first and last character positions in the string.
+// Extract the first character position in the string.
 size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
                                rmm::cuda_stream_view stream)
