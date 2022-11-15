@@ -21,15 +21,7 @@ install_requires = [
     f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
     f"ptxcompiler{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
     f"cubinlinker{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-    # We may need to account for other architectures eventually. PEP 508 does
-    # not appear to support an 'in list' syntax
-    # `platform_machine in ('arch1', 'arch2', ...)
-    # so we'll need to use multiple `or` conditions to support that case.
-    # This SO post has a pretty exhaustive list of possible platform names we
-    # may need to support:
-    # https://stackoverflow.com/questions/45125516/possible-values-for-uname-m
-    "cupy-cuda11x;'x86' in platform_machine",
-    "cupy-cuda11x @ https://pip.cupy.dev/aarch64;'aarch' in platform_machine",
+    "cupy-cuda11x",
 ]
 
 extras_require = {
