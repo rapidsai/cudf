@@ -3,6 +3,7 @@
 import hashlib
 import operator
 import re
+from collections import OrderedDict, defaultdict
 from string import ascii_letters, digits
 
 import cupy as cp
@@ -1992,3 +1993,14 @@ def test_set_bool_error(dtype, bool_scalar):
         lfunc_args_and_kwargs=([bool_scalar],),
         rfunc_args_and_kwargs=([bool_scalar],),
     )
+
+
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_series_to_dict(into):
+    gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
+    ps = gs.to_pandas()
+
+    actual = gs.to_dict(into=into)
+    expected = ps.to_dict(into=into)
+
+    assert_eq(expected, actual)
