@@ -107,6 +107,12 @@ class acquire_spill_lock(ContextDecorator):
 
     All calls to `get_spill_lock()` within the decorated function or context
     will return a spill lock with a lifetime bound to the function or context.
+
+    Developer Notes
+    ---------------
+    We use the global variable `_thread_spill_locks` to track the global spill
+    lock state. To support concurrency, each thread tracks its own state by
+    pushing and poping from `_thread_spill_locks` using its thread ID.
     """
 
     def __enter__(self) -> Optional[SpillLock]:
