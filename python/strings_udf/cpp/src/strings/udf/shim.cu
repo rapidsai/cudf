@@ -274,7 +274,7 @@ extern "C" __device__ int rstrip(int* nb_retval,
 
 extern "C" __device__ int upper(int* nb_retval,
                                 void* udf_str,
-                                void* const* st,
+                                void const* st,
                                 std::uintptr_t flags_table,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
@@ -298,7 +298,7 @@ extern "C" __device__ int upper(int* nb_retval,
 
 extern "C" __device__ int lower(int* nb_retval,
                                 void* udf_str,
-                                void* const* st,
+                                void const* st,
                                 std::uintptr_t flags_table,
                                 std::uintptr_t cases_table,
                                 std::uintptr_t special_table)
