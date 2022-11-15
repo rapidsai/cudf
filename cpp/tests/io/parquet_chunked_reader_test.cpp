@@ -134,8 +134,6 @@ auto chunked_read(std::string const& filepath, std::size_t byte_limit)
     }
     ++num_chunks;
     out_tables.emplace_back(std::move(chunk.tbl));
-
-    if (out_tables.back()->num_rows() == 0) { break; }
   } while (reader.has_next());
 
   auto out_tviews = std::vector<cudf::table_view>{};
