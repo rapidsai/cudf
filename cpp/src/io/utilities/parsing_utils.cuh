@@ -117,8 +117,9 @@ struct parse_options {
 };
 
 /**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * @brief Returns the numeric value of an ASCII/UTF-8 character.
+ * Handles hexadecimal digits, both uppercase and lowercase
+ * for integral types and only decimal digits for floating point types.
  * If the character is not a valid numeric digit then `0` is returned and
  * valid_flag is set to false.
  *
@@ -127,31 +128,14 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
+template <typename T, bool as_hex = false>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. If the character is not
- * a valid numeric digit then `0` is returned and valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
-constexpr uint8_t decode_digit(char c, bool* valid_flag)
-{
-  if (c >= '0' && c <= '9') return c - '0';
+  if constexpr (as_hex and std::is_integral_v<T>) {
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  }
 
   *valid_flag = false;
   return 0;
@@ -194,13 +178,13 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-constexpr T parse_numeric(char const* begin,
-                          char const* end,
-                          parse_options_view const& opts,
-                          T error_result = std::numeric_limits<T>::quiet_NaN())
+__host__ __device__ std::optional<T> parse_numeric(char const* begin,
+                                                   char const* end,
+                                                   parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;
+  constexpr bool as_hex = (base == 16);
 
   // Handle negative values if necessary
   int32_t sign = (*begin == '-') ? -1 : 1;
@@ -223,7 +207,7 @@ constexpr T parse_numeric(char const* begin,
     } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
       break;
     } else if (*begin != opts.thousands && *begin != '+') {
-      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
+      value = (value * base) + decode_digit<T, as_hex>(*begin, &all_digits_valid);
     }
     ++begin;
   }
@@ -237,7 +221,7 @@ constexpr T parse_numeric(char const* begin,
         break;
       } else if (*begin != opts.thousands && *begin != '+') {
         divisor /= base;
-        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
+        value += decode_digit<T, as_hex>(*begin, &all_digits_valid) * divisor;
       }
       ++begin;
     }
@@ -248,12 +232,12 @@ constexpr T parse_numeric(char const* begin,
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
       while (begin < end) {
-        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
+        exponent = (exponent * 10) + decode_digit<T, as_hex>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return error_result; }
+  if (!all_digits_valid) { return std::optional<T>{}; }
 
   return value * sign;
 }
@@ -485,7 +469,7 @@ cudf::size_type count_all_from_set(host_span<char const> data,
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
- * @param[in] ch The character to check
+ * @param ch The character to check
  *
  * @return True if the input is whitespace, False otherwise
  */
@@ -567,65 +551,6 @@ __inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const
   return {begin, end};
 }
 
-/**
- * @brief Decodes a numeric value base on templated cudf type T with specified
- * base.
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T, int base>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
-}
-
-/**
- * @brief Decodes a numeric value base on templated cudf type T
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed numeric value
- */
-template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  // If this is a string value, remove quotes
-  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
-    thrust::advance(begin, 1);
-    thrust::advance(end, -1);
-  }
-  return to_timestamp<T>(begin, end, opts.dayfirst);
-}
-
-template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
-__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
-{
-  // If this is a string value, remove quotes
-  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
-    thrust::advance(begin, 1);
-    thrust::advance(end, -1);
-  }
-  return to_duration<T>(begin, end);
-}
-
 struct ConvertFunctor {
   /**
    * @brief Dispatch for numeric types whose values can be convertible to
@@ -645,13 +570,15 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
-    static_cast<T*>(out_buffer)[row] = [as_hex, &opts, begin, end]() -> T {
+    auto const value = [as_hex, &opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
-      return as_hex ? decode_value<T, 16>(begin, end, opts) : decode_value<T>(begin, end, opts);
+      return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
+                    : cudf::io::parse_numeric<T>(begin, end, opts);
     }();
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
     return true;
   }
@@ -670,6 +597,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
+    // TODO decide what's invalid input and update parsing functions
     static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
       [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
       return strings::detail::parse_decimal<device_storage_type_t<T>>(
@@ -691,13 +619,18 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
-      return decode_value<T>(begin, end, opts);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
+      return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
     return true;
   }
@@ -715,10 +648,20 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    T const value                    = decode_value<T>(begin, end, opts);
-    static_cast<T*>(out_buffer)[row] = value;
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
+      return cudf::io::parse_numeric<T>(begin, end, opts);
+    }();
+    static_cast<T*>(out_buffer)[row] = value.value_or(std::numeric_limits<T>::quiet_NaN());
 
-    return !std::isnan(value);
+    return value.has_value() and !std::isnan(*value);
   }
 
   /**
@@ -735,12 +678,15 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    if constexpr (cudf::is_timestamp<T>() or cudf::is_duration<T>()) {
-      static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
-      return true;
+    // TODO decide what's invalid input and update parsing functions
+    if constexpr (cudf::is_timestamp<T>()) {
+      static_cast<T*>(out_buffer)[row] = to_timestamp<T>(begin, end, opts.dayfirst);
+    } else if constexpr (cudf::is_duration<T>()) {
+      static_cast<T*>(out_buffer)[row] = to_duration<T>(begin, end);
     } else {
       return false;
     }
+    return true;
   }
 };
 

@@ -469,16 +469,18 @@ try:
         """
 
         @staticmethod
-        def from_dict(data, npartitions, orient="columns", **kwargs):
-            from dask_cudf import from_cudf
+        def from_dict(
+            data, npartitions, orient="columns", dtype=None, columns=None
+        ):
 
-            if orient != "columns":
-                raise ValueError(f"orient={orient} is not supported")
-            # TODO: Use cudf.from_dict
-            # (See: https://github.com/rapidsai/cudf/issues/11934)
-            return from_cudf(
-                cudf.DataFrame(data),
+            return _default_backend(
+                dd.from_dict,
+                data,
                 npartitions=npartitions,
+                orient=orient,
+                dtype=dtype,
+                columns=columns,
+                constructor=cudf.DataFrame,
             )
 
         @staticmethod
