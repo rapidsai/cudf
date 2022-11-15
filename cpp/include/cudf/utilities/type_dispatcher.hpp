@@ -442,9 +442,6 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
                                                                           Ts&&... args)
 {
   switch (dtype.id()) {
-    case type_id::BOOL8:
-      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
-        std::forward<Ts>(args)...);
     case type_id::INT8:
       return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
         std::forward<Ts>(args)...);
@@ -475,8 +472,8 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
     case type_id::FLOAT64:
       return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
         std::forward<Ts>(args)...);
-    case type_id::STRING:
-      return f.template operator()<typename IdTypeMap<type_id::STRING>::type>(
+    case type_id::BOOL8:
+      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
         std::forward<Ts>(args)...);
     case type_id::TIMESTAMP_DAYS:
       return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
@@ -510,6 +507,9 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
         std::forward<Ts>(args)...);
     case type_id::DICTIONARY32:
       return f.template operator()<typename IdTypeMap<type_id::DICTIONARY32>::type>(
+        std::forward<Ts>(args)...);
+    case type_id::STRING:
+      return f.template operator()<typename IdTypeMap<type_id::STRING>::type>(
         std::forward<Ts>(args)...);
     case type_id::LIST:
       return f.template operator()<typename IdTypeMap<type_id::LIST>::type>(
