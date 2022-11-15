@@ -67,7 +67,6 @@ jobs:
 
       python-package-versioneer-override: ${{ inputs.versioneer-override }}
       python-package-build-tag: ${{ inputs.build-tag }}
-      python-package-cuda-suffix: "-cu11"
 
       test-extras:  test
       test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
