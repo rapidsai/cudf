@@ -79,6 +79,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
+        unsupported_msg = (
+            f"{op} not supported for the following dtypes: "
+            f"{self.dtype}, {other.dtype}"
+        )
         try:
             if op in {"__add__", "__sub__", "__mul__", "__div__"}:
                 output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
@@ -96,15 +100,10 @@ class DecimalBaseColumn(NumericalBaseColumn):
             }:
                 result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
             else:
-                raise NotImplementedError(
-                    f"{op} not supported for the following dtypes: "
-                    f"{self.dtype}, {other.dtype}"
-                )
+                raise TypeError(unsupported_msg)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
-                raise NotImplementedError(
-                    f"{op} not supported for types with different bit-widths"
-                ) from e
+                raise TypeError(unsupported_msg) from e
             raise
 
         return result
