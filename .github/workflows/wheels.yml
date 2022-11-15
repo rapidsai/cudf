@@ -52,8 +52,8 @@ jobs:
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
       test-extras:  test
-      test-before-amd64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      test-before-arm64: "pip install requests tokenizers==0.10.2 && pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+      test-before-amd64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
+      test-before-arm64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
     secrets: inherit
   dask_cudf-wheel:
