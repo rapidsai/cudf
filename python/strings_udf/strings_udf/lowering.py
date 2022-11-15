@@ -174,9 +174,7 @@ def concat_impl(context, builder, sig, args):
     builder.store(args[0], lhs_ptr)
     builder.store(args[1], rhs_ptr)
 
-    udf_str_ptr = cgutils.alloca_once(
-        builder, default_manager[udf_string].get_value_type(), zfill=True
-    )
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
     _ = context.compile_internal(
         builder,
         call_concat_string_view,
