@@ -138,6 +138,7 @@ repos:
                 exclude: |
                   (?x)^(
                     .*test.*|
+                    ^CHANGELOG.md$|
                     ^.*versioneer.py$
                   )
 
