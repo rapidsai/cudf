@@ -78,7 +78,7 @@ class reader::impl {
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
    *
-   * By using this constructor, the reader will supports iterative (chunked) reading through
+   * By using this constructor, the reader will support iterative (chunked) reading through
    * `has_next() ` and `read_chunk()`. For example:
    * ```
    *  do {
