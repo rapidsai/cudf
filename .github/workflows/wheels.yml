@@ -49,8 +49,13 @@ jobs:
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
 
       test-extras:  test
+
       # Have to manually specify the cupy install location on arm.
-      test-before-arm64: "pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      # Have to also manually install tokenizers==0.10.2, which is the last tokenizers 
+      # to have a binary aarch64 wheel available on PyPI
+      # Otherwise, the tokenizers sdist is used, which needs a Rust compiler, and blah blah blah
+      test-before-arm64: "pip install tokenizers==0.10.2 && cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
     secrets: inherit
   dask_cudf-wheel:
