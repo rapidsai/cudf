@@ -247,7 +247,7 @@ def _bert_add_special_tokens(token_o):
     max_length = token_o["input_ids"].shape[1]
     seq_end_col = max_length - (token_o["input_ids"][:, ::-1] != 0).argmax(1)
     # clipping to take overflow into account
-    seq_end_col = cp.clip(seq_end_col + 1, a_max=max_length - 1)
+    seq_end_col = cp.clip(seq_end_col + 1, a_min=None, a_max=max_length - 1)
 
     _bert_add_special_tokens_input_ids(token_o["input_ids"], seq_end_col)
     _bert_add_special_tokens_attention_mask(
@@ -294,4 +294,6 @@ def _bert_add_special_tokens_metadata(metadata, max_length):
     # metadata seq starts from plus 1
     metadata[:, 1] = metadata[:, 1] + 1
     # clip done to take overflow into account
-    metadata[:, 2] = cp.clip(metadata[:, 2] + 1, a_max=max_length - 2)
+    metadata[:, 2] = cp.clip(
+        metadata[:, 2] + 1, a_min=None, a_max=max_length - 2
+    )
