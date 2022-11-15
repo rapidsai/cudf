@@ -50,7 +50,7 @@ jobs:
 
       test-extras:  test
       test-before-amd64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
-      test-before-arm64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple && pip install cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-before-arm64: "pip install rmm-cu11 ptxcompiler-cu11 cubinlinker-cu11 --index-url https://pypi.k8s.rapids.ai/simple"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
     secrets: inherit
   dask_cudf-wheel:
