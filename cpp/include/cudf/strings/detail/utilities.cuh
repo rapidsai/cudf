@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/scan_reduce_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -28,7 +29,6 @@
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 #include <mutex>
@@ -37,6 +37,7 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
 /**
  * @brief Create an offsets column to be a child of a strings column.
  * This will set the offsets values by executing scan on the provided
@@ -139,11 +140,14 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Compute the offsets values
   for_each_fn(size_and_exec_fn);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  auto const bytes = cudf::detail::exclusive_scan_reduce(
+    d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  CUDF_EXPECTS(bytes <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds column size limit");
 
   // Now build the chars column
-  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  // auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
   std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
