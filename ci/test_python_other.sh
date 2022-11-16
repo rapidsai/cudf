@@ -27,7 +27,7 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   -c "${PYTHON_CHANNEL}" \
-  cudf libcudf
+  dask-cudf cudf_kafka custreamz
 
 TESTRESULTS_DIR="${PWD}/test-results"
 mkdir -p "${TESTRESULTS_DIR}"
@@ -38,15 +38,45 @@ nvidia-smi
 
 set +e
 
-rapids-logger "pytest cudf"
-echo ${PWD}
-pushd python/cudf/cudf/tests
-# pytest -n 6 --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term --dist=loadscope
-pytest --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term
+rapids-logger "pytest dask_cudf"
+pushd python/dask_cudf
+pytest \
+  --verbose \
+  --cache-clear \
+  --junitxml="${TESTRESULTS_DIR}/junit-dask-cudf.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=dask_cudf \
+  --cov-report=xml:dask-cudf-coverage.xml \
+  --cov-report=term \
+  dask_cudf
 exitcode=$?
+
 if (( ${exitcode} != 0 )); then
     SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf"
+    echo "FAILED: 1 or more tests in dask-cudf"
+fi
+popd
+
+rapids-logger "pytest custreamz"
+pushd python/custreamz
+pytest \
+  --verbose \
+  --cache-clear \
+  --junitxml="${TESTRESULTS_DIR}/junit-custreamz.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=custreamz \
+  --cov-report=xml:custreamz-coverage.xml \
+  --cov-report=term \
+  custreamz
+exitcode=$?
+
+if (( ${exitcode} != 0 )); then
+    SUITEERROR=${exitcode}
+    echo "FAILED: 1 or more tests in custreamz"
 fi
 popd
 

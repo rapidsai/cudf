@@ -39,11 +39,21 @@ nvidia-smi
 set +e
 
 rapids-logger "pytest cudf"
-echo ${PWD}
-pushd python/cudf/cudf/tests
-# pytest -n 6 --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term --dist=loadscope
-pytest --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term
+pushd python/cudf/cudf
+pytest \
+  --verbose \
+  --cache-clear \
+  --ignore="benchmarks" \
+  --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:cudf-coverage.xml \
+  --cov-report=term \
+  tests
 exitcode=$?
+
 if (( ${exitcode} != 0 )); then
     SUITEERROR=${exitcode}
     echo "FAILED: 1 or more tests in cudf"
