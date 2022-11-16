@@ -310,3 +310,11 @@ def test_string_udf_concat(data, concat_char):
         return st + concat_char
 
     run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_concat_reflected(data, concat_char):
+    def func(st):
+        return concat_char + st
+
+    run_udf_test(data, func, "str")
