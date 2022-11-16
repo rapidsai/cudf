@@ -23,7 +23,7 @@
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -39,6 +39,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

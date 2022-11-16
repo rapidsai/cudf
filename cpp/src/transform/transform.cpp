@@ -27,7 +27,7 @@
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

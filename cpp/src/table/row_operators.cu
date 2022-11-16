@@ -23,8 +23,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_checks.hpp>
-
-#include <jit/type.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 

@@ -43,10 +43,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
