@@ -678,7 +678,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // Exclude the end-of-data row from number of rows with actual data
   auto num_records                   = std::max(row_offsets.size(), 1ul) - 1;
-  auto const unique_use_cols_indexes = std::set<int>(reader_opts.get_use_cols_indexes().cbegin(),
+  auto const unique_use_cols_indexes = std::set(reader_opts.get_use_cols_indexes().cbegin(),
                                                      reader_opts.get_use_cols_indexes().cend());
 
   auto const detected_column_names =
@@ -760,7 +760,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   }
 
   // User can specify which columns should be parsed
-  auto const unique_use_cols_names = std::unordered_set<std::string>(
+  auto const unique_use_cols_names = std::unordered_set(
     reader_opts.get_use_cols_names().cbegin(), reader_opts.get_use_cols_names().cend());
   auto const is_column_selection_used =
     not unique_use_cols_names.empty() or not unique_use_cols_indexes.empty();
