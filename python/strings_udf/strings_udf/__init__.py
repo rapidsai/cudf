@@ -89,18 +89,20 @@ def _get_ptx_file():
 
 
 # Maximum size of a string column is 2gb
-STRINGS_UDF_DEFAULT_HEAP_SIZE = 2**31
-STRINGS_UDF_HEAP_SIZE = os.environ.get(
-    "STRINGS_UDF_HEAP_SIZE", STRINGS_UDF_DEFAULT_HEAP_SIZE
-)
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = 2**31
 heap_size = 0
 
 
-def set_malloc_heap_size(size=STRINGS_UDF_HEAP_SIZE):
+def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
     """
     global heap_size
+    if size == None:
+        size = os.environ.get(
+            "STRINGS_UDF_HEAP_SIZE", _STRINGS_UDF_DEFAULT_HEAP_SIZE
+        )
+
     if size != heap_size:
         (ret,) = cudart.cudaDeviceSetLimit(
             cudart.cudaLimit.cudaLimitMallocHeapSize, size
