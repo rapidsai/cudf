@@ -12,7 +12,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
 
@@ -64,6 +64,7 @@ def _gather_map_is_valid(
     return gm_min >= -nrows and gm_max < nrows
 
 
+@acquire_spill_lock()
 def copy_column(Column input_column):
     """
     Deep copies a column
@@ -85,6 +86,7 @@ def copy_column(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def _copy_range_in_place(Column input_column,
                          Column target_column,
                          size_type input_begin,
@@ -132,6 +134,7 @@ def _copy_range(Column input_column,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def copy_range(Column source_column,
                Column target_column,
                size_type source_begin,
@@ -165,6 +168,7 @@ def copy_range(Column source_column,
                            source_begin, source_end, target_begin)
 
 
+@acquire_spill_lock()
 def gather(
     list columns,
     Column gather_map,
@@ -232,6 +236,7 @@ cdef scatter_column(list source_columns,
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def scatter(list sources, Column scatter_map, list target_columns,
             bool bounds_check=True):
     """
@@ -272,6 +277,7 @@ def scatter(list sources, Column scatter_map, list target_columns,
         )
 
 
+@acquire_spill_lock()
 def column_empty_like(Column input_column):
 
     cdef column_view input_column_view = input_column.view()
@@ -283,6 +289,7 @@ def column_empty_like(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def column_allocate_like(Column input_column, size=None):
 
     cdef size_type c_size = 0
@@ -307,6 +314,7 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def columns_empty_like(list input_columns):
     cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
@@ -317,6 +325,7 @@ def columns_empty_like(list input_columns):
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def column_slice(Column input_column, object indices):
 
     cdef column_view input_column_view = input_column.view()
@@ -346,6 +355,7 @@ def column_slice(Column input_column, object indices):
     return result
 
 
+@acquire_spill_lock()
 def columns_slice(list input_columns, list indices):
     """
     Given a list of input columns, return columns sliced by ``indices``.
@@ -372,6 +382,7 @@ def columns_slice(list input_columns, list indices):
     ]
 
 
+@acquire_spill_lock()
 def column_split(Column input_column, object splits):
 
     cdef column_view input_column_view = input_column.view()
@@ -403,6 +414,7 @@ def column_split(Column input_column, object splits):
     return result
 
 
+@acquire_spill_lock()
 def columns_split(list input_columns, object splits):
 
     cdef table_view input_table_view = table_view_from_columns(input_columns)
@@ -509,6 +521,7 @@ def _copy_if_else_scalar_scalar(DeviceScalar lhs,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def copy_if_else(object lhs, object rhs, Column boolean_mask):
 
     if isinstance(lhs, Column):
@@ -576,6 +589,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
     """Copy the target columns, replacing masked rows with input data.
@@ -608,6 +622,7 @@ def boolean_mask_scatter(list input_, list target_columns,
         )
 
 
+@acquire_spill_lock()
 def shift(Column input, int offset, object fill_value=None):
 
     cdef DeviceScalar fill
@@ -644,6 +659,7 @@ def shift(Column input, int offset, object fill_value=None):
     return Column.from_unique_ptr(move(c_output))
 
 
+@acquire_spill_lock()
 def get_element(Column input_column, size_type index):
     cdef column_view col_view = input_column.view()
 
@@ -658,6 +674,7 @@ def get_element(Column input_column, size_type index):
     )
 
 
+@acquire_spill_lock()
 def segmented_gather(Column source_column, Column gather_map):
     cdef shared_ptr[lists_column_view] source_LCV = (
         make_shared[lists_column_view](source_column.view())
@@ -725,7 +742,8 @@ cdef class _CPackedColumns:
         gpu_data = as_buffer(
             data=self.gpu_data_ptr,
             size=self.gpu_data_size,
-            owner=self
+            owner=self,
+            exposed=True
         )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header

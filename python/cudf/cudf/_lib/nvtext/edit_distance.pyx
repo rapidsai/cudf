@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -12,6 +14,7 @@ from cudf._lib.cpp.nvtext.edit_distance cimport (
 )
 
 
+@acquire_spill_lock()
 def edit_distance(Column strings, Column targets):
     cdef column_view c_strings = strings.view()
     cdef column_view c_targets = targets.view()
@@ -23,6 +26,7 @@ def edit_distance(Column strings, Column targets):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def edit_distance_matrix(Column strings):
     cdef column_view c_strings = strings.view()
     cdef unique_ptr[column] c_result
