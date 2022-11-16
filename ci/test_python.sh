@@ -41,7 +41,8 @@ set +e
 rapids-logger "pytest cudf"
 echo ${PWD}
 pushd python/cudf/cudf/tests
-pytest --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term --dist=loadscope
+# pytest -n 6 --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term --dist=loadscope
+pytest --cache-clear --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:python/cudf-coverage.xml --cov-report term
 exitcode=$?
 if (( ${exitcode} != 0 )); then
     SUITEERROR=${exitcode}
