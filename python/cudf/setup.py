@@ -6,6 +6,8 @@ import versioneer
 from setuptools import find_packages
 from skbuild import setup
 
+cuda_suffix = os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default="")
+
 install_requires = [
     "cachetools",
     "cuda-python>=11.7.1,<12.0",
@@ -18,9 +20,9 @@ install_requires = [
     "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
     "pyarrow==9.0.0",
-    f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-    f"ptxcompiler{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
-    f"cubinlinker{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}",
+    f"rmm{cuda_suffix}",
+    f"ptxcompiler{cuda_suffix}",
+    f"cubinlinker{cuda_suffix}",
     "cupy-cuda11x",
 ]
 
@@ -42,7 +44,7 @@ extras_require = {
 
 
 setup(
-    name="cudf" + os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
+    name=f"cudf{cuda_suffix}",
     version=os.getenv(
         "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()
     ),

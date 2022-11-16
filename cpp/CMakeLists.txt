@@ -49,6 +49,7 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks"
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
+mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)

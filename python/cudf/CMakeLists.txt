@@ -31,7 +31,7 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
-option(CUDF_BUILD_WHEELS "Whether we're building a wheel for pypi" OFF)
+option(CUDF_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 

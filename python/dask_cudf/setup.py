@@ -5,13 +5,15 @@ import os
 import versioneer
 from setuptools import find_packages, setup
 
+cuda_suffix = os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default="")
+
 install_requires = [
     "dask==2022.9.2",
     "distributed==2022.9.2",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
-    f"cudf{os.getenv('RAPIDS_PY_WHEEL_CUDA_SUFFIX', default='')}",
+    f"cudf{cuda_suffix}",
     "cupy-cuda11x",
 ]
 
@@ -26,7 +28,7 @@ extras_require = {
 }
 
 setup(
-    name="dask-cudf" + os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default=""),
+    name=f"dask-cudf{cuda_suffix}",
     version=os.getenv(
         "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()
     ),
