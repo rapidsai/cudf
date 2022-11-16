@@ -1,6 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
+
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -19,6 +22,7 @@ from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def contains_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -40,6 +44,7 @@ def contains_re(Column source_strings, object reg_ex, uint32_t flags):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def count_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column with count of occurrences of `reg_ex` in
@@ -61,6 +66,7 @@ def count_re(Column source_strings, object reg_ex, uint32_t flags):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def match_re(Column source_strings, object reg_ex, uint32_t flags):
     """
     Returns a Column with each value True if the string matches `reg_ex`
@@ -82,6 +88,7 @@ def match_re(Column source_strings, object reg_ex, uint32_t flags):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def like(Column source_strings, object py_pattern, object py_escape):
     """
     Returns a Column with each value True if the string matches the

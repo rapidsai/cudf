@@ -1,4 +1,6 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -13,6 +15,7 @@ from cudf._lib.cpp.strings.attributes cimport (
 )
 
 
+@acquire_spill_lock()
 def count_characters(Column source_strings):
     """
     Returns an integer numeric column containing the
@@ -27,6 +30,7 @@ def count_characters(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def count_bytes(Column source_strings):
     """
     Returns an integer numeric column containing the
@@ -41,6 +45,7 @@ def count_bytes(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def code_points(Column source_strings):
     """
     Creates a numeric column with code point values (integers)
