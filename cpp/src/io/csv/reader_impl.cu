@@ -694,9 +694,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       unique_use_cols_indexes.empty());
   auto column_names = opts_have_all_col_names ? reader_opts.get_names() : detected_column_names;
 
-  auto num_actual_columns = static_cast<int32_t>(column_names.size());
-  auto num_active_columns = num_actual_columns;
-  auto column_flags       = std::vector<column_parse::flags>(
+  auto const num_actual_columns = static_cast<int32_t>(column_names.size());
+  auto num_active_columns       = num_actual_columns;
+  auto column_flags             = std::vector<column_parse::flags>(
     num_actual_columns, column_parse::enabled | column_parse::inferred);
 
   if (not opts_have_all_col_names) {
@@ -786,7 +786,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     }
   }
 
-  if (not reader_opts.get_use_cols_names().empty()) {
+  if (not unique_use_cols_names.empty()) {
     for (auto const& name : unique_use_cols_names) {
       auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
       CUDF_EXPECTS(it != column_names.end(), "Nonexistent column selected");
