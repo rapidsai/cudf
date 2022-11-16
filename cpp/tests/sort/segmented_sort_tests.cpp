@@ -97,7 +97,7 @@ TEST_F(SegmentedSortInt, Single)
   column_wrapper<int> segments2{{0, 3}};
   table_view table_1elem{{col1}};
   table_view table_1segm{{col3}};
-  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1elem, table_1elem, segments2));
+
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1elem, table_1elem, segments1));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1segm, table_1segm, segments2));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1segm, table_1segm, segments1));
@@ -251,27 +251,27 @@ TEST_F(SegmentedSortInt, Sliced)
 TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
 {
   using T = int;
-  column_wrapper<T> col1{{1, 2, 3, 4}};
-  column_wrapper<T> col2{{5, 6, 7, 8, 9}};
+  column_wrapper<T> col1{{5, 6, 7, 8, 9}};
+  column_wrapper<T> segments{{1, 2, 3, 4}};
   table_view input1{{col1}};
 
   // Mismatch order sizes
   EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, col2, {order::ASCENDING, order::ASCENDING}, {}),
+    cudf::segmented_sort_by_key(input1, input1, segments, {order::ASCENDING, order::ASCENDING}, {}),
     logic_error);
   // Mismatch null precedence sizes
-  EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, col2, {}, {null_order::AFTER, null_order::AFTER}),
-    logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(
+                 input1, input1, segments, {}, {null_order::AFTER, null_order::AFTER}),
+               logic_error);
   // Both
   EXPECT_THROW(cudf::segmented_sort_by_key(input1,
                                            input1,
-                                           col2,
+                                           segments,
                                            {order::ASCENDING, order::ASCENDING},
                                            {null_order::AFTER, null_order::AFTER}),
                logic_error);
   // segmented_offsets beyond num_rows - undefined behavior, no throw.
-  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, col2));
+  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, segments));
 }
 
 }  // namespace test
