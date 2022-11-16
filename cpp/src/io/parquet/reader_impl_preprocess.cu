@@ -170,7 +170,7 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 }
 
 /**
- * @brief Function that returns the required the number of bits to store a value.
+ * @brief Return the required number of bits to store a value.
  */
 template <typename T = uint8_t>
 [[nodiscard]] T required_bits(uint32_t max_level)
@@ -1050,7 +1050,7 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
       // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
       // either do this, or we have to call unique() on the input first.
       while (p < (static_cast<int64_t>(sizes.size()) - 1) &&
-             (sizes[p].row_count == cur_row_count || p < 0)) {
+             (p < 0 || sizes[p].row_count == cur_row_count)) {
         p++;
       }
 
@@ -1342,7 +1342,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // we will be applying a later "trim" pass if skip_rows/num_rows is being used, which can happen
     // if:
     // - user has passed custom row bounds
-    // - if we will be doing a chunked read
+    // - we will be doing a chunked read
     gpu::ComputePageSizes(pages,
                           chunks,
                           0,  // 0-max size_t. process all possible rows
@@ -1403,7 +1403,9 @@ void reader::impl::preprocess_pages(size_t skip_rows,
     // retrieve pages back
     pages.device_to_host(_stream, true);
 
-    // print_pages(pages, _stream);
+#if defined(PREPROCESS_DEBUG)
+    print_pages(pages, _stream);
+#endif
   }
 
   // compute splits if necessary. otherwise retun a single split representing
@@ -1434,7 +1436,9 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                           false,  // num_rows is already computed
                           false,  // no need to compute string sizes
                           _stream);
-    // print_pages(pages, _stream);
+#if defined(PREPROCESS_DEBUG)
+    print_pages(pages, _stream);
+#end
   }
 
   // iterate over all input columns and allocate any associated output
