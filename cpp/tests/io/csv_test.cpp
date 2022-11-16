@@ -2316,7 +2316,7 @@ TEST_F(CsvReaderTest, ExtraColumns)
 
     const auto result_table = result.tbl->view();
     ASSERT_EQ(result_table.num_columns(), 4);
-    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::INT64});
+    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::INT8});
     ASSERT_EQ(result_table.column(3).null_count(), 3);
   }
   {
@@ -2348,7 +2348,7 @@ TEST_F(CsvReaderTest, ExtraColumnsUseCols)
 
     const auto result_table = result.tbl->view();
     ASSERT_EQ(result_table.num_columns(), 2);
-    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::INT64});
+    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::INT8});
     ASSERT_EQ(result_table.column(1).null_count(), 3);
   }
   {
