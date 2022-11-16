@@ -27,7 +27,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -64,11 +64,13 @@ std::unique_ptr<table> unique(table_view const& input,
     data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_view     = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view        = input.select(keys);
-  auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
-  auto row_equal        = row_equality_comparator(nullate::DYNAMIC{cudf::has_nulls(keys_view)},
-                                           *keys_device_view,
-                                           *keys_device_view,
-                                           nulls_equal);
+  // auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
+  // auto row_equal        = row_equality_comparator(nullate::DYNAMIC{cudf::has_nulls(keys_view)},
+  //                                          *keys_device_view,
+  //                                          *keys_device_view,
+  //                                          nulls_equal);
+  auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
+  auto row_equal = comp.equal_to(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
 
   // get indices of unique rows
   auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
