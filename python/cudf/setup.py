@@ -6,7 +6,7 @@ import versioneer
 from setuptools import find_packages
 from skbuild import setup
 
-cuda_suffix = os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default="")
+cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
     "cachetools",

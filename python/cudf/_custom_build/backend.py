@@ -19,7 +19,7 @@ def replace_requirements(func):
     def wrapper(config_settings=None):
         orig_list = getattr(_orig, func.__name__)(config_settings)
         append_list = [
-            f"rmm{os.getenv('PYTHON_PACKAGE_CUDA_SUFFIX', default='')}"
+            f"rmm{os.getenv('RAPIDS_PY_WHEEL_CUDA_SUFFIX', default='')}"
         ]
         return orig_list + append_list
 

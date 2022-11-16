@@ -5,7 +5,7 @@ import os
 import versioneer
 from setuptools import find_packages, setup
 
-cuda_suffix = os.getenv("PYTHON_PACKAGE_CUDA_SUFFIX", default="")
+cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
     "dask==2022.9.2",
