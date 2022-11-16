@@ -102,7 +102,9 @@ def set_malloc_heap_size(size=STRINGS_UDF_HEAP_SIZE):
     """
     global heap_size
     if size != heap_size:
-        (ret,) = cudart.cudaDeviceSetLimit(cudart.cudaLimit.cudaLimitMallocHeapSize, size)
+        (ret,) = cudart.cudaDeviceSetLimit(
+            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        )
         if ret.value != 0:
             raise RuntimeError("Unable to set cudaMalloc heap size")
 
