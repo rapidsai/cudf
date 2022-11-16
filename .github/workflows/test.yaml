@@ -23,7 +23,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-  python-tests:
+  python-cudf-tests:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
@@ -32,3 +32,15 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+      test_script: "ci/test_python_cudf.sh"
+  python-other-tests:
+    # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      test_script: "ci/test_python_other.sh"
