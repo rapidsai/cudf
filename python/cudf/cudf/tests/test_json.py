@@ -929,21 +929,19 @@ def test_json_dtypes_nested_data():
         (
             "missing",
             """
-            { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
-            { "a": { "y" : 6}, "b" : [4, 5   ]}
-            { "a": { "y" : 6}, "c": 13 }
-            { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
-        """,
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ]          }
+    { "a": { "y" : 6}, "c": 13                  }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
+""",
         ),
-        # failing test cases
         pytest.param(
             "dtype_mismatch",
             """\
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
-    { "a": { "y" : 6}, "b" : [7      ], "c": "14" }""",
-            marks=pytest.mark.xfail(reason="dtype mismatch"),
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14.0 }""",
         ),
     ],
 )
@@ -951,8 +949,12 @@ class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
         if tag == "missing" and chunk_size == 10:
-            pytest.xfail(reason="missing data in pandas returns float64 dtype")
-        expected = pd.read_json(StringIO(data), lines=True)
+            pytest.xfail(
+                reason="cudf inferences integer with nulls as float64"
+            )
+        expected = cudf.read_json(
+            StringIO(data), engine="cudf_experimental", lines=True
+        )
 
         source_size = len(data)
         chunks = []
@@ -965,16 +967,20 @@ class TestNestedJsonReaderCommon:
                     lines=True,
                 )
             )
-        df = cudf.concat(chunks).reset_index(drop=True)
-        # assert_eq(df, expected, check_dtype=True)
-        assert pa.Table.from_pandas(expected).equals(df.to_arrow())
+        df = cudf.concat(chunks, ignore_index=True)
+        assert expected.to_arrow().equals(df.to_arrow())
 
     def test_order_nested_json_reader(self, tag, data):
+        if tag == "dtype_mismatch":
+            pytest.xfail(
+                reason="pandas parses integer values in float representation"
+                " as integer"
+            )
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(
             StringIO(data), engine="cudf_experimental", lines=True
         )
-        assert_eq(expected, target, check_dtype=True)
+        assert pa.Table.from_pandas(expected).equals(target.to_arrow())
 
 
 def test_json_round_trip_gzip():
