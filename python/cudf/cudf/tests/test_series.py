@@ -1995,6 +1995,12 @@ def test_set_bool_error(dtype, bool_scalar):
     )
 
 
+def test_int64_equality():
+    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
+    assert (s != np.int64(2**63 - 1)).all()
+    assert (s != cudf.Scalar(2**63 - 1, dtype=np.int64)).all()
+
+
 @pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
 def test_series_to_dict(into):
     gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
