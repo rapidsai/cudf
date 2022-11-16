@@ -991,7 +991,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
-      // TODO: Once MAP type is supported in cuDF, update this for MAP as well
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 
@@ -1072,11 +1071,20 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
           if (total_data_size == 0) {
             CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
+
+            auto const are_all_empty =
+              std::all_of(_col_meta.num_child_rows.begin(),
+                          _col_meta.num_child_rows.end(),
+                          [](auto col_num_rows) { return col_num_rows == 0; });
+
+            auto const are_all_structs =
+              std::all_of(column_types.begin(), column_types.end(), [](auto dtype) {
+                return dtype.id() == type_id::STRUCT;
+              });
+
             // In case ROW GROUP INDEX is not present and all columns are structs with no null
             // stream, there is nothing to read at this level.
-            auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
-            CUDF_EXPECTS(std::all_of(column_types.begin(), column_types.end(), fn_check_dtype),
-                         "Expected streams data within stripe");
+            CUDF_EXPECTS(are_all_empty or are_all_structs, "Expected streams data within stripe");
             is_data_empty = true;
           }
 
