@@ -54,7 +54,7 @@ jobs:
       # Have to also manually install tokenizers==0.10.2, which is the last tokenizers 
       # to have a binary aarch64 wheel available on PyPI
       # Otherwise, the tokenizers sdist is used, which needs a Rust compiler, and blah blah blah
-      test-before-arm64: "pip install tokenizers==0.10.2 && cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
 
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
     secrets: inherit
