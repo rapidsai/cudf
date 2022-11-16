@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -23,6 +25,7 @@ from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.utils cimport table_view_from_columns
 
 
+@acquire_spill_lock()
 def is_sorted(
     list source_columns, object ascending=None, object null_position=None
 ):
@@ -98,6 +101,7 @@ def is_sorted(
     return c_result
 
 
+@acquire_spill_lock()
 def order_by(list columns_from_table, object ascending, str na_position):
     """
     Get index to sort the table in ascending/descending order.
@@ -139,6 +143,7 @@ def order_by(list columns_from_table, object ascending, str na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def digitize(list source_columns, list bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
@@ -189,6 +194,7 @@ def digitize(list source_columns, list bins, bool right=False):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def rank_columns(list source_columns, object method, str na_option,
                  bool ascending, bool pct
                  ):

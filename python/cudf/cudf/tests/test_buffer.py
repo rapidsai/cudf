@@ -5,6 +5,8 @@ import pytest
 
 from cudf.core.buffer import Buffer, as_buffer
 
+pytestmark = pytest.mark.spilling
+
 arr_len = 10
 
 
@@ -48,15 +50,21 @@ def test_buffer_from_cuda_iface_dtype(data, dtype):
 
 def test_buffer_creation_from_any():
     ary = cp.arange(arr_len)
-    b = as_buffer(ary)
+    b = as_buffer(ary, exposed=True)
     assert isinstance(b, Buffer)
-    assert ary.__cuda_array_interface__["data"][0] == b.ptr
+    assert ary.data.ptr == b.ptr
     assert ary.nbytes == b.size
 
     with pytest.raises(
         ValueError, match="size must be specified when `data` is an integer"
     ):
-        as_buffer(42)
+        as_buffer(ary.data.ptr)
+
+    b = as_buffer(ary.data.ptr, size=ary.nbytes, owner=ary, exposed=True)
+    assert isinstance(b, Buffer)
+    assert ary.data.ptr == b.ptr
+    assert ary.nbytes == b.size
+    assert b.owner.owner is ary
 
 
 @pytest.mark.parametrize(

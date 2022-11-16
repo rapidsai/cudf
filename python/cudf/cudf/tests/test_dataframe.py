@@ -40,6 +40,8 @@ from cudf.testing._utils import (
     gen_rand,
 )
 
+pytestmark = pytest.mark.spilling
+
 
 def test_init_via_list_of_tuples():
     data = [

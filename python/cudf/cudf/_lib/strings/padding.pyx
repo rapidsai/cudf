@@ -1,15 +1,16 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move
+
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport size_type
 
 from enum import IntEnum
-
-from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.strings.padding cimport pad as cpp_pad, zfill as cpp_zfill
@@ -25,6 +26,7 @@ class SideType(IntEnum):
     BOTH = <underlying_type_t_side_type> side_type.BOTH
 
 
+@acquire_spill_lock()
 def pad(Column source_strings,
         size_type width,
         fill_char,
@@ -55,6 +57,7 @@ def pad(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def zfill(Column source_strings,
           size_type width):
     """
@@ -73,6 +76,7 @@ def zfill(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def center(Column source_strings,
            size_type width,
            fill_char):
@@ -97,6 +101,7 @@ def center(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def ljust(Column source_strings,
           size_type width,
           fill_char):
@@ -120,6 +125,7 @@ def ljust(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def rjust(Column source_strings,
           size_type width,
           fill_char):
