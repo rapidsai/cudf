@@ -223,7 +223,7 @@ extern "C" __device__ int udf_string_from_string_view(int* nb_retbal,
                                                       void* udf_str)
 {
   auto str_view_ptr = reinterpret_cast<cudf::string_view const*>(str);
-  auto udf_str_ptr  = reinterpret_cast<udf_string*>(udf_str);
+  auto udf_str_ptr  = new (udf_str) udf_string;
   *udf_str_ptr      = udf_string(*str_view_ptr);
 
   return 0;
@@ -236,7 +236,7 @@ extern "C" __device__ int strip(int* nb_retval,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = reinterpret_cast<udf_string*>(udf_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
 
@@ -250,7 +250,7 @@ extern "C" __device__ int lstrip(int* nb_retval,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = reinterpret_cast<udf_string*>(udf_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
 
@@ -264,7 +264,7 @@ extern "C" __device__ int rstrip(int* nb_retval,
 {
   auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
   auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
-  auto udf_str_ptr   = reinterpret_cast<udf_string*>(udf_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
 
   *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
 
