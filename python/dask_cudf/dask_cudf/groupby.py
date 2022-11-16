@@ -685,8 +685,13 @@ def groupby_agg(
             "with `sort=False`, or set `shuffle=True`."
         )
 
+    # Determine required columns to enable column projection
+    required_columns = list(
+        set(gb_cols).union(aggs.keys()).intersection(ddf.columns)
+    )
+
     return aca(
-        [ddf],
+        [ddf[required_columns]],
         chunk=chunk,
         chunk_kwargs=chunk_kwargs,
         combine=combine,

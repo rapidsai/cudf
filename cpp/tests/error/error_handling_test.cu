@@ -29,24 +29,9 @@ TEST(ExpectsTest, FalseCondition)
 
 TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
 
-TEST(ExpectsTest, TryCatch)
-{
-  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), "test reason");
-}
-
-TEST(CudaTryTest, Error)
-{
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorLaunchFailure),
-                            "cudaErrorLaunchFailure unspecified launch failure");
-}
+TEST(CudaTryTest, Error) { EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorLaunchFailure), cudf::cuda_error); }
 
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
-
-TEST(CudaTryTest, TryCatch)
-{
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorMemoryAllocation),
-                            "cudaErrorMemoryAllocation out of memory");
-}
 
 TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
@@ -79,9 +64,7 @@ TEST(StreamCheck, CatchFailedKernel)
 #ifndef NDEBUG
   stream.synchronize();
 #endif
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CHECK_CUDA(stream.value()),
-                            "cudaErrorInvalidConfiguration "
-                            "invalid configuration argument");
+  EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 __global__ void kernel() { asm("trap;"); }
