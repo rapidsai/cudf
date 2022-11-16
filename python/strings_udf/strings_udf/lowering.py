@@ -25,6 +25,9 @@ _UDF_STRING_PTR = types.CPointer(udf_string)
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
+_concat_string_view = cuda.declare_device(
+    "concat", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
 
 
 def _declare_binary_func(lhs, rhs, out, name):
@@ -158,6 +161,31 @@ def len_impl(context, builder, sig, args):
     )
 
     return result
+
+
+def call_concat_string_view(result, lhs, rhs):
+    return _concat_string_view(result, lhs, rhs)
+
+
+@cuda_lower(operator.add, string_view, string_view)
+def concat_impl(context, builder, sig, args):
+    lhs_ptr = builder.alloca(args[0].type)
+    rhs_ptr = builder.alloca(args[1].type)
+    builder.store(args[0], lhs_ptr)
+    builder.store(args[1], rhs_ptr)
+
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+    _ = context.compile_internal(
+        builder,
+        call_concat_string_view,
+        types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+        (udf_str_ptr, lhs_ptr, rhs_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
 
 
 def create_binary_string_func(binary_func, retty):
