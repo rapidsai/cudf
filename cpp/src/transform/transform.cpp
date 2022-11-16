@@ -44,13 +44,13 @@ void unary_operation(mutable_column_view output,
 {
   std::string kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
-      .instantiate(cudf::jit::get_jit_type_name(output.type()),  // list of template arguments
-                   cudf::jit::get_jit_type_name(input.type()));
+      .instantiate(cudf::type_to_name(output.type()),  // list of template arguments
+                   cudf::type_to_name(input.type()));
 
   std::string cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(udf,  //
                                                   "GENERIC_UNARY_OP",
-                                                  cudf::jit::get_jit_type_name(output_type),
+                                                  cudf::type_to_name(output_type),
                                                   {0})
            : cudf::jit::parse_single_function_cuda(udf,  //
                                                    "GENERIC_UNARY_OP");
