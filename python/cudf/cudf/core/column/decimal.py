@@ -79,12 +79,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
+        unsupported_msg = (
+            f"{op} not supported for the following dtypes: "
+            f"{self.dtype}, {other.dtype}"
+        )
         try:
             if op in {"__add__", "__sub__", "__mul__", "__div__"}:
-                output_type = _get_decimal_type(self.dtype, other.dtype, op)
-                result = libcudf.binaryop.binaryop(
-                    self, other, op, output_type
-                )
+                output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
+                result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
                 # TODO:  Why is this necessary? Why isn't the result's
                 # precision already set correctly based on output_type?
                 result.dtype.precision = output_type.precision
@@ -96,12 +98,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "__le__",
                 "__ge__",
             }:
-                result = libcudf.binaryop.binaryop(self, other, op, bool)
+                result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
+            else:
+                raise TypeError(unsupported_msg)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
-                raise NotImplementedError(
-                    f"{op} not supported for types with different bit-widths"
-                ) from e
+                raise TypeError(unsupported_msg) from e
             raise
 
         return result

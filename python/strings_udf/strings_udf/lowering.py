@@ -199,7 +199,6 @@ def create_binary_string_func(binary_func, retty):
                 udf_str_ptr = builder.alloca(
                     default_manager[udf_string].get_value_type()
                 )
-
                 _ = context.compile_internal(
                     builder,
                     cuda_func,

@@ -21,7 +21,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
-from cudf.api.types import is_scalar, is_string_dtype
+from cudf.api.types import is_scalar
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator
@@ -173,7 +173,6 @@ def binaryop(lhs, rhs, op, dtype):
     cdef data_type c_dtype = dtype_to_data_type(dtype)
 
     if is_scalar(lhs) or lhs is None:
-        is_string_col = is_string_dtype(rhs.dtype)
         s_lhs = as_device_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
         result = binaryop_s_v(
             s_lhs,
@@ -183,7 +182,6 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     elif is_scalar(rhs) or rhs is None:
-        is_string_col = is_string_dtype(lhs.dtype)
         s_rhs = as_device_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         result = binaryop_v_s(
             lhs,
@@ -193,7 +191,6 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     else:
-        is_string_col = is_string_dtype(lhs.dtype)
         result = binaryop_v_v(
             lhs,
             rhs,
