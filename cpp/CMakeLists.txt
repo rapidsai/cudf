@@ -580,6 +580,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+  src/utilities/type_dispatcher.cpp
 )
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation

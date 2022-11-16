@@ -601,10 +601,7 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) double_type_dispatcher
  * @param type The `data_type`
  * @return Name of the type
  */
-std::string type_to_name(data_type type)
-{
-  return cudf::type_dispatcher(type, type_to_name_impl{});
-}
+std::string type_to_name(data_type type);
 
 /** @} */  // end of group
 }  // namespace cudf
