@@ -359,6 +359,12 @@ __global__ void __launch_bounds__(128)
       // override this_max_page_size if the requested size is smaller
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
+      // subtract size of rep and def level vectors
+      this_max_page_size -=
+        util::div_rounding_up_unsafe((values_in_page + frag_g.num_values) *
+                                       (col_g.num_def_level_bits() + col_g.num_rep_level_bits()),
+                                     8);
+
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
           rows_in_page >= max_page_size_rows) {
