@@ -149,8 +149,7 @@ void test_sum_agg(column_view const& keys,
                   column_view const& expected_keys,
                   column_view const& expected_values)
 {
-  EXPECT_THROW(test_sort_based_sum_agg(keys, values, expected_keys, expected_values),
-               cudf::logic_error);
+  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
   test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
 }
 }  // namespace
@@ -189,8 +188,8 @@ TYPED_TEST(groupby_lists_test, lists_with_nulls)
   auto keys   = lcw<TypeParam> { {{1,1}, {2,2}, {3,3}, {1,1}, {2,2}}, nulls_at({1,2,4})};
   auto values = fwcw<int32_t>  {     0,     1,     2,     3,     4 };
 
-  auto expected_keys   = lcw<TypeParam> { {{1,1}, {null,null}}, null_at(1)};
-  auto expected_values = fwcw<R>        {     3,           7 };
+  auto expected_keys   = lcw<TypeParam> { {{null,null}, {1,1}}, null_at(0)};
+  auto expected_values = fwcw<R>        {           7,     3 };
   // clang-format on
 
   test_sum_agg(keys, values, expected_keys, expected_values);
@@ -207,8 +206,8 @@ TYPED_TEST(groupby_lists_test, lists_with_null_elements)
   auto values = fwcw<int32_t>{1, 2, 4, 5};
 
   auto expected_keys = lcw<TypeParam>{
-    {lcw<TypeParam>{{{1, 2, 3}, {}, {4, 5}, {}, {6, 0}}, nulls_at({1, 3})}, {}}, null_at(1)};
-  auto expected_values = fwcw<R>{3, 9};
+    {{}, lcw<TypeParam>{{{1, 2, 3}, {}, {4, 5}, {}, {6, 0}}, nulls_at({1, 3})}}, null_at(0)};
+  auto expected_values = fwcw<R>{9, 3};
 
   test_sum_agg(keys, values, expected_keys, expected_values);
 }

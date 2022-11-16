@@ -10,6 +10,8 @@ import cudf
 from cudf import DataFrame
 from cudf.testing import _utils as utils
 
+pytestmark = pytest.mark.spilling
+
 
 @pytest.mark.parametrize(
     "data, index",
