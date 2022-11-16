@@ -73,12 +73,6 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   }
   record_ranges.push_back({prev, total_source_size});
 
-  // TODO column tree reduction
-  // could be done at last because missed columns are empty/all_nulls anyway.
-  // Needed for column type deductions:
-  // how about complete type deduction in parallel on value/str nodes, then reduce on column_id, and
-  // then share.
-
   std::vector<cudf::io::table_with_metadata> tables;
   // Process each chunk in parallel.
   for (auto const [chunk_start, chunk_end] : record_ranges) {
