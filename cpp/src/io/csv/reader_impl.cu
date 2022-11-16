@@ -676,10 +676,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   auto const& data        = data_row_offsets.first;
   auto const& row_offsets = data_row_offsets.second;
 
-  // Exclude the end-of-data row from number of rows with actual data
-  auto num_records                   = std::max(row_offsets.size(), 1ul) - 1;
   auto const unique_use_cols_indexes = std::set(reader_opts.get_use_cols_indexes().cbegin(),
-                                                     reader_opts.get_use_cols_indexes().cend());
+                                                reader_opts.get_use_cols_indexes().cend());
 
   auto const detected_column_names =
     get_column_names(header, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
@@ -760,8 +758,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   }
 
   // User can specify which columns should be parsed
-  auto const unique_use_cols_names = std::unordered_set(
-    reader_opts.get_use_cols_names().cbegin(), reader_opts.get_use_cols_names().cend());
+  auto const unique_use_cols_names = std::unordered_set(reader_opts.get_use_cols_names().cbegin(),
+                                                        reader_opts.get_use_cols_names().cend());
   auto const is_column_selection_used =
     not unique_use_cols_names.empty() or not unique_use_cols_indexes.empty();
 
@@ -790,9 +788,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     for (auto const& name : unique_use_cols_names) {
       auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
       CUDF_EXPECTS(it != column_names.end(), "Nonexistent column selected");
-      auto const curr_it = it - column_names.begin();
-      if (column_flags[curr_it] == column_parse::disabled) {
-        column_flags[curr_it] = column_parse::enabled | column_parse::inferred;
+      auto const col_idx = std::distance(column_names.cbegin(), it);
+      if (column_flags[col_idx] == column_parse::disabled) {
+        column_flags[col_idx] = column_parse::enabled | column_parse::inferred;
         ++num_active_columns;
       }
     }
@@ -830,6 +828,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // Return empty table rather than exception if nothing to load
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
+  // Exclude the end-of-data row from number of rows with actual data
+  auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
   auto const column_types = determine_column_types(
     reader_opts, parse_opts, column_names, data, row_offsets, num_records, column_flags, stream);
 
