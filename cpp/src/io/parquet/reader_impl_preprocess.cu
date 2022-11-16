@@ -1438,7 +1438,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                           _stream);
 #if defined(PREPROCESS_DEBUG)
     print_pages(pages, _stream);
-#end
+#endif
   }
 
   // iterate over all input columns and allocate any associated output
