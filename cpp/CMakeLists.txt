@@ -346,7 +346,10 @@ add_library(
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/reader_impl.cu
+  src/io/parquet/reader.cpp
+  src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_helpers.cpp
+  src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -501,7 +504,8 @@ add_library(
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
-  src/strings/regex/regexec.cu
+  src/strings/regex/regexec.cpp
+  src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
   src/strings/replace/multi_re.cu

@@ -30,24 +30,27 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
 
-namespace detail {
-namespace parquet {
+namespace detail::parquet {
 
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
- private:
+ protected:
   class impl;
   std::unique_ptr<impl> _impl;
+
+  /**
+   * @brief Default constructor, needed for subclassing.
+   */
+  reader();
 
  public:
   /**
@@ -66,7 +69,7 @@ class reader {
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~reader();
+  virtual ~reader();
 
   /**
    * @brief Reads the dataset as per given options.
@@ -154,7 +157,5 @@ class writer {
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 
-};  // namespace parquet
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+}  // namespace detail::parquet
+}  // namespace cudf::io

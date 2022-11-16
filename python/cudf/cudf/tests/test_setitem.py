@@ -108,6 +108,16 @@ def test_series_set_item(psr, arg):
     assert_eq(psr, gsr)
 
 
+def test_series_setitem_singleton_range():
+    sr = cudf.Series([1, 2, 3], dtype=np.int64)
+    psr = sr.to_pandas()
+    value = np.asarray([7], dtype=np.int64)
+    sr.iloc[:1] = value
+    psr.iloc[:1] = value
+    assert_eq(sr, cudf.Series([7, 2, 3], dtype=np.int64))
+    assert_eq(sr, psr, check_dtype=True)
+
+
 @pytest.mark.parametrize(
     "df",
     [
