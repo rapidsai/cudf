@@ -14,32 +14,23 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <cudf/io/datasource.hpp>
-#include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-
-#include <memory>
+#include <rmm/exec_policy.hpp>
+#include <thrust/find.h>
 
 namespace cudf::io::detail::json::experimental {
 
-table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
-                              json_reader_options const& reader_opts,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
-
+// Extract the first character position in the string.
 size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
-                               rmm::cuda_stream_view stream);
-
-size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
-                                        json_reader_options const& reader_opts,
-                                        char const delimiter,
-                                        rmm::cuda_stream_view stream);
+                               rmm::cuda_stream_view stream)
+{
+  auto const first_delimiter_position =
+    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
+  return first_delimiter_position != d_data.end() ? first_delimiter_position - d_data.begin() : -1;
+}
 
 }  // namespace cudf::io::detail::json::experimental
