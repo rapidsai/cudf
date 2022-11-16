@@ -59,6 +59,16 @@ def len_typing(self, args, kws):
         return nb_signature(size_type, args[0])
 
 
+@register_string_function(operator.add)
+def concat_typing(self, args, kws):
+    if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
+        return nb_signature(
+            MaskedType(udf_string),
+            MaskedType(string_view),
+            MaskedType(string_view),
+        )
+
+
 @register_string_function(operator.contains)
 def contains_typing(self, args, kws):
     if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
