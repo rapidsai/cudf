@@ -668,14 +668,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto const has_nested_column =
-    std::any_of(keys.begin(), keys.end(), [](cudf::column_view const& col) {
-      return cudf::is_nested(col.type());
-    });
-  if (has_nested_column and include_null_keys == cudf::null_policy::EXCLUDE) {
-    CUDF_FAIL("Null keys of nested type cannot be excluded.");
-  }
-
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =

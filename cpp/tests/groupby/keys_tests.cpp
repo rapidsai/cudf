@@ -293,8 +293,7 @@ TYPED_TEST(groupby_keys_test, structs)
   auto expect_vals = FWCW<R>{6, 1, 8, 7};
 
   auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
-  EXPECT_THROW(test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg)),
-               cudf::logic_error);
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 template <typename T>
@@ -313,8 +312,7 @@ TYPED_TEST(groupby_keys_test, lists)
   // clang-format on
 
   auto agg = cudf::make_sum_aggregation<groupby_aggregation>();
-  EXPECT_THROW(test_single_agg(keys, values, expected_keys, expected_values, std::move(agg)),
-               cudf::logic_error);
+  test_single_agg(keys, values, expected_keys, expected_values, std::move(agg));
 }
 
 struct groupby_string_keys_test : public cudf::test::BaseFixture {
