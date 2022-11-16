@@ -79,15 +79,6 @@ namespace {
  */
 bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
 
-/**
- * @brief Check whether the specified column is of compound types.
- */
-bool is_or_has_has_nested_compound(cudf::column_view const& col)
-{
-  return cudf::is_compound(col.type()) ||
-         std::any_of(col.child_begin(), col.child_end(), is_or_has_has_nested_compound);
-}
-
 }  // namespace
 
 bool is_or_has_nested_lists(cudf::column_view const& col)
@@ -223,33 +214,33 @@ flattened_table flatten_nested_columns(table_view const& input,
 
 // Helper function to superimpose validity of parent struct
 // over the specified member (child) column.
-void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
-                              size_type parent_null_count,
-                              std::unique_ptr<column> const& input,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+column superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                                size_type parent_null_count,
+                                column&& input,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   if (input.type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
-    return;
+    return std::move(input);
   }
+
   if (!input.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
     input.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, input.size(), stream, mr));
     input.set_null_count(parent_null_count);
   } else {
+    auto current_null_mask = input.mutable_view().null_mask();
+
     // Child should have a null mask.
     // `AND` the child's null mask with the parent's.
-
-    auto current_child_mask = input.mutable_view().null_mask();
-
     std::vector<bitmask_type const*> masks{
       reinterpret_cast<bitmask_type const*>(parent_null_mask),
-      reinterpret_cast<bitmask_type const*>(current_child_mask)};
+      reinterpret_cast<bitmask_type const*>(current_null_mask)};
     std::vector<size_type> begin_bits{0, 0};
     auto const valid_count = cudf::detail::inplace_bitmask_and(
-      device_span<bitmask_type>(current_child_mask, num_bitmask_words(input.size())),
+      device_span<bitmask_type>(current_null_mask, num_bitmask_words(input.size())),
       masks,
       begin_bits,
       input.size(),
@@ -258,16 +249,41 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
     input.set_null_count(null_count);
   }
 
-  // If the child is also a struct, repeat for all grandchildren.
+  // If the input is a structs column, recursively superimpose null mask for all grandchildren.
   if (input.type().id() == cudf::type_id::STRUCT) {
-    const auto current_child_mask = input.mutable_view().null_mask();
-    std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(input.num_children()),
-                  [&current_child_mask, &input, stream, mr](auto i) {
-                    superimpose_parent_nulls(
-                      current_child_mask, UNKNOWN_NULL_COUNT, input.child(i), stream, mr);
-                  });
+    auto const num_rows   = input.size();
+    auto const null_count = input.null_count();
+    auto content          = input.release();
+
+    // Build new children columns.
+    // If any child column is strings/lists column, its non-empty nulls will also be purged.
+    const auto current_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    std::for_each(
+      content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
+        child = std::make_unique<column>(superimpose_parent_nulls(
+          current_mask, UNKNOWN_NULL_COUNT, std::move(*child), stream, mr));
+      });
+
+    // Return a new structs column with newly rebuilt children.
+    return std::move(*cudf::make_structs_column(num_rows,
+                                                std::move(content.children),
+                                                null_count,
+                                                std::move(*content.null_mask),
+                                                stream,
+                                                mr));
   }
+
+  auto const is_string_or_list = [](auto const type_id) {
+    return type_id == type_id::STRING || type_id == type_id::LIST;
+  };
+
+  // If the input is not a strings/lists column, just let it pass through.
+  // Otherwise, we need to purge non-empty nulls.
+  // If this is a structs column, the children columns have already been purged empty nulls in the
+  // rebuild step above.
+  return is_string_or_list(input.type().id())
+           ? std::move(*cudf::detail::purge_nonempty_nulls(input.view(), stream, mr))
+           : std::move(input);
 }
 
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(

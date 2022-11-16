@@ -152,22 +152,26 @@ flattened_table flatten_nested_columns(
   column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 /**
- * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
+ * @brief Push down nulls from a given parent null mask into the input column, using bitwise AND.
  *
  * This function will recurse through all struct descendants. It is expected that
- * the size of `parent_null_mask` in bits is the same as `child.size()`
+ * the size of `parent_null_mask` in bits is the same as `input.size()`.
+ *
+ * The null strings/lists in the input (if any) will also be sanitized. I.e., a string/list after
+ * being superimposed null will always have zero size in the output.
  *
  * @param parent_null_mask The mask to be applied to descendants
  * @param parent_null_count Null count in the null mask
- * @param column Column to apply the null mask to.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate new device memory.
+ * @param input Column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A column generated from the input with nulls superimposed recursively
  */
-void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
-                              size_type parent_null_count,
-                              column& child,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+[[nodiscard]] column superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                                              size_type parent_null_count,
+                                              column&& input,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Push down nulls from a parent mask into a child column, using bitwise AND.

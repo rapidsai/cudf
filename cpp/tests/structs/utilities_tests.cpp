@@ -346,7 +346,7 @@ void test_non_struct_columns(cudf::column_view const& input)
   auto [superimposed, backing_validity_buffers] =
     cudf::structs::detail::superimpose_parent_nulls(input, cudf::get_default_stream());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input, superimposed);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, superimposed);
   EXPECT_TRUE(backing_validity_buffers.empty());
 }
 
@@ -399,10 +399,10 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
 
   // At this point, the STRUCT nulls aren't pushed down to members,
   // even though the parent null-mask was modified.
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs_view.child(0),
-                                      make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6})));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    structs_view.child(1), make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_view.child(0),
+                                 make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6})));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_view.child(1),
+                                 make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
 
   auto [output, backing_buffers] =
     cudf::structs::detail::superimpose_parent_nulls(structs_view, cudf::get_default_stream());
@@ -414,7 +414,7 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
   auto expected_structs_output = cudf::test::structs_column_wrapper{
     {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_output);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
@@ -440,7 +440,7 @@ TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
   auto expected_structs_output = cudf::test::structs_column_wrapper{
     {expected_nums_member, expected_lists_member}, cudf::test::iterators::no_nulls()};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_output);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
@@ -476,7 +476,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
     {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
   auto expected_structs_of_structs = cudf::test::structs_column_wrapper{{expected_structs}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_of_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_of_structs);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
@@ -520,7 +520,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   auto expected_structs_of_structs =
     cudf::test::structs_column_wrapper{{expected_structs}, cudf::test::iterators::null_at(1)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_of_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_of_structs);
 }
 
 cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
@@ -580,7 +580,7 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
     {expected_nums, expected_lists}, cudf::test::iterators::nulls_at({1})};
   auto expected_structs = slice_off_first_and_last_rows(expected_unsliced_structs);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
@@ -636,5 +636,5 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
     cudf::test::structs_column_wrapper{{expected_structs}, cudf::test::iterators::null_at(2)};
   auto expected_sliced_structs = slice_off_first_and_last_rows(expected_struct_structs);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_sliced_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_sliced_structs);
 }

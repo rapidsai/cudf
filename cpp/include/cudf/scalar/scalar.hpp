@@ -867,8 +867,14 @@ class struct_scalar : public scalar {
  private:
   table _data;
 
-  void init(bool is_valid, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
-  void superimpose_nulls(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  void check_size();
+  static table init_data(table&& data,
+                         bool is_valid,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr);
+  static table superimpose_nulls(table&& data,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 };
 
 /** @} */  // end of group
