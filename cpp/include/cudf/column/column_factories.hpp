@@ -62,6 +62,7 @@ std::unique_ptr<column> make_empty_column(type_id id);
  *
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a numeric type
+ * @throws cudf::logic_error if `size < 0`
  *
  * @param[in] type The desired numeric element type
  * @param[in] size The number of elements in the column
@@ -119,6 +120,7 @@ std::unique_ptr<column> make_numeric_column(
  * @note The column's null count is determined by the requested null mask `state`.
  *
  * @throws cudf::logic_error if `type` is not a `fixed_point` type.
+ * @throws cudf::logic_error if `size < 0`
  *
  * @param[in] type The desired `fixed_point` element type.
  * @param[in] size The number of elements in the column.
@@ -176,6 +178,7 @@ std::unique_ptr<column> make_fixed_point_column(
  *
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a timestamp type
+ * @throws cudf::logic_error if `size < 0`
  *
  * @param[in] type The desired timestamp element type
  * @param[in] size The number of elements in the column
@@ -234,6 +237,7 @@ std::unique_ptr<column> make_timestamp_column(
  *
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a duration type
+ * @throws cudf::logic_error if `size < 0`
  *
  * @param[in] type The desired duration element type
  * @param[in] size The number of elements in the column
@@ -292,6 +296,7 @@ std::unique_ptr<column> make_duration_column(
  *
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a fixed width type
+ * @throws cudf::logic_error if `size < 0`
  *
  * @param[in] type The desired fixed width type
  * @param[in] size The number of elements in the column
@@ -366,7 +371,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
-  * @return Constructed strings column
+ * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<thrust::pair<const char*, size_type> const> strings,
