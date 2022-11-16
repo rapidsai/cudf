@@ -39,7 +39,7 @@ namespace cudf {
  */
 
 /**
- * @brief Maps a C++ type to it's corresponding `cudf::type_id`
+ * @brief Maps a C++ type to its corresponding `cudf::type_id`
  *
  * When explicitly passed a template argument of a given type, returns the
  * appropriate `type_id` enum for the specified C++ type.
@@ -60,12 +60,12 @@ inline constexpr type_id type_to_id()
 };
 
 /**
- * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+ * @brief Maps a `cudf::type_id` types to its corresponding C++ type name string
  *
  */
 struct type_to_name_impl {
   /**
-   * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+   * @brief Maps a `cudf::type_id` types to its corresponding C++ type name string
    *
    * @return The C++ type name as string
    */
@@ -81,7 +81,7 @@ struct id_to_type_impl {
   using type = void;
 };
 /**
- * @brief Maps a `cudf::type_id` to it's corresponding concrete C++ type
+ * @brief Maps a `cudf::type_id` to its corresponding concrete C++ type
  *
  * Example:
  * ```
