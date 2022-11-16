@@ -697,6 +697,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   auto column_flags             = std::vector<column_parse::flags>(
     num_actual_columns, column_parse::enabled | column_parse::inferred);
 
+  // User did not pass column names to override names in the file
+  // Process names from the file to remove empty and duplicated strings
   if (not opts_have_all_col_names) {
     std::vector<size_t> col_loop_order(column_names.size());
     auto unnamed_it = std::copy_if(
@@ -704,6 +706,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       thrust::make_counting_iterator<size_t>(column_names.size()),
       col_loop_order.begin(),
       [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
+
     // Rename empty column names to "Unnamed: col_index"
     std::copy_if(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator<size_t>(column_names.size()),
@@ -763,12 +766,15 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   auto const is_column_selection_used =
     not unique_use_cols_names.empty() or not unique_use_cols_indexes.empty();
 
+  // Reset flags and output column count; columns will be reactivated based on the selection options
   if (is_column_selection_used) {
     std::fill(column_flags.begin(), column_flags.end(), column_parse::disabled);
     num_active_columns = 0;
   }
 
+  // Column selection via column indexes
   if (not unique_use_cols_indexes.empty()) {
+    // Users can pass names for the selected columns only, if selecting column by their indices
     auto const are_opts_col_names_used =
       not reader_opts.get_names().empty() and not opts_have_all_col_names;
     CUDF_EXPECTS(not are_opts_col_names_used or
@@ -784,6 +790,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     }
   }
 
+  // Column selection via column names
   if (not unique_use_cols_names.empty()) {
     for (auto const& name : unique_use_cols_names) {
       auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
