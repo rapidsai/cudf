@@ -948,10 +948,6 @@ def test_json_dtypes_nested_data():
 class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
-        if tag == "missing" and chunk_size == 10:
-            pytest.xfail(
-                reason="cudf inferences integer with nulls as float64"
-            )
         expected = cudf.read_json(
             StringIO(data), engine="cudf_experimental", lines=True
         )
@@ -968,19 +964,25 @@ class TestNestedJsonReaderCommon:
                 )
             )
         df = cudf.concat(chunks, ignore_index=True)
-        assert expected.to_arrow().equals(df.to_arrow())
+        if tag == "missing" and chunk_size == 10:
+            with pytest.raises(AssertionError):
+                # nested JSON reader inferences integer with nulls as float64
+                assert expected.to_arrow().equals(df.to_arrow())
+        else:
+            assert expected.to_arrow().equals(df.to_arrow())
 
     def test_order_nested_json_reader(self, tag, data):
-        if tag == "dtype_mismatch":
-            pytest.xfail(
-                reason="pandas parses integer values in float representation"
-                " as integer"
-            )
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(
             StringIO(data), engine="cudf_experimental", lines=True
         )
-        assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        if tag == "dtype_mismatch":
+            with pytest.raises(AssertionError):
+                # pandas parses integer values in float representation
+                # as integer
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        else:
+            assert pa.Table.from_pandas(expected).equals(target.to_arrow())
 
 
 def test_json_round_trip_gzip():

@@ -28,9 +28,8 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                char const delimiter,
                                rmm::cuda_stream_view stream)
 {
-  auto const is_delimiter = [delimiter] __device__(char c) { return c == delimiter; };
-  auto first_delimiter_position =
-    thrust::find_if(rmm::exec_policy(stream), d_data.begin(), d_data.end(), is_delimiter);
+  auto const first_delimiter_position =
+    thrust::find(rmm::exec_policy(stream), d_data.begin(), d_data.end(), delimiter);
   return first_delimiter_position != d_data.end() ? first_delimiter_position - d_data.begin() : -1;
 }
 

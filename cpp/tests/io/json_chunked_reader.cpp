@@ -34,7 +34,7 @@ struct JsonReaderTest : public cudf::test::BaseFixture {
 std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   cudf::host_span<std::unique_ptr<cudf::io::datasource>> sources,
   cudf::io::json_reader_options const& reader_opts,
-  int chunk_size,
+  int32_t chunk_size,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -42,7 +42,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   using cudf::size_type;
   // assuming single source.
   size_t total_source_size = 0;
-  for (const auto& source : sources) {
+  for (auto const& source : sources) {
     total_source_size += source->size();
   }
   size_t num_chunks                = (total_source_size + chunk_size - 1) / chunk_size;
@@ -115,7 +115,7 @@ TEST_F(JsonReaderTest, ByteRange)
 
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500}) {
-    const auto tables = skeleton_for_parellel_chunk_reader(datasources,
+    auto const tables = skeleton_for_parellel_chunk_reader(datasources,
                                                            json_lines_options,
                                                            chunk_size,
                                                            cudf::get_default_stream(),
