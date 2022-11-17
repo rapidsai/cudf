@@ -12,34 +12,34 @@ concurrency:
 jobs:
   # pr-builder:
   #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@configurable-test-scripts
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@main
   # checks:
   #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@configurable-test-scripts
+  #   uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@main
   conda-cpp-build:
     # needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@configurable-test-scripts
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@main
     with:
       build_type: pull-request
       node_type: cpu16
   conda-cpp-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@configurable-test-scripts
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
     with:
       build_type: pull-request
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@configurable-test-scripts
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@main
     with:
       build_type: pull-request
       node_type: cpu16
   conda-python-cudf-tests:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@configurable-test-scripts
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: pull-request
       test_script: "ci/test_python_cudf.sh"
@@ -47,7 +47,7 @@ jobs:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@configurable-test-scripts
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: pull-request
       test_script: "ci/test_python_other.sh"
