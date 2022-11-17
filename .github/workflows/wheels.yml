@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   cudf-wheels:
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@feat/pure-python-wheels
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
     with:
       repo: rapidsai/cudf
 
@@ -60,7 +60,7 @@ jobs:
     secrets: inherit
   dask_cudf-wheel:
     needs: cudf-wheels
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@feat/pure-python-wheels
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@main
     with:
       repo: rapidsai/cudf
 
