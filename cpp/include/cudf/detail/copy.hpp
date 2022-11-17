@@ -315,5 +315,15 @@ bool has_nonempty_nulls(column_view const& input, rmm::cuda_stream_view stream);
  */
 bool may_have_nonempty_nulls(column_view const& input, rmm::cuda_stream_view stream);
 
+/**
+ * @copydoc cudf::purge_nonempty_nulls
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> purge_nonempty_nulls(
+  column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf

@@ -5,7 +5,7 @@ from numba.np import numpy_support
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import as_buffer
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -34,6 +34,7 @@ from cudf._lib.utils cimport (
 )
 
 
+@acquire_spill_lock()
 def bools_to_mask(Column col):
     """
     Given an int8 (boolean) column, compress the data from booleans to bits and
@@ -88,6 +89,7 @@ def nans_to_nulls(Column input):
     return buffer
 
 
+@acquire_spill_lock()
 def transform(Column input, op):
     cdef column_view c_input = input.view()
     cdef string c_str
@@ -132,8 +134,10 @@ def table_encode(list source_columns):
     with nogil:
         c_result = move(libcudf_transform.encode(c_input))
 
-    return columns_from_unique_ptr(
-        move(c_result.first)), Column.from_unique_ptr(move(c_result.second))
+    return (
+        columns_from_unique_ptr(move(c_result.first)),
+        Column.from_unique_ptr(move(c_result.second))
+    )
 
 
 def one_hot_encode(Column input_column, Column categories):
@@ -146,7 +150,11 @@ def one_hot_encode(Column input_column, Column categories):
             libcudf_transform.one_hot_encode(c_view_input, c_view_categories)
         )
 
-    owner = Column.from_unique_ptr(move(c_result.first))
+    # Notice, the data pointer of `owner` has been exposed
+    # through `c_result.second` at this point.
+    owner = Column.from_unique_ptr(
+        move(c_result.first), data_ptr_exposed=True
+    )
 
     pylist_categories = categories.to_arrow().to_pylist()
     encodings, _ = data_from_table_view(
@@ -156,10 +164,10 @@ def one_hot_encode(Column input_column, Column categories):
             x if x is not None else 'null' for x in pylist_categories
         ]
     )
-
     return encodings
 
 
+@acquire_spill_lock()
 def compute_column(list columns, tuple column_names, expr: str):
     """Compute a new column by evaluating an expression on a set of columns.
 

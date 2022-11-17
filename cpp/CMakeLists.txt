@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.12.00
+  VERSION 23.02.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -329,6 +329,7 @@ add_library(
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/byte_range_info.cu
   src/io/json/experimental/read_json.cpp
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -346,7 +347,10 @@ add_library(
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/reader_impl.cu
+  src/io/parquet/reader.cpp
+  src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_helpers.cpp
+  src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -501,7 +505,8 @@ add_library(
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
-  src/strings/regex/regexec.cu
+  src/strings/regex/regexec.cpp
+  src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
   src/strings/replace/multi_re.cu

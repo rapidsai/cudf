@@ -262,6 +262,30 @@ constexpr inline bool is_signed_iterator()
 }
 
 /**
+ * @brief Indicates whether the type `T` is an integral type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is integral
+ * @return false  `T` is not integral
+ */
+template <typename T>
+constexpr inline bool is_integral()
+{
+  return cuda::std::is_integral_v<T>;
+}
+
+/**
+ * @brief Indicates whether `type` is a integral `data_type`.
+ *
+ * "Integral" types are fundamental integer types such as `INT*` and `UINT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is integral
+ * @return false `type` is integral
+ */
+bool is_integral(data_type type);
+
+/**
  * @brief Indicates whether the type `T` is a floating point type.
  *
  * @tparam T  The type to verify

@@ -177,6 +177,7 @@ Reindexing / selection / label manipulation
    Series.take
    Series.tail
    Series.tile
+   Series.truncate
    Series.where
    Series.mask
 
@@ -367,6 +368,7 @@ Serialization / IO / conversion
 
    Series.to_arrow
    Series.to_cupy
+   Series.to_dict
    Series.to_dlpack
    Series.to_frame
    Series.to_hdf

@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import copy
+import gzip
 import itertools
 import os
 from io import BytesIO, StringIO
@@ -928,18 +929,80 @@ def test_json_dtypes_nested_data():
         (
             "missing",
             """
-            { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
-            { "a": { "y" : 6}, "b" : [4, 5   ]}
-            { "a": { "y" : 6}, "c": 13 }
-            { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
-        """,
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ]          }
+    { "a": { "y" : 6}, "c": 13                  }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14 }
+""",
+        ),
+        pytest.param(
+            "dtype_mismatch",
+            """\
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+    { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14.0 }""",
         ),
     ],
 )
-def test_order_nested_json_reader(tag, data):
-    expected = cudf.read_json(StringIO(data), engine="pandas", lines=True)
-    target = cudf.read_json(
-        StringIO(data), engine="cudf_experimental", lines=True
-    )
+class TestNestedJsonReaderCommon:
+    @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
+    def test_chunked_nested_json_reader(self, tag, data, chunk_size):
+        expected = cudf.read_json(
+            StringIO(data), engine="cudf_experimental", lines=True
+        )
 
-    assert_eq(expected, target, check_dtype=True)
+        source_size = len(data)
+        chunks = []
+        for chunk_start in range(0, source_size, chunk_size):
+            chunks.append(
+                cudf.read_json(
+                    StringIO(data),
+                    engine="cudf_experimental",
+                    byte_range=[chunk_start, chunk_size],
+                    lines=True,
+                )
+            )
+        df = cudf.concat(chunks, ignore_index=True)
+        if tag == "missing" and chunk_size == 10:
+            with pytest.raises(AssertionError):
+                # nested JSON reader inferences integer with nulls as float64
+                assert expected.to_arrow().equals(df.to_arrow())
+        else:
+            assert expected.to_arrow().equals(df.to_arrow())
+
+    def test_order_nested_json_reader(self, tag, data):
+        expected = pd.read_json(StringIO(data), lines=True)
+        target = cudf.read_json(
+            StringIO(data), engine="cudf_experimental", lines=True
+        )
+        if tag == "dtype_mismatch":
+            with pytest.raises(AssertionError):
+                # pandas parses integer values in float representation
+                # as integer
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        else:
+            assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+
+
+def test_json_round_trip_gzip():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["abc", "def", "ghi"]})
+    bytes = BytesIO()
+    with gzip.open(bytes, mode="wb") as fo:
+        df.to_json(fo, orient="records", lines=True)
+    bytes.seek(0)
+    with gzip.open(bytes, mode="rb") as fo:
+        written_df = cudf.read_json(fo, orient="records", lines=True)
+    assert_eq(written_df, df)
+
+    # Testing writing from middle of the file.
+    loc = bytes.tell()
+
+    with gzip.open(bytes, mode="wb") as fo:
+        fo.seek(loc)
+        df.to_json(fo, orient="records", lines=True)
+    bytes.seek(loc)
+    with gzip.open(bytes, mode="rb") as fo:
+        fo.seek(loc)
+        written_df = cudf.read_json(fo, orient="records", lines=True)
+    assert_eq(written_df, df)

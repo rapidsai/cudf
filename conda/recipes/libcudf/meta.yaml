@@ -78,7 +78,6 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/binaryop.hpp
         - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
         - test -f $PREFIX/include/cudf/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/detail/copy.cuh
         - test -f $PREFIX/include/cudf/detail/copy.hpp
         - test -f $PREFIX/include/cudf/detail/datetime.hpp
         - test -f $PREFIX/include/cudf/detail/fill.hpp
@@ -236,6 +235,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/json.hpp
         - test -f $PREFIX/include/cudf/strings/padding.hpp
         - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
+        - test -f $PREFIX/include/cudf/strings/regex/regex_program.hpp
         - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
         - test -f $PREFIX/include/cudf/strings/replace.hpp
         - test -f $PREFIX/include/cudf/strings/replace_re.hpp

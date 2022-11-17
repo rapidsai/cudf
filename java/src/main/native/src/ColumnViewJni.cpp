@@ -1397,6 +1397,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringS(JNIEnv *env, jclass,
+                                                                  jlong cv_handle, jint start) {
+  JNI_NULL_CHECK(env, cv_handle, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(cv_handle);
+    auto const scv = cudf::strings_column_view{*cv};
+    return release_as_jlong(cudf::strings::slice_strings(scv, start));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substring(JNIEnv *env, jclass,
                                                                  jlong column_view, jint start,
                                                                  jint end) {
@@ -1405,8 +1417,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substring(JNIEnv *env, jc
     cudf::jni::auto_set_device(env);
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::strings_column_view scv(*cv);
-    return release_as_jlong((end == -1 ? cudf::strings::slice_strings(scv, start) :
-                                         cudf::strings::slice_strings(scv, start, end)));
+    return release_as_jlong(cudf::strings::slice_strings(scv, start, end));
   }
   CATCH_STD(env, 0);
 }

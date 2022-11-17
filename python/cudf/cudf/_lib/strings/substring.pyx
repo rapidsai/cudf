@@ -1,16 +1,17 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
+import numpy as np
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport size_type
-
-import numpy as np
-
 from cudf._lib.cpp.strings.substring cimport slice_strings as cpp_slice_strings
+from cudf._lib.cpp.types cimport size_type
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -18,6 +19,7 @@ from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def slice_strings(Column source_strings,
                   object start,
                   object end,
@@ -54,6 +56,7 @@ def slice_strings(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def slice_from(Column source_strings,
                Column starts,
                Column stops):
@@ -77,6 +80,7 @@ def slice_from(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def get(Column source_strings,
         object index):
     """

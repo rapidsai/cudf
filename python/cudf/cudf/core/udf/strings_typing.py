@@ -13,7 +13,9 @@ from strings_udf._typing import (
     id_unary_funcs,
     int_binary_funcs,
     size_type,
+    string_return_attrs,
     string_view,
+    udf_string,
 )
 
 from cudf.core.udf import masked_typing
@@ -55,6 +57,16 @@ def len_typing(self, args, kws):
         return nb_signature(MaskedType(size_type), args[0])
     elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
         return nb_signature(size_type, args[0])
+
+
+@register_string_function(operator.add)
+def concat_typing(self, args, kws):
+    if _is_valid_string_arg(args[0]) and _is_valid_string_arg(args[1]):
+        return nb_signature(
+            MaskedType(udf_string),
+            MaskedType(string_view),
+            MaskedType(string_view),
+        )
 
 
 @register_string_function(operator.contains)
@@ -170,6 +182,13 @@ for func in int_binary_funcs:
         MaskedStringViewAttrs,
         f"resolve_{func}",
         create_masked_binary_attr(f"MaskedType.{func}", size_type),
+    )
+
+for func in string_return_attrs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_binary_attr(f"MaskedType.{func}", udf_string),
     )
 
 for func in id_unary_funcs:
