@@ -1,9 +1,6 @@
 name: cuDF wheels
 
 on:
-  push:
-    branches:
-      - 'pull-request/[0-9]+'
   workflow_call:
     inputs:
       versioneer-override:
@@ -35,7 +32,7 @@ jobs:
     with:
       repo: rapidsai/cudf
 
-      build-type: ${{ inputs.build-type || 'pull-request' }}
+      build-type: ${{ inputs.build-type }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -64,7 +61,7 @@ jobs:
     with:
       repo: rapidsai/cudf
 
-      build-type: ${{ inputs.build-type || 'pull-request' }}
+      build-type: ${{ inputs.build-type }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
