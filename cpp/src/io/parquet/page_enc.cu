@@ -360,10 +360,9 @@ __global__ void __launch_bounds__(128)
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
       // subtract size of rep and def level vectors
-      this_max_page_size -=
-        util::div_rounding_up_unsafe((values_in_page + frag_g.num_values) *
-                                       (col_g.num_def_level_bits() + col_g.num_rep_level_bits()),
-                                     8);
+      auto num_vals = values_in_page + frag_g.num_values;
+      this_max_page_size -= util::div_rounding_up_unsafe(num_vals * col_g.num_def_level_bits(), 8) +
+                            util::div_rounding_up_unsafe(num_vals * col_g.num_rep_level_bits(), 8);
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
