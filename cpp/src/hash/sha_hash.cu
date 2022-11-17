@@ -605,7 +605,7 @@ struct SHA512Hash : HashBase<SHA512Hash> {
 };
 
 // SHA supported leaf data type check
-constexpr inline bool sha_leaf_type_check(data_type dt)
+bool sha_leaf_type_check(data_type dt)
 {
   return (is_fixed_width(dt) && !is_chrono(dt)) || (dt.id() == type_id::STRING);
 }
