@@ -144,7 +144,7 @@ rapids_find_package(
 )
 
 # add third party dependencies using CPM
-rapids_cpm_init(OVERRIDE ${CMAKE_CURRENT_SOURCE_DIR}/cmake/versions.json)
+rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find nvCOMP
