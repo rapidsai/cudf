@@ -919,6 +919,7 @@ def test_string_udf_lower(str_udf_data):
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
 
+@string_udf_test
 @pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_concat(str_udf_data, concat_char):
     def func(row):
