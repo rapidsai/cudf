@@ -147,7 +147,6 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                "Size of output exceeds column size limit");
 
   // Now build the chars column
-  // auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
   std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
