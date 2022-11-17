@@ -4,6 +4,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -24,6 +26,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
+@acquire_spill_lock()
 def split(Column source_strings,
           object py_delimiter,
           size_type maxsplit):
@@ -54,6 +57,7 @@ def split(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_record(Column source_strings,
                  object py_delimiter,
                  size_type maxsplit):
@@ -83,6 +87,7 @@ def split_record(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit(Column source_strings,
            object py_delimiter,
            size_type maxsplit):
@@ -113,6 +118,7 @@ def rsplit(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_record(Column source_strings,
                   object py_delimiter,
                   size_type maxsplit):
@@ -142,6 +148,7 @@ def rsplit_record(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_re(Column source_strings,
              object pattern,
              size_type maxsplit):
@@ -166,6 +173,7 @@ def split_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_re(Column source_strings,
               object pattern,
               size_type maxsplit):
@@ -191,6 +199,7 @@ def rsplit_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_record_re(Column source_strings,
                     object pattern,
                     size_type maxsplit):
@@ -214,6 +223,7 @@ def split_record_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_record_re(Column source_strings,
                      object pattern,
                      size_type maxsplit):
