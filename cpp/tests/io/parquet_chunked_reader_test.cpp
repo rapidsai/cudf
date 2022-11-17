@@ -91,13 +91,9 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         }
       }
 
-      // Can't use `cudf::detail::purge_nonempty_nulls` since it requires to be compiled with CUDA.
-      if (col_typeid == cudf::type_id::LIST) {
-        col = cudf::purge_nonempty_nulls(cudf::lists_column_view{col->view()});
-      } else if (col_typeid == cudf::type_id::STRUCT) {
-        col = cudf::purge_nonempty_nulls(cudf::structs_column_view{col->view()});
-      } else if (col_typeid == cudf::type_id::STRING) {
-        col = cudf::purge_nonempty_nulls(cudf::strings_column_view{col->view()});
+      if (col_typeid == cudf::type_id::LIST || col_typeid == cudf::type_id::STRUCT ||
+          col_typeid == cudf::type_id::STRING) {
+        col = cudf::purge_nonempty_nulls(col->view());
       }
     }
   }
