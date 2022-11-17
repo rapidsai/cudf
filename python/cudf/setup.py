@@ -42,6 +42,19 @@ extras_require = {
     ]
 }
 
+if "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE" in os.environ:
+    # borrow a similar hack from dask-cuda: https://github.com/rapidsai/dask-cuda/blob/b3ed9029a1ad02a61eb7fbd899a5a6826bb5cfac/setup.py#L12-L31
+    orig_get_versions = versioneer.get_versions
+
+    version_override = os.environ.get("RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", "")
+
+    def get_versions():
+        data = orig_get_versions()
+        if version_override != "":
+            data["version"] = version_override
+        return data
+
+    versioneer.get_versions = get_versions
 
 setup(
     name=f"cudf{cuda_suffix}",
