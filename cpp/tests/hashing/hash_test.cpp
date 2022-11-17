@@ -1238,7 +1238,7 @@ TEST_F(SHA1HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA1);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1257,7 +1257,7 @@ TYPED_TEST(SHA1HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA1);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(SHA1HashTestTyped, EqualityNulls)
@@ -1275,7 +1275,7 @@ TYPED_TEST(SHA1HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA1);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1302,7 +1302,7 @@ TYPED_TEST(SHA1HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA1);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA1);
 
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 class SHA224HashTest : public cudf::test::BaseFixture {
@@ -1417,7 +1417,7 @@ TEST_F(SHA224HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA224);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1436,7 +1436,7 @@ TYPED_TEST(SHA224HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA224);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(SHA224HashTestTyped, EqualityNulls)
@@ -1454,7 +1454,7 @@ TYPED_TEST(SHA224HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA224);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1481,7 +1481,7 @@ TYPED_TEST(SHA224HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA224);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA224);
 
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 class SHA256HashTest : public cudf::test::BaseFixture {
@@ -1596,7 +1596,7 @@ TEST_F(SHA256HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA256);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1615,7 +1615,7 @@ TYPED_TEST(SHA256HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA256);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(SHA256HashTestTyped, EqualityNulls)
@@ -1633,7 +1633,7 @@ TYPED_TEST(SHA256HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA256);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1660,7 +1660,7 @@ TYPED_TEST(SHA256HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA256);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA256);
 
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 class SHA384HashTest : public cudf::test::BaseFixture {
@@ -1791,7 +1791,7 @@ TEST_F(SHA384HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1810,7 +1810,7 @@ TYPED_TEST(SHA384HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA384);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(SHA384HashTestTyped, EqualityNulls)
@@ -1828,7 +1828,7 @@ TYPED_TEST(SHA384HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -1855,7 +1855,7 @@ TYPED_TEST(SHA384HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA384);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA384);
 
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 class SHA512HashTest : public cudf::test::BaseFixture {
@@ -1986,7 +1986,7 @@ TEST_F(SHA512HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -2005,7 +2005,7 @@ TYPED_TEST(SHA512HashTestTyped, Equality)
   auto const output2 = cudf::hash(input, cudf::hash_id::HASH_SHA512);
 
   EXPECT_EQ(input.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 TYPED_TEST(SHA512HashTestTyped, EqualityNulls)
@@ -2023,7 +2023,7 @@ TYPED_TEST(SHA512HashTestTyped, EqualityNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 template <typename T>
@@ -2050,7 +2050,7 @@ TYPED_TEST(SHA512HashTestFloatTyped, TestExtremes)
   auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_SHA512);
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_SHA512);
 
-  expect_columns_equal(output1->view(), output2->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
