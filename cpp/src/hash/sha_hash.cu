@@ -652,7 +652,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   auto d_chars    = chars_view.template data<char>();
 
   // Build an output null mask from the logical AND of all input columns' null masks.
-  rmm::device_buffer null_mask{cudf::detail::bitmask_and(input, stream)};
+  auto [null_mask, null_count] = cudf::detail::bitmask_and(input, stream);
 
   auto const device_input = table_device_view::create(input, stream);
 
@@ -671,8 +671,11 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                      hasher.finalize();
                    });
 
-  return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+  return make_strings_column(input.num_rows(),
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             null_count,
+                             std::move(null_mask));
 }
 
 }  // namespace
