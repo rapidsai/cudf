@@ -23,7 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
@@ -71,7 +71,7 @@ struct substring_fn {
       // normal positive position logic
       auto start = d_start.value();
       if (start >= 0) {
-        if (start < length) return d_str.begin() + start;
+            if (start < length) return d_str.begin() + start;
         return d_str.end() + (step < 0 ? -1 : 0);
       }
       // handle negative position here

@@ -21,7 +21,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -85,10 +85,10 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&) = delete;
+  MD5Hasher(const MD5Hasher&)            = delete;
   MD5Hasher& operator=(const MD5Hasher&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
-  MD5Hasher& operator=(MD5Hasher&&) = delete;
+  MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)

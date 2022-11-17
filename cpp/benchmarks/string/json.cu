@@ -21,6 +21,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -29,8 +30,7 @@
 
 #include <thrust/random.h>
 
-class JsonPath : public cudf::benchmark {
-};
+class JsonPath : public cudf::benchmark {};
 
 const std::vector<std::string> Books{
   R"json({
