@@ -1141,23 +1141,23 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   // at that point.  So we have to proceed as if we are taking the bytes from all 200 rows of that
   // page.
   //
-  rmm::device_uvector<cumulative_row_info> adjusted(c_info.size(), stream);
+  rmm::device_uvector<cumulative_row_info> aggregated_info(c_info.size(), stream);
   thrust::transform(rmm::exec_policy(stream),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
-                    adjusted.begin(),
+                    aggregated_info.begin(),
                     row_total_size{c_info.data(), key_offsets.data(), num_unique_keys});
 
   // bring back to the cpu
-  std::vector<cumulative_row_info> h_adjusted(adjusted.size());
-  cudaMemcpyAsync(h_adjusted.data(),
-                  adjusted.data(),
+  std::vector<cumulative_row_info> h_aggregated_info(aggregated_info.size());
+  cudaMemcpyAsync(h_aggregated_info.data(),
+                  aggregated_info.data(),
                   sizeof(cumulative_row_info) * c_info.size(),
                   cudaMemcpyDeviceToHost,
                   stream);
   stream.synchronize();
 
-  return find_splits(h_adjusted, num_rows, chunk_read_limit);
+  return find_splits(h_aggregated_info, num_rows, chunk_read_limit);
 }
 
 struct get_page_chunk_idx {
