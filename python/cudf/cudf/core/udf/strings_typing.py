@@ -14,6 +14,7 @@ from strings_udf._typing import (
     int_binary_funcs,
     size_type,
     string_return_attrs,
+    string_unary_funcs,
     string_view,
     udf_string,
 )
@@ -123,7 +124,7 @@ def create_masked_binary_attr(attrname, retty):
     return attr
 
 
-def create_masked_identifier_attr(attrname):
+def create_masked_unary_attr(attrname, retty):
     """
     Helper function wrapping numba's low level extension API. Provides
     the boilerplate needed to register a unary function of a masked
@@ -134,7 +135,7 @@ def create_masked_identifier_attr(attrname):
         key = attrname
 
         def generic(self, args, kws):
-            return nb_signature(MaskedType(types.boolean), recvr=self.this)
+            return nb_signature(MaskedType(retty), recvr=self.this)
 
     def attr(self, mod):
         return types.BoundFunction(
@@ -195,7 +196,14 @@ for func in id_unary_funcs:
     setattr(
         MaskedStringViewAttrs,
         f"resolve_{func}",
-        create_masked_identifier_attr(f"MaskedType.{func}"),
+        create_masked_unary_attr(f"MaskedType.{func}", types.boolean),
+    )
+
+for func in string_unary_funcs:
+    setattr(
+        MaskedStringViewAttrs,
+        f"resolve_{func}",
+        create_masked_unary_attr(f"MaskedType.{func}", udf_string),
     )
 
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
