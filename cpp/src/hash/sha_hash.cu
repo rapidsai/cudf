@@ -85,15 +85,15 @@ const __constant__ uint64_t sha512_hash_constants[80] = {
  */
 template <typename T>
 struct crtp {
-  CUDA_DEVICE_CALLABLE T& underlying() { return static_cast<T&>(*this); }
-  CUDA_DEVICE_CALLABLE T const& underlying() const { return static_cast<T const&>(*this); }
+  __device__ inline T& underlying() { return static_cast<T&>(*this); }
+  __device__ inline T const& underlying() const { return static_cast<T const&>(*this); }
 };
 
 template <typename Hasher>
 struct HashBase : public crtp<Hasher> {
   char* result_location;
 
-  CUDA_DEVICE_CALLABLE HashBase(char* result_location) : result_location(result_location) {}
+  __device__ inline HashBase(char* result_location) : result_location(result_location) {}
 
   /**
    * @brief Execute SHA on input data chunks.
@@ -101,7 +101,7 @@ struct HashBase : public crtp<Hasher> {
    * This accepts arbitrary data, handles it as bytes, and calls the hash step
    * when the buffer is filled up to message_chunk_size bytes.
    */
-  void CUDA_DEVICE_CALLABLE process(uint8_t const* data, uint32_t len)
+  void __device__ inline process(uint8_t const* data, uint32_t len)
   {
     auto& state = this->underlying().state;
     state.message_length += len;
@@ -133,7 +133,7 @@ struct HashBase : public crtp<Hasher> {
   }
 
   template <typename T>
-  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key)
+  void __device__ inline process_fixed_width(T const& key)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(T);
@@ -147,7 +147,7 @@ struct HashBase : public crtp<Hasher> {
    * the message length (in another step of the hash, if needed), and performs
    * the final hash step.
    */
-  void CUDA_DEVICE_CALLABLE finalize()
+  void __device__ inline finalize()
   {
     auto& state = this->underlying().state;
     // Message length in bits.
@@ -225,13 +225,13 @@ struct HasherDispatcher {
   Hasher* hasher;
   column_device_view input_col;
 
-  CUDA_DEVICE_CALLABLE HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+  __device__ inline HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
     : hasher{hasher}, input_col{input_col}
   {
   }
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
+  void __device__ inline operator()(size_type row_index)
   {
     if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
       Element const& key = input_col.element<Element>(row_index);
@@ -315,7 +315,7 @@ struct sha512_hash_state {
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
+void __device__ inline sha1_hash_step(hash_state& state)
 {
   uint32_t words[80];
 
@@ -382,7 +382,7 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
+void __device__ inline sha256_hash_step(hash_state& state)
 {
   uint32_t words[64];
 
@@ -448,7 +448,7 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void CUDA_DEVICE_CALLABLE sha512_hash_step(hash_state& state)
+void __device__ inline sha512_hash_step(hash_state& state)
 {
   uint64_t words[80];
 
@@ -510,7 +510,7 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(hash_state& state)
 }
 
 struct SHA1Hash : HashBase<SHA1Hash> {
-  CUDA_DEVICE_CALLABLE SHA1Hash(char* result_location) : HashBase<SHA1Hash>(result_location) {}
+  __device__ inline SHA1Hash(char* result_location) : HashBase<SHA1Hash>(result_location) {}
 
   // Intermediate data type storing the hash state
   using hash_state = sha1_hash_state;
@@ -523,13 +523,13 @@ struct SHA1Hash : HashBase<SHA1Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha1_hash_step(state); }
+  void __device__ inline hash_step(hash_state& state) { sha1_hash_step(state); }
 
   hash_state state;
 };
 
 struct SHA224Hash : HashBase<SHA224Hash> {
-  CUDA_DEVICE_CALLABLE SHA224Hash(char* result_location) : HashBase<SHA224Hash>(result_location) {}
+  __device__ inline SHA224Hash(char* result_location) : HashBase<SHA224Hash>(result_location) {}
 
   // Intermediate data type storing the hash state
   using hash_state = sha224_hash_state;
@@ -542,13 +542,13 @@ struct SHA224Hash : HashBase<SHA224Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha256_hash_step(state); }
+  void __device__ inline hash_step(hash_state& state) { sha256_hash_step(state); }
 
   hash_state state;
 };
 
 struct SHA256Hash : HashBase<SHA256Hash> {
-  CUDA_DEVICE_CALLABLE SHA256Hash(char* result_location) : HashBase<SHA256Hash>(result_location) {}
+  __device__ inline SHA256Hash(char* result_location) : HashBase<SHA256Hash>(result_location) {}
 
   // Intermediate data type storing the hash state
   using hash_state = sha256_hash_state;
@@ -561,13 +561,13 @@ struct SHA256Hash : HashBase<SHA256Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha256_hash_step(state); }
+  void __device__ inline hash_step(hash_state& state) { sha256_hash_step(state); }
 
   hash_state state;
 };
 
 struct SHA384Hash : HashBase<SHA384Hash> {
-  CUDA_DEVICE_CALLABLE SHA384Hash(char* result_location) : HashBase<SHA384Hash>(result_location) {}
+  __device__ inline SHA384Hash(char* result_location) : HashBase<SHA384Hash>(result_location) {}
 
   // Intermediate data type storing the hash state
   using hash_state = sha384_hash_state;
@@ -580,13 +580,13 @@ struct SHA384Hash : HashBase<SHA384Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 16;
 
-  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha512_hash_step(state); }
+  void __device__ inline hash_step(hash_state& state) { sha512_hash_step(state); }
 
   hash_state state;
 };
 
 struct SHA512Hash : HashBase<SHA512Hash> {
-  CUDA_DEVICE_CALLABLE SHA512Hash(char* result_location) : HashBase<SHA512Hash>(result_location) {}
+  __device__ inline SHA512Hash(char* result_location) : HashBase<SHA512Hash>(result_location) {}
 
   // Intermediate data type storing the hash state
   using hash_state = sha512_hash_state;
@@ -599,7 +599,7 @@ struct SHA512Hash : HashBase<SHA512Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 16;
 
-  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha512_hash_step(state); }
+  void __device__ inline hash_step(hash_state& state) { sha512_hash_step(state); }
 
   hash_state state;
 };
