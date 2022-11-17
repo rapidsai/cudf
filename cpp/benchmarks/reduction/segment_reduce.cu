@@ -109,7 +109,7 @@ void BM_Simple_Segmented_Reduction(nvbench::state& state,
   auto const input_view  = input->view();
   auto const offset_span = cudf::device_span<cudf::size_type>{offsets};
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync, [input_view, output_type, offset_span, &agg](nvbench::launch& launch) {
       segmented_reduce(input_view, offset_span, *agg, output_type, cudf::null_policy::INCLUDE);

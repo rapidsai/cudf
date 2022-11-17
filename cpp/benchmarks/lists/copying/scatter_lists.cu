@@ -40,7 +40,7 @@ class ScatterLists : public cudf::benchmark {
 template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
-  auto stream = cudf::default_stream_value;
+  auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
 
   const size_type base_size{(size_type)state.range(0)};
@@ -108,7 +108,7 @@ void BM_lists_scatter(::benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    scatter(table_view{{*source}}, *scatter_map, table_view{{*target}}, false, mr);
+    scatter(table_view{{*source}}, *scatter_map, table_view{{*target}}, mr);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * 2 *

@@ -385,7 +385,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_string(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_string(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -393,7 +393,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_strings(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -403,7 +403,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::repeat_strings(
-    input, repeat_times, output_strings_sizes, cudf::default_stream_value, mr);
+    input, repeat_times, output_strings_sizes, cudf::get_default_stream(), mr);
 }
 
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
@@ -412,7 +412,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings_output_sizes(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_strings_output_sizes(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

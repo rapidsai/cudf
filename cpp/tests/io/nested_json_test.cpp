@@ -139,7 +139,7 @@ TEST_F(JsonTest, StackContext)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Test input
   std::string const input = R"(  [{)"
@@ -200,7 +200,7 @@ TEST_F(JsonTest, StackContextUtf8)
   using StackSymbolT = char;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Test input
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
@@ -251,7 +251,7 @@ TEST_F(JsonTest, TokenStream)
                             R"("price": 8.95)"
                             R"(}] )";
 
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -387,7 +387,7 @@ TEST_F(JsonTest, TokenStream2)
     R"([ {}, { "a": { "y" : 6, "z": [] }}, { "a" : { "x" : 8, "y": 9}, "b" : {"x": 10 , "z": 11)"
     "\n}}]";
 
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -462,7 +462,7 @@ TEST_P(JsonParserTest, ExtractColumn)
                                        : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
@@ -489,7 +489,7 @@ TEST_P(JsonParserTest, ExtractColumn)
 TEST_P(JsonParserTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  auto const stream      = cudf::default_stream_value;
+  auto const stream      = cudf::get_default_stream();
   auto mr                = rmm::mr::get_current_device_resource();
   bool const is_full_gpu = GetParam();
   auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
@@ -539,7 +539,7 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
                                        : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
@@ -572,7 +572,7 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
                                        : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
@@ -588,11 +588,11 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
     R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}] )",
     R"( [{"a":[123, "123"], "b":1.0}, {"b":1.1}, {"b":2.1}] )"};
 
+  // libcudf does not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
-    CUDF_EXPECT_THROW_MESSAGE(
-      auto const cudf_table = json_parser(
-        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr),
-      "A mix of lists and structs within the same column is not supported");
+    EXPECT_THROW(auto const cudf_table = json_parser(
+                   cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr),
+                 cudf::logic_error);
   }
 
   for (auto const& input : inputs_succeed) {
@@ -610,7 +610,7 @@ TEST_P(JsonParserTest, EmptyString)
                                        : cuio_json::detail::host_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::default_stream_value;
+  auto const stream = cudf::get_default_stream();
   auto mr           = rmm::mr::get_current_device_resource();
 
   // Default parsing options
@@ -624,3 +624,5 @@ TEST_P(JsonParserTest, EmptyString)
   auto const expected_col_count = 0;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

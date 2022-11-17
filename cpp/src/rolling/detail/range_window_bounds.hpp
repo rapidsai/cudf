@@ -149,7 +149,7 @@ template <typename OrderByType>
 range_rep_type<OrderByType> range_comparable_value(
   range_window_bounds const& range_bounds,
   data_type const& order_by_data_type = data_type{type_to_id<OrderByType>()},
-  rmm::cuda_stream_view stream        = cudf::default_stream_value)
+  rmm::cuda_stream_view stream        = cudf::get_default_stream())
 {
   auto const& range_scalar = range_bounds.range_scalar();
   using range_type         = cudf::detail::range_type<OrderByType>;

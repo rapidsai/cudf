@@ -78,7 +78,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  return detail::distinct(input, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf::lists

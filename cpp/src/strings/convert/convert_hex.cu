@@ -206,11 +206,10 @@ struct dispatch_integers_to_hex_fn {
 }  // namespace
 
 // This will convert a strings column into any integer column type.
-std::unique_ptr<column> hex_to_integers(
-  strings_column_view const& strings,
-  data_type output_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
+                                        data_type output_type,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(output_type);
@@ -284,21 +283,21 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, cudf::default_stream_value, mr);
+  return detail::hex_to_integers(strings, output_type, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, cudf::default_stream_value, mr);
+  return detail::is_hex(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_hex(input, cudf::default_stream_value, mr);
+  return detail::integers_to_hex(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

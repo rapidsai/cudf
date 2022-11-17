@@ -64,7 +64,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream        = cudf::default_stream_value,
+         rmm::cuda_stream_view stream        = cudf::get_default_stream(),
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -109,6 +109,8 @@ class column {
    * @note This constructor is primarily intended for use in column factory
    * functions.
    *
+   * @throws cudf::logic_error if `size < 0`
+   *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
    * @param[in] data The column's data
@@ -133,6 +135,7 @@ class column {
       _null_count{null_count},
       _children{std::move(children)}
   {
+    CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   }
 
   /**
@@ -146,7 +149,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+                  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -208,7 +211,7 @@ class column {
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count     = UNKNOWN_NULL_COUNT,
-                     rmm::cuda_stream_view stream = cudf::default_stream_value);
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Updates the count of null elements.

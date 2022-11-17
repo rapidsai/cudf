@@ -93,6 +93,6 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, cudf::default_stream_value, mr);
+  return detail::apply_boolean_mask(input, boolean_mask, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

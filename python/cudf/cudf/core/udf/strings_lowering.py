@@ -7,7 +7,7 @@ from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower
 
-from strings_udf._typing import size_type, string_view
+from strings_udf._typing import size_type, string_view, udf_string
 from strings_udf.lowering import (
     contains_impl,
     count_impl,
@@ -22,8 +22,11 @@ from strings_udf.lowering import (
     istitle_impl,
     isupper_impl,
     len_impl,
+    lstrip_impl,
     rfind_impl,
+    rstrip_impl,
     startswith_impl,
+    strip_impl,
 )
 
 from cudf.core.udf.masked_typing import MaskedType
@@ -77,6 +80,13 @@ def create_binary_string_func(op, cuda_func, retty):
     cuda_lower(op, MaskedType(string_view), MaskedType(string_view))(
         masked_binary_func_impl
     )
+
+
+create_binary_string_func("MaskedType.strip", strip_impl, udf_string)
+
+create_binary_string_func("MaskedType.lstrip", lstrip_impl, udf_string)
+
+create_binary_string_func("MaskedType.rstrip", rstrip_impl, udf_string)
 
 
 create_binary_string_func(

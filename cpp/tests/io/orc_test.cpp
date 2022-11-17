@@ -143,6 +143,10 @@ struct OrcReaderTest : public cudf::test::BaseFixture {
 struct OrcStatisticsTest : public cudf::test::BaseFixture {
 };
 
+// Test fixture for metadata tests
+struct OrcMetadataReaderTest : public cudf::test::BaseFixture {
+};
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -1588,6 +1592,107 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
 
   EXPECT_EQ(result.tbl->num_columns(), 0);
   EXPECT_EQ(result.tbl->num_rows(), 0);
+}
+
+TEST_F(OrcMetadataReaderTest, TestBasic)
+{
+  auto const num_rows = 1'200'000;
+
+  auto ints   = random_values<int>(num_rows);
+  auto floats = random_values<float>(num_rows);
+  int32_col int_col(ints.begin(), ints.end());
+  float32_col float_col(floats.begin(), floats.end());
+
+  table_view expected({int_col, float_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("int_col");
+  expected_metadata.column_metadata[1].set_name("float_col");
+
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf::io::write_orc(out_opts);
+
+  auto meta = read_orc_metadata(cudf::io::source_info{filepath});
+  EXPECT_EQ(meta.num_rows(), num_rows);
+
+  EXPECT_EQ(meta.schema().root().name(), "");
+  EXPECT_EQ(meta.schema().root().type_kind(), cudf::io::orc::STRUCT);
+  ASSERT_EQ(meta.schema().root().num_children(), 2);
+
+  EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
+  EXPECT_EQ(meta.schema().root().child(1).name(), "float_col");
+}
+
+TEST_F(OrcMetadataReaderTest, TestNested)
+{
+  auto const num_rows       = 1'200'000;
+  auto const lists_per_row  = 4;
+  auto const num_child_rows = num_rows * lists_per_row;
+
+  auto keys = random_values<int>(num_child_rows);
+  auto vals = random_values<float>(num_child_rows);
+  int32_col keys_col(keys.begin(), keys.end());
+  float32_col vals_col(vals.begin(), vals.end());
+  auto s_col = struct_col({keys_col, vals_col}).release();
+
+  std::vector<int> row_offsets(num_rows + 1);
+  for (int idx = 0; idx < num_rows + 1; ++idx) {
+    row_offsets[idx] = idx * lists_per_row;
+  }
+  int32_col offsets(row_offsets.begin(), row_offsets.end());
+
+  auto list_col =
+    cudf::make_lists_column(num_rows, offsets.release(), std::move(s_col), 0, rmm::device_buffer{});
+
+  table_view expected({*list_col, *list_col});
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("maps");
+  expected_metadata.column_metadata[0].set_list_column_as_map();
+  expected_metadata.column_metadata[1].set_name("lists");
+  expected_metadata.column_metadata[1].child(1).child(0).set_name("int_field");
+  expected_metadata.column_metadata[1].child(1).child(1).set_name("float_field");
+
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf::io::write_orc(out_opts);
+
+  auto meta = read_orc_metadata(cudf::io::source_info{filepath});
+  EXPECT_EQ(meta.num_rows(), num_rows);
+
+  EXPECT_EQ(meta.schema().root().name(), "");
+  EXPECT_EQ(meta.schema().root().type_kind(), cudf::io::orc::STRUCT);
+  ASSERT_EQ(meta.schema().root().num_children(), 2);
+
+  auto const& out_map_col = meta.schema().root().child(0);
+  EXPECT_EQ(out_map_col.name(), "maps");
+  EXPECT_EQ(out_map_col.type_kind(), cudf::io::orc::MAP);
+  ASSERT_EQ(out_map_col.num_children(), 2);
+  EXPECT_EQ(out_map_col.child(0).name(), "");  // keys (no name in ORC)
+  EXPECT_EQ(out_map_col.child(1).name(), "");  // values (no name in ORC)
+
+  auto const& out_list_col = meta.schema().root().child(1);
+  EXPECT_EQ(out_list_col.name(), "lists");
+  EXPECT_EQ(out_list_col.type_kind(), cudf::io::orc::LIST);
+  ASSERT_EQ(out_list_col.num_children(), 1);
+
+  auto const& out_list_struct_col = out_list_col.child(0);
+  EXPECT_EQ(out_list_struct_col.name(), "");  // elements (no name in ORC)
+  EXPECT_EQ(out_list_struct_col.type_kind(), cudf::io::orc::STRUCT);
+  ASSERT_EQ(out_list_struct_col.num_children(), 2);
+
+  auto const& out_int_col = out_list_struct_col.child(0);
+  EXPECT_EQ(out_int_col.name(), "int_field");
+  EXPECT_EQ(out_int_col.type_kind(), cudf::io::orc::INT);
+
+  auto const& out_float_col = out_list_struct_col.child(1);
+  EXPECT_EQ(out_float_col.name(), "float_field");
+  EXPECT_EQ(out_float_col.type_kind(), cudf::io::orc::FLOAT);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

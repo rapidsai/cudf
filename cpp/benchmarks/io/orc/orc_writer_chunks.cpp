@@ -29,8 +29,8 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
 
 void nvbench_orc_write(nvbench::state& state)
@@ -58,7 +58,7 @@ void nvbench_orc_write(nvbench::state& state)
 
   size_t encoded_file_size = 0;
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(io_type::VOID);
@@ -112,7 +112,7 @@ void nvbench_orc_chunked_write(nvbench::state& state)
 
   size_t encoded_file_size = 0;
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::timer | nvbench::exec_tag::sync, [&](nvbench::launch& launch, auto& timer) {
       cuio_source_sink_pair source_sink(io_type::VOID);

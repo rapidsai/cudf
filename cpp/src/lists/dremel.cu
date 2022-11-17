@@ -192,8 +192,7 @@ dremel_data get_dremel_data(column_view h_col,
     }
     if (curr_col.type().id() == type_id::LIST) {
       auto child = curr_col.child(lists_column_view::child_column_index);
-      if ((child.type().id() == type_id::INT8 || child.type().id() == type_id::UINT8) &&
-          output_as_byte_array) {
+      if (output_as_byte_array && child.type().id() == type_id::UINT8) {
         // consider this the bottom
         break;
       }

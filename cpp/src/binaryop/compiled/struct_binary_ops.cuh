@@ -71,7 +71,7 @@ void apply_struct_binary_op(mutable_column_view& out,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
                             PhysicalElementComparator comparator = {},
-                            rmm::cuda_stream_view stream         = cudf::default_stream_value)
+                            rmm::cuda_stream_view stream         = cudf::get_default_stream())
 {
   auto const compare_orders = std::vector<order>(
     lhs.size(),
@@ -115,7 +115,7 @@ void apply_struct_equality_op(mutable_column_view& out,
                               bool is_rhs_scalar,
                               binary_operator op,
                               PhysicalEqualityComparator comparator = {},
-                              rmm::cuda_stream_view stream          = cudf::default_stream_value)
+                              rmm::cuda_stream_view stream          = cudf::get_default_stream())
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
                  op == binary_operator::NULL_EQUALS,

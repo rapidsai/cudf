@@ -175,7 +175,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
    * available in device memory
    */
   static auto create(table_view source_view,
-                     rmm::cuda_stream_view stream = cudf::default_stream_value)
+                     rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     auto deleter = [](table_device_view* t) { t->destroy(); };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
@@ -212,7 +212,7 @@ class mutable_table_device_view
    * available in device memory
    */
   static auto create(mutable_table_view source_view,
-                     rmm::cuda_stream_view stream = cudf::default_stream_value)
+                     rmm::cuda_stream_view stream = cudf::get_default_stream())
   {
     auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{

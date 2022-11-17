@@ -146,7 +146,7 @@ ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(
-  QUANTILES_TEST quantiles/percentile_approx_test.cu quantiles/quantile_test.cpp
+  QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
 )
 
@@ -224,7 +224,7 @@ ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
-ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(JSON_TEST io/json_test.cpp io/json_chunked_reader.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)

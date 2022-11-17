@@ -53,7 +53,7 @@ template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
-  TypedColumnTest(rmm::cuda_stream_view stream = cudf::default_stream_value)
+  TypedColumnTest(rmm::cuda_stream_view stream = cudf::get_default_stream())
     : data{_num_elements * cudf::size_of(type()), stream},
       mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
@@ -356,7 +356,7 @@ TEST_F(OverflowTest, OverflowTest)
     table_view tbl_last({*many_chars_last});
     std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
     std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
-    EXPECT_NO_THROW(cudf::default_stream_value.synchronize());
+    EXPECT_NO_THROW(cudf::get_default_stream().synchronize());
     ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
   }
 
@@ -522,11 +522,11 @@ TEST_F(OverflowTest, Presliced)
 
     // try and concatenate 4 string columns of with ~1/2 billion chars in each
     auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  offsets->mutable_view().begin<offset_type>(),
                  offsets->mutable_view().end<offset_type>(),
                  string_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
+    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
@@ -596,11 +596,11 @@ TEST_F(OverflowTest, Presliced)
 
     // try and concatenate 4 struct columns of with ~1/2 billion elements in each
     auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  offsets->mutable_view().begin<offset_type>(),
                  offsets->mutable_view().end<offset_type>(),
                  list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
+    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
@@ -688,11 +688,11 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr size_type string_size = inner_size / num_rows;
 
     auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  offsets->mutable_view().begin<offset_type>(),
                  offsets->mutable_view().end<offset_type>(),
                  string_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
+    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
@@ -715,11 +715,11 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr size_type list_size = inner_size / num_rows;
 
     auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  offsets->mutable_view().begin<offset_type>(),
                  offsets->mutable_view().end<offset_type>(),
                  list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
+    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
@@ -742,11 +742,11 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr size_type list_size = inner_size / num_rows;
 
     auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
-    thrust::fill(rmm::exec_policy(cudf::default_stream_value),
+    thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
                  offsets->mutable_view().begin<offset_type>(),
                  offsets->mutable_view().end<offset_type>(),
                  list_size);
-    thrust::exclusive_scan(rmm::exec_policy(cudf::default_stream_value),
+    thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());

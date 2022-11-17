@@ -230,8 +230,8 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      result_pairs.push_back({result.first->element(i, cudf::default_stream_value),
-                              result.second->element(i, cudf::default_stream_value)});
+      result_pairs.push_back({result.first->element(i, cudf::get_default_stream()),
+                              result.second->element(i, cudf::get_default_stream())});
     }
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -276,11 +276,11 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(PairJoinReturn const& result, PairJoinReturn const& reference)
   {
     auto result_pairs =
-      rmm::device_uvector<index_pair>(result.first->size(), cudf::default_stream_value);
+      rmm::device_uvector<index_pair>(result.first->size(), cudf::get_default_stream());
     auto reference_pairs =
-      rmm::device_uvector<index_pair>(reference.first->size(), cudf::default_stream_value);
+      rmm::device_uvector<index_pair>(reference.first->size(), cudf::get_default_stream());
 
-    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                       result.first->begin(),
                       result.first->end(),
                       result.second->begin(),
@@ -288,7 +288,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                       [] __device__(cudf::size_type first, cudf::size_type second) {
                         return index_pair{first, second};
                       });
-    thrust::transform(rmm::exec_policy(cudf::default_stream_value),
+    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                       reference.first->begin(),
                       reference.first->end(),
                       reference.second->begin(),
@@ -298,11 +298,11 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
                       });
 
     thrust::sort(
-      rmm::exec_policy(cudf::default_stream_value), result_pairs.begin(), result_pairs.end());
+      rmm::exec_policy(cudf::get_default_stream()), result_pairs.begin(), result_pairs.end());
     thrust::sort(
-      rmm::exec_policy(cudf::default_stream_value), reference_pairs.begin(), reference_pairs.end());
+      rmm::exec_policy(cudf::get_default_stream()), reference_pairs.begin(), reference_pairs.end());
 
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
                               reference_pairs.begin(),
                               reference_pairs.end(),
                               result_pairs.begin()));
@@ -713,7 +713,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      resulting_indices.push_back(result->element(i, cudf::default_stream_value));
+      resulting_indices.push_back(result->element(i, cudf::get_default_stream()));
     }
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
@@ -724,10 +724,10 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
                              std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& reference)
   {
-    thrust::sort(rmm::exec_policy(cudf::default_stream_value), result->begin(), result->end());
+    thrust::sort(rmm::exec_policy(cudf::get_default_stream()), result->begin(), result->end());
     thrust::sort(
-      rmm::exec_policy(cudf::default_stream_value), reference->begin(), reference->end());
-    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::default_stream_value),
+      rmm::exec_policy(cudf::get_default_stream()), reference->begin(), reference->end());
+    EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::get_default_stream()),
                               result->begin(),
                               result->end(),
                               reference->begin()));

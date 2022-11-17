@@ -86,26 +86,26 @@ std::vector<cudf::column_view> split(cudf::column_view const& input,
                                      host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::default_stream_value);
+  return detail::split(input, splits, cudf::get_default_stream());
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::default_stream_value);
+  return detail::split(input, splits, cudf::get_default_stream());
 }
 
 std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::default_stream_value);
+  return detail::split(input, splits, cudf::get_default_stream());
 }
 
 std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::default_stream_value);
+  return detail::split(input, splits, cudf::get_default_stream());
 }
 
 }  // namespace cudf

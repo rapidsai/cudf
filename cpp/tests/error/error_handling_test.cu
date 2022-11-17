@@ -29,24 +29,9 @@ TEST(ExpectsTest, FalseCondition)
 
 TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
 
-TEST(ExpectsTest, TryCatch)
-{
-  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), "test reason");
-}
-
-TEST(CudaTryTest, Error)
-{
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorLaunchFailure),
-                            "cudaErrorLaunchFailure unspecified launch failure");
-}
+TEST(CudaTryTest, Error) { EXPECT_THROW(CUDF_CUDA_TRY(cudaErrorLaunchFailure), cudf::cuda_error); }
 
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
-
-TEST(CudaTryTest, TryCatch)
-{
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorMemoryAllocation),
-                            "cudaErrorMemoryAllocation out of memory");
-}
 
 TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
@@ -79,9 +64,7 @@ TEST(StreamCheck, CatchFailedKernel)
 #ifndef NDEBUG
   stream.synchronize();
 #endif
-  CUDA_EXPECT_THROW_MESSAGE(CUDF_CHECK_CUDA(stream.value()),
-                            "cudaErrorInvalidConfiguration "
-                            "invalid configuration argument");
+  EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 __global__ void kernel() { asm("trap;"); }
@@ -90,7 +73,7 @@ TEST(DeathTest, CudaFatalError)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
   auto call_kernel                      = []() {
-    kernel<<<1, 1, 0, cudf::default_stream_value.value()>>>();
+    kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>();
     try {
       CUDF_CUDA_TRY(cudaDeviceSynchronize());
     } catch (const cudf::fatal_cuda_error& fe) {
@@ -140,5 +123,12 @@ TEST(DebugAssert, cudf_assert_true)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
+  auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
+  auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
+  if (stream_mode == "custom") {
+    auto resource = rmm::mr::get_current_device_resource();
+    auto adapter  = make_stream_checking_resource_adaptor(resource);
+    rmm::mr::set_current_device_resource(&adapter);
+  }
   return RUN_ALL_TESTS();
 }

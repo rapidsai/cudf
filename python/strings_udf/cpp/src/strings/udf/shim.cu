@@ -17,6 +17,8 @@
 #include <cudf/strings/udf/char_types.cuh>
 #include <cudf/strings/udf/search.cuh>
 #include <cudf/strings/udf/starts_with.cuh>
+#include <cudf/strings/udf/strip.cuh>
+#include <cudf/strings/udf/udf_string.cuh>
 
 using namespace cudf::strings::udf;
 
@@ -213,5 +215,71 @@ extern "C" __device__ int pycount(int* nb_retval, void const* str, void const* s
   auto substr_view = reinterpret_cast<cudf::string_view const*>(substr);
 
   *nb_retval = count(*str_view, *substr_view);
+  return 0;
+}
+
+extern "C" __device__ int udf_string_from_string_view(int* nb_retbal,
+                                                      void const* str,
+                                                      void* udf_str)
+{
+  auto str_view_ptr = reinterpret_cast<cudf::string_view const*>(str);
+  auto udf_str_ptr  = new (udf_str) udf_string;
+  *udf_str_ptr      = udf_string(*str_view_ptr);
+
+  return 0;
+}
+
+extern "C" __device__ int strip(int* nb_retval,
+                                void* udf_str,
+                                void* const* to_strip,
+                                void* const* strip_str)
+{
+  auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
+  auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
+
+  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr);
+
+  return 0;
+}
+
+extern "C" __device__ int lstrip(int* nb_retval,
+                                 void* udf_str,
+                                 void* const* to_strip,
+                                 void* const* strip_str)
+{
+  auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
+  auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
+
+  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::LEFT);
+
+  return 0;
+}
+
+extern "C" __device__ int rstrip(int* nb_retval,
+                                 void* udf_str,
+                                 void* const* to_strip,
+                                 void* const* strip_str)
+{
+  auto to_strip_ptr  = reinterpret_cast<cudf::string_view const*>(to_strip);
+  auto strip_str_ptr = reinterpret_cast<cudf::string_view const*>(strip_str);
+  auto udf_str_ptr   = new (udf_str) udf_string;
+
+  *udf_str_ptr = strip(*to_strip_ptr, *strip_str_ptr, cudf::strings::side_type::RIGHT);
+
+  return 0;
+}
+
+extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs, void* const* rhs)
+{
+  auto lhs_ptr = reinterpret_cast<cudf::string_view const*>(lhs);
+  auto rhs_ptr = reinterpret_cast<cudf::string_view const*>(rhs);
+
+  auto udf_str_ptr = new (udf_str) udf_string;
+
+  udf_string result;
+  result.append(*lhs_ptr).append(*rhs_ptr);
+  *udf_str_ptr = result;
   return 0;
 }

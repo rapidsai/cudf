@@ -267,7 +267,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      StackSymbolT const empty_stack_symbol,
                                      StackSymbolT const read_symbol,
                                      std::size_t const num_symbols_out,
-                                     rmm::cuda_stream_view stream = cudf::default_stream_value)
+                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
 {
   rmm::device_buffer temp_storage{};
 
