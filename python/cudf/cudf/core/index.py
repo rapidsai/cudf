@@ -2072,7 +2072,10 @@ class DatetimeIndex(GenericIndex):
         """  # noqa: E501
         return as_index(
             (
-                self._values.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self._values.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self._values.get_dt_field("microsecond"),

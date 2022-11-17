@@ -1992,6 +1992,247 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     operands[k] = (left_default, v, reflect, None)
         return operands, index
 
+    @classmethod
+    @_cudf_nvtx_annotate
+    def from_dict(
+        cls,
+        data: dict,
+        orient: str = "columns",
+        dtype: Dtype = None,
+        columns: list = None,
+    ) -> DataFrame:
+        """
+        Construct DataFrame from dict of array-like or dicts.
+        Creates DataFrame object from dictionary by columns or by index
+        allowing dtype specification.
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        orient : {'columns', 'index', 'tight'}, default 'columns'
+            The "orientation" of the data. If the keys of the passed dict
+            should be the columns of the resulting DataFrame, pass 'columns'
+            (default). Otherwise if the keys should be rows, pass 'index'.
+            If 'tight', assume a dict with keys ['index', 'columns', 'data',
+            'index_names', 'column_names'].
+        dtype : dtype, default None
+            Data type to force, otherwise infer.
+        columns : list, default None
+            Column labels to use when ``orient='index'``. Raises a ``ValueError``
+            if used with ``orient='columns'`` or ``orient='tight'``.
+
+        Returns
+        -------
+        DataFrame
+
+        See Also
+        --------
+        DataFrame.from_records : DataFrame from structured ndarray, sequence
+            of tuples or dicts, or DataFrame.
+        DataFrame : DataFrame object creation using constructor.
+        DataFrame.to_dict : Convert the DataFrame to a dictionary.
+
+        Examples
+        --------
+        By default the keys of the dict become the DataFrame columns:
+
+        >>> import cudf
+        >>> data = {'col_1': [3, 2, 1, 0], 'col_2': ['a', 'b', 'c', 'd']}
+        >>> cudf.DataFrame.from_dict(data)
+           col_1 col_2
+        0      3     a
+        1      2     b
+        2      1     c
+        3      0     d
+
+        Specify ``orient='index'`` to create the DataFrame using dictionary
+        keys as rows:
+
+        >>> data = {'row_1': [3, 2, 1, 0], 'row_2': [10, 11, 12, 13]}
+        >>> cudf.DataFrame.from_dict(data, orient='index')
+                0   1   2   3
+        row_1   3   2   1   0
+        row_2  10  11  12  13
+
+        When using the 'index' orientation, the column names can be
+        specified manually:
+
+        >>> cudf.DataFrame.from_dict(data, orient='index',
+        ...                          columns=['A', 'B', 'C', 'D'])
+                A   B   C   D
+        row_1   3   2   1   0
+        row_2  10  11  12  13
+
+        Specify ``orient='tight'`` to create the DataFrame using a 'tight'
+        format:
+
+        >>> data = {'index': [('a', 'b'), ('a', 'c')],
+        ...         'columns': [('x', 1), ('y', 2)],
+        ...         'data': [[1, 3], [2, 4]],
+        ...         'index_names': ['n1', 'n2'],
+        ...         'column_names': ['z1', 'z2']}
+        >>> cudf.DataFrame.from_dict(data, orient='tight')
+        z1     x  y
+        z2     1  2
+        n1 n2
+        a  b   1  3
+           c   2  4
+        """  # noqa: E501
+
+        orient = orient.lower()
+        if orient == "index":
+            if len(data) > 0 and isinstance(
+                next(iter(data.values())), (cudf.Series, cupy.ndarray)
+            ):
+                result = cls(data).T
+                result.columns = columns
+                if dtype is not None:
+                    result = result.astype(dtype)
+                return result
+            else:
+                return cls.from_pandas(
+                    pd.DataFrame.from_dict(
+                        data=data,
+                        orient=orient,
+                        dtype=dtype,
+                        columns=columns,
+                    )
+                )
+        elif orient == "columns":
+            if columns is not None:
+                raise ValueError(
+                    "Cannot use columns parameter with orient='columns'"
+                )
+            return cls(data, columns=None, dtype=dtype)
+        elif orient == "tight":
+            if columns is not None:
+                raise ValueError(
+                    "Cannot use columns parameter with orient='right'"
+                )
+
+            index = _from_dict_create_index(
+                data["index"], data["index_names"], cudf
+            )
+            columns = _from_dict_create_index(
+                data["columns"], data["column_names"], pd
+            )
+            return cls(data["data"], index=index, columns=columns, dtype=dtype)
+        else:
+            raise ValueError(
+                "Expected 'index', 'columns' or 'tight' for orient "
+                f"parameter. Got '{orient}' instead"
+            )
+
+    @_cudf_nvtx_annotate
+    def to_dict(
+        self,
+        orient: str = "dict",
+        into: type[dict] = dict,
+    ) -> dict | list[dict]:
+        """
+        Convert the DataFrame to a dictionary.
+
+        The type of the key-value pairs can be customized with the parameters
+        (see below).
+
+        Parameters
+        ----------
+        orient : str {'dict', 'list', 'series', 'split', 'tight', 'records', 'index'}
+            Determines the type of the values of the dictionary.
+
+            - 'dict' (default) : dict like {column -> {index -> value}}
+            - 'list' : dict like {column -> [values]}
+            - 'series' : dict like {column -> Series(values)}
+            - 'split' : dict like
+              {'index' -> [index], 'columns' -> [columns], 'data' -> [values]}
+            - 'tight' : dict like
+              {'index' -> [index], 'columns' -> [columns], 'data' -> [values],
+              'index_names' -> [index.names], 'column_names' -> [column.names]}
+            - 'records' : list like
+              [{column -> value}, ... , {column -> value}]
+            - 'index' : dict like {index -> {column -> value}}
+            Abbreviations are allowed. `s` indicates `series` and `sp`
+            indicates `split`.
+
+        into : class, default dict
+            The collections.abc.Mapping subclass used for all Mappings
+            in the return value.  Can be the actual class or an empty
+            instance of the mapping type you want.  If you want a
+            collections.defaultdict, you must pass it initialized.
+
+        Returns
+        -------
+        dict, list or collections.abc.Mapping
+            Return a collections.abc.Mapping object representing the DataFrame.
+            The resulting transformation depends on the `orient` parameter.
+
+        See Also
+        --------
+        DataFrame.from_dict: Create a DataFrame from a dictionary.
+        DataFrame.to_json: Convert a DataFrame to JSON format.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'col1': [1, 2],
+        ...                      'col2': [0.5, 0.75]},
+        ...                     index=['row1', 'row2'])
+        >>> df
+              col1  col2
+        row1     1  0.50
+        row2     2  0.75
+        >>> df.to_dict()
+        {'col1': {'row1': 1, 'row2': 2}, 'col2': {'row1': 0.5, 'row2': 0.75}}
+
+        You can specify the return orientation.
+
+        >>> df.to_dict('series')
+        {'col1': row1    1
+                 row2    2
+        Name: col1, dtype: int64,
+        'col2': row1    0.50
+                row2    0.75
+        Name: col2, dtype: float64}
+
+        >>> df.to_dict('split')
+        {'index': ['row1', 'row2'], 'columns': ['col1', 'col2'],
+         'data': [[1, 0.5], [2, 0.75]]}
+
+        >>> df.to_dict('records')
+        [{'col1': 1, 'col2': 0.5}, {'col1': 2, 'col2': 0.75}]
+
+        >>> df.to_dict('index')
+        {'row1': {'col1': 1, 'col2': 0.5}, 'row2': {'col1': 2, 'col2': 0.75}}
+
+        >>> df.to_dict('tight')
+        {'index': ['row1', 'row2'], 'columns': ['col1', 'col2'],
+         'data': [[1, 0.5], [2, 0.75]], 'index_names': [None], 'column_names': [None]}
+
+        You can also specify the mapping type.
+
+        >>> from collections import OrderedDict, defaultdict
+        >>> df.to_dict(into=OrderedDict)
+        OrderedDict([('col1', OrderedDict([('row1', 1), ('row2', 2)])),
+                     ('col2', OrderedDict([('row1', 0.5), ('row2', 0.75)]))])
+
+        If you want a `defaultdict`, you need to initialize it:
+
+        >>> dd = defaultdict(list)
+        >>> df.to_dict('records', into=dd)
+        [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
+         defaultdict(<class 'list'>, {'col1': 2, 'col2': 0.75})]
+        """  # noqa: E501
+        orient = orient.lower()
+
+        if orient == "series":
+            # Special case needed to avoid converting
+            # cudf.Series objects into pd.Series
+            into_c = pd.core.common.standardize_mapping(into)
+            return into_c((k, v) for k, v in self.items())
+
+        return self.to_pandas().to_dict(orient=orient, into=into)
+
     @_cudf_nvtx_annotate
     def scatter_by_map(
         self, map_index, map_size=None, keep_index=True, **kwargs
@@ -7444,3 +7685,11 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
+
+
+def _from_dict_create_index(indexlist, namelist, library):
+    if len(namelist) > 1:
+        index = library.MultiIndex.from_tuples(indexlist, names=namelist)
+    else:
+        index = library.Index(indexlist, name=namelist[0])
+    return index

@@ -2205,3 +2205,41 @@ def test_default_float_bitwidth_partial(default_float_bitwidth):
     )
     assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
     assert read["float2"].dtype == np.dtype("f8")
+
+
+@pytest.mark.parametrize(
+    "usecols,names",
+    [
+        # selection using indices; only names of selected columns are specified
+        ([1, 2], ["b", "c"]),
+        # selection using indices; names of all columns are specified
+        ([1, 2], ["a", "b", "c"]),
+        # selection using indices; duplicates
+        ([2, 2], ["a", "b", "c"]),
+        # selection using indices; out of order
+        ([2, 1], ["a", "b", "c"]),
+        # selection using names
+        (["b"], ["a", "b", "c"]),
+        # selection using names; multiple columns
+        (["b", "c"], ["a", "b", "c"]),
+        # selection using names; duplicates
+        (["c", "c"], ["a", "b", "c"]),
+        # selection using names; out of order
+        (["c", "b"], ["a", "b", "c"]),
+    ],
+)
+def test_column_selection_plus_column_names(usecols, names):
+
+    lines = [
+        "num,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi",
+    ]
+
+    buffer = "\n".join(lines) + "\n"
+
+    assert_eq(
+        pd.read_csv(StringIO(buffer), usecols=usecols, names=names),
+        cudf.read_csv(StringIO(buffer), usecols=usecols, names=names),
+    )
