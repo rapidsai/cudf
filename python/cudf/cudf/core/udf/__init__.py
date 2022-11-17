@@ -25,11 +25,6 @@ _STRING_UDFS_ENABLED = False
 cudf_str_dtype = dtype(str)
 
 
-@lru_cache(maxsize=None)
-def set_initial_malloc_heap_size():
-    strings_udf.set_malloc_heap_size()
-
-
 try:
     import strings_udf
     from strings_udf import ptxpath
