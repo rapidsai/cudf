@@ -69,6 +69,11 @@ foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
 endforeach()
 
+set(targets_using_dlpack interop)
+foreach(target IN LISTS targets_using_dlpack)
+  target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
+endforeach()
+
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(strings)

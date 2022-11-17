@@ -51,6 +51,12 @@ if(FIND_CUDF_CPP)
   endif()
 
   find_package(cudf ${cudf_version} REQUIRED)
+
+  # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
+  # for the interop.pyx
+  include(rapids-cpm)
+  rapids_cpm_init()
+  include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
 else()
   set(cudf_FOUND OFF)
 endif()
