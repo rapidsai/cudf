@@ -16,6 +16,8 @@ from cudf.testing._utils import (
     assert_eq,
 )
 
+pytestmark = pytest.mark.spilling
+
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2])
 @pytest.mark.parametrize("num_value_vars", [0, 1, 2])
