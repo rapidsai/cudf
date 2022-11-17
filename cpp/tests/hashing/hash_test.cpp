@@ -1147,7 +1147,7 @@ TEST_F(SHA1HashTest, EmptyTable)
 
 TEST_F(SHA1HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "0",
      "A 56 character string to test message padding algorithm.",
@@ -1158,31 +1158,33 @@ TEST_F(SHA1HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
-  strings_column_wrapper const sha1_string_results1({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "b6589fc6ab0dc82cf12099d1c2d40ab994e8410c",
-                                                     "cb73203438ab46ea54491c53e288a2703c440c4a",
-                                                     "c595ebd13a785c1c2659e010a42e2ff9987ef51f",
-                                                     "4ffaf61804c55b8c2171be548bef2e1d0baca17a",
-                                                     "595965dd18f38087186162c788485fe249242131",
-                                                     "a62ca720fbab830c8890044eacbeac216f1ca2e4",
-                                                     "11e16c52273b5669a41d17ec7c187475193f88b3"});
+  cudf::test::strings_column_wrapper const sha1_string_results1(
+    {"da39a3ee5e6b4b0d3255bfef95601890afd80709",
+     "b6589fc6ab0dc82cf12099d1c2d40ab994e8410c",
+     "cb73203438ab46ea54491c53e288a2703c440c4a",
+     "c595ebd13a785c1c2659e010a42e2ff9987ef51f",
+     "4ffaf61804c55b8c2171be548bef2e1d0baca17a",
+     "595965dd18f38087186162c788485fe249242131",
+     "a62ca720fbab830c8890044eacbeac216f1ca2e4",
+     "11e16c52273b5669a41d17ec7c187475193f88b3"});
 
-  strings_column_wrapper const sha1_string_results2({"da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                                     "fb96549631c835eb239cd614cc6b5cb7d295121a",
-                                                     "e3977ee0ea7f238134ec93c79988fa84b7c5d79e",
-                                                     "f6f75b6fa3c3d8d86b44fcb2c98c9ad4b37dcdd0",
-                                                     "c7abd431a775c604edf41a62f7f215e7258dc16a",
-                                                     "153fdf20d2bd8ae76241197314d6e0be7fe10f50",
-                                                     "8c3656f7cb37898f9296c1965000d6da13fed64e",
-                                                     "b4a848399375ec842c2cb445d98b5f80a4dce94f"});
+  cudf::test::strings_column_wrapper const sha1_string_results2(
+    {"da39a3ee5e6b4b0d3255bfef95601890afd80709",
+     "fb96549631c835eb239cd614cc6b5cb7d295121a",
+     "e3977ee0ea7f238134ec93c79988fa84b7c5d79e",
+     "f6f75b6fa3c3d8d86b44fcb2c98c9ad4b37dcdd0",
+     "c7abd431a775c604edf41a62f7f215e7258dc16a",
+     "153fdf20d2bd8ae76241197314d6e0be7fe10f50",
+     "8c3656f7cb37898f9296c1965000d6da13fed64e",
+     "b4a848399375ec842c2cb445d98b5f80a4dce94f"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1       = cudf::table_view({strings_col});
   auto const string_input2       = cudf::table_view({strings_col, strings_col});
@@ -1204,7 +1206,7 @@ TEST_F(SHA1HashTest, MultiValue)
 TEST_F(SHA1HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
@@ -1212,24 +1214,25 @@ TEST_F(SHA1HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                             "Another string that is null.",
-                                             "Very different... but null",
-                                             "All work and no play makes Jack a dull boy",
-                                             ""},
-                                            {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 0});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1249,7 +1252,7 @@ TYPED_TEST_CASE(SHA1HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(SHA1HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -1265,8 +1268,8 @@ TYPED_TEST(SHA1HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -1292,8 +1295,9 @@ TYPED_TEST(SHA1HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
@@ -1324,7 +1328,7 @@ TEST_F(SHA224HashTest, EmptyTable)
 
 TEST_F(SHA224HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "0",
      "A 56 character string to test message padding algorithm.",
@@ -1335,7 +1339,7 @@ TEST_F(SHA224HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
-  strings_column_wrapper const sha224_string_results1(
+  cudf::test::strings_column_wrapper const sha224_string_results1(
     {"d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f",
      "dfd5f9139a820075df69d7895015360b76d0360f3d4b77a845689614",
      "5d1ed8373987e403482cefe1662a63fa3076c0a5331d141f41654bbe",
@@ -1345,7 +1349,7 @@ TEST_F(SHA224HashTest, MultiValue)
      "e7d0adb165079efc6c6343112f8b154aa3644ca6326f658aaa0f8e4a",
      "309cc09eaa051beea7d0b0159daca9b4e8a533cb554e8f382c82709e"});
 
-  strings_column_wrapper const sha224_string_results2(
+  cudf::test::strings_column_wrapper const sha224_string_results2(
     {"d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f",
      "5538ae2b02d4ae0b7090dc908ca69cd11a2ffad43c7435f1dbad5e6a",
      "8e1955a473a149368dc0a931f99379b44b0bb752f206dbdf68629232",
@@ -1356,12 +1360,12 @@ TEST_F(SHA224HashTest, MultiValue)
      "d219eefea538491efcb69bc5bbef4177ad991d1b6e1367b5981b8c31"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
@@ -1383,7 +1387,7 @@ TEST_F(SHA224HashTest, MultiValue)
 TEST_F(SHA224HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
@@ -1391,24 +1395,25 @@ TEST_F(SHA224HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                             "Another string that is null.",
-                                             "Very different... but null",
-                                             "All work and no play makes Jack a dull boy",
-                                             ""},
-                                            {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 0});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1428,7 +1433,7 @@ TYPED_TEST_CASE(SHA224HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(SHA224HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -1444,8 +1449,8 @@ TYPED_TEST(SHA224HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -1471,8 +1476,9 @@ TYPED_TEST(SHA224HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
@@ -1503,7 +1509,7 @@ TEST_F(SHA256HashTest, EmptyTable)
 
 TEST_F(SHA256HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "0",
      "A 56 character string to test message padding algorithm.",
@@ -1514,7 +1520,7 @@ TEST_F(SHA256HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
-  strings_column_wrapper const sha256_string_results1(
+  cudf::test::strings_column_wrapper const sha256_string_results1(
     {"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
      "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
      "d16883c666112142c1d72c9080b41161be7563250539e3f6ab6e2fdf2210074b",
@@ -1524,7 +1530,7 @@ TEST_F(SHA256HashTest, MultiValue)
      "2ce9936a4a2234bf8a76c37d92e01d549d03949792242e7f8a1ad68575e4e4a8",
      "255fdd4d80a72f67921eb36f3e1157ea3e995068cee80e430c034e0d3692f614"});
 
-  strings_column_wrapper const sha256_string_results2(
+  cudf::test::strings_column_wrapper const sha256_string_results2(
     {"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
      "f1534392279bddbf9d43dde8701cb5be14b82f76ec6607bf8d6ad557f60f304e",
      "96c204fa5d44b2487abfec105a05f8ae634551604f6596202ca99e3724e3953a",
@@ -1535,12 +1541,12 @@ TEST_F(SHA256HashTest, MultiValue)
      "4ddc45855d7ce3ab09efacff1fbafb33502f7dd468dc5a62826689c1c658dbce"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
@@ -1562,7 +1568,7 @@ TEST_F(SHA256HashTest, MultiValue)
 TEST_F(SHA256HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
@@ -1570,24 +1576,25 @@ TEST_F(SHA256HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                             "Another string that is null.",
-                                             "Very different... but null",
-                                             "All work and no play makes Jack a dull boy",
-                                             ""},
-                                            {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 0});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1607,7 +1614,7 @@ TYPED_TEST_CASE(SHA256HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(SHA256HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -1623,8 +1630,8 @@ TYPED_TEST(SHA256HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -1650,8 +1657,9 @@ TYPED_TEST(SHA256HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
@@ -1682,7 +1690,7 @@ TEST_F(SHA384HashTest, EmptyTable)
 
 TEST_F(SHA384HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "0",
      "A 56 character string to test message padding algorithm.",
@@ -1693,7 +1701,7 @@ TEST_F(SHA384HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
-  strings_column_wrapper const sha384_string_results1(
+  cudf::test::strings_column_wrapper const sha384_string_results1(
     {"38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b"
      "95b",
      "5f91550edb03f0bb8917da57f0f8818976f5da971307b7ee4886bb951c4891a1f16f840dae8f655aa5df718884ebc"
@@ -1711,7 +1719,7 @@ TEST_F(SHA384HashTest, MultiValue)
      "3a9d1a870a5f6a4c04df1daf1808163d33852897ebc757a5b028a1214fbc758485a392159b11bc360cfadc79f9512"
      "822"});
 
-  strings_column_wrapper const sha384_string_results2(
+  cudf::test::strings_column_wrapper const sha384_string_results2(
     {"38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b"
      "95b",
      "34ae2cd40efabf896d8d4173e500278d10671b2d914efb5480e8349190bc7e8e1d532ad568d00a8295ea536a9b42b"
@@ -1730,12 +1738,12 @@ TEST_F(SHA384HashTest, MultiValue)
      "edf"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
@@ -1757,7 +1765,7 @@ TEST_F(SHA384HashTest, MultiValue)
 TEST_F(SHA384HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
@@ -1765,24 +1773,25 @@ TEST_F(SHA384HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                             "Another string that is null.",
-                                             "Very different... but null",
-                                             "All work and no play makes Jack a dull boy",
-                                             ""},
-                                            {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 0});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1802,7 +1811,7 @@ TYPED_TEST_CASE(SHA384HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(SHA384HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -1818,8 +1827,8 @@ TYPED_TEST(SHA384HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -1845,8 +1854,9 @@ TYPED_TEST(SHA384HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
@@ -1877,7 +1887,7 @@ TEST_F(SHA512HashTest, EmptyTable)
 
 TEST_F(SHA512HashTest, MultiValue)
 {
-  strings_column_wrapper const strings_col(
+  cudf::test::strings_column_wrapper const strings_col(
     {"",
      "0",
      "A 56 character string to test message padding algorithm.",
@@ -1888,7 +1898,7 @@ TEST_F(SHA512HashTest, MultiValue)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
-  strings_column_wrapper const sha512_string_results1(
+  cudf::test::strings_column_wrapper const sha512_string_results1(
     {"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877ee"
      "c2f63b931bd47417a81a538327af927da3e",
      "31bca02094eb78126a517b206a88c73cfa9ec6f704c7030d18212cace820f025f00bf0ea68dbf3f3a5436ca63b53b"
@@ -1906,7 +1916,7 @@ TEST_F(SHA512HashTest, MultiValue)
      "05a4ca1c523dcab32edb7d8793934a4cdf41a9062b229d711f5326e297bda83fa965118b9d7636172b43688e8e149"
      "008b3f967f1a969962b7e959af894a8a315"});
 
-  strings_column_wrapper const sha512_string_results2(
+  cudf::test::strings_column_wrapper const sha512_string_results2(
     {"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877ee"
      "c2f63b931bd47417a81a538327af927da3e",
      "8ab3361c051a97ddc3c665d29f2762f8ac4240d08995f8724b6d07d8cbedd32c28f589ccdae514f20a6c8eea6f755"
@@ -1925,12 +1935,12 @@ TEST_F(SHA512HashTest, MultiValue)
      "d1eebe0661386909684927d67819a2cf736"});
 
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col(
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
   // Different truth values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
 
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
@@ -1952,7 +1962,7 @@ TEST_F(SHA512HashTest, MultiValue)
 TEST_F(SHA512HashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
-  strings_column_wrapper const strings_col1(
+  cudf::test::strings_column_wrapper const strings_col1(
     {"",
      "Different but null!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
@@ -1960,24 +1970,25 @@ TEST_F(SHA512HashTest, MultiValueNulls)
      "All work and no play makes Jack a dull boy",
      "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
-  strings_column_wrapper const strings_col2({"",
-                                             "Another string that is null.",
-                                             "Very different... but null",
-                                             "All work and no play makes Jack a dull boy",
-                                             ""},
-                                            {1, 0, 0, 1, 0});
+  cudf::test::strings_column_wrapper const strings_col2(
+    {"",
+     "Another string that is null.",
+     "Very different... but null",
+     "All work and no play makes Jack a dull boy",
+     ""},
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
-  fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 0});
-  fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
+    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
+    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1997,7 +2008,7 @@ TYPED_TEST_CASE(SHA512HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(SHA512HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -2013,8 +2024,8 @@ TYPED_TEST(SHA512HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -2040,8 +2051,9 @@ TYPED_TEST(SHA512HashTestFloatTyped, TestExtremes)
   T nan   = std::numeric_limits<T>::quiet_NaN();
   T inf   = std::numeric_limits<T>::infinity();
 
-  fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
-  fixed_width_column_wrapper<T> const col2(
+  cudf::test::fixed_width_column_wrapper<T> const col1(
+    {T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
+  cudf::test::fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
 
   auto const input1 = cudf::table_view({col1});
