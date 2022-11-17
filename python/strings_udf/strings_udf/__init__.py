@@ -88,7 +88,7 @@ def _get_ptx_file():
         return regular_result[1]
 
 
-# Maximum size of a string column is 2gb
+# Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
     "STRINGS_UDF_HEAP_SIZE", 2**31
 )
