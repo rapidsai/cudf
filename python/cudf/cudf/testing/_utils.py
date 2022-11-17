@@ -352,8 +352,12 @@ def assert_column_memory_eq(
     children to the same constraints. Also fails check if the number of
     children mismatches at any level.
     """
-    assert lhs.base_data_ptr == rhs.base_data_ptr
-    assert lhs.base_mask_ptr == rhs.base_mask_ptr
+
+    def get_ptr(x) -> int:
+        return x.ptr if x else 0
+
+    assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
+    assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
     assert lhs.base_size == rhs.base_size
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
