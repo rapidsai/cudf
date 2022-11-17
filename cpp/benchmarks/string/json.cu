@@ -30,7 +30,8 @@
 
 #include <thrust/random.h>
 
-class JsonPath : public cudf::benchmark {};
+class JsonPath : public cudf::benchmark {
+};
 
 const std::vector<std::string> Books{
   R"json({
