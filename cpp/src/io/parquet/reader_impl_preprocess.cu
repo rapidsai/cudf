@@ -1000,9 +1000,9 @@ struct row_total_size {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, [&] __device__(size_type i) { return c_info[start + i].row_count; });
+        0, [&] __device__(size_type i) { return c_info[i].row_count; });
       auto const page_index =
-        (thrust::lower_bound(thrust::seq, iter, iter + (end - start), i.row_count) - iter) + start;
+        thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_count) - iter;
       sum += c_info[page_index].size_bytes;
     }
     return {i.row_count, sum, i.key};
