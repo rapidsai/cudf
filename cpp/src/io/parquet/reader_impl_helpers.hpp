@@ -19,12 +19,9 @@
 #include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
-#include <io/comp/gpuinflate.hpp>
-
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <tuple>
 #include <vector>
@@ -36,14 +33,14 @@ using namespace cudf::io::parquet;
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
-type_id to_type_id(SchemaElement const& schema,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id);
+[[nodiscard]] type_id to_type_id(SchemaElement const& schema,
+                                 bool strings_to_categorical,
+                                 type_id timestamp_type_id);
 
 /**
  * @brief Converts cuDF type enum to column logical type
  */
-inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
+[[nodiscard]] inline data_type to_data_type(type_id t_id, SchemaElement const& schema)
 {
   return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
            ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
@@ -79,13 +76,14 @@ class aggregate_reader_metadata {
   /**
    * @brief Create a metadata object from each element in the source vector
    */
-  std::vector<metadata> metadatas_from_sources(
+  static std::vector<metadata> metadatas_from_sources(
     std::vector<std::unique_ptr<datasource>> const& sources);
 
   /**
    * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
    */
-  [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata();
+  [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata()
+    const;
 
   /**
    * @brief Sums up the number of rows of each source
@@ -172,7 +170,7 @@ class aggregate_reader_metadata {
    *         starting row
    */
   [[nodiscard]] std::tuple<size_type, size_type, std::vector<row_group_info>> select_row_groups(
-    std::vector<std::vector<size_type>> const& row_group_indices,
+    host_span<std::vector<size_type> const> row_group_indices,
     size_type row_start,
     size_type row_count) const;
 

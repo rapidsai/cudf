@@ -15,6 +15,7 @@
  */
 
 #include <strings/regex/regex.cuh>
+#include <strings/regex/regex_program_impl.h>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -125,13 +126,12 @@ struct replace_multi_regex_fn {
 
 }  // namespace
 
-std::unique_ptr<column> replace_re(
-  strings_column_view const& input,
-  std::vector<std::string> const& patterns,
-  strings_column_view const& replacements,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_re(strings_column_view const& input,
+                                   std::vector<std::string> const& patterns,
+                                   strings_column_view const& replacements,
+                                   regex_flags const flags,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
@@ -145,7 +145,8 @@ std::unique_ptr<column> replace_re(
     patterns.size());
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
-      return reprog_device::create(ptn, flags, capture_groups::NON_CAPTURE, stream);
+      auto h_prog = regex_program::create(ptn, flags, capture_groups::NON_CAPTURE);
+      return regex_device_builder::create_prog_device(*h_prog, stream);
     });
 
   // get the longest regex for the dispatcher

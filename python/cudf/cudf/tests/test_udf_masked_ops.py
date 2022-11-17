@@ -868,6 +868,66 @@ def test_string_udf_count(str_udf_data, substr):
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
 
+@string_udf_test
+def test_string_udf_return_string(str_udf_data):
+    def func(row):
+        return row["str_col"]
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_strip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].strip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_lstrip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].lstrip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_rstrip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].rstrip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_upper(str_udf_data):
+    def func(row):
+        return row["str_col"].upper()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_lower(str_udf_data):
+    def func(row):
+        return row["str_col"].lower()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_concat(str_udf_data, concat_char):
+    def func(row):
+        return row["str_col"] + concat_char
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
 )

@@ -18,219 +18,23 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
+#include <numeric>
 
 namespace cudf::io::detail::parquet {
 
-namespace {
-
-struct get_page_nesting_size {
-  size_type const src_col_schema;
-  size_type const depth;
-  gpu::PageInfo const* const pages;
-
-  __device__ size_type operator()(int index) const
-  {
-    auto const& page = pages[index];
-    if (page.src_col_schema != src_col_schema || page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
-      return 0;
-    }
-    return page.nesting[depth].size;
-  }
-};
-
-struct start_offset_output_iterator {
-  gpu::PageInfo* pages;
-  int const* page_indices;
-  int cur_index;
-  int src_col_schema;
-  int nesting_depth;
-  int empty               = 0;
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
-  using iterator_category = thrust::output_device_iterator_tag;
-
-  __host__ __device__ void operator=(start_offset_output_iterator const& other)
-  {
-    pages          = other.pages;
-    page_indices   = other.page_indices;
-    cur_index      = other.cur_index;
-    src_col_schema = other.src_col_schema;
-    nesting_depth  = other.nesting_depth;
-  }
-
-  __host__ __device__ start_offset_output_iterator operator+(int i)
-  {
-    return start_offset_output_iterator{
-      pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
-  }
-
-  __host__ __device__ void operator++() { cur_index++; }
-
-  __device__ reference operator[](int i) { return dereference(cur_index + i); }
-  __device__ reference operator*() { return dereference(cur_index); }
-
- private:
-  __device__ reference dereference(int index)
-  {
-    gpu::PageInfo const& p = pages[page_indices[index]];
-    if (p.src_col_schema != src_col_schema || p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
-      return empty;
-    }
-    return p.nesting[nesting_depth].page_start_value;
-  }
-};
-
-/**
- * @brief Recursively copy the output buffer from one to another.
- *
- * This only copies `name` and `user_data` fields, which are generated during reader construction.
- *
- * @param buff The old output buffer
- * @param new_buff The new output buffer
- */
-void copy_output_buffer(column_buffer const& buff, column_buffer& new_buff)
+void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  new_buff.name      = buff.name;
-  new_buff.user_data = buff.user_data;
-  for (auto const& child : buff.children) {
-    auto& new_child = new_buff.children.emplace_back(column_buffer(child.type, child.is_nullable));
-    copy_output_buffer(child, new_child);
-  }
-}
+  auto& chunks       = _file_itm_data.chunks;
+  auto& pages        = _file_itm_data.pages_info;
+  auto& page_nesting = _file_itm_data.page_nesting_info;
 
-}  // namespace
+  // Should not reach here if there is no page data.
+  CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
-void reader::impl::allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    gpu::chunk_intermediate_data const& id,
-                                    size_t skip_rows,
-                                    size_t num_rows,
-                                    bool uses_custom_row_bounds)
-{
-  // computes:
-  // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
-  // PageInfo::skipped_values, which tells us where to start decoding in the input to respect the
-  // user bounds.
-  // It is only necessary to do this second pass if uses_custom_row_bounds is set (if the user has
-  // specified artifical bounds).
-  if (uses_custom_row_bounds) {
-    gpu::ComputePageSizes(pages,
-                          chunks,
-                          skip_rows,
-                          num_rows,
-                          false,  // num_rows is already computed
-                          false,  // no need to compute string sizes
-                          _stream);
-    // print_pages(pages, _stream);
-  }
-
-  // iterate over all input columns and allocate any associated output
-  // buffers if they are not part of a list hierarchy. mark down
-  // if we have any list columns that need further processing.
-  bool has_lists = false;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
-    size_t const max_depth = input_col.nesting_depth();
-
-    auto* cols = &_output_buffers;
-    for (size_t l_idx = 0; l_idx < max_depth; l_idx++) {
-      auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-      cols          = &out_buf.children;
-
-      // if this has a list parent, we will have to do further work in gpu::PreprocessColumnData
-      // to know how big this buffer actually is.
-      if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
-        has_lists = true;
-      }
-      // if we haven't already processed this column because it is part of a struct hierarchy
-      else if (out_buf.size == 0) {
-        // add 1 for the offset if this is a list column
-        out_buf.create(
-          out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
-          _stream,
-          _mr);
-      }
-    }
-  }
-
-  // compute output column sizes by examining the pages of the -input- columns
-  if (has_lists) {
-    auto& page_keys  = _chunk_itm_data.page_keys;
-    auto& page_index = _chunk_itm_data.page_index;
-    for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-      auto const& input_col = _input_columns[idx];
-      auto src_col_schema   = input_col.schema_idx;
-      size_t max_depth      = input_col.nesting_depth();
-
-      auto* cols = &_output_buffers;
-      for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
-        auto& out_buf = (*cols)[input_col.nesting[l_idx]];
-        cols          = &out_buf.children;
-
-        // size iterator. indexes pages by sorted order
-        auto size_input = thrust::make_transform_iterator(
-          page_index.begin(),
-          get_page_nesting_size{src_col_schema, static_cast<size_type>(l_idx), pages.device_ptr()});
-
-        // if this buffer is part of a list hierarchy, we need to determine it's
-        // final size and allocate it here.
-        //
-        // for struct columns, higher levels of the output columns are shared between input
-        // columns. so don't compute any given level more than once.
-        if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) && out_buf.size == 0) {
-          int size =
-            thrust::reduce(rmm::exec_policy(_stream), size_input, size_input + pages.size());
-
-          // if this is a list column add 1 for non-leaf levels for the terminating offset
-          if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
-
-          // allocate
-          out_buf.create(size, _stream, _mr);
-        }
-
-        // for nested hierarchies, compute per-page start offset
-        if (input_col.has_repetition) {
-          thrust::exclusive_scan_by_key(
-            rmm::exec_policy(_stream),
-            page_keys.begin(),
-            page_keys.end(),
-            size_input,
-            start_offset_output_iterator{pages.device_ptr(),
-                                         page_index.begin(),
-                                         0,
-                                         static_cast<int>(src_col_schema),
-                                         static_cast<int>(l_idx)});
-        }
-      }
-    }
-  }
-}
-
-void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                                    hostdevice_vector<gpu::PageInfo>& pages,
-                                    hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                                    size_t skip_rows,
-                                    size_t num_rows)
-{
-  // TODO (dm): hd_vec should have begin and end iterator members
-  size_t sum_max_depths =
-    std::accumulate(chunks.host_ptr(),
-                    chunks.host_ptr(chunks.size()),
-                    0,
-                    [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
-                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
-                    });
+  size_t const sum_max_depths = std::accumulate(
+    chunks.begin(), chunks.end(), 0, [&](size_t cursum, gpu::ColumnChunkDesc const& chunk) {
+      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+    });
 
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
@@ -318,15 +122,13 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
 
   gpu::DecodePageData(pages, chunks, num_rows, skip_rows, _stream);
 
-  _stream.synchronize();
-
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
   _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
-  // on each buffer.  Or potentially do it in PreprocessColumnData
+  // on each buffer.
   // Note : the reason we are doing this here instead of in the decode kernel is
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
@@ -387,7 +189,20 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream), _mr(mr), _sources(std::move(sources))
+  : impl(0 /*chunk_read_limit*/,
+         std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+         options,
+         stream,
+         mr)
+{
+}
+
+reader::impl::impl(std::size_t chunk_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   parquet_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _stream{stream}, _mr{mr}, _sources{std::move(sources)}, _chunk_read_limit{chunk_read_limit}
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
@@ -409,32 +224,20 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               _timestamp_type.id());
-}
-
-reader::impl::impl(std::size_t chunk_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   parquet_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : impl(std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
-         options,
-         stream,
-         mr)
-{
-  _chunk_read_limit = chunk_read_limit;
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    auto& new_buff =
-      _output_buffers_template.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
+  // Don't need to do it if we read the file all at once.
+  if (_chunk_read_limit > 0) {
+    for (auto const& buff : _output_buffers) {
+      _output_buffers_template.emplace_back(column_buffer::empty_like(buff));
+    }
   }
 }
 
 void reader::impl::prepare_data(size_type skip_rows,
                                 size_type num_rows,
                                 bool uses_custom_row_bounds,
-                                std::vector<std::vector<size_type>> const& row_group_indices)
+                                host_span<std::vector<size_type> const> row_group_indices)
 {
   if (_file_preprocessed) { return; }
 
@@ -443,13 +246,8 @@ void reader::impl::prepare_data(size_type skip_rows,
 
   if (num_rows_corrected > 0 && row_groups_info.size() != 0 && _input_columns.size() != 0) {
     load_and_decompress_data(row_groups_info, num_rows_corrected);
-
-    compute_chunk_read_info(_file_itm_data.chunks,
-                            _file_itm_data.pages_info,
-                            skip_rows_corrected,
-                            num_rows_corrected,
-                            uses_custom_row_bounds,
-                            _chunk_read_limit);
+    preprocess_pages(
+      skip_rows_corrected, num_rows_corrected, uses_custom_row_bounds, _chunk_read_limit);
 
     if (_chunk_read_limit == 0) {  // read the whole file at once
       CUDF_EXPECTS(_chunk_read_info.size() == 1,
@@ -475,25 +273,13 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
 
   auto const& read_info = _chunk_read_info[_current_read_chunk++];
 
-  // allocate outgoing columns
-  allocate_columns(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _chunk_itm_data,
-                   read_info.skip_rows,
-                   read_info.num_rows,
-                   uses_custom_row_bounds);
+  // Allocate memory buffers for the output columns.
+  allocate_columns(read_info.skip_rows, read_info.num_rows, uses_custom_row_bounds);
 
-  //  printf("read skip_rows = %d, num_rows = %d\n", (int)read_info.skip_rows,
-  //  (int)read_info.num_rows);
+  // Parse data into the output buffers.
+  decode_page_data(read_info.skip_rows, read_info.num_rows);
 
-  // decoding column data
-  decode_page_data(_file_itm_data.chunks,
-                   _file_itm_data.pages_info,
-                   _file_itm_data.page_nesting_info,
-                   read_info.skip_rows,
-                   read_info.num_rows);
-
-  // create the final output cudf columns
+  // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
     auto const metadata = _reader_column_schema.has_value()
                             ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
@@ -507,6 +293,7 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     }
   }
 
+  // Add empty columns if needed.
   return finalize_output(out_metadata, out_columns);
 }
 
@@ -543,39 +330,40 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-// #define ALLOW_PLAIN_READ_CHUNK_LIMIT
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
                                        bool uses_custom_row_bounds,
-                                       std::vector<std::vector<size_type>> const& row_group_indices)
+                                       host_span<std::vector<size_type> const> row_group_indices)
 {
-#if defined(ALLOW_PLAIN_READ_CHUNK_LIMIT)
-  prepare_data(
-    skip_rows, num_rows, uses_custom_row_bounds || _chunk_read_limit > 0, row_group_list);
-  return read_chunk_internal(uses_custom_row_bounds || _chunk_read_limit > 0);
-#else
   CUDF_EXPECTS(_chunk_read_limit == 0, "Reading the whole file must not have non-zero byte_limit.");
   prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices);
   return read_chunk_internal(uses_custom_row_bounds);
-#endif
 }
 
 table_with_metadata reader::impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
-  _output_buffers.resize(0);
-  for (auto const& buff : _output_buffers_template) {
-    auto& new_buff = _output_buffers.emplace_back(column_buffer(buff.type, buff.is_nullable));
-    copy_output_buffer(buff, new_buff);
+  // Don't need to do it if we read the file all at once.
+  if (_chunk_read_limit > 0) {
+    _output_buffers.resize(0);
+    for (auto const& buff : _output_buffers_template) {
+      _output_buffers.emplace_back(column_buffer::empty_like(buff));
+    }
   }
 
-  prepare_data(0, -1, true, {});
+  prepare_data(0 /*skip_rows*/,
+               -1 /*num_rows, `-1` means unlimited*/,
+               true /*uses_custom_row_bounds*/,
+               {} /*row_group_indices, empty means read all row groups*/);
   return read_chunk_internal(true);
 }
 
 bool reader::impl::has_next()
 {
-  prepare_data(0, -1, true, {});
+  prepare_data(0 /*skip_rows*/,
+               -1 /*num_rows, `-1` means unlimited*/,
+               true /*uses_custom_row_bounds*/,
+               {} /*row_group_indices, empty means read all row groups*/);
   return _current_read_chunk < _chunk_read_info.size();
 }
 

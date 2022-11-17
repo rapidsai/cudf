@@ -129,10 +129,9 @@ struct url_encoder_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> url_encode(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> url_encode(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -388,10 +387,9 @@ __global__ void url_decode_char_replacer(column_device_view const in_strings,
 }  // namespace
 
 //
-std::unique_ptr<column> url_decode(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> url_decode(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);

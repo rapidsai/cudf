@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "reader_impl_helpers.cuh"
+#include "reader_impl_helpers.hpp"
 
-#include <cudf/io/datasource.hpp>
-
+#include <numeric>
 #include <regex>
 
 namespace cudf::io::detail::parquet {
@@ -95,12 +94,8 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::UINT_32: return type_id::UINT32;
     case parquet::UINT_64: return type_id::UINT64;
     case parquet::DATE: return type_id::TIMESTAMP_DAYS;
-    case parquet::TIME_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MILLISECONDS;
-    case parquet::TIME_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_MICROSECONDS;
+    case parquet::TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
+    case parquet::TIME_MICROS: return type_id::DURATION_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
@@ -136,6 +131,11 @@ type_id to_type_id(SchemaElement const& schema,
       logical_type.TIMESTAMP.unit.isset.NANOS) {
     return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                  : type_id::TIMESTAMP_NANOSECONDS;
+  }
+
+  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
+      logical_type.TIME.unit.isset.NANOS) {
+    return type_id::DURATION_NANOSECONDS;
   }
 
   // is it simply a struct?
@@ -196,7 +196,7 @@ std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
 }
 
 std::vector<std::unordered_map<std::string, std::string>>
-aggregate_reader_metadata::collect_keyval_metadata()
+aggregate_reader_metadata::collect_keyval_metadata() const
 {
   std::vector<std::unordered_map<std::string, std::string>> kv_maps;
   std::transform(per_file_metadata.cbegin(),
@@ -239,21 +239,20 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
-  // Verify that the input files have matching numbers of columns
-  size_type num_cols = -1;
-  for (auto const& pfm : per_file_metadata) {
-    if (pfm.row_groups.size() != 0) {
-      if (num_cols == -1)
-        num_cols = pfm.row_groups[0].columns.size();
-      else
-        CUDF_EXPECTS(num_cols == static_cast<size_type>(pfm.row_groups[0].columns.size()),
+  if (per_file_metadata.size() > 0) {
+    auto const& first_meta = per_file_metadata.front();
+    auto const num_cols =
+      first_meta.row_groups.size() > 0 ? first_meta.row_groups.front().columns.size() : 0;
+    auto const& schema = first_meta.schema;
+
+    // Verify that the input files have matching numbers of columns and schema.
+    for (auto const& pfm : per_file_metadata) {
+      if (pfm.row_groups.size() > 0) {
+        CUDF_EXPECTS(num_cols == pfm.row_groups.front().columns.size(),
                      "All sources must have the same number of columns");
+      }
+      CUDF_EXPECTS(schema == pfm.schema, "All sources must have the same schema");
     }
-  }
-  // Verify that the input files have matching schemas
-  for (auto const& pfm : per_file_metadata) {
-    CUDF_EXPECTS(per_file_metadata[0].schema == pfm.schema,
-                 "All sources must have the same schemas");
   }
 }
 
@@ -328,7 +327,7 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<size_type, size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
-  std::vector<std::vector<size_type>> const& row_group_indices,
+  host_span<std::vector<size_type> const> row_group_indices,
   size_type row_start,
   size_type row_count) const
 {

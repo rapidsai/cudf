@@ -277,30 +277,12 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
 
 void write_csv_helper(std::string const& filename,
                       cudf::table_view const& table,
-                      bool include_header,
                       std::vector<std::string> const& names = {})
 {
-  // csv_writer_options only keeps a pointer to metadata (non-owning)
-  cudf::io::table_metadata metadata{};
-
-  if (not names.empty()) {
-    metadata.column_names = names;
-  } else {
-    // generate some dummy column names
-    int i                  = 0;
-    auto const num_columns = table.num_columns();
-    metadata.column_names.reserve(num_columns);
-    std::generate_n(std::back_inserter(metadata.column_names), num_columns, [&i]() {
-      return std::string("col") + std::to_string(i++);
-    });
-  }
-
   cudf::io::csv_writer_options writer_options =
     cudf::io::csv_writer_options::builder(cudf::io::sink_info(filename), table)
-      .include_header(include_header)
-      .rows_per_chunk(
-        1)  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
-      .metadata(&metadata);
+      .include_header(not names.empty())
+      .names(names);
 
   cudf::io::write_csv(writer_options);
 }
@@ -922,7 +904,7 @@ TEST_F(CsvReaderTest, Strings)
   auto filepath = temp_env->get_temp_dir() + "Strings.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
     outfile << "30,stu \"\"vwx\"\" yz" << '\n';
@@ -952,7 +934,7 @@ TEST_F(CsvReaderTest, StringsQuotes)
   auto filepath = temp_env->get_temp_dir() + "StringsQuotes.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,`abc,\ndef, ghi`" << '\n';
     outfile << "20,`jkl, ``mno``, pqr`" << '\n';
     outfile << "30,stu `vwx` yz" << '\n';
@@ -981,7 +963,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << names[0] << ',' << names[1] << ',' << '\n';
+    outfile << names[0] << ',' << names[1] << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
     outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
@@ -1509,7 +1491,7 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
 
   auto filepath = temp_env->get_temp_filepath("SingleColumnWithWriter.csv");
 
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath}).header(-1);
@@ -1577,7 +1559,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
 
   auto filepath = temp_env->get_temp_dir() + "MultiColumnWithWriter.csv";
 
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1625,7 +1607,7 @@ TEST_F(CsvReaderTest, DatesWithWriter)
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO need to add a dayfirst flag?
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1650,7 +1632,7 @@ TEST_F(CsvReaderTest, DatesStringWithWriter)
 
     cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
-    write_csv_helper(filepath, input_table, false);
+    write_csv_helper(filepath, input_table);
 
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1673,7 +1655,7 @@ TEST_F(CsvReaderTest, DatesStringWithWriter)
 
     cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
-    write_csv_helper(filepath, input_table, false);
+    write_csv_helper(filepath, input_table);
 
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1696,7 +1678,7 @@ TEST_F(CsvReaderTest, DatesStringWithWriter)
 
     cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
-    write_csv_helper(filepath, input_table, false);
+    write_csv_helper(filepath, input_table);
 
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1720,7 +1702,7 @@ TEST_F(CsvReaderTest, DatesStringWithWriter)
 
     cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
-    write_csv_helper(filepath, input_table, false);
+    write_csv_helper(filepath, input_table);
 
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1743,7 +1725,7 @@ TEST_F(CsvReaderTest, DatesStringWithWriter)
 
     cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
-    write_csv_helper(filepath, input_table, false);
+    write_csv_helper(filepath, input_table);
 
     cudf::io::csv_reader_options in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1766,7 +1748,7 @@ TEST_F(CsvReaderTest, FloatingPointWithWriter)
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO add lineterminator=";"
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1792,11 +1774,10 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
-  write_csv_helper(filepath, input_table, true, names);
+  write_csv_helper(filepath, input_table, names);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
-      .names(names)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()})
       .quoting(cudf::io::quote_style::NONE);
   auto result = cudf::io::read_csv(in_opts);
@@ -1804,6 +1785,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
+  ASSERT_EQ(names, result.metadata.column_names);
 }
 
 TEST_F(CsvReaderTest, StringsWithWriterSimple)
@@ -1817,11 +1799,10 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
-  write_csv_helper(filepath, input_table, true, names);
+  write_csv_helper(filepath, input_table, names);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
-      .names(names)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()})
       .quoting(cudf::io::quote_style::NONE);
   auto result = cudf::io::read_csv(in_opts);
@@ -1829,6 +1810,7 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
+  ASSERT_EQ(names, result.metadata.column_names);
 }
 
 TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
@@ -1841,15 +1823,15 @@ TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
   auto string_column = column_wrapper<cudf::string_view>{"abc def ghi", "jkl,mno,pq", "stu vwx y"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
-  write_csv_helper(filepath, input_table, true, names);
+  write_csv_helper(filepath, input_table, names);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
-      .names(names)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
+  ASSERT_EQ(names, result.metadata.column_names);
 }
 
 TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
@@ -1864,7 +1846,7 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   cudf::table_view input_table(
     std::vector<cudf::column_view>{int_column, string_column, int_column, int_column, int_column});
 
-  write_csv_helper(filepath, input_table, true, names);
+  write_csv_helper(filepath, input_table, names);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1877,6 +1859,7 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
+  ASSERT_EQ(names, result.metadata.column_names);
 }
 
 TEST_F(CsvReaderTest, EmptyFileWithWriter)
@@ -1884,7 +1867,7 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
   auto filepath = temp_env->get_temp_dir() + "EmptyFileWithWriter.csv";
 
   cudf::table_view empty_table;
-  write_csv_helper(filepath, empty_table, false);
+  write_csv_helper(filepath, empty_table);
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_csv(in_opts);
@@ -1968,7 +1951,7 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
     durations_D, durations_s, durations_ms, durations_us, durations_ns});
   std::vector<std::string> names{"D", "s", "ms", "us", "ns"};
 
-  write_csv_helper(filepath, input_table, true, names);
+  write_csv_helper(filepath, input_table, names);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -1982,6 +1965,7 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
+  ASSERT_EQ(names, result.metadata.column_names);
 }
 
 TEST_F(CsvReaderTest, ParseInRangeIntegers)
@@ -2044,7 +2028,7 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
 
   auto filepath = temp_env->get_temp_filepath("ParseInRangeIntegers.csv");
 
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath}).header(-1);
@@ -2123,7 +2107,7 @@ TEST_F(CsvReaderTest, ParseOutOfRangeIntegers)
 
   auto filepath = temp_env->get_temp_filepath("ParseOutOfRangeIntegers.csv");
 
-  write_csv_helper(filepath, input_table, false);
+  write_csv_helper(filepath, input_table);
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath}).header(-1);
@@ -2258,6 +2242,175 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
   EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
+}
+
+TEST_F(CsvReaderTest, UseColsValidation)
+{
+  const std::string buffer = "1,2,3";
+
+  const cudf::io::csv_reader_options idx_cnt_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .names({"a", "b"})
+      .use_cols_indexes({0});
+  EXPECT_THROW(cudf::io::read_csv(idx_cnt_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options unique_idx_cnt_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .names({"a", "b"})
+      .use_cols_indexes({0, 0});
+  EXPECT_THROW(cudf::io::read_csv(unique_idx_cnt_options), cudf::logic_error);
+
+  cudf::io::csv_reader_options bad_name_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .names({"a", "b", "c"})
+      .use_cols_names({"nonexistent_name"});
+  EXPECT_THROW(cudf::io::read_csv(bad_name_options), cudf::logic_error);
+}
+
+TEST_F(CsvReaderTest, CropColumns)
+{
+  const std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
+      .names({"a", "b"})
+      .header(-1);
+  const auto result = cudf::io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  ASSERT_EQ(result_table.num_columns(), 2);
+  ASSERT_EQ(result_table.column(0).type(), data_type{type_id::INT32});
+  ASSERT_EQ(result_table.column(1).type(), data_type{type_id::FLOAT32});
+  expect_column_data_equal(std::vector<int32_t>{12, 34, 56}, result_table.column(0));
+  expect_column_data_equal(std::vector<float>{9., 8., 7.}, result_table.column(1));
+}
+
+TEST_F(CsvReaderTest, CropColumnsUseColsNames)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
+      .names({"a", "b"})
+      .use_cols_names({"b"})
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  ASSERT_EQ(result_table.num_columns(), 1);
+  ASSERT_EQ(result_table.column(0).type(), data_type{type_id::FLOAT32});
+  expect_column_data_equal(std::vector<float>{9., 8., 7.}, result_table.column(0));
+}
+
+TEST_F(CsvReaderTest, ExtraColumns)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+  {
+    cudf::io::csv_reader_options opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .header(-1);
+    auto result = cudf::io::read_csv(opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 4);
+    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::INT8});
+    ASSERT_EQ(result_table.column(3).null_count(), 3);
+  }
+  {
+    cudf::io::csv_reader_options with_dtypes_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<float>()})
+        .header(-1);
+    auto result = cudf::io::read_csv(with_dtypes_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 4);
+    ASSERT_EQ(result_table.column(3).type(), data_type{type_id::FLOAT32});
+    ASSERT_EQ(result_table.column(3).null_count(), 3);
+  }
+}
+
+TEST_F(CsvReaderTest, ExtraColumnsUseCols)
+{
+  std::string csv_in{"12,9., 10\n34,8., 20\n56,7., 30"};
+
+  {
+    cudf::io::csv_reader_options in_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .use_cols_names({"b", "d"})
+        .header(-1);
+    auto result = cudf::io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 2);
+    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::INT8});
+    ASSERT_EQ(result_table.column(1).null_count(), 3);
+  }
+  {
+    cudf::io::csv_reader_options with_dtypes_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .names({"a", "b", "c", "d"})
+        .use_cols_names({"b", "d"})
+        .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<cudf::string_view>()})
+        .header(-1);
+    auto result = cudf::io::read_csv(with_dtypes_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 2);
+    ASSERT_EQ(result_table.column(1).type(), data_type{type_id::STRING});
+    ASSERT_EQ(result_table.column(1).null_count(), 3);
+  }
+}
+
+TEST_F(CsvReaderTest, EmptyColumns)
+{
+  // First column only has empty fields. second column contains only "null" literals
+  std::string csv_in{",null\n,null"};
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+      .names({"a", "b", "c", "d"})
+      .header(-1);
+  // More elements in `names` than in the file; additional columns are filled with nulls
+  auto result = cudf::io::read_csv(in_opts);
+
+  const auto result_table = result.tbl->view();
+  EXPECT_EQ(result_table.num_columns(), 4);
+  // All columns should contain only nulls; expect INT8 type to use as little memory as possible
+  for (auto& column : result_table) {
+    EXPECT_EQ(column.type(), data_type{type_id::INT8});
+    EXPECT_EQ(column.null_count(), 2);
+  }
+}
+
+TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
+{
+  std::string csv_in{"12,9., 10\n\n"};
+
+  {
+    cudf::io::csv_reader_options no_header_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()})
+        .header(-1);
+    // No header, getting column names/count from first row
+    auto result = cudf::io::read_csv(no_header_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 3);
+  }
+  {
+    cudf::io::csv_reader_options header_opts =
+      cudf::io::csv_reader_options::builder(cudf::io::source_info{csv_in.c_str(), csv_in.size()});
+    // Getting column names/count from header
+    auto result = cudf::io::read_csv(header_opts);
+
+    const auto result_table = result.tbl->view();
+    ASSERT_EQ(result_table.num_columns(), 3);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

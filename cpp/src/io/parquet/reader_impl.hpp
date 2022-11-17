@@ -21,32 +21,23 @@
 
 #pragma once
 
-#include "parquet.hpp"
 #include "parquet_gpu.hpp"
-#include "reader_impl_helpers.cuh"
+#include "reader_impl_helpers.hpp"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
-#include <string>
-#include <utility>
+#include <optional>
 #include <vector>
 
 namespace cudf::io::detail::parquet {
-
-using namespace cudf::io::parquet;
-using namespace cudf::io;
-
-// Forward declarations
-class aggregate_reader_metadata;
-
 /**
  * @brief Implementation for Parquet reader
  */
@@ -54,6 +45,9 @@ class reader::impl {
  public:
   /**
    * @brief Constructor from an array of dataset sources with reader options.
+   *
+   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
+   * entire given file.
    *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
@@ -79,14 +73,27 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            bool uses_custom_row_bounds,
-                           std::vector<std::vector<size_type>> const& row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
    *
-   * By using this constructor, the reader will supports chunked reading with read size limit.
+   * By using this constructor, the reader will support iterative (chunked) reading through
+   * `has_next() ` and `read_chunk()`. For example:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
    *
-   * @param chunk_read_limit The size limit (in bytes) to read each chunk
+   * ```
+   *
+   * Reading the whole given file at once through `read()` function is still supported if
+   * `chunk_read_limit == 0` (i.e., no reading limit).
+   * In such case, `read_chunk()` will also return rows of the entire file.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -110,18 +117,18 @@ class reader::impl {
 
  private:
   /**
-   * @brief Perform the necessary data preprocessing for reading data later on.
+   * @brief Perform the necessary data preprocessing for parsing file later on.
    *
    * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read
+   * @param num_rows Number of rows to read, or `-1` to read all rows
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
-   * @param row_group_indices Lists of row groups to read, one per source
+   * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
    */
   void prepare_data(size_type skip_rows,
                     size_type num_rows,
                     bool uses_custom_row_bounds,
-                    const std::vector<std::vector<size_type>>& row_group_indices);
+                    host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Load and decompress the input file(s) into memory.
@@ -130,7 +137,8 @@ class reader::impl {
                                 size_type num_rows);
 
   /**
-   * @brief Compute the reading info (skip_rows, num_rows) for the output chunks.
+   * @brief Perform some preprocessing for page data and also compute the split locations
+   * {skip_rows, num_rows} for chunked reading.
    *
    * There are several pieces of information we can't compute directly from row counts in
    * the parquet headers when dealing with nested schemas:
@@ -139,19 +147,17 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
    *
-   * @param chunks All chunks to be decoded
-   * @param pages All pages to be decoded
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
    */
-  void compute_chunk_read_info(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                               hostdevice_vector<gpu::PageInfo>& pages,
-                               size_t skip_rows,
-                               size_t num_rows,
-                               bool uses_custom_row_bounds,
-                               size_type chunked_read_size);
+  void preprocess_pages(size_t skip_rows,
+                        size_t num_rows,
+                        bool uses_custom_row_bounds,
+                        size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -161,19 +167,13 @@ class reader::impl {
    *
    * Note that this gets called even in the flat schema case so that we have a
    * consistent place to store common information such as value counts, etc.
-   *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param page_nesting_info The allocated nesting info structs.
    */
-  void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
-                             hostdevice_vector<gpu::PageInfo>& pages,
-                             hostdevice_vector<gpu::PageNestingInfo>& page_nesting_info);
+  void allocate_nesting_info();
 
   /**
    * @brief Read a chunk of data and return an output table.
    *
-   * This function is called internally and expects all preprocessing steps have been done.
+   * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
@@ -195,35 +195,20 @@ class reader::impl {
   /**
    * @brief Allocate data bufers for the output columns.
    *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param id The chunk intermediate data
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    */
-  void allocate_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                        hostdevice_vector<gpu::PageInfo>& pages,
-                        gpu::chunk_intermediate_data const& id,
-                        size_t skip_rows,
-                        size_t num_rows,
-                        bool uses_custom_row_bounds);
+  void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
 
   /**
    * @brief Converts the page data and outputs to columns.
    *
-   * @param chunks List of column chunk descriptors
-   * @param pages List of page information
-   * @param page_nesting Page nesting array
    * @param skip_rows Minimum number of rows from start
    * @param num_rows Number of rows to output
    */
-  void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
-                        hostdevice_vector<gpu::PageInfo>& pages,
-                        hostdevice_vector<gpu::PageNestingInfo>& page_nesting,
-                        size_t skip_rows,
-                        size_t num_rows);
+  void decode_page_data(size_t skip_rows, size_t num_rows);
 
  private:
   rmm::cuda_stream_view _stream;

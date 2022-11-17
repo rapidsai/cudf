@@ -490,6 +490,15 @@ def test_repartition_hash(by, npartitions, max_branch):
     dd.assert_eq(got_unique, expect_unique, check_index=False)
 
 
+def test_repartition_no_extra_row():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    gdf = cudf.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    ddf = dgd.from_cudf(gdf, npartitions=1)
+    ddf_new = ddf.repartition([0, 5, 10, 30], force=True)
+    dd.assert_eq(ddf, ddf_new)
+    dd.assert_eq(gdf, ddf_new)
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame(
