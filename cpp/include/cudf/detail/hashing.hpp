@@ -50,35 +50,29 @@ std::unique_ptr<column> spark_murmur_hash3_32(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> md5_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> md5_hash(table_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> sha1_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sha1_hash(table_view const& input,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> sha224_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sha224_hash(table_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> sha256_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sha256_hash(table_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> sha384_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sha384_hash(table_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> sha512_hash(
-  table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sha512_hash(table_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /* Copyright 2005-2014 Daniel James.
  *
