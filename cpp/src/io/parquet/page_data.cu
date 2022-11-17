@@ -509,7 +509,7 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
  * @param[in] s Page state input
  * @param[in] src_pos Source position
  *
- * @return A pair containing a pointer to the string and it's length
+ * @return A pair containing a pointer to the string and its length
  */
 inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile page_state_s* s,
                                                                         int src_pos)
@@ -877,15 +877,17 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
  * @param[in, out] s The local page state to be filled in
  * @param[in] p The global page to be copied from
  * @param[in] chunks The global list of chunks
- * @param[in] num_rows Maximum number of rows to read
  * @param[in] min_row Crop all rows below min_row
+ * @param[in] num_rows Maximum number of rows to read
+ * @param[in] is_decode_step If we are setting up for the decode step (instead of the preprocess
+ * step)
  */
 static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo const* p,
                                           device_span<ColumnChunkDesc const> chunks,
                                           size_t min_row,
                                           size_t num_rows,
-                                          bool decode_step)
+                                          bool is_decode_step)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1016,7 +1018,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // NOTE: in a chunked read situation, s->col.column_data_base and s->col.valid_map_base
       // will be aliased to memory that has been freed when we get here in the non-decode step, so
       // we cannot check against nullptr.  we'll just check a flag directly.
-      if (decode_step) {
+      if (is_decode_step) {
         int max_depth = s->col.max_nesting_depth;
         for (int idx = 0; idx < max_depth; idx++) {
           PageNestingInfo* pni = &s->page.nesting[idx];
@@ -1138,7 +1140,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
 
       // if we're in the decoding step, jump directly to the first
       // value we care about
-      if (decode_step) {
+      if (is_decode_step) {
         s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
       } else {
         s->input_value_count = 0;
@@ -1564,17 +1566,19 @@ __device__ size_type gpuGetStringSize(page_state_s* s, int target_count, int t)
  * @param pages List of pages
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
- * @param num_rows Maximum number of rows to read. Pass as INT_MAX to guarantee reading all rows.
- * @param trim_pass Whether or not this is the trim pass.  We first have to compute
+ * @param num_rows Maximum number of rows to read. Pass as INT_MAX to guarantee reading all rows
+ * @param is_base_pass Whether or not this is the base pass.  We first have to compute
  * the full size information of every page before we come through in a second (trim) pass
- * to determine what subset of rows in this page we should be reading.
+ * to determine what subset of rows in this page we should be reading
+ * @param compute_string_sizes Whether or not we should be computing string sizes
+ * (PageInfo::str_bytes) as part of the pass
  */
 __global__ void __launch_bounds__(block_size)
   gpuComputePageSizes(PageInfo* pages,
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
                       size_t num_rows,
-                      bool base_pass,
+                      bool is_base_pass,
                       bool compute_string_sizes)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -1595,7 +1599,7 @@ __global__ void __launch_bounds__(block_size)
 
     // in the base pass, we're computing the number of rows, make sure we visit absolutely
     // everything
-    if (base_pass) {
+    if (is_base_pass) {
       s->first_row             = 0;
       s->num_rows              = INT_MAX;
       s->row_index_lower_bound = -1;
@@ -1619,7 +1623,7 @@ __global__ void __launch_bounds__(block_size)
     while (d < s->page.num_nesting_levels) {
       auto const i = d + t;
       if (i < s->page.num_nesting_levels) {
-        if (base_pass) { pp->nesting[i].size = pp->num_input_values; }
+        if (is_base_pass) { pp->nesting[i].size = pp->num_input_values; }
         pp->nesting[i].batch_size = pp->num_input_values;
       }
       d += blockDim.x;
@@ -1629,7 +1633,7 @@ __global__ void __launch_bounds__(block_size)
 
   // - if this page is not at the beginning or end of the trim bounds, the batch size is
   //   the full page size
-  if (!base_pass && s->num_rows == s->page.num_rows) {
+  if (!is_base_pass && s->num_rows == s->page.num_rows) {
     int d = 0;
     while (d < s->page.num_nesting_levels) {
       auto const i = d + t;
@@ -1640,7 +1644,7 @@ __global__ void __launch_bounds__(block_size)
   }
 
   // - if this page is completely trimmed, zero out sizes.
-  if (!base_pass && s->num_rows == 0) {
+  if (!is_base_pass && s->num_rows == 0) {
     int d = 0;
     while (d < s->page.num_nesting_levels) {
       auto const i = d + t;
@@ -1683,7 +1687,7 @@ __global__ void __launch_bounds__(block_size)
                                               : s->lvl_count[level_type::DEFINITION];
 
       // process what we got back
-      gpuUpdatePageSizes(s, actual_input_count, t, !base_pass);
+      gpuUpdatePageSizes(s, actual_input_count, t, !is_base_pass);
       if (compute_string_sizes) {
         auto const str_len = gpuGetStringSize(s, s->input_leaf_count, t);
         if (!t) { s->page.str_bytes += str_len; }
@@ -1699,7 +1703,7 @@ __global__ void __launch_bounds__(block_size)
   // - nesting sizes for the whole page
   // - skipped value information for trimmed pages
   // - string bytes
-  if (base_pass) {
+  if (is_base_pass) {
     // nesting level 0 is the root column, so the size is also the # of rows
     if (!t) { pp->num_rows = s->page.nesting[0].batch_size; }
 

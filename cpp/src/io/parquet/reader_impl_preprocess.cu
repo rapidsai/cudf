@@ -988,9 +988,9 @@ struct get_cumulative_row_info {
  * page. Essentially, a conservative over-estimate of the real size.
  */
 struct row_total_size {
-  cumulative_row_info const* const c_info;
-  size_type const* const key_offsets;
-  size_t const num_keys;
+  cumulative_row_info const* c_info;
+  size_type const* key_offsets;
+  size_t num_keys;
 
   __device__ cumulative_row_info operator()(cumulative_row_info const& i)
   {
@@ -1035,13 +1035,14 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
     });
     auto end   = start + sizes.size();
     while (cur_row_count < num_rows) {
-      int64_t p = thrust::lower_bound(thrust::seq, start + cur_pos, end, chunk_read_limit) - start;
+      int64_t split_pos =
+        thrust::lower_bound(thrust::seq, start + cur_pos, end, chunk_read_limit) - start;
 
       // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
       // one.
-      if (static_cast<size_t>(p) >= sizes.size() ||
-          (sizes[p].size_bytes - cur_cumulative_size > chunk_read_limit)) {
-        p--;
+      if (static_cast<size_t>(split_pos) >= sizes.size() ||
+          (sizes[split_pos].size_bytes - cur_cumulative_size > chunk_read_limit)) {
+        split_pos--;
       }
 
       // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
@@ -1049,16 +1050,16 @@ std::vector<gpu::chunk_read_info> find_splits(std::vector<cumulative_row_info> c
       // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
       // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
       // either do this, or we have to call unique() on the input first.
-      while (p < (static_cast<int64_t>(sizes.size()) - 1) &&
-             (p < 0 || sizes[p].row_count == cur_row_count)) {
-        p++;
+      while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
+             (split_pos < 0 || sizes[split_pos].row_count == cur_row_count)) {
+        split_pos++;
       }
 
       auto const start_row = cur_row_count;
-      cur_row_count        = sizes[p].row_count;
+      cur_row_count        = sizes[split_pos].row_count;
       splits.push_back(gpu::chunk_read_info{start_row, cur_row_count - start_row});
-      cur_pos             = p;
-      cur_cumulative_size = sizes[p].size_bytes;
+      cur_pos             = split_pos;
+      cur_cumulative_size = sizes[split_pos].size_bytes;
     }
   }
   // print_cumulative_row_info(sizes, "adjusted", splits);
@@ -1227,7 +1228,7 @@ struct start_offset_output_iterator {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ void operator=(start_offset_output_iterator const& other)
+  constexpr void operator=(start_offset_output_iterator const& other)
   {
     pages          = other.pages;
     page_indices   = other.page_indices;
@@ -1236,13 +1237,13 @@ struct start_offset_output_iterator {
     nesting_depth  = other.nesting_depth;
   }
 
-  __host__ __device__ start_offset_output_iterator operator+(int i)
+  constexpr start_offset_output_iterator operator+(int i)
   {
     return start_offset_output_iterator{
       pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
   }
 
-  __host__ __device__ void operator++() { cur_index++; }
+  constexpr void operator++() { cur_index++; }
 
   __device__ reference operator[](int i) { return dereference(cur_index + i); }
   __device__ reference operator*() { return dereference(cur_index); }
