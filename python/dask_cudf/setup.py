@@ -43,9 +43,7 @@ if "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE" in os.environ:
 
 setup(
     name=f"dask-cudf{cuda_suffix}",
-    version=os.getenv(
-        "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE", default=versioneer.get_version()
-    ),
+    version=versioneer.get_version(),
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
