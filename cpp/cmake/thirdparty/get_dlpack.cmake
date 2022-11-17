@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -27,9 +27,7 @@ function(find_and_configure_dlpack VERSION)
   )
 
   if(DEFINED dlpack_SOURCE_DIR)
-    set(dlpack_SOURCE_DIR 
-        "${dlpack_SOURCE_DIR}"
-        PARENT_SCOPE)
+    set(dlpack_SOURCE_DIR "${dlpack_SOURCE_DIR}" PARENT_SCOPE)
 
     # otherwise find_package(DLPACK) will set this variable
     set(DLPACK_INCLUDE_DIR
