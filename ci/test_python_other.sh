@@ -84,8 +84,6 @@ popd
 
 rapids-logger "pytest cudf with strings_udf"
 pushd python/cudf/cudf
---cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests/test_udf_masked_ops.py
-pushd python/strings_udf/strings_udf
 pytest \
   --verbose \
   --cache-clear \
@@ -93,11 +91,11 @@ pytest \
   --junitxml="${TESTRESULTS_DIR}/junit-cudf-strings-udf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
-  --cov-config=.coveragerc \
-  --cov=strings_udf \
-  --cov-report=xml:strings-udf-coverage.xml \
+  --cov-config=../.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:cudf-strings-udf-coverage.xml \
   --cov-report=term \
-  tests
+  tests/test_udf_masked_ops.py
 exitcode=$?
 
 if (( ${exitcode} != 0 )); then
