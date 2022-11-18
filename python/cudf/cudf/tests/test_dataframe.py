@@ -28,6 +28,7 @@ from cudf.core._compat import (
     PANDAS_GE_134,
     PANDAS_LT_140,
 )
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
@@ -40,7 +41,19 @@ from cudf.testing._utils import (
     gen_rand,
 )
 
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+
 pytestmark = pytest.mark.spilling
+
+# Use this to "unmark" the module level spilling mark
+pytest_unmark_spilling = pytest.mark.skipif(
+    get_global_manager() is not None, reason="unmarked spilling"
+)
 
 
 def test_init_via_list_of_tuples():
@@ -2067,6 +2080,7 @@ def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -2214,6 +2228,7 @@ def _hide_host_other_warning(other):
         yield
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2304,6 +2319,7 @@ def test_bitwise_binops_df(pdf, gdf, binop):
     assert_eq(d, g)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2761,6 +2777,7 @@ def test_tail_for_string():
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize(
@@ -2804,6 +2821,7 @@ def test_reset_index(level, drop, column_names, inplace, col_level, col_fill):
     assert_eq(expect, got)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("level", [None, 0, 1, [None]])
 @pytest.mark.parametrize("drop", [False, True])
 @pytest.mark.parametrize("inplace", [False, True])
@@ -3022,6 +3040,7 @@ def reindex_data_numeric():
     )
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("copy", [True, False])
 @pytest.mark.parametrize(
     "args,gd_kwargs",
@@ -3178,6 +3197,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "index",
     [
@@ -3235,6 +3255,7 @@ def test_dataframe_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 @pytest.mark.parametrize(
     "level",
@@ -3872,6 +3893,7 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("a", [[], ["123"]])
 @pytest.mark.parametrize("b", ["123", ["123"]])
 @pytest.mark.parametrize(
@@ -4734,6 +4756,7 @@ def test_df_constructor_dtype(dtype):
     assert_eq(expect, got)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -5200,6 +5223,7 @@ def test_cov_nans():
     assert_eq(pdf.cov(), gdf.cov())
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "gsr",
     [
@@ -5252,6 +5276,7 @@ def test_df_sr_binop(gsr, colnames, op):
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "op",
     [
@@ -6249,6 +6274,7 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         assert_eq(pdf, gdf, check_dtype=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "col_data",
     [
@@ -6292,6 +6318,7 @@ def test_dataframe_assign_scalar(col_data, assign_val):
     assert_eq(pdf, gdf)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "col_data",
     [
@@ -6587,6 +6614,7 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data1",
     [
@@ -7064,6 +7092,7 @@ def test_series_keys(ps):
         assert_eq(ps.keys(), gds.keys())
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7144,6 +7173,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
         assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7227,6 +7257,7 @@ def test_dataframe_append_series_mixed_index():
         df.append(sr, ignore_index=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7396,6 +7427,7 @@ def test_dataframe_ffill(df):
     assert_eq(expected, actual)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7746,6 +7778,7 @@ def test_dataframe_init_with_columns(data, columns):
     )
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data, ignore_dtype",
     [
@@ -7825,6 +7858,7 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
         assert_eq(expected, actual, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data, ignore_dtype, index",
     [
@@ -7995,6 +8029,7 @@ def test_dataframe_iterrows_itertuples():
         df.iterrows()
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -8072,6 +8107,7 @@ def test_describe_misc_include(df, include):
     assert_eq(expected, actual)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -8554,6 +8590,7 @@ def test_dataframe_constructor_column_index_only():
     ) == id(gdf["c"]._column)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -8655,6 +8692,7 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         gdf.agg(aggs)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "join",
     ["left"],
@@ -9469,6 +9507,7 @@ def test_dataframe_rename_duplicate_column():
         gdf.rename(columns={"a": "b"}, inplace=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [

@@ -14,6 +14,7 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core._compat import PANDAS_GE_150
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
@@ -26,7 +27,6 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
-
 
 _binops = [
     operator.add,
@@ -46,6 +46,127 @@ _binops_compare = [
     operator.gt,
     operator.ge,
 ]
+
+_bitwise_binops = [operator.and_, operator.or_, operator.xor]
+
+_int_types = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+]
+
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
+]
+
+_reflected_ops = [
+    lambda x: 1 + x,
+    lambda x: 2 * x,
+    lambda x: 2 - x,
+    lambda x: 2 // x,
+    lambda x: 2 / x,
+    lambda x: 3 + x,
+    lambda x: 3 * x,
+    lambda x: 3 - x,
+    lambda x: 3 // x,
+    lambda x: 3 / x,
+    lambda x: 3 % x,
+    lambda x: -1 + x,
+    lambda x: -2 * x,
+    lambda x: -2 - x,
+    lambda x: -2 // x,
+    lambda x: -2 / x,
+    lambda x: -3 + x,
+    lambda x: -3 * x,
+    lambda x: -3 - x,
+    lambda x: -3 // x,
+    lambda x: -3 / x,
+    lambda x: -3 % x,
+    lambda x: 0 + x,
+    lambda x: 0 * x,
+    lambda x: 0 - x,
+    lambda x: 0 // x,
+    lambda x: 0 / x,
+]
+
+_operators_arithmetic = [
+    "add",
+    "radd",
+    "sub",
+    "rsub",
+    "mul",
+    "rmul",
+    "mod",
+    "rmod",
+    "pow",
+    "rpow",
+    "div",
+    "divide",
+    "floordiv",
+    "rfloordiv",
+    "truediv",
+    "rtruediv",
+]
+
+_operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
+
+
+_cudf_scalar_reflected_ops = [
+    lambda x: cudf.Scalar(1) + x,
+    lambda x: cudf.Scalar(2) * x,
+    lambda x: cudf.Scalar(2) - x,
+    lambda x: cudf.Scalar(2) // x,
+    lambda x: cudf.Scalar(2) / x,
+    lambda x: cudf.Scalar(3) + x,
+    lambda x: cudf.Scalar(3) * x,
+    lambda x: cudf.Scalar(3) - x,
+    lambda x: cudf.Scalar(3) // x,
+    lambda x: cudf.Scalar(3) / x,
+    lambda x: cudf.Scalar(3) % x,
+    lambda x: cudf.Scalar(-1) + x,
+    lambda x: cudf.Scalar(-2) * x,
+    lambda x: cudf.Scalar(-2) - x,
+    lambda x: cudf.Scalar(-2) // x,
+    lambda x: cudf.Scalar(-2) / x,
+    lambda x: cudf.Scalar(-3) + x,
+    lambda x: cudf.Scalar(-3) * x,
+    lambda x: cudf.Scalar(-3) - x,
+    lambda x: cudf.Scalar(-3) // x,
+    lambda x: cudf.Scalar(-3) / x,
+    lambda x: cudf.Scalar(-3) % x,
+    lambda x: cudf.Scalar(0) + x,
+    lambda x: cudf.Scalar(0) * x,
+    lambda x: cudf.Scalar(0) - x,
+    lambda x: cudf.Scalar(0) // x,
+    lambda x: cudf.Scalar(0) / x,
+]
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    _binops = _binops[:1]
+    _binops_compare = _binops_compare[:1]
+    _int_types = _int_types[-1:]
+    _cmpops = _cmpops[:1]
+    _reflected_ops = _reflected_ops[:1]
+    _operators_arithmetic = _operators_arithmetic[:1]
+    _operators_comparison = _operators_comparison[:1]
+    _cudf_scalar_reflected_ops = _cudf_scalar_reflected_ops[:1]
+    DATETIME_TYPES = {"datetime64[ms]"}  # noqa: F811
+    NUMERIC_TYPES = {"float32"}  # noqa: F811
+    FLOAT_TYPES = {"float64"}  # noqa: F811
+    INTEGER_TYPES = {"int16"}  # noqa: F811
+    TIMEDELTA_TYPES = {"timedelta64[s]"}  # noqa: F811
+
 
 pytestmark = pytest.mark.spilling
 
@@ -114,20 +235,6 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     np.testing.assert_almost_equal(result.to_numpy(), binop(arr, rhs))
 
 
-_bitwise_binops = [operator.and_, operator.or_, operator.xor]
-
-
-_int_types = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-]
-
-
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _bitwise_binops)
 @pytest.mark.parametrize(
@@ -150,16 +257,6 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
         result = Series(result)
 
     np.testing.assert_almost_equal(result.to_numpy(), binop(arr1, arr2))
-
-
-_cmpops = [
-    operator.lt,
-    operator.gt,
-    operator.le,
-    operator.ge,
-    operator.eq,
-    operator.ne,
-]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -385,37 +482,6 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     np.testing.assert_array_equal(result.to_numpy(), cmpop(lhs, rhs))
 
 
-_reflected_ops = [
-    lambda x: 1 + x,
-    lambda x: 2 * x,
-    lambda x: 2 - x,
-    lambda x: 2 // x,
-    lambda x: 2 / x,
-    lambda x: 3 + x,
-    lambda x: 3 * x,
-    lambda x: 3 - x,
-    lambda x: 3 // x,
-    lambda x: 3 / x,
-    lambda x: 3 % x,
-    lambda x: -1 + x,
-    lambda x: -2 * x,
-    lambda x: -2 - x,
-    lambda x: -2 // x,
-    lambda x: -2 / x,
-    lambda x: -3 + x,
-    lambda x: -3 * x,
-    lambda x: -3 - x,
-    lambda x: -3 // x,
-    lambda x: -3 / x,
-    lambda x: -3 % x,
-    lambda x: 0 + x,
-    lambda x: 0 * x,
-    lambda x: 0 - x,
-    lambda x: 0 // x,
-    lambda x: 0 / x,
-]
-
-
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize(
     "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
@@ -456,37 +522,6 @@ def test_cudf_scalar_reflected_ops_scalar(func, dtype):
     actual = func(scalar).value
 
     assert np.isclose(expected, actual)
-
-
-_cudf_scalar_reflected_ops = [
-    lambda x: cudf.Scalar(1) + x,
-    lambda x: cudf.Scalar(2) * x,
-    lambda x: cudf.Scalar(2) - x,
-    lambda x: cudf.Scalar(2) // x,
-    lambda x: cudf.Scalar(2) / x,
-    lambda x: cudf.Scalar(3) + x,
-    lambda x: cudf.Scalar(3) * x,
-    lambda x: cudf.Scalar(3) - x,
-    lambda x: cudf.Scalar(3) // x,
-    lambda x: cudf.Scalar(3) / x,
-    lambda x: cudf.Scalar(3) % x,
-    lambda x: cudf.Scalar(-1) + x,
-    lambda x: cudf.Scalar(-2) * x,
-    lambda x: cudf.Scalar(-2) - x,
-    lambda x: cudf.Scalar(-2) // x,
-    lambda x: cudf.Scalar(-2) / x,
-    lambda x: cudf.Scalar(-3) + x,
-    lambda x: cudf.Scalar(-3) * x,
-    lambda x: cudf.Scalar(-3) - x,
-    lambda x: cudf.Scalar(-3) // x,
-    lambda x: cudf.Scalar(-3) / x,
-    lambda x: cudf.Scalar(-3) % x,
-    lambda x: cudf.Scalar(0) + x,
-    lambda x: cudf.Scalar(0) * x,
-    lambda x: cudf.Scalar(0) - x,
-    lambda x: cudf.Scalar(0) // x,
-    lambda x: cudf.Scalar(0) / x,
-]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -650,28 +685,6 @@ def test_boolean_scalar_binop(op):
     # cuDF scalar
     utils.assert_eq(op(psr, True), op(gsr, cudf.Scalar(True)))
     utils.assert_eq(op(psr, False), op(gsr, cudf.Scalar(False)))
-
-
-_operators_arithmetic = [
-    "add",
-    "radd",
-    "sub",
-    "rsub",
-    "mul",
-    "rmul",
-    "mod",
-    "rmod",
-    "pow",
-    "rpow",
-    "div",
-    "divide",
-    "floordiv",
-    "rfloordiv",
-    "truediv",
-    "rtruediv",
-]
-
-_operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)

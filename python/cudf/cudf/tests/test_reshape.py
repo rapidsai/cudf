@@ -9,12 +9,21 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
 )
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+
 
 pytestmark = pytest.mark.spilling
 
