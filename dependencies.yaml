@@ -24,6 +24,11 @@ files:
       - cudatoolkit
       - py_version
       - test_python
+  test_java:
+    output: none
+    includes:
+      - cudatoolkit
+      - test_java
   checks:
     output: none
     includes:
@@ -234,6 +239,18 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
+  test_java:
+    common:
+      - output_types: conda
+        packages:
+          # This list is copied from ci/gpu/java.sh and needs to be filtered
+          - dask-cuda=22.12.*
+          - maven
+          - openjdk=8.*
+          - rapids-build-env=22.12.*
+          - rapids-notebook-env=22.12.*
+          - rmm=22.12.*
+          - ucx-py=0.29.*  # TODO: Use variable, don't hard-code
   test_python:
     common:
       - output_types: [conda, requirements]
