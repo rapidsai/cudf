@@ -31,8 +31,14 @@ project(
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
        OFF
 )
+option(CUDF_BUILD_WHEELS "Whether this build is generating a Python wheel." OFF)
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
+
+# Always build wheels against the pyarrow libarrow.
+if(CUDF_BUILD_WHEELS)
+  set(USE_LIBARROW_FROM_PYARROW ON)
+endif()
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
@@ -51,6 +57,12 @@ if(FIND_CUDF_CPP)
   endif()
 
   find_package(cudf ${cudf_version} REQUIRED)
+
+  # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
+  # for the interop.pyx
+  include(rapids-cpm)
+  rapids_cpm_init()
+  include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
 else()
   set(cudf_FOUND OFF)
 endif()
@@ -69,8 +81,32 @@ if(NOT cudf_FOUND)
 
   set(BUILD_TESTS OFF)
   set(BUILD_BENCHMARKS OFF)
-  add_subdirectory(../../cpp cudf-cpp)
 
+  set(_exclude_from_all "")
+  if(CUDF_BUILD_WHEELS)
+    # We don't build C++ tests when building wheels, so we can also omit the test util and shrink
+    # the wheel by avoiding embedding GTest.
+    set(CUDF_BUILD_TESTUTIL OFF)
+
+    # Statically link cudart if building wheels
+    set(CUDA_STATIC_RUNTIME ON)
+
+    # Need to set this so all the nvcomp targets are global, not only nvcomp::nvcomp
+    # https://cmake.org/cmake/help/latest/variable/CMAKE_FIND_PACKAGE_TARGETS_GLOBAL.html#variable:CMAKE_FIND_PACKAGE_TARGETS_GLOBAL
+    set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+
+    # Don't install the cuDF C++ targets into wheels
+    set(_exclude_from_all EXCLUDE_FROM_ALL)
+  endif()
+
+  add_subdirectory(../../cpp cudf-cpp ${_exclude_from_all})
+
+  if(CUDF_BUILD_WHEELS)
+    include(cmake/Modules/WheelHelpers.cmake)
+    get_target_property(_nvcomp_link_libs nvcomp::nvcomp INTERFACE_LINK_LIBRARIES)
+    # Ensure all the shared objects we need at runtime are in the wheel
+    add_target_libs_to_wheel(LIB_DIR cudf TARGETS arrow_shared nvcomp::nvcomp ${_nvcomp_link_libs})
+  endif()
   # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
   # library in the cudf directory as a single source of truth and modify the other rpaths
   # appropriately.
