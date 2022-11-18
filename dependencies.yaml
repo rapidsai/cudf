@@ -10,7 +10,7 @@ files:
       - cudatoolkit
       - develop
       - doc
-      - notebook
+      - notebooks
       - run
       - test_python
   test_cpp:
