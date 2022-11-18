@@ -256,10 +256,10 @@ However, for performance reasons they frequently access internal attributes and 
 ## Copy on write
 
 
-Copy on write is designed to reduce memory footprint on GPUs. With this feature, a copy is only really made whenever
+Copy on write is designed to reduce memory footprint on GPUs. With this feature, a copy(`.copy(deep=False)`) is only really made whenever
 there is a write operation on a column.
 
-The core copy-on-write implementation relies on the `Buffer` class. This class stores the pointer to the device memory and size.
+The core copy-on-write implementation relies in the `Buffer` class. This class stores the pointer to the device memory and size.
 With the help of `Buffer._ptr` and `Buffer._size` we create a unique singleton `BufferWeakref`, which means all the new `Buffer`s that are created get the same `BufferWeakref` if they are all pointing to the same device memory. We
 store this ``BufferWeakref`` in `Buffer._proxy_ref`.
 
@@ -295,7 +295,7 @@ is technically not possible to know if the device data is modified without intro
 someone accesses `__cuda_array_interface__` of `Column` or a `Buffer`, we trigger
 `Column/Buffer._detach_refs` which will ensure a true copy of underlying device data is made and
 detaches itself from pointing to the original device memory. We also mark the `Column`/`Buffer` as
-`obj._zero_copied=True` thus indicating any future deep-copy requests will trigger a true-deep copy
+`obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
 rather than a copy-on-write shallow copy with weak-references.
 
 

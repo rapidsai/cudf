@@ -210,6 +210,10 @@ cdef class Column:
             mask = None
         elif (
             isinstance(value, Buffer) or
+            # Check for Buffer instance, because
+            # hasattr will trigger invocation of
+            # `__cuda_array_interface__` which could
+            # be expensive.
             hasattr(value, "__cuda_array_interface__")
         ):
             if isinstance(value, Buffer):

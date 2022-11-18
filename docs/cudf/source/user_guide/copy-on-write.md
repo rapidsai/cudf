@@ -1,6 +1,6 @@
 # Copy on write
 
-Copy on write enables ability to save on GPU memory usage when deep copies of a column
+Copy on write enables ability to save on GPU memory usage when copies(`.copy(deep=False)`) of a column
 are made.
 
 ## How to enable it
@@ -32,7 +32,7 @@ Performing a deep copy will create a new series object but pointing to the
 same underlying device memory:
 
 ```python
->>> copied_series = series.copy(deep=True)
+>>> copied_series = series.copy(deep=False)
 >>> series
 0    1
 1    2
@@ -45,8 +45,6 @@ dtype: int64
 2    3
 3    4
 dtype: int64
->>> 
->>> 
 >>> series.data.ptr
 140102175031296
 >>> copied_series.data.ptr
@@ -54,7 +52,7 @@ dtype: int64
 ```
 
 But, when there is a write-operation being performed on either ``series`` or
-``copied_series``, a true deep-copy is triggered:
+``copied_series``, a true physical copy of the data is created:
 
 ```python
 >>> series[0:2] = 10
@@ -83,7 +81,7 @@ different device objects:
 ```
 
 ````{Warning}
-When ``copy_on_write`` is enabled, all of the deep copies are constructed with 
+When ``copy_on_write`` is enabled, all of the shallow copies are constructed with
 weak-references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
 or `series.data.__cuda_array_interface__` which will then take care of detaching any existing weak-references that a column contains.
 ````
