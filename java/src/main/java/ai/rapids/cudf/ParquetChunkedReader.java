@@ -82,6 +82,10 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @return A boolean value indicating if there is more data to read from file.
    */
   public boolean hasNext() {
+    if(handle == 0) {
+      throw new IllegalStateException("Native chunked Parquet reader object may have been closed.");
+    }
+
     if (firstCall) {
       // This function needs to return true at least once, so an empty table
       // (but having empty columns instead of no column) can be returned by readChunk()
@@ -100,6 +104,10 @@ public class ParquetChunkedReader implements AutoCloseable {
    * @return A table of new rows reading from the given file.
    */
   public Table readChunk() {
+    if(handle == 0) {
+      throw new IllegalStateException("Native chunked Parquet reader object may have been closed.");
+    }
+
     long[] columnPtrs = readChunk(handle);
     return columnPtrs != null ? new Table(columnPtrs) : null;
   }
