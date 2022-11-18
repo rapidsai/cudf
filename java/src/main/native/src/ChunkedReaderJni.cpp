@@ -60,7 +60,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
-    cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read); /// << TODO
+
+    // TODO: This variable is unused now, but we still don't know what to do with it yet.
+    // As such, it needs to stay here for a little more time before we decide to use it again,
+    // or remove it completely.
+    cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read);
+    (void)n_col_binary_read;
 
     auto const source = read_buffer ?
                             cudf::io::source_info(reinterpret_cast<char *>(buffer),
