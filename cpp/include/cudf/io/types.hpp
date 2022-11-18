@@ -100,6 +100,15 @@ enum statistics_freq {
 };
 
 /**
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum dictionary_policy {
+  NEVER,    ///< Never use dictionary encoding
+  DEFAULT,  ///< Use dictionary when it will not impact compression
+  ALWAYS    ///< Use dictionary reqardless of impact on compression
+};
+
+/**
  * @brief Detailed name information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output

@@ -509,6 +509,8 @@ class parquet_writer_options {
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
   size_type _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
 
   /**
    * @brief Constructor from sink and table.
@@ -663,6 +665,13 @@ class parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -789,6 +798,13 @@ class parquet_writer_options {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
   }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
 };
 
 /**
@@ -970,6 +986,24 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g zStandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. The default policy is to disable dictionary encoding
+   * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
+   * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
+   * will allow the use of dictionary encoding even if it will result in the disabling of
+   * compression for that column.
+   */
+  parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
+  {
+    options.set_dictionary_policy(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps
@@ -1058,6 +1092,8 @@ class chunked_parquet_writer_options {
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
   size_type _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
 
   /**
    * @brief Constructor from sink.
@@ -1168,6 +1204,13 @@ class chunked_parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1269,6 +1312,13 @@ class chunked_parquet_writer_options {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
   }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1435,6 +1485,24 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
   {
     options.set_column_index_truncate_length(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g zStandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. The default policy is to disable dictionary encoding
+   * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
+   * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
+   * will allow the use of dictionary encoding even if it will result in the disabling of
+   * compression for that column.
+   */
+  chunked_parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
+  {
+    options.set_dictionary_policy(val);
     return *this;
   }
 
