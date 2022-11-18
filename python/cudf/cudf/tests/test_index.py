@@ -400,7 +400,7 @@ def test_index_copy_deep(idx, deep):
     if (
         isinstance(idx, cudf.StringIndex)
         or not deep
-        or cudf.get_option("copy_on_write")
+        or (cudf.get_option("copy_on_write") and not deep)
     ):
         # StringColumn is immutable hence, deep copies of a
         # StringIndex will share the same StringColumn.

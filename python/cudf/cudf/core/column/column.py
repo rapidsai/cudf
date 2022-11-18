@@ -1309,7 +1309,7 @@ def column_empty_like(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(column_empty_like(codes, dtype=codes.dtype),),
+            children=(codes,),
             size=codes.size,
         )
 
