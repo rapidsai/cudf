@@ -419,10 +419,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if deep:
             return self.force_deep_copy()
         else:
-            if (
-                cudf.get_option("copy_on_write")
-                and not self._is_cai_zero_copied()
-            ):
+            if cudf.get_option("copy_on_write"):
+                if self._is_cai_zero_copied():
+                    return self.force_deep_copy()
+
                 copied_col = cast(
                     T,
                     build_column(
@@ -1754,6 +1754,8 @@ def as_column(
     nan_as_null: bool = None,
     dtype: Dtype = None,
     length: int = None,
+    copy: bool = False,
+    fastpath: bool = False,
 ):
     """Create a Column from an arbitrary object
 
@@ -1838,6 +1840,14 @@ def as_column(
 
         data = as_buffer(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
+        if copy:
+            col = col.copy(deep=True)
+        elif (
+            fastpath
+            and cudf.get_option("copy_on_write")
+            and col.base_data is not None
+        ):
+            col.base_data._zero_copied = True
 
         if dtype is not None:
             col = col.astype(dtype)

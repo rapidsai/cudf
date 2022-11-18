@@ -59,40 +59,56 @@ def test_null_copy():
 def test_series_setitem_cow(copy_on_write):
     cudf.set_option("copy_on_write", copy_on_write)
     actual = cudf.Series([1, 2, 3, 4, 5])
-    new_copy = actual.copy(deep=True)
+    new_copy = actual.copy(deep=False)
 
     actual[1] = 100
     assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
-    assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
+    if copy_on_write:
+        assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
+    else:
+        assert_eq(new_copy, cudf.Series([1, 100, 3, 4, 5]))
 
     actual = cudf.Series([1, 2, 3, 4, 5])
-    new_copy = actual.copy(deep=True)
+    new_copy = actual.copy(deep=False)
 
     actual[slice(0, 2, 1)] = 100
     assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
-    assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
+    if copy_on_write:
+        assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
+    else:
+        assert_eq(new_copy, cudf.Series([100, 100, 3, 4, 5]))
 
     new_copy[slice(2, 4, 1)] = 300
-    assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
-    assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
+    if copy_on_write:
+        assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
+    else:
+        assert_eq(actual, cudf.Series([100, 100, 300, 300, 5]))
+
+    if copy_on_write:
+        assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
+    else:
+        assert_eq(new_copy, cudf.Series([100, 100, 300, 300, 5]))
 
     actual = cudf.Series([1, 2, 3, 4, 5])
-    new_copy = actual.copy(deep=True)
+    new_copy = actual.copy(deep=False)
 
     new_copy[slice(2, 4, 1)] = 300
-    assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
+    if copy_on_write:
+        assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
+    else:
+        assert_eq(actual, cudf.Series([1, 2, 300, 300, 5]))
     assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
 
 def test_multiple_series_cow():
     cudf.set_option("copy_on_write", True)
     s = cudf.Series([10, 20, 30, 40, 50])
-    s1 = s.copy(deep=True)
-    s2 = s.copy(deep=True)
-    s3 = s.copy(deep=True)
-    s4 = s2.copy(deep=True)
-    s5 = s4.copy(deep=True)
-    s6 = s3.copy(deep=True)
+    s1 = s.copy(deep=False)
+    s2 = s.copy(deep=False)
+    s3 = s.copy(deep=False)
+    s4 = s2.copy(deep=False)
+    s5 = s4.copy(deep=False)
+    s6 = s3.copy(deep=False)
 
     s1[0:3] = 10000
     assert_eq(s1, cudf.Series([10000, 10000, 10000, 40, 50]))
@@ -129,7 +145,7 @@ def test_multiple_series_cow():
     for ser in [s3]:
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
 
-    s7 = s5.copy(deep=True)
+    s7 = s5.copy(deep=False)
     assert_eq(s7, cudf.Series([10, 20, 6000, 6000, 50]))
     s7[1:3] = 55
     assert_eq(s7, cudf.Series([10, 55, 55, 6000, 50]))
@@ -178,7 +194,7 @@ def test_multiple_series_cow():
 def test_series_zero_copy(copy_on_write):
     cudf.set_option("copy_on_write", copy_on_write)
     s = cudf.Series([1, 2, 3, 4, 5])
-    s1 = s.copy(deep=True)
+    s1 = s.copy(deep=False)
     cp_array = cp.asarray(s)
 
     assert_eq(s, cudf.Series([1, 2, 3, 4, 5]))
@@ -188,19 +204,28 @@ def test_series_zero_copy(copy_on_write):
     cp_array[0:3] = 10
 
     assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
-    assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+    if copy_on_write:
+        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+    else:
+        assert_eq(s1, cudf.Series([10, 10, 10, 4, 5]))
     assert_eq(cp_array, cp.array([10, 10, 10, 4, 5]))
 
     s2 = cudf.Series(cp_array)
     assert_eq(s2, cudf.Series([10, 10, 10, 4, 5]))
-    s3 = s2.copy(deep=True)
+    s3 = s2.copy(deep=False)
     cp_array[0] = 20
 
     assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
-    assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+    if copy_on_write:
+        assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
+    else:
+        assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
     assert_eq(cp_array, cp.array([20, 10, 10, 4, 5]))
     assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
-    assert_eq(s3, cudf.Series([10, 10, 10, 4, 5]))
+    if copy_on_write:
+        assert_eq(s3, cudf.Series([10, 10, 10, 4, 5]))
+    else:
+        assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
 
 
 @pytest.mark.parametrize("copy_on_write", [True, False])

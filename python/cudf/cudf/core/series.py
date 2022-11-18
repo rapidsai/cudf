@@ -491,6 +491,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index=None,
         dtype=None,
         name=None,
+        copy=False,
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
@@ -521,6 +522,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if name is None:
                 name = data.name
             data = data._column
+            if copy:
+                data = data.copy(deep=True)
             if dtype is not None:
                 data = data.astype(dtype)
 
@@ -539,7 +542,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
-            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            data = column.as_column(
+                data,
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                copy=copy,
+                fastpath=True,
+            )
         else:
             if dtype is not None:
                 data = data.astype(dtype)
