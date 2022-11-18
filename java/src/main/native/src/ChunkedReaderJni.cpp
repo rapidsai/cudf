@@ -56,7 +56,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_create(
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inp_file_path);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inp_file_path can't be empty", 0);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inp_file_path cannot be empty", 0);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
