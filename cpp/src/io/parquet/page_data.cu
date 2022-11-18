@@ -39,22 +39,17 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-constexpr int block_size           = 128;
-constexpr int non_zero_buffer_size = block_size * 2;
-
-inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
-{
-  return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
-}
-
-constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
-
 namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
 
 namespace {
+
+constexpr int block_size           = 128;
+constexpr int non_zero_buffer_size = block_size * 2;
+
+constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
 struct page_state_s {
   const uint8_t* data_start;
