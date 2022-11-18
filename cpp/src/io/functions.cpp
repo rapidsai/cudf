@@ -502,6 +502,45 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 }
 
 /**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
+                                               parquet_reader_options const& options,
+                                               rmm::mr::device_memory_resource* mr)
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            make_datasources(options.get_source()),
+                                                            options,
+                                                            cudf::get_default_stream(),
+                                                            mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::~chunked_parquet_reader
+ */
+chunked_parquet_reader::~chunked_parquet_reader() = default;
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::has_next
+ */
+bool chunked_parquet_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+ */
+table_with_metadata chunked_parquet_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
+}
+
+/**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,

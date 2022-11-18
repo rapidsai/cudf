@@ -48,6 +48,8 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
+mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
@@ -94,6 +96,12 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 rapids_cmake_build_type("Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
+  message(
+    FATAL_ERROR
+      "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
+  )
+endif()
 
 set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
@@ -133,12 +141,14 @@ include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 # find zlib
 rapids_find_package(ZLIB REQUIRED)
 
-# find Threads (needed by cudftestutil)
-rapids_find_package(
-  Threads REQUIRED
-  BUILD_EXPORT_SET cudf-exports
-  INSTALL_EXPORT_SET cudf-exports
-)
+if(CUDF_BUILD_TESTUTIL)
+  # find Threads (needed by cudftestutil)
+  rapids_find_package(
+    Threads REQUIRED
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+  )
+endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
@@ -160,7 +170,9 @@ rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-expo
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
-include(cmake/thirdparty/get_gtest.cmake)
+if(CUDF_BUILD_TESTUTIL)
+  include(cmake/thirdparty/get_gtest.cmake)
+endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
@@ -694,46 +706,48 @@ add_library(cudf::cudf ALIAS cudf)
 # ##################################################################################################
 # * build cudftestutil ----------------------------------------------------------------------------
 
-add_library(
-  cudftestutil STATIC
-  tests/io/metadata_utilities.cpp
-  tests/utilities/base_fixture.cpp
-  tests/utilities/column_utilities.cu
-  tests/utilities/table_utilities.cu
-  tests/utilities/tdigest_utilities.cu
-)
+if(CUDF_BUILD_TESTUTIL)
+  add_library(
+    cudftestutil STATIC
+    tests/io/metadata_utilities.cpp
+    tests/utilities/base_fixture.cpp
+    tests/utilities/column_utilities.cu
+    tests/utilities/table_utilities.cu
+    tests/utilities/tdigest_utilities.cu
+  )
 
-set_target_properties(
-  cudftestutil
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN"
-             # set target compile options
-             CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON
-             CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON
-             POSITION_INDEPENDENT_CODE ON
-             INTERFACE_POSITION_INDEPENDENT_CODE ON
-)
+  set_target_properties(
+    cudftestutil
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+  )
 
-target_compile_options(
-  cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
-)
+  target_compile_options(
+    cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+                        "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+  )
 
-target_link_libraries(
-  cudftestutil
-  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
-  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
-)
+  target_link_libraries(
+    cudftestutil
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
 
-target_include_directories(
-  cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                      "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-)
+  target_include_directories(
+    cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+  )
 
-add_library(cudf::cudftestutil ALIAS cudftestutil)
+  add_library(cudf::cudftestutil ALIAS cudftestutil)
 
+endif()
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
 
@@ -788,24 +802,26 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(
-  TARGETS cudftestutil
-  DESTINATION ${lib_dir}
-  EXPORT cudf-testing-exports
-)
+if(CUDF_BUILD_TESTUTIL)
+  install(
+    TARGETS cudftestutil
+    DESTINATION ${lib_dir}
+    EXPORT cudf-testing-exports
+  )
 
-install(
-  EXPORT cudf-testing-exports
-  FILE cudf-testing-targets.cmake
-  NAMESPACE cudf::
-  DESTINATION "${lib_dir}/cmake/cudf"
-)
+  install(
+    EXPORT cudf-testing-exports
+    FILE cudf-testing-targets.cmake
+    NAMESPACE cudf::
+    DESTINATION "${lib_dir}/cmake/cudf"
+  )
 
-include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-rapids_export_write_dependencies(
-  INSTALL cudf-testing-exports
-  "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
-)
+  include("${rapids-cmake-dir}/export/write_dependencies.cmake")
+  rapids_export_write_dependencies(
+    INSTALL cudf-testing-exports
+    "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
+  )
+endif()
 
 set(doc_string
     [=[
@@ -895,6 +911,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
 ]=]
 )
+
 string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
@@ -906,15 +923,16 @@ rapids_export(
   FINAL_CODE_BLOCK build_code_string
 )
 
-export(
-  EXPORT cudf-testing-exports
-  FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-  NAMESPACE cudf::
-)
-rapids_export_write_dependencies(
-  BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
-)
-
+if(CUDF_BUILD_TESTUTIL)
+  export(
+    EXPORT cudf-testing-exports
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
+    NAMESPACE cudf::
+  )
+  rapids_export_write_dependencies(
+    BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
+  )
+endif()
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
 
