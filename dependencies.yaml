@@ -248,11 +248,10 @@ dependencies:
       - output_types: conda
         packages:
           # This list is copied from ci/gpu/java.sh and needs to be filtered
-          - dask-cuda=22.12.*
+          - dask-cuda=23.02.*
           - maven
           - openjdk=8.*
-          - rapids-build-env=22.12.*
-          - rmm=22.12.*
+          - rmm=23.02.*
           - ucx-py=0.30.*  # TODO: Use variable, don't hard-code
   test_python:
     common:
