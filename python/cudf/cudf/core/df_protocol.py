@@ -721,7 +721,9 @@ def _protocol_to_cudf_column_numeric(
     _dbuffer, _ddtype = buffers["data"]
     _check_buffer_is_on_gpu(_dbuffer)
     cudfcol_num = build_column(
-        as_buffer(data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None),
+        as_buffer(
+            data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(_ddtype),
     )
     return _set_missing_values(col, cudfcol_num), buffers
@@ -751,7 +753,11 @@ def _set_missing_values(
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         bitmask = cp.asarray(
-            as_buffer(data=valid_mask[0].ptr, size=valid_mask[0].bufsize),
+            as_buffer(
+                data=valid_mask[0].ptr,
+                size=valid_mask[0].bufsize,
+                exposed=True,
+            ),
             cp.bool8,
         )
         cudf_col[~bitmask] = None
@@ -790,7 +796,9 @@ def _protocol_to_cudf_column_categorical(
     _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
-        as_buffer(data=codes_buffer.ptr, size=codes_buffer.bufsize),
+        as_buffer(
+            data=codes_buffer.ptr, size=codes_buffer.bufsize, exposed=True
+        ),
         cdtype,
     )
 
@@ -822,7 +830,9 @@ def _protocol_to_cudf_column_string(
     data_buffer, data_dtype = buffers["data"]
     _check_buffer_is_on_gpu(data_buffer)
     encoded_string = build_column(
-        as_buffer(data=data_buffer.ptr, size=data_buffer.bufsize),
+        as_buffer(
+            data=data_buffer.ptr, size=data_buffer.bufsize, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(data_dtype),
     )
 
@@ -832,7 +842,9 @@ def _protocol_to_cudf_column_string(
     offset_buffer, offset_dtype = buffers["offsets"]
     _check_buffer_is_on_gpu(offset_buffer)
     offsets = build_column(
-        as_buffer(data=offset_buffer.ptr, size=offset_buffer.bufsize),
+        as_buffer(
+            data=offset_buffer.ptr, size=offset_buffer.bufsize, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(offset_dtype),
     )
 

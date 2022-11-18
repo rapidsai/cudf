@@ -4,6 +4,8 @@ from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -16,6 +18,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def slice_replace(Column source_strings,
                   size_type start,
                   size_type stop,
@@ -46,6 +49,7 @@ def slice_replace(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def insert(Column source_strings,
            size_type start,
            object py_repl):
@@ -74,6 +78,7 @@ def insert(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace(Column source_strings,
             object py_target,
             object py_repl,
@@ -107,6 +112,7 @@ def replace(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_multi(Column source_strings,
                   Column target_strings,
                   Column repl_strings):

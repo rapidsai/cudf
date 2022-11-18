@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -27,6 +29,7 @@ from cudf._lib.cpp.types cimport interpolation, null_order, order, sorted
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
+@acquire_spill_lock()
 def quantile(
     Column input,
     object q,
