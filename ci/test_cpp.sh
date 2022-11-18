@@ -4,7 +4,6 @@
 set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
-conda activate base
 
 rapids-logger "Generate C++ testing dependencies"
 rapids-dependency-file-generator \
