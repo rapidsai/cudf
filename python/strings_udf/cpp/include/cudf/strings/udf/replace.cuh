@@ -37,19 +37,20 @@ __device__ inline udf_string replace(string_view source,
   if (target.empty()) return udf_string(source);
 
   udf_string result;
-
+  auto const tgt_length   = target.length();
+  auto const src_length   = source.length();
   size_type last_position = 0;
-  auto position           = source.find(target, 0);
+  size_type position      = 0;
   while (position != string_view::npos) {
-    auto left = source.substr(last_position, position - last_position);
-    result.append(left);
-    result.append(replacement);
-    last_position = position + target.length();
-    position      = source.find(target, last_position);
+    position = source.find(target, last_position);
+    if (position != string_view::npos) {
+      result.append(source.substr(last_position, position - last_position));
+      result.append(replacement);
+      last_position = position + tgt_length;
+    }
   }
-  if (last_position < source.length()) {
-    auto right = source.substr(last_position, source.length() - last_position);
-    result.append(right);
+  if (last_position < src_length) {
+    result.append(source.substr(last_position, src_length - last_position));
   }
 
   return result;
