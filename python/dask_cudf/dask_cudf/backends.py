@@ -470,7 +470,12 @@ try:
 
         @staticmethod
         def from_dict(
-            data, npartitions, orient="columns", dtype=None, columns=None
+            data,
+            npartitions,
+            orient="columns",
+            dtype=None,
+            columns=None,
+            constructor=cudf.DataFrame,
         ):
 
             return _default_backend(
@@ -480,7 +485,7 @@ try:
                 orient=orient,
                 dtype=dtype,
                 columns=columns,
-                constructor=cudf.DataFrame,
+                constructor=constructor,
             )
 
         @staticmethod
