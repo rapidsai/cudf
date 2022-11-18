@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ.get('RAPIDS_CUDA_VERSION', '11.5.2').split('.')[:2]) %}
 {% set py_version = environ.get('PY_VER', '3.8') %}
 {% set py_version_numeric = py_version.replace('.', '') %}
 
