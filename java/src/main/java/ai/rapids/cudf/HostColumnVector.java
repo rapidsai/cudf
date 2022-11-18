@@ -1362,7 +1362,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert type.isBackedByByte();
       assert srcOffset >= 0;
       assert length >= 0;
-      assert value.length + srcOffset <= length;
+      assert length + srcOffset <= value.length;
 
       if (length > 0) {
         growFixedWidthBuffersAndRows(length);
@@ -1659,7 +1659,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert value != null : "appendNull must be used to append null strings";
       assert offset >= 0;
       assert length >= 0;
-      assert value.length + offset <= length;
+      assert length + offset <= value.length;
       assert type.equals(DType.STRING);
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
