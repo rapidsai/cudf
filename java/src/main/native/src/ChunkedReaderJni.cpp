@@ -21,9 +21,8 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 
-#include "../include/jni_utils.hpp"
-
 #include "cudf_jni_apis.hpp"
+#include "jni_utils.hpp"
 
 // This function is defined in `TableJni.cpp`.
 jlongArray
