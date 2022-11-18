@@ -248,7 +248,6 @@ dependencies:
           - maven
           - openjdk=8.*
           - rapids-build-env=22.12.*
-          - rapids-notebook-env=22.12.*
           - rmm=22.12.*
           - ucx-py=0.30.*  # TODO: Use variable, don't hard-code
   test_python:

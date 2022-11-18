@@ -54,7 +54,7 @@ jobs:
   conda-java-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: bdice/shared-action-workflows/.github/workflows/custom-job.yaml@custom-test-job
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@custom-test-job
     with:
       build_type: pull-request
       node_type: "gpu-v100-495-1"
