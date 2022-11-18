@@ -29,6 +29,10 @@ files:
     includes:
       - cudatoolkit
       - test_java
+  test_notebooks:
+    output: none
+    includes:
+      - notebooks
   checks:
     output: none
     includes:
@@ -176,7 +180,7 @@ dependencies:
               cuda: "11.5"
             packages:
               - *nvcc_aarch64_115
-  notebook:
+  notebooks:
     common:
       - output_types: [conda, requirements]
         packages:
