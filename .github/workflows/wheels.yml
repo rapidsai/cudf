@@ -1,0 +1,77 @@
+name: cuDF wheels
+
+on:
+  workflow_call:
+    inputs:
+      versioneer-override:
+        type: string
+        default: ''
+      build-tag:
+        type: string
+        default: ''
+      branch:
+        required: true
+        type: string
+      date:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+      build-type:
+        type: string
+        default: nightly
+
+concurrency:
+  group: "cudf-${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  cudf-wheels:
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux.yml@main
+    with:
+      repo: rapidsai/cudf
+
+      build-type: ${{ inputs.build-type }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+
+      package-dir: python/cudf
+      package-name: cudf
+
+      python-package-versioneer-override: ${{ inputs.versioneer-override }}
+      python-package-build-tag: ${{ inputs.build-tag }}
+
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+
+      test-extras:  test
+
+      # Have to manually specify the cupy install location on arm.
+      # Have to also manually install tokenizers==0.10.2, which is the last tokenizers
+      # to have a binary aarch64 wheel available on PyPI
+      # Otherwise, the tokenizers sdist is used, which needs a Rust compiler
+      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+
+      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
+    secrets: inherit
+  dask_cudf-wheel:
+    needs: cudf-wheels
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure.yml@main
+    with:
+      repo: rapidsai/cudf
+
+      build-type: ${{ inputs.build-type }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+
+      package-dir: python/dask_cudf
+      package-name: dask_cudf
+
+      python-package-versioneer-override: ${{ inputs.versioneer-override }}
+      python-package-build-tag: ${{ inputs.build-tag }}
+
+      test-extras:  test
+      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
+    secrets: inherit
