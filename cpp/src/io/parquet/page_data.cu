@@ -771,8 +771,8 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
 {
   T unscaled = 0;
   for (auto i = 0; i < len; i++) {
-    uint32_t v = ptr[i];
-    unscaled   = (unscaled << 8) | v;
+    uint8_t v = ptr[i];
+    unscaled  = (unscaled << 8) | v;
   }
   *dst = unscaled;
 }
