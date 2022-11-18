@@ -56,4 +56,54 @@ if (( ${exitcode} != 0 )); then
 fi
 popd
 
+rapids-mamba-retry install \
+  -c "${CPP_CHANNEL}" \
+  -c "${PYTHON_CHANNEL}" \
+  strings_udf
+
+rapids-logger "pytest strings_udf"
+pushd python/strings_udf/strings_udf
+pytest \
+  --verbose \
+  --cache-clear \
+  --junitxml="${TESTRESULTS_DIR}/junit-strings-udf.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=strings_udf \
+  --cov-report=xml:strings-udf-coverage.xml \
+  --cov-report=term \
+  tests
+exitcode=$?
+
+if (( ${exitcode} != 0 )); then
+    SUITEERROR=${exitcode}
+    echo "FAILED: 1 or more tests in strings_udf"
+fi
+popd
+
+rapids-logger "pytest cudf with strings_udf"
+pushd python/cudf/cudf
+--cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests/test_udf_masked_ops.py
+pushd python/strings_udf/strings_udf
+pytest \
+  --verbose \
+  --cache-clear \
+  --ignore="benchmarks" \
+  --junitxml="${TESTRESULTS_DIR}/junit-cudf-strings-udf.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=strings_udf \
+  --cov-report=xml:strings-udf-coverage.xml \
+  --cov-report=term \
+  tests
+exitcode=$?
+
+if (( ${exitcode} != 0 )); then
+    SUITEERROR=${exitcode}
+    echo "FAILED: 1 or more tests in cudf with strings_udf"
+fi
+popd
+
 exit ${SUITEERROR}
