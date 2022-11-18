@@ -928,6 +928,16 @@ def test_string_udf_concat(str_udf_data, concat_char):
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
 
+@string_udf_test
+@pytest.mark.parametrize("to_replace", ["a", "1", "", "@"])
+@pytest.mark.parametrize("replacement", ["a", "1", "", "@"])
+def test_string_udf_replace(str_udf_data, to_replace, replacement):
+    def func(row):
+        return row["str_col"].replace(to_replace, replacement)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
 )
