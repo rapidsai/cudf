@@ -51,3 +51,13 @@ jobs:
     with:
       build_type: pull-request
       test_script: "ci/test_python_other.sh"
+  conda-java-tests:
+    needs: conda-cpp-build
+    secrets: inherit
+    uses: bdice/shared-action-workflows/.github/workflows/custom-job.yaml@custom-test-job
+    with:
+      build_type: pull-request
+      node_type: "cpu8"
+      arch: "amd64"
+      container_image: "rapidsai/ci:latest"
+      run_script: "ci/test_java.sh"
