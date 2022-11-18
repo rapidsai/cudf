@@ -50,7 +50,7 @@ TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
   constexpr cudf::size_type repeat_count{10};
@@ -75,7 +75,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
 
@@ -112,7 +112,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
 
@@ -156,7 +156,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
                                                            thrust::make_counting_iterator(0));

@@ -288,7 +288,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if (escape_char == true) {
+    if (escape_char) {
       // If a escape character is encountered, escape next character in next loop.
       if (escape_next == false and *current == '\\') {
         escape_next = true;

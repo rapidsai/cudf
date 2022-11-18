@@ -1020,7 +1020,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       memset(chunks.base_host_ptr(), 0, chunks.memory_size());
 
       const bool use_index =
-        (_use_index == true) &&
+        _use_index &&
         // Do stripes have row group index
         _metadata.is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
