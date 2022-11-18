@@ -101,11 +101,7 @@ public class ParquetChunkedReader implements AutoCloseable {
    */
   public Table readChunk() {
     long[] columnPtrs = readChunk(handle);
-    if (columnPtrs == null) {
-      return null;
-    } else {
-      return new Table(columnPtrs);
-    }
+    return columnPtrs != null ? new Table(columnPtrs) : null;
   }
 
   @Override
