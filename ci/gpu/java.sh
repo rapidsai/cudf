@@ -98,8 +98,8 @@ conda list --show-channel-urls
 # INSTALL - Install libcudf artifacts
 ################################################################################
 
-gpuci_logger "Installing libcudf & libcudf_kafka"
-gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka
+gpuci_logger "Installing libcudf"
+gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf
 
 ################################################################################
 # TEST - Run java tests
