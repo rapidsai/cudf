@@ -22,9 +22,9 @@ build:
     # TODO: remove "gha" suffix before PR is merged
     - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64-gha # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=libcudf-linux64-gha # [linux64]
-    - SCCACHE_BUCKET=rapids-sccache
-    - SCCACHE_REGION=us-west-2
-    - SCCACHE_IDLE_TIMEOUT=32768
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
 

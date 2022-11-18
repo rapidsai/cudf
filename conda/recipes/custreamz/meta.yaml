@@ -17,8 +17,20 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - VERSION_SUFFIX
     - PARALLEL_LEVEL
+    - VERSION_SUFFIX
+    - CMAKE_GENERATOR
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    # TODO: remove "gha" suffix before PR is merged
+    - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64-gha # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=libcudf-linux64-gha # [linux64]
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
 requirements:
   host:
