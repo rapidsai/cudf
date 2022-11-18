@@ -530,8 +530,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                             : ids_itr + copy_size;
     auto const end_itr  = thrust::copy_if(
       rmm::exec_policy(stream), ids_itr, copy_end, contiguous_token_ids, copy_if_fn{});
-    contiguous_token_ids += std::distance(contiguous_token_ids, end_itr);
-    ids_itr = copy_end;
+    contiguous_token_ids = end_itr;
+    ids_itr              = copy_end;
   }
 
   // Repurpose start word indices since it is the same size and type as the required output.
