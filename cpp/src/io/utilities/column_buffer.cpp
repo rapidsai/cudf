@@ -55,6 +55,33 @@ void column_buffer::create(size_type _size,
   }
 }
 
+namespace {
+
+/**
+ * @brief Recursively copy `name` and `user_data` fields of one buffer to another.
+ *
+ * @param buff The old output buffer
+ * @param new_buff The new output buffer
+ */
+void copy_buffer_data(column_buffer const& buff, column_buffer& new_buff)
+{
+  new_buff.name      = buff.name;
+  new_buff.user_data = buff.user_data;
+  for (auto const& child : buff.children) {
+    auto& new_child = new_buff.children.emplace_back(column_buffer(child.type, child.is_nullable));
+    copy_buffer_data(child, new_child);
+  }
+}
+
+}  // namespace
+
+column_buffer column_buffer::empty_like(column_buffer const& input)
+{
+  auto new_buff = column_buffer(input.type, input.is_nullable);
+  copy_buffer_data(input, new_buff);
+  return new_buff;
+}
+
 /**
  * @copydoc cudf::io::detail::make_column
  */
