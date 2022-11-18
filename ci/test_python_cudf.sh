@@ -27,7 +27,7 @@ pytest \
   --dist=loadscope \
   --cov-config=../.coveragerc \
   --cov=cudf \
-  --cov-report=xml:cudf-coverage.xml \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
   --cov-report=term \
   tests
 exitcode=$?
@@ -50,6 +50,10 @@ pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=loadscope \
+  --cov-config=.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
+  --cov-report=term \
   benchmarks
 exitcode=$?
 
@@ -66,6 +70,10 @@ pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=loadscope \
+  --cov-config=../.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
+  --cov-report=term \
   benchmarks
 exitcode=$?
 

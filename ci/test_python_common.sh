@@ -29,3 +29,6 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 TESTRESULTS_DIR="${PWD}/test-results"
 mkdir -p "${TESTRESULTS_DIR}"
 SUITEERROR=0
+
+RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
+mkdir -p "${RAPIDS_COVERAGE_DIR}"

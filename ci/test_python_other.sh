@@ -24,7 +24,7 @@ pytest \
   --dist=loadscope \
   --cov-config=.coveragerc \
   --cov=dask_cudf \
-  --cov-report=xml:dask-cudf-coverage.xml \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term \
   dask_cudf
 exitcode=$?
@@ -45,7 +45,7 @@ pytest \
   --dist=loadscope \
   --cov-config=.coveragerc \
   --cov=custreamz \
-  --cov-report=xml:custreamz-coverage.xml \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term \
   custreamz
 exitcode=$?
@@ -71,7 +71,7 @@ pytest \
   --dist=loadscope \
   --cov-config=.coveragerc \
   --cov=strings_udf \
-  --cov-report=xml:strings-udf-coverage.xml \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/strings-udf-coverage.xml" \
   --cov-report=term \
   tests
 exitcode=$?
@@ -93,7 +93,7 @@ pytest \
   --dist=loadscope \
   --cov-config=../.coveragerc \
   --cov=cudf \
-  --cov-report=xml:cudf-strings-udf-coverage.xml \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-strings-udf-coverage.xml" \
   --cov-report=term \
   tests/test_udf_masked_ops.py
 exitcode=$?
