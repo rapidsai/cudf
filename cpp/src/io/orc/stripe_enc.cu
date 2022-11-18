@@ -1235,6 +1235,8 @@ __global__ void __launch_bounds__(1024)
                        ? results[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
+      // Only use the compressed block if it's smaller than the uncompressed
+      // If compression failed, dst_len == src_len, so the uncompressed block will be used
       if (src_len < dst_len) {
         // Copy from uncompressed source
         src                                       = inputs[ss.first_block + b].data();
