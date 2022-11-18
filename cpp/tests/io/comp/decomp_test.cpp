@@ -16,6 +16,7 @@
 
 #include <io/comp/gpuinflate.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+#include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <cudf/utilities/default_stream.hpp>
 
@@ -118,6 +119,9 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   }
 };
 
+struct NvcompConfigTest : public cudf::test::BaseFixture {
+};
+
 TEST_F(GzipDecompressTest, HelloWorld)
 {
   constexpr char uncompressed[]  = "hello world";
@@ -164,6 +168,60 @@ TEST_F(BrotliDecompressTest, HelloWorld)
   std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
   EXPECT_EQ(output, input);
+}
+
+TEST_F(NvcompConfigTest, Compression)
+{
+  using cudf::io::nvcomp::compression_type;
+  auto const& comp_disabled = cudf::io::nvcomp::is_compression_disabled;
+
+  EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {2, 5, 0, true, true, 0}));
+  // version 2.5 required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {2, 4, 0, true, true, 0}));
+  // all integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {2, 5, 0, false, true, 0}));
+
+  EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 0}));
+  EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, true, 0}));
+  // 2.4 version required
+  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 3, 1, false, true, 0}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 0}));
+
+  EXPECT_FALSE(comp_disabled(compression_type::SNAPPY, {2, 5, 0, true, true, 0}));
+  EXPECT_FALSE(comp_disabled(compression_type::SNAPPY, {2, 4, 0, false, true, 0}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::SNAPPY, {2, 3, 0, false, false, 0}));
+}
+
+TEST_F(NvcompConfigTest, Decompression)
+{
+  using cudf::io::nvcomp::compression_type;
+  auto const& decomp_disabled = cudf::io::nvcomp::is_decompression_disabled;
+
+  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {2, 5, 0, true, true, 7}));
+  // version 2.5 required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {2, 4, 0, true, true, 7}));
+  // all integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {2, 5, 0, false, true, 7}));
+
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 3, 2, false, true, 6}));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 3, 0, true, true, 6}));
+  // 2.3.1 and earlier requires all integrations to be enabled
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 3, 1, false, true, 7}));
+  // 2.3 version required
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 2, 0, true, true, 7}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 7}));
+  // 2.4.0 disabled on Pascal
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 6}));
+
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, true, 7}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, false, 7}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

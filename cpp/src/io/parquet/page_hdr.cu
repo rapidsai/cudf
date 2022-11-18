@@ -367,6 +367,7 @@ __global__ void __launch_bounds__(128)
       // definition levels
       bs->page.chunk_row = 0;
       bs->page.num_rows  = 0;
+      bs->page.str_bytes = 0;
     }
     num_values     = bs->ck.num_values;
     page_info      = bs->ck.page_info;
