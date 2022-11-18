@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
@@ -722,6 +723,23 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testChunkedReadParquet() {
+    try (ParquetChunkedReader reader = new ParquetChunkedReader(240000,
+        TEST_PARQUET_FILE_CHUNKED_READ)) {
+      int numChunks = 0;
+      long totalRows = 0;
+      while(reader.hasNext()) {
+        ++numChunks;
+        try(Table chunk = reader.readChunk()) {
+          totalRows += chunk.getRowCount();
+        }
+      }
+      assertEquals(2, numChunks);
+      assertEquals(40000, totalRows);
     }
   }
 
