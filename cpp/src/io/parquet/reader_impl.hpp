@@ -38,7 +38,6 @@
 #include <vector>
 
 namespace cudf::io::detail::parquet {
-
 /**
  * @brief Implementation for Parquet reader
  */
@@ -46,6 +45,9 @@ class reader::impl {
  public:
   /**
    * @brief Constructor from an array of dataset sources with reader options.
+   *
+   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
+   * entire given file.
    *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
@@ -73,6 +75,46 @@ class reader::impl {
                            bool uses_custom_row_bounds,
                            host_span<std::vector<size_type> const> row_group_indices);
 
+  /**
+   * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
+   *
+   * By using this constructor, the reader will support iterative (chunked) reading through
+   * `has_next() ` and `read_chunk()`. For example:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * Reading the whole given file at once through `read()` function is still supported if
+   * `chunk_read_limit == 0` (i.e., no reading limit).
+   * In such case, `read_chunk()` will also return rows of the entire file.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param sources Dataset sources
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit impl(std::size_t chunk_read_limit,
+                std::vector<std::unique_ptr<datasource>>&& sources,
+                parquet_reader_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::has_next
+   */
+  bool has_next();
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+   */
+  table_with_metadata read_chunk();
+
  private:
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -93,6 +135,29 @@ class reader::impl {
    */
   void load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
                                 size_type num_rows);
+
+  /**
+   * @brief Perform some preprocessing for page data and also compute the split locations
+   * {skip_rows, num_rows} for chunked reading.
+   *
+   * There are several pieces of information we can't compute directly from row counts in
+   * the parquet headers when dealing with nested schemas:
+   * - The total sizes of all output columns at all nesting levels
+   * - The starting output buffer offset for each page, for each nesting level
+   *
+   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
+   *
+   * @param skip_rows Crop all rows below skip_rows
+   * @param num_rows Maximum number of rows to read
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   */
+  void preprocess_pages(size_t skip_rows,
+                        size_t num_rows,
+                        bool uses_custom_row_bounds,
+                        size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -158,17 +223,26 @@ class reader::impl {
   // Buffers for generating output columns
   std::vector<column_buffer> _output_buffers;
 
+  // Buffers copied from `_output_buffers` after construction for reuse
+  std::vector<column_buffer> _output_buffers_template;
+
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
+
+  // _output_buffers associated metadata
+  std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 
+  // Variables used for chunked reading:
   cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-
-  size_type _skip_rows{0};
-  size_type _num_rows{0};
+  cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
+  std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
+  std::size_t _chunk_read_limit{0};
+  std::size_t _current_read_chunk{0};
+  bool _file_preprocessed{false};
 };
 
 }  // namespace cudf::io::detail::parquet
