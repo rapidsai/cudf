@@ -41,19 +41,22 @@ from cudf.testing._utils import (
     gen_rand,
 )
 
-# If spilling is enabled globally, we skip many test permutations
-# to reduce running time.
-if get_global_manager() is not None:
-    ALL_TYPES = ["float32"]  # noqa: F811
-    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
-    NUMERIC_TYPES = ["float32"]  # noqa: F811
-
+pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
 
 # Use this to "unmark" the module level spilling mark
 pytest_unmark_spilling = pytest.mark.skipif(
     get_global_manager() is not None, reason="unmarked spilling"
 )
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    # To save time, we skip tests marked "xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 def test_init_via_list_of_tuples():
@@ -276,19 +279,19 @@ def test_append_index(a, b):
         {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
         pytest.param(
             {},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
         pytest.param(
             {1: [], 2: [], 3: []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
         pytest.param(
             [1, 2, 3],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
@@ -2097,7 +2100,7 @@ def gdf(pdf):
         },
         pytest.param(
             {"x": [], "y": [], "z": []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=version.parse("11")
                 <= version.parse(cupy.__version__)
                 < version.parse("11.1"),
@@ -2107,7 +2110,7 @@ def gdf(pdf):
         ),
         pytest.param(
             {"x": []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=version.parse("11")
                 <= version.parse(cupy.__version__)
                 < version.parse("11.1"),
@@ -2625,7 +2628,7 @@ def test_dataframe_boolmask(mask_shape):
         [True, False, True],
         pytest.param(
             cudf.Series([True, False, True]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Pandas can't index a multiindex with a Series"
             ),
         ),
@@ -2982,7 +2985,7 @@ def test_set_index(data, index, drop, append, inplace):
 )
 @pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
 @pytest.mark.parametrize("verify_integrity", [True])
-@pytest.mark.xfail
+@pytest_xfail
 def test_set_index_verify_integrity(data, index, verify_integrity):
     gdf = cudf.DataFrame(data)
     gdf.set_index(index, verify_integrity=verify_integrity)
@@ -3212,7 +3215,7 @@ def test_dataframe_empty_sort_index():
         pytest.param(
             pd.RangeIndex(2, -1, -1),
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     condition=PANDAS_LT_140,
                     reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
@@ -3793,7 +3796,7 @@ def test_dataframe_round(decimals):
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     reason="NotImplementedError: all does not "
                     "support columns of object dtype."
                 )
@@ -3845,7 +3848,7 @@ def test_all(data):
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     reason="NotImplementedError: any does not "
                     "support columns of object dtype."
                 )
@@ -4341,11 +4344,11 @@ def test_series_values_host_property(data):
         [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
-            marks=pytest.mark.xfail(raises=NotImplementedError),
+            marks=pytest_xfail(raises=NotImplementedError),
         ),
         pytest.param(
             ["m", "a", "d", "v"],
-            marks=pytest.mark.xfail(raises=TypeError),
+            marks=pytest_xfail(raises=TypeError),
         ),
     ],
 )
@@ -4366,26 +4369,26 @@ def test_series_values_property(data):
         {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
         pytest.param(
             {"A": [1, None, 3], "B": [1, 2, None]},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Nulls not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Nulls not supported by values accessor"
             ),
         ),
         {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="str or categorical not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="str or categorical not supported by values accessor"
             ),
         ),
@@ -4721,9 +4724,9 @@ def test_empty_df_astype(dtype, args):
     "errors",
     [
         pytest.param(
-            "raise", marks=pytest.mark.xfail(reason="should raise error here")
+            "raise", marks=pytest_xfail(reason="should raise error here")
         ),
-        pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
+        pytest.param("other", marks=pytest_xfail(raises=ValueError)),
         "ignore",
     ],
 )
@@ -5211,7 +5214,7 @@ def test_cov():
     assert_eq(pdf.cov(), gdf.cov())
 
 
-@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+@pytest_xfail(reason="cupy-based cov does not support nulls")
 def test_cov_nans():
     pdf = pd.DataFrame()
     pdf["a"] = [None, None, None, 2.00758632, None]
@@ -5234,7 +5237,7 @@ def test_cov_nans():
         cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
         pytest.param(
             cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
-            marks=pytest.mark.xfail,
+            marks=pytest_xfail,
         ),
     ],
 )
@@ -5288,12 +5291,12 @@ def test_df_sr_binop(gsr, colnames, op):
         operator.pow,
         # comparison ops will temporarily XFAIL
         # see PR  https://github.com/rapidsai/cudf/pull/7491
-        pytest.param(operator.eq, marks=pytest.mark.xfail()),
-        pytest.param(operator.lt, marks=pytest.mark.xfail()),
-        pytest.param(operator.le, marks=pytest.mark.xfail()),
-        pytest.param(operator.gt, marks=pytest.mark.xfail()),
-        pytest.param(operator.ge, marks=pytest.mark.xfail()),
-        pytest.param(operator.ne, marks=pytest.mark.xfail()),
+        pytest.param(operator.eq, marks=pytest_xfail()),
+        pytest.param(operator.lt, marks=pytest_xfail()),
+        pytest.param(operator.le, marks=pytest_xfail()),
+        pytest.param(operator.gt, marks=pytest_xfail()),
+        pytest.param(operator.ge, marks=pytest_xfail()),
+        pytest.param(operator.ne, marks=pytest_xfail()),
     ],
 )
 @pytest.mark.parametrize(
@@ -5355,7 +5358,7 @@ def test_memory_usage(deep, index, set_index):
         )
 
 
-@pytest.mark.xfail
+@pytest_xfail
 def test_memory_usage_string():
     rows = int(100)
     df = pd.DataFrame(
@@ -7204,7 +7207,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
         pd.Series([10, 11, 23, 234, 13]),
         pytest.param(
             pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="pandas bug: "
                 "https://github.com/pandas-dev/pandas/issues/35092"
             ),
@@ -8062,7 +8065,7 @@ def test_dataframe_iterrows_itertuples():
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -8083,7 +8086,7 @@ def test_dataframe_iterrows_itertuples():
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -8140,7 +8143,7 @@ def test_describe_misc_include(df, include):
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -8161,7 +8164,7 @@ def test_describe_misc_include(df, include):
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -8920,7 +8923,7 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="level=None not implemented yet")
+@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
@@ -9353,7 +9356,7 @@ def test_groupby_cov_positive_semidefinite_matrix():
     )
 
 
-@pytest.mark.xfail
+@pytest_xfail
 def test_groupby_cov_for_pandas_bug_case():
     # Handles case: pandas bug using ddof with missing data.
     # Filed an issue in Pandas on GH, link below:
@@ -9750,14 +9753,14 @@ def test_multiindex_wildcard_selection_all(wildcard_df):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="Not yet properly supported.")
+@pytest_xfail(reason="Not yet properly supported.")
 def test_multiindex_wildcard_selection_partial(wildcard_df):
     expect = wildcard_df.to_pandas().loc[:, (slice("a", "b"), "b")]
     got = wildcard_df.loc[:, (slice("a", "b"), "b")]
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="Not yet properly supported.")
+@pytest_xfail(reason="Not yet properly supported.")
 def test_multiindex_wildcard_selection_three_level_all():
     midx = cudf.MultiIndex.from_tuples(
         [(c1, c2, c3) for c1 in "abcd" for c2 in "abc" for c3 in "ab"]

@@ -150,6 +150,9 @@ _cudf_scalar_reflected_ops = [
     lambda x: cudf.Scalar(0) / x,
 ]
 
+pytest_xfail = pytest.mark.xfail
+pytestmark = pytest.mark.spilling
+
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
@@ -166,9 +169,8 @@ if get_global_manager() is not None:
     FLOAT_TYPES = {"float64"}  # noqa: F811
     INTEGER_TYPES = {"int16"}  # noqa: F811
     TIMEDELTA_TYPES = {"timedelta64[s]"}  # noqa: F811
-
-
-pytestmark = pytest.mark.spilling
+    # To save time, we skip tests marked "pytest.mark.xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -900,7 +902,7 @@ def test_binop_bool_uint(func, rhs):
     (
         pytest.param(
             np.bool_,
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason=(
                     "Pandas handling of division by zero-bool is too strange"
                 )
@@ -931,7 +933,7 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     (
         pytest.param(
             np.bool_,
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason=(
                     "Pandas handling of division by zero-bool is too strange"
                 )
@@ -1637,7 +1639,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
         "microseconds",
         pytest.param(
             "nanoseconds",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=not PANDAS_GE_150,
                 reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
@@ -1689,19 +1691,19 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
         pytest.param(
             {"milliseconds": 4},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Pandas gets the wrong answer for milliseconds"
             ),
         ),
         pytest.param(
             {"milliseconds": 4, "years": 2},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Pandas construction fails with these keywords"
             ),
         ),
         pytest.param(
             {"nanoseconds": 12},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Pandas gets the wrong answer for nanoseconds"
             ),
         ),
@@ -1745,7 +1747,7 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         "microseconds",
         pytest.param(
             "nanoseconds",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=not PANDAS_GE_150,
                 reason="https://github.com/pandas-dev/pandas/issues/36589",
             ),
@@ -2767,7 +2769,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
         ),
     ],
 )
-@pytest.mark.xfail(
+@pytest_xfail(
     reason="binop operations not supported for different "
     "bit-width decimal types"
 )
@@ -2941,7 +2943,7 @@ def test_binops_decimal_scalar(args):
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
-@pytest.mark.xfail(
+@pytest_xfail(
     reason="binop operations not supported for different bit-width "
     "decimal types"
 )
@@ -3130,7 +3132,7 @@ def test_empty_column(binop, data, scalar):
         cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
         pytest.param(
             cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Cannot access Frame.values if frame contains nulls"
             ),
         ),
