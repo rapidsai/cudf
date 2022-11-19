@@ -967,7 +967,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
     std::vector<orc_column_meta> nested_col;
-    bool is_data_empty = false;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -1050,6 +1049,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
+      bool is_data_empty = true;
       std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
@@ -1072,10 +1072,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           if (total_data_size == 0) {
             CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
 
-            auto const are_all_empty =
-              std::all_of(_col_meta.num_child_rows.begin(),
-                          _col_meta.num_child_rows.end(),
-                          [](auto col_num_rows) { return col_num_rows == 0; });
+            auto const are_all_empty = std::all_of(
+              thrust::make_counting_iterator(0ul),
+              thrust::make_counting_iterator(num_columns),
+              [&](auto col_idx) {
+                auto const col_stripe_num_rows =
+                  (level == 0)
+                    ? stripe_info->numberOfRows
+                    : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+                return col_stripe_num_rows == 0;
+              });
 
             auto const are_all_structs =
               std::all_of(column_types.begin(), column_types.end(), [](auto dtype) {
@@ -1085,7 +1091,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             // In case ROW GROUP INDEX is not present and all columns are structs with no null
             // stream, there is nothing to read at this level.
             CUDF_EXPECTS(are_all_empty or are_all_structs, "Expected streams data within stripe");
-            is_data_empty = true;
+          } else {
+            is_data_empty = false;
           }
 
           stripe_data.emplace_back(total_data_size, stream);
