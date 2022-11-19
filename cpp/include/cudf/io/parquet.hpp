@@ -996,6 +996,9 @@ class parquet_writer_options_builder {
    * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
    * will allow the use of dictionary encoding even if it will result in the disabling of
    * compression for that column.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
    */
   parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
   {
@@ -1499,6 +1502,9 @@ class chunked_parquet_writer_options_builder {
    * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
    * will allow the use of dictionary encoding even if it will result in the disabling of
    * compression for that column.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
    */
   chunked_parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
   {
