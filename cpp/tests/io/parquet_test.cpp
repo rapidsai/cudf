@@ -4804,7 +4804,7 @@ TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
 
 TEST_F(ParquetWriterTest, DictionaryNeverTest)
 {
-  constexpr unsigned int nrows         = 1'000U;
+  constexpr unsigned int nrows = 1'000U;
 
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
@@ -4845,18 +4845,18 @@ TEST_F(ParquetWriterTest, DictionaryNeverTest)
 
 TEST_F(ParquetWriterTest, DictionaryDefaultTest)
 {
-  constexpr unsigned int nrows       = 65'536U;
+  constexpr unsigned int nrows = 65'536U;
   // cardinality is chosen to result in a dictionary > 1MB in size
   constexpr unsigned int cardinality = 32'768U;
 
   auto elements0 = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
-  auto const col0     = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
+  auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
 
-  auto elements1      = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
+  auto elements1  = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
     return "a unique string value suffixed with " + std::to_string(i % cardinality);
   });
-  auto const col1     = cudf::test::strings_column_wrapper(elements1, elements1 + nrows);
+  auto const col1 = cudf::test::strings_column_wrapper(elements1, elements1 + nrows);
 
   auto const expected = table_view{{col0, col1}};
 
@@ -4895,18 +4895,18 @@ TEST_F(ParquetWriterTest, DictionaryDefaultTest)
 
 TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
 {
-  constexpr unsigned int nrows       = 65'536U;
+  constexpr unsigned int nrows = 65'536U;
   // cardinality is chosen to result in a dictionary > 1MB in size
   constexpr unsigned int cardinality = 32'768U;
 
   auto elements0 = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
-  auto const col0     = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
+  auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
 
-  auto elements1      = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
+  auto elements1  = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
     return "a unique string value suffixed with " + std::to_string(i % cardinality);
   });
-  auto const col1     = cudf::test::strings_column_wrapper(elements1, elements1 + nrows);
+  auto const col1 = cudf::test::strings_column_wrapper(elements1, elements1 + nrows);
 
   auto const expected = table_view{{col0, col1}};
 
