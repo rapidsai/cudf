@@ -18,6 +18,26 @@ class Option:
 _OPTIONS: Dict[str, Option] = {}
 
 
+def _env_get_int(name, default):
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):
+        return default
+
+
+def _env_get_bool(name, default):
+    env = os.getenv(name)
+    if env is None:
+        return default
+    as_a_int = _env_get_int(name, None)
+    env = env.lower().strip()
+    if env == "true" or env == "on" or as_a_int:
+        return True
+    if env == "false" or env == "off" or as_a_int == 0:
+        return False
+    return default
+
+
 def _register_option(
     name: str, default_value: Any, description: str, validator: Callable
 ):
@@ -130,6 +150,16 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
+def _integer_and_none_validator(val):
+    try:
+        if val is None or int(val):
+            return
+    except ValueError:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be an integer or None."
+        )
+
+
 _register_option(
     "default_integer_bitwidth",
     None,
@@ -180,4 +210,43 @@ _register_option(
     """
     ),
     _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "spill",
+    _env_get_bool("CUDF_SPILL", False),
+    textwrap.dedent(
+        """
+        Enables spilling.
+        \tValid values are True or False. Default is False.
+        """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "spill_on_demand",
+    _env_get_bool("CUDF_SPILL_ON_DEMAND", True),
+    textwrap.dedent(
+        """
+        Enables spilling on demand using an RMM out-of-memory error handler.
+        This has no effect if spilling is disabled, see the "spill" option.
+        \tValid values are True or False. Default is True.
+        """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "spill_device_limit",
+    _env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
+    textwrap.dedent(
+        """
+        Enforce a device memory limit in bytes.
+        This has no effect if spilling is disabled, see the "spill" option.
+        \tValid values are any positive integer or None (disabled).
+        \tDefault is None.
+        """
+    ),
+    _integer_and_none_validator,
 )

@@ -3,6 +3,7 @@ import glob
 import os
 
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
+from cuda import cudart
 from numba import cuda
 from numba.cuda.cudadrv.driver import Linker
 from ptxcompiler.patch import NO_DRIVER, safe_get_versions
@@ -85,6 +86,30 @@ def _get_ptx_file():
         )
     else:
         return regular_result[1]
+
+
+# Maximum size of a string column is 2 GiB
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
+    "STRINGS_UDF_HEAP_SIZE", 2**31
+)
+heap_size = 0
+
+
+def set_malloc_heap_size(size=None):
+    """
+    Heap size control for strings_udf, size in bytes.
+    """
+    global heap_size
+    if size is None:
+        size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
+    if size != heap_size:
+        (ret,) = cudart.cudaDeviceSetLimit(
+            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        )
+        if ret.value != 0:
+            raise RuntimeError("Unable to set cudaMalloc heap size")
+
+        heap_size = size
 
 
 ptxpath = None

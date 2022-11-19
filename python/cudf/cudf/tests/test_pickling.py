@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-import sys
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -10,13 +10,7 @@ from cudf import DataFrame, GenericIndex, RangeIndex, Series
 from cudf.core.buffer import as_buffer
 from cudf.testing._utils import assert_eq
 
-if sys.version_info < (3, 8):
-    try:
-        import pickle5 as pickle
-    except ImportError:
-        import pickle
-else:
-    import pickle
+pytestmark = pytest.mark.spilling
 
 
 def check_serialization(df):

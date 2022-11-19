@@ -1838,7 +1838,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary)
+        data = as_buffer(arbitrary, exposed=True)
         col = build_column(data, dtype=current_dtype, mask=mask)
         if copy:
             col = col.copy(deep=True)
@@ -2303,7 +2303,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = as_buffer(data=ptr, size=mask_size, owner=obj)
+            mask = as_buffer(data=ptr, size=mask_size, owner=obj, exposed=True)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)

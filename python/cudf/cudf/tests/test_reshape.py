@@ -9,12 +9,25 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
 )
+
+pytest_xfail = pytest.mark.xfail
+pytestmark = pytest.mark.spilling
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    # To save time, we skip tests marked "pytest.mark.xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2])
@@ -78,7 +91,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     + [
         pytest.param(
             "str",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=not PANDAS_GE_120, reason="pandas bug"
             ),
         )
@@ -441,7 +454,7 @@ def test_pivot_values(values):
         0,
         pytest.param(
             1,
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -449,7 +462,7 @@ def test_pivot_values(values):
         "foo",
         pytest.param(
             "bar",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -457,24 +470,24 @@ def test_pivot_values(values):
         [],
         pytest.param(
             [0, 1],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         ["foo"],
         pytest.param(
             ["foo", "bar"],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         pytest.param(
             [0, 1, 2],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
         pytest.param(
             ["foo", "bar", "baz"],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
     ],
 )
@@ -506,7 +519,7 @@ def test_unstack_multiindex(level):
         pd.Index(range(0, 5), name="row_index"),
         pytest.param(
             pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
