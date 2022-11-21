@@ -30,9 +30,6 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
-# ucx-py version
-export UCX_PY_VERSION='0.30.*'
-
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################
@@ -80,10 +77,7 @@ gpuci_logger "Install dependencies"
 gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
-                  "rapids-notebook-env=$MINOR_VERSION.*" \
-                  "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=${UCX_PY_VERSION}" \
                   "openjdk=8.*" \
                   "maven"
 # "mamba install openjdk" adds an activation script to set JAVA_HOME but this is
@@ -95,36 +89,17 @@ conda activate rapids
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
-
-gpuci_logger "Check compiler versions"
-python --version
-
-
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-function install_dask {
-    # Install the main version of dask, distributed, and streamz
-    gpuci_logger "Install the main version of dask, distributed, and streamz"
-    set -x
-    pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
-    # Need to uninstall streamz that is already in the env.
-    pip uninstall -y streamz
-    pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
-    set +x
-}
-
 ################################################################################
 # INSTALL - Install libcudf artifacts
 ################################################################################
 
-gpuci_logger "Installing libcudf & libcudf_kafka"
-gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka
-
-install_dask
+gpuci_logger "Installing libcudf"
+gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf
 
 ################################################################################
 # TEST - Run java tests
