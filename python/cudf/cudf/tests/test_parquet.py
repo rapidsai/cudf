@@ -2520,7 +2520,7 @@ def test_parquet_reader_one_level_list(datadir):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_one_binary_decimal(datadir):
+def test_parquet_reader_binary_decimal(datadir):
     fname = datadir / "binary_decimal.parquet"
 
     expect = pd.read_parquet(fname)
