@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/types.hpp>
 
@@ -304,6 +305,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
     rmm::device_uvector<size_type> offsets(col_size + 1, stream);
 
@@ -389,10 +391,13 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
         return;
       }
 
+      // If this is a string value, remove quotes
+      auto [in_begin, in_end] = trim_quotes(in.first, in.first + in.second, options.quotechar);
+
       auto const is_parsed = cudf::type_dispatcher(col_type,
                                                    ConvertFunctor{},
-                                                   in.first,
-                                                   in.first + in.second,
+                                                   in_begin,
+                                                   in_end,
                                                    col.data<char>(),
                                                    row,
                                                    col_type,

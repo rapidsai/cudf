@@ -766,6 +766,81 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     assert_eq(df_out, out)
 
 
+def test_csv_reader_bools_custom():
+    names = ["text", "bool"]
+    dtypes = {"text": "str", "bool": "bool"}
+    trues = ["foo", "1"]
+    falses = ["bar", "0"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "0,0",
+        "1,1",
+    ]
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+
+    # Note: bool literals give parsing errors as int
+    # "0" and "1" give parsing errors as bool in pandas
+    expected = pd.read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert_eq(df, expected, check_dtype=True)
+
+
+def test_csv_reader_bools_NA():
+    names = ["text", "int"]
+    dtypes = ["str", "int"]
+    trues = ["foo"]
+    falses = ["bar"]
+    lines = [
+        ",".join(names),
+        "true,true",
+        "false,false",
+        "foo,foo",
+        "bar,bar",
+        "qux,qux",
+    ]
+
+    buffer = "\n".join(lines)
+
+    df = read_csv(
+        StringIO(buffer),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        true_values=trues,
+        false_values=falses,
+    )
+    assert len(df.columns) == 2
+    assert df["text"].dtype == np.dtype("object")
+    assert df["int"].dtype == np.dtype("int64")
+    expected = pd.DataFrame(
+        {
+            "text": ["true", "false", "foo", "bar", "qux"],
+            "int": [1, 0, 1, 0, 0],
+        }
+    )
+    # breaking behaviour is np.nan for qux
+    assert_eq(df, expected)
+
+
 def test_csv_quotednumbers(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file12.csv")
 
@@ -2130,3 +2205,41 @@ def test_default_float_bitwidth_partial(default_float_bitwidth):
     )
     assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
     assert read["float2"].dtype == np.dtype("f8")
+
+
+@pytest.mark.parametrize(
+    "usecols,names",
+    [
+        # selection using indices; only names of selected columns are specified
+        ([1, 2], ["b", "c"]),
+        # selection using indices; names of all columns are specified
+        ([1, 2], ["a", "b", "c"]),
+        # selection using indices; duplicates
+        ([2, 2], ["a", "b", "c"]),
+        # selection using indices; out of order
+        ([2, 1], ["a", "b", "c"]),
+        # selection using names
+        (["b"], ["a", "b", "c"]),
+        # selection using names; multiple columns
+        (["b", "c"], ["a", "b", "c"]),
+        # selection using names; duplicates
+        (["c", "c"], ["a", "b", "c"]),
+        # selection using names; out of order
+        (["c", "b"], ["a", "b", "c"]),
+    ],
+)
+def test_column_selection_plus_column_names(usecols, names):
+
+    lines = [
+        "num,datetime,text",
+        "123,2018-11-13T12:00:00,abc",
+        "456,2018-11-14T12:35:01,def",
+        "789,2018-11-15T18:02:59,ghi",
+    ]
+
+    buffer = "\n".join(lines) + "\n"
+
+    assert_eq(
+        pd.read_csv(StringIO(buffer), usecols=usecols, names=names),
+        cudf.read_csv(StringIO(buffer), usecols=usecols, names=names),
+    )

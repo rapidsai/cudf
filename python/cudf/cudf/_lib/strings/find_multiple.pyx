@@ -1,7 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -11,6 +13,7 @@ from cudf._lib.cpp.strings.find_multiple cimport (
 )
 
 
+@acquire_spill_lock()
 def find_multiple(Column source_strings, Column target_strings):
     """
     Returns a column with character position values where each

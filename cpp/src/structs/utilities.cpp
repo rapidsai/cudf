@@ -118,8 +118,8 @@ struct table_flattener {
    */
   void superimpose_nulls(table_view const& input_table)
   {
-    auto [table, null_masks]     = superimpose_parent_nulls(input_table);
-    this->input                  = table;
+    auto [table, null_masks] = superimpose_parent_nulls(input_table, cudf::get_default_stream());
+    this->input              = table;
     this->superimposed_nullmasks = std::move(null_masks);
   }
 

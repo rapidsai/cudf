@@ -38,12 +38,11 @@ namespace cudf {
 namespace strings {
 namespace detail {
 //
-std::unique_ptr<column> all_characters_of_type(
-  strings_column_view const& strings,
-  string_character_types types,
-  string_character_types verify_types,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+                                               string_character_types types,
+                                               string_character_types verify_types,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -197,7 +196,7 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
 {
   CUDF_FUNC_RANGE();
   return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::default_stream_value, mr);
+    strings, types, verify_types, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
@@ -208,7 +207,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::default_stream_value, mr);
+    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

@@ -44,8 +44,10 @@ __global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, 
 
   auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
   auto const stride     = s_prog.thread_count();
-  for (auto idx = thread_idx; idx < size; idx += stride) {
-    fn(idx, s_prog, thread_idx);
+  if (thread_idx < stride) {
+    for (auto idx = thread_idx; idx < size; idx += stride) {
+      fn(idx, s_prog, thread_idx);
+    }
   }
 }
 
@@ -79,8 +81,10 @@ __global__ void transform_kernel(TransformFunction fn,
 
   auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
   auto const stride     = s_prog.thread_count();
-  for (auto idx = thread_idx; idx < size; idx += stride) {
-    d_output[idx] = fn(idx, s_prog, thread_idx);
+  if (thread_idx < stride) {
+    for (auto idx = thread_idx; idx < size; idx += stride) {
+      d_output[idx] = fn(idx, s_prog, thread_idx);
+    }
   }
 }
 

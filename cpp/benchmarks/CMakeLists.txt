@@ -169,7 +169,7 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/sort_lists.cpp sort/sort_structs.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/segmented_sort.cpp sort/sort_lists.cpp sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -301,7 +301,8 @@ ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
+target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
 add_custom_target(
   run_benchmarks

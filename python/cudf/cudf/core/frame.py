@@ -321,15 +321,19 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
-        result = {}
+        result_data = {}
         for col_name, col in self._data.items():
             dt = dtype.get(col_name, col.dtype)
             if not is_dtype_equal(dt, col.dtype):
-                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
             else:
-                result[col_name] = col.copy() if copy else col
+                result_data[col_name] = col.copy() if copy else col
 
-        return result
+        return ColumnAccessor._create_unsafe(
+            data=result_data,
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+        )
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -953,7 +957,7 @@ class Frame(BinaryOperand, Scannable):
         return self[out_cols]
 
     @_cudf_nvtx_annotate
-    def _quantiles(
+    def _quantile_table(
         self,
         q,
         interpolation="LINEAR",
@@ -972,7 +976,7 @@ class Frame(BinaryOperand, Scannable):
         ]
 
         return self._from_columns_like_self(
-            libcudf.quantiles.quantiles(
+            libcudf.quantiles.quantile_table(
                 [*self._columns],
                 q,
                 interpolation,
@@ -1196,7 +1200,7 @@ class Frame(BinaryOperand, Scannable):
         return self
 
     @_cudf_nvtx_annotate
-    def isnull(self):
+    def isna(self):
         """
         Identify missing values.
 
@@ -1236,7 +1240,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.isnull()
+        >>> df.isna()
              age   born   name    toy
         0  False   True  False   True
         1  False  False  False  False
@@ -1252,7 +1256,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.isnull()
+        >>> ser.isna()
         0    False
         1    False
         2     True
@@ -1265,17 +1269,17 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.isnull()
-        GenericIndex([False, False, True, True, False, False], dtype='bool')
+        >>> idx.isna()
+        array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for isnull
-    isna = isnull
+    # Alias for isna
+    isnull = isna
 
     @_cudf_nvtx_annotate
-    def notnull(self):
+    def notna(self):
         """
         Identify non-missing values.
 
@@ -1315,7 +1319,7 @@ class Frame(BinaryOperand, Scannable):
         0     5                        <NA>  Alfred       <NA>
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
-        >>> df.notnull()
+        >>> df.notna()
              age   born  name    toy
         0   True  False  True  False
         1   True   True  True   True
@@ -1331,7 +1335,7 @@ class Frame(BinaryOperand, Scannable):
         3     Inf
         4    -Inf
         dtype: float64
-        >>> ser.notnull()
+        >>> ser.notna()
         0     True
         1     True
         2    False
@@ -1344,14 +1348,14 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
         >>> idx
         Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
-        >>> idx.notnull()
-        GenericIndex([True, True, False, False, True, True], dtype='bool')
+        >>> idx.notna()
+        array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for notnull
-    notna = notnull
+    # Alias for notna
+    notnull = notna
 
     @_cudf_nvtx_annotate
     def searchsorted(
@@ -1363,12 +1367,12 @@ class Frame(BinaryOperand, Scannable):
         ----------
         value : Frame (Shape must be consistent with self)
             Values to be hypothetically inserted into Self
-        side : str {‘left’, ‘right’} optional, default ‘left‘
-            If ‘left’, the index of the first suitable location found is given
-            If ‘right’, return the last such index
+        side : str {'left', 'right'} optional, default 'left'
+            If 'left', the index of the first suitable location found is given
+            If 'right', return the last such index
         ascending : bool optional, default True
             Sorted Frame is in ascending order (otherwise descending)
-        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+        na_position : str {'last', 'first'} optional, default 'last'
             Position of null values in sorted order
 
         Returns
@@ -1412,7 +1416,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df.searchsorted(values_df, ascending=False)
         array([4, 4, 4, 0], dtype=int32)
         """
-        # Call libcudf++ search_sorted primitive
+        # Call libcudf search_sorted primitive
 
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -1476,8 +1480,8 @@ class Frame(BinaryOperand, Scannable):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns

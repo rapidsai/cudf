@@ -65,7 +65,7 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
   auto const requests = make_aggregation_request_vector(
     *vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }

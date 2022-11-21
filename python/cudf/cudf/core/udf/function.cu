@@ -19,6 +19,7 @@
 
 using size_type = int;
 
+/*
 // double atomicAdd
 __device__ __forceinline__ double atomicAdd(double* address, double val)
 {
@@ -34,6 +35,7 @@ __device__ __forceinline__ double atomicAdd(double* address, double val)
 
   return __longlong_as_double(old);
 }
+*/
 
 // int64_t atomicAdd
 __device__ __forceinline__ int64_t atomicAdd(int64_t* address, int64_t val)

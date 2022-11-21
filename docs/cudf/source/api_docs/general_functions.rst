@@ -14,6 +14,8 @@ Data manipulations
    cudf.get_dummies
    cudf.melt
    cudf.pivot
+   cudf.pivot_table
+   cudf.crosstab
    cudf.unstack
 
 Top-level conversions

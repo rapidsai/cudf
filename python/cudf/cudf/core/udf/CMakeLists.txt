@@ -71,6 +71,15 @@ endfunction()
 # Create the shim library for each architecture.
 set(GROUPBY_FUNCTION_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
+# always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
+# safely queried through a context
+list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "60")
+
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
+list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
+list(SORT CMAKE_CUDA_ARCHITECTURES)
+list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
+
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt function_${arch})
 

@@ -56,6 +56,11 @@ def str_udf_data():
                 "cudf",
                 "cuda",
                 "gpu",
+                "This Is A Title",
+                "This is Not a Title",
+                "Neither is This a Title",
+                "NoT a TiTlE",
+                "123 Title Works",
             ]
         }
     )
@@ -192,6 +197,10 @@ def test_arith_masked_vs_constant(op, constant, data):
         operator.pow,
         operator.truediv,
         operator.floordiv,
+        operator.imod,
+        operator.ipow,
+        operator.itruediv,
+        operator.ifloordiv,
     }:
         # The following tests cases yield undefined behavior:
         # - truediv(x, False) because its dividing by zero
@@ -214,7 +223,7 @@ def test_arith_masked_vs_constant_reflected(op, constant, data):
     # Just a single column -> result will be all NA
     gdf = cudf.DataFrame({"data": data})
 
-    if constant == 1 and op is operator.pow:
+    if constant == 1 and op in {operator.pow, operator.ipow}:
         # The following tests cases yield differing results from pandas:
         # - 1**NA
         # - True**NA
@@ -232,7 +241,7 @@ def test_arith_masked_vs_null(op, data):
 
     gdf = cudf.DataFrame({"data": data})
 
-    if 1 in gdf["data"] and op is operator.pow:
+    if 1 in gdf["data"] and op in {operator.pow, operator.ipow}:
         # In pandas, 1**NA == 1.
         pytest.skip()
     run_masked_udf_test(func, gdf, check_dtype=False)
@@ -478,7 +487,7 @@ def test_series_arith_masked_vs_constant(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-    if constant is cudf.NA and op is operator.pow:
+    if constant is cudf.NA and op in {operator.pow, operator.ipow}:
         # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
         with pytest.xfail():
             run_masked_udf_series(func, data, check_dtype=False)
@@ -494,7 +503,11 @@ def test_series_arith_masked_vs_constant_reflected(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-    if constant is not cudf.NA and constant == 1 and op is operator.pow:
+    if (
+        constant is not cudf.NA
+        and constant == 1
+        and op in {operator.pow, operator.ipow}
+    ):
         # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
         with pytest.xfail():
             run_masked_udf_series(func, data, check_dtype=False)
@@ -840,9 +853,77 @@ def test_string_udf_isspace(str_udf_data):
 
 
 @string_udf_test
+def test_string_udf_istitle(str_udf_data):
+    def func(row):
+        return row["str_col"].istitle()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
 def test_string_udf_count(str_udf_data, substr):
     def func(row):
         return row["str_col"].count(substr)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_return_string(str_udf_data):
+    def func(row):
+        return row["str_col"]
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_strip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].strip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_lstrip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].lstrip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_rstrip(str_udf_data, strip_char):
+    def func(row):
+        return row["str_col"].rstrip(strip_char)
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_upper(str_udf_data):
+    def func(row):
+        return row["str_col"].upper()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+def test_string_udf_lower(str_udf_data):
+    def func(row):
+        return row["str_col"].lower()
+
+    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+
+
+@string_udf_test
+@pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
+def test_string_udf_concat(str_udf_data, concat_char):
+    def func(row):
+        return row["str_col"] + concat_char
 
     run_masked_udf_test(func, str_udf_data, check_dtype=False)
 

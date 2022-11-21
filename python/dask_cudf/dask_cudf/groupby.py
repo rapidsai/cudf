@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from functools import wraps
 from typing import Set
 
 import numpy as np
@@ -11,16 +12,13 @@ from dask.dataframe.core import (
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
+from dask.utils import funcname
 
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
-CUMULATIVE_AGGS = (
-    "cumsum",
-    "cumcount",
-)
-
-AGGS = (
+# aggregations that are dask-cudf optimized
+OPTIMIZED_AGGS = (
     "count",
     "mean",
     "std",
@@ -33,19 +31,18 @@ AGGS = (
     "last",
 )
 
-SUPPORTED_AGGS = (*AGGS, *CUMULATIVE_AGGS)
 
-
-def _check_groupby_supported(func):
+def _check_groupby_optimized(func):
     """
     Decorator for dask-cudf's groupby methods that returns the dask-cudf
-    method if the groupby object is supported, otherwise reverting to the
-    upstream Dask method
+    optimized method if the groupby object is supported, otherwise
+    reverting to the upstream Dask method
     """
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
         gb = args[0]
-        if _groupby_supported(gb):
+        if _groupby_optimized(gb):
             return func(*args, **kwargs)
         # note that we use upstream Dask's default kwargs for this call if
         # none are specified; this shouldn't be an issue as those defaults are
@@ -93,7 +90,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return {c: agg_name for c in self.obj.columns if c != self.by}
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def count(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -108,7 +105,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -123,7 +120,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def std(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -138,7 +135,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def var(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -153,7 +150,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def sum(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -168,7 +165,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def min(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -183,7 +180,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def max(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -198,7 +195,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -213,7 +210,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def first(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -228,7 +225,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         )
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def last(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -249,7 +246,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
         arg = _redirect_aggs(arg)
 
-        if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
+        if _groupby_optimized(self) and _aggs_optimized(arg, OPTIMIZED_AGGS):
             if isinstance(self._meta.grouping.keys, cudf.MultiIndex):
                 keys = self._meta.grouping.keys.names
             else:
@@ -286,7 +283,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         super().__init__(*args, sort=sort, **kwargs)
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def count(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -301,7 +298,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -316,7 +313,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def std(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -331,7 +328,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def var(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -346,7 +343,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def sum(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -361,7 +358,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def min(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -376,7 +373,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def max(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -391,7 +388,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -406,7 +403,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def first(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -421,7 +418,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
-    @_check_groupby_supported
+    @_check_groupby_optimized
     def last(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -445,7 +442,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         if not isinstance(arg, dict):
             arg = {self._slice: arg}
 
-        if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
+        if _groupby_optimized(self) and _aggs_optimized(arg, OPTIMIZED_AGGS):
             return groupby_agg(
                 self.obj,
                 self.by,
@@ -467,6 +464,71 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             # when dask_cudf is pinned to dask>2022.8.0
             **({} if shuffle is None else {"shuffle": shuffle}),
         )
+
+
+def _shuffle_aggregate(
+    ddf,
+    gb_cols,
+    chunk,
+    chunk_kwargs,
+    aggregate,
+    aggregate_kwargs,
+    split_every,
+    split_out,
+    token=None,
+    sort=None,
+    shuffle=None,
+):
+    # Shuffle-based groupby aggregation
+    # NOTE: This function is the dask_cudf version of
+    # dask.dataframe.groupby._shuffle_aggregate
+
+    # Step 1 - Chunkwise groupby operation
+    chunk_name = f"{token or funcname(chunk)}-chunk"
+    chunked = ddf.map_partitions(
+        chunk,
+        meta=chunk(ddf._meta, **chunk_kwargs),
+        token=chunk_name,
+        **chunk_kwargs,
+    )
+
+    # Step 2 - Perform global sort or shuffle
+    shuffle_npartitions = max(
+        chunked.npartitions // split_every,
+        split_out,
+    )
+    if sort and split_out > 1:
+        # Sort-based code path
+        result = (
+            chunked.repartition(npartitions=shuffle_npartitions)
+            .sort_values(
+                gb_cols,
+                ignore_index=True,
+                shuffle=shuffle,
+            )
+            .map_partitions(
+                aggregate,
+                meta=aggregate(chunked._meta, **aggregate_kwargs),
+                **aggregate_kwargs,
+            )
+        )
+    else:
+        # Hash-based code path
+        result = chunked.shuffle(
+            gb_cols,
+            npartitions=shuffle_npartitions,
+            ignore_index=True,
+            shuffle=shuffle,
+        ).map_partitions(
+            aggregate,
+            meta=aggregate(chunked._meta, **aggregate_kwargs),
+            **aggregate_kwargs,
+        )
+
+    # Step 3 - Repartition and return
+    if split_out < result.npartitions:
+        return result.repartition(npartitions=split_out)
+    return result
 
 
 @_dask_cudf_nvtx_annotate
@@ -501,17 +563,11 @@ def groupby_agg(
     in `dask.dataframe`, because it allows the cudf backend to
     perform multiple aggregations at once.
     """
-    if shuffle:
-        # Temporary error until shuffle-based groupby is implemented
-        raise NotImplementedError(
-            "The shuffle option is not yet implemented in dask_cudf."
-        )
-
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)
-    if not _aggs_supported(aggs, SUPPORTED_AGGS):
+    if not _aggs_optimized(aggs, OPTIMIZED_AGGS):
         raise ValueError(
-            f"Supported aggs include {SUPPORTED_AGGS} for groupby_agg API. "
+            f"Supported aggs include {OPTIMIZED_AGGS} for groupby_agg API. "
             f"Aggregations must be specified with dict or list syntax."
         )
 
@@ -522,16 +578,6 @@ def groupby_agg(
     # Deal with default split_out and split_every params
     split_every = split_every or 8
     split_out = split_out or 1
-
-    # Deal with sort/shuffle defaults
-    if split_out > 1 and sort:
-        # NOTE: This can be changed when `shuffle` is not `None`
-        # as soon as the shuffle-based groupby is implemented
-        raise ValueError(
-            "dask-cudf's groupby algorithm does not yet support "
-            "`sort=True` when `split_out>1`. Please use `split_out=1`, "
-            "or try grouping with `sort=False`."
-        )
 
     # Standardize `gb_cols`, `columns`, and `aggs`
     if isinstance(gb_cols, str):
@@ -609,8 +655,43 @@ def groupby_agg(
         "aggs_renames": aggs_renames,
     }
 
+    # Use shuffle=True for split_out>1
+    if sort and split_out > 1 and shuffle is None:
+        shuffle = "tasks"
+
+    # Check if we are using the shuffle-based algorithm
+    if shuffle:
+        # Shuffle-based aggregation
+        return _shuffle_aggregate(
+            ddf,
+            gb_cols,
+            chunk,
+            chunk_kwargs,
+            aggregate,
+            aggregate_kwargs,
+            split_every,
+            split_out,
+            token="cudf-aggregate",
+            sort=sort,
+            shuffle=shuffle if isinstance(shuffle, str) else None,
+        )
+
+    # Deal with sort/shuffle defaults
+    if split_out > 1 and sort:
+        raise ValueError(
+            "dask-cudf's groupby algorithm does not yet support "
+            "`sort=True` when `split_out>1`, unless a shuffle-based "
+            "algorithm is used. Please use `split_out=1`, group "
+            "with `sort=False`, or set `shuffle=True`."
+        )
+
+    # Determine required columns to enable column projection
+    required_columns = list(
+        set(gb_cols).union(aggs.keys()).intersection(ddf.columns)
+    )
+
     return aca(
-        [ddf],
+        [ddf[required_columns]],
         chunk=chunk,
         chunk_kwargs=chunk_kwargs,
         combine=combine,
@@ -655,7 +736,7 @@ def _redirect_aggs(arg):
 
 
 @_dask_cudf_nvtx_annotate
-def _aggs_supported(arg, supported: set):
+def _aggs_optimized(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
@@ -677,8 +758,8 @@ def _aggs_supported(arg, supported: set):
 
 
 @_dask_cudf_nvtx_annotate
-def _groupby_supported(gb):
-    """Check that groupby input is supported by dask-cudf"""
+def _groupby_optimized(gb):
+    """Check that groupby input can use dask-cudf optimized codepath"""
     return isinstance(gb.obj, DaskDataFrame) and (
         isinstance(gb.by, str)
         or (isinstance(gb.by, list) and all(isinstance(x, str) for x in gb.by))
@@ -726,8 +807,10 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
     gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
         _agg_dict
     )
-    gb.columns = [_make_name(name, sep=sep) for name in gb.columns]
-    return gb
+    output_columns = [_make_name(name, sep=sep) for name in gb.columns]
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate
@@ -748,7 +831,7 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         agg = col.split(sep)[-1]
         if agg in ("count", "sum"):
             agg_dict[col] = ["sum"]
-        elif agg in SUPPORTED_AGGS:
+        elif agg in OPTIMIZED_AGGS:
             agg_dict[col] = [agg]
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
@@ -758,11 +841,13 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     )
 
     # Don't include the last aggregation in the column names
-    gb.columns = [
+    output_columns = [
         _make_name(name[:-1] if isinstance(name, tuple) else name, sep=sep)
         for name in gb.columns
     ]
-    return gb
+    gb.columns = output_columns
+    # Return with deterministic column ordering
+    return gb[sorted(output_columns)]
 
 
 @_dask_cudf_nvtx_annotate

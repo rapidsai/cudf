@@ -34,6 +34,8 @@
 #include <cudf/utilities/error.hpp>
 #include <io/orc/orc.hpp>
 
+#include <cudf/detail/iterator.cuh>
+
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options
@@ -156,7 +158,7 @@ table_with_metadata read_avro(avro_reader_options const& options,
 
   CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return avro::read_avro(std::move(datasources[0]), options, cudf::default_stream_value, mr);
+  return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
 }
 
 compression_type infer_compression_type(compression_type compression, source_info const& info)
@@ -198,7 +200,7 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  return detail::json::read_json(datasources, options, cudf::default_stream_value, mr);
+  return detail::json::read_json(datasources, options, cudf::get_default_stream(), mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
@@ -216,7 +218,7 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
   return cudf::io::detail::csv::read_csv(  //
     std::move(datasources[0]),
     options,
-    cudf::default_stream_value,
+    cudf::get_default_stream(),
     mr);
 }
 
@@ -231,9 +233,9 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   return csv::write_csv(  //
     sinks[0].get(),
     options.get_table(),
-    options.get_metadata(),
+    options.get_names(),
     options,
-    cudf::default_stream_value,
+    cudf::get_default_stream(),
     mr);
 }
 
@@ -241,7 +243,7 @@ namespace detail_orc = cudf::io::detail::orc;
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
-  auto stream = cudf::default_stream_value;
+  auto stream = cudf::get_default_stream();
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type() == io_type::FILEPATH) {
@@ -287,6 +289,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 {
   number_of_values = cs.number_of_values;
+  has_null         = cs.has_null;
   if (cs.int_stats) {
     type_specific_stats = *cs.int_stats;
   } else if (cs.double_stats) {
@@ -336,6 +339,40 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 
   return result;
 }
+namespace {
+orc_column_schema make_orc_column_schema(host_span<orc::SchemaType const> orc_schema,
+                                         uint32_t column_id,
+                                         std::string column_name)
+{
+  auto const& orc_col_schema = orc_schema[column_id];
+  std::vector<orc_column_schema> children;
+  children.reserve(orc_col_schema.subtypes.size());
+  std::transform(
+    orc_col_schema.subtypes.cbegin(),
+    orc_col_schema.subtypes.cend(),
+    cudf::detail::make_counting_transform_iterator(0,
+                                                   [&names = orc_col_schema.fieldNames](size_t i) {
+                                                     return i < names.size() ? names[i]
+                                                                             : std::string{};
+                                                   }),
+    std::back_inserter(children),
+    [&](auto& type, auto name) { return make_orc_column_schema(orc_schema, type, name); });
+
+  return {std::move(column_name), orc_schema[column_id].kind, std::move(children)};
+}
+};  // namespace
+
+orc_metadata read_orc_metadata(source_info const& src_info)
+{
+  auto sources = make_datasources(src_info);
+
+  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
+  auto const footer = orc::metadata(sources.front().get(), cudf::detail::default_stream_value).ff;
+
+  return {{make_orc_column_schema(footer.types, 0, "")},
+          static_cast<size_type>(footer.numberOfRows),
+          static_cast<size_type>(footer.stripes.size())};
+}
 
 /**
  * @copydoc cudf::io::read_orc
@@ -346,9 +383,9 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 
   auto datasources = make_datasources(options.get_source());
   auto reader      = std::make_unique<detail_orc::reader>(
-    std::move(datasources), options, cudf::default_stream_value, mr);
+    std::move(datasources), options, cudf::get_default_stream(), mr);
 
-  return reader->read(options);
+  return reader->read(options, cudf::get_default_stream());
 }
 
 /**
@@ -364,7 +401,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::default_stream_value, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream(), mr);
 
   writer->write(options.get_table());
 }
@@ -381,7 +418,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::default_stream_value, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream(), mr);
 }
 
 /**
@@ -416,7 +453,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 
   auto datasources = make_datasources(options.get_source());
   auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources), options, cudf::default_stream_value, mr);
+    std::move(datasources), options, cudf::get_default_stream(), mr);
 
   return reader->read(options);
 }
@@ -457,11 +494,50 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::default_stream_value, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::YES, cudf::get_default_stream(), mr);
 
   writer->write(options.get_table(), options.get_partitions());
 
   return writer->close(options.get_column_chunks_file_paths());
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
+ */
+chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
+                                               parquet_reader_options const& options,
+                                               rmm::mr::device_memory_resource* mr)
+  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
+                                                            make_datasources(options.get_source()),
+                                                            options,
+                                                            cudf::get_default_stream(),
+                                                            mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::~chunked_parquet_reader
+ */
+chunked_parquet_reader::~chunked_parquet_reader() = default;
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::has_next
+ */
+bool chunked_parquet_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+ */
+table_with_metadata chunked_parquet_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
 }
 
 /**
@@ -475,7 +551,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::default_stream_value, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::NO, cudf::get_default_stream(), mr);
 }
 
 /**

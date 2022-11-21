@@ -19,6 +19,7 @@
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/trie.cuh>
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -283,6 +284,7 @@ cudf::data_type infer_data_type(OptionsView const& options,
                                 std::size_t const size,
                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(size != 0, "No data available for data type inference.\n");
 
   auto const h_column_info = infer_column_type(options, data, column_strings_begin, size, stream);

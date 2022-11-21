@@ -53,7 +53,7 @@ static void BM_translate(benchmark::State& state, int entry_count)
                  });
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::strings::translate(input, entries);
   }
 

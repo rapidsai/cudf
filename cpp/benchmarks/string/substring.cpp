@@ -52,7 +52,7 @@ static void BM_substring(benchmark::State& state, substring_type rt)
   cudf::test::strings_column_wrapper delimiters(delim_itr, delim_itr + n_rows);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case position: cudf::strings::slice_strings(input, 1, max_str_length / 2); break;
       case multi_position: cudf::strings::slice_strings(input, starts, stops); break;

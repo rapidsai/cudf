@@ -108,6 +108,13 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                size_type fp_ulps            = cudf::test::default_ulp);
 
 /**
+ * @brief Verifies the given column is empty
+ *
+ * @param col The column to check
+ */
+void expect_column_empty(cudf::column_view const& col);
+
+/**
  * @brief Verifies the bitwise equality of two device memory buffers.
  *
  * @param lhs The first buffer
@@ -234,11 +241,11 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   auto const scv     = strings_column_view(c);
   auto const h_chars = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    cudf::default_stream_value);
+    cudf::get_default_stream());
   auto const h_offsets = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    cudf::default_stream_value);
+    cudf::get_default_stream());
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;

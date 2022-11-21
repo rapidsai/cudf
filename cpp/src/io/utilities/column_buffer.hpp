@@ -104,9 +104,13 @@ struct column_buffer {
   {
     return static_cast<T*>(_null_mask.data());
   }
-  auto null_mask_size() { return _null_mask.size(); };
+  auto null_mask_size() { return _null_mask.size(); }
 
   auto& null_count() { return _null_count; }
+
+  // Create a new column_buffer that has empty data but with the same basic information as the
+  // input column, including same type, nullability, name, and user_data.
+  static column_buffer empty_like(column_buffer const& input);
 
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};

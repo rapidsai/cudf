@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,14 +80,12 @@ TEST_F(SegmentedSortInt, Empty)
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_empty, table_empty, segments));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_empty, table_empty, col_empty));
 
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_empty, table_valid, segments),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_empty, table_valid, col_empty),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_valid, table_empty, segments),
-                            "Mismatch in number of rows for values and keys");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::segmented_sort_by_key(table_valid, table_empty, col_empty),
-                            "Mismatch in number of rows for values and keys");
+  // Swapping "empty" and "valid" tables is invalid because the keys and values will be of different
+  // sizes.
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_empty, table_valid, segments), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_empty, table_valid, col_empty), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_valid, table_empty, segments), cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(table_valid, table_empty, col_empty), cudf::logic_error);
 }
 
 TEST_F(SegmentedSortInt, Single)
@@ -99,7 +97,7 @@ TEST_F(SegmentedSortInt, Single)
   column_wrapper<int> segments2{{0, 3}};
   table_view table_1elem{{col1}};
   table_view table_1segm{{col3}};
-  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1elem, table_1elem, segments2));
+
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1elem, table_1elem, segments1));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1segm, table_1segm, segments2));
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(table_1segm, table_1segm, segments1));
@@ -201,9 +199,13 @@ TEST_F(SegmentedSortInt, NonZeroSegmentsStart)
   column_wrapper<int> segments1{{0,    2,       5,       8,     11}};
   column_wrapper<int> segments2{{      2,       5,       8,      11}};
   column_wrapper<int> segments3{{                  6,    8,      11}};
+  column_wrapper<int> segments4{{                  6,    8}};
+  column_wrapper<int> segments5{{0,       3,       6}};
   column_wrapper<int> expected1{{0, 1, 2, 4, 3, 7, 5, 6, 9, 10, 8}};
   column_wrapper<int> expected2{{0, 1, 2, 4, 3, 7, 5, 6, 9, 10, 8}};
-  column_wrapper<int> expected3{{2, 4, 5, 3, 0, 1, 7, 6, 9, 10, 8}};
+  column_wrapper<int> expected3{{0, 1, 2, 3, 4, 5, 7, 6, 9, 10, 8}};
+  column_wrapper<int> expected4{{0, 1, 2, 3, 4, 5, 7, 6, 8, 9, 10}};
+  column_wrapper<int> expected5{{2, 0, 1, 4, 5, 3, 6, 7, 8, 9, 10}};
   // clang-format on
   table_view input{{col1}};
   auto results = cudf::detail::segmented_sorted_order(input, segments1);
@@ -212,6 +214,10 @@ TEST_F(SegmentedSortInt, NonZeroSegmentsStart)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected2);
   results = cudf::detail::segmented_sorted_order(input, segments3);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected3);
+  results = cudf::detail::segmented_sorted_order(input, segments4);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected4);
+  results = cudf::detail::segmented_sorted_order(input, segments5);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected5);
 }
 
 TEST_F(SegmentedSortInt, Sliced)
@@ -219,13 +225,13 @@ TEST_F(SegmentedSortInt, Sliced)
   using T = int;
   // clang-format off
   column_wrapper<T>        col1{{8, 9, 2, 3, 2, 2, 4, 1, 7, 5, 6}};
-  // sliced                      2, 2, 4, 1, 7, 5, 6
+  // sliced                                  2, 2, 4, 1, 7, 5, 6
   column_wrapper<int> segments1{{0,    2,       5}};
   column_wrapper<int> segments2{{-4,   0,      2,       5}};
   column_wrapper<int> segments3{{                 7}};
   column_wrapper<int> expected1{{0, 1, 3, 2, 4, 5, 6}};
   column_wrapper<int> expected2{{0, 1, 3, 2, 4, 5, 6}};
-  column_wrapper<int> expected3{{3, 0, 1, 2, 5, 6, 4}};
+  column_wrapper<int> expected3{{0, 1, 2, 3, 4, 5, 6}};
   // clang-format on
   auto slice = cudf::slice(col1, {4, 11})[0];  // 7 elements
   table_view input{{slice}};
@@ -245,27 +251,27 @@ TEST_F(SegmentedSortInt, Sliced)
 TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
 {
   using T = int;
-  column_wrapper<T> col1{{1, 2, 3, 4}};
-  column_wrapper<T> col2{{5, 6, 7, 8, 9}};
+  column_wrapper<T> col1{{5, 6, 7, 8, 9}};
+  column_wrapper<T> segments{{1, 2, 3, 4}};
   table_view input1{{col1}};
 
   // Mismatch order sizes
   EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, col2, {order::ASCENDING, order::ASCENDING}, {}),
+    cudf::segmented_sort_by_key(input1, input1, segments, {order::ASCENDING, order::ASCENDING}, {}),
     logic_error);
   // Mismatch null precedence sizes
-  EXPECT_THROW(
-    cudf::segmented_sort_by_key(input1, input1, col2, {}, {null_order::AFTER, null_order::AFTER}),
-    logic_error);
+  EXPECT_THROW(cudf::segmented_sort_by_key(
+                 input1, input1, segments, {}, {null_order::AFTER, null_order::AFTER}),
+               logic_error);
   // Both
   EXPECT_THROW(cudf::segmented_sort_by_key(input1,
                                            input1,
-                                           col2,
+                                           segments,
                                            {order::ASCENDING, order::ASCENDING},
                                            {null_order::AFTER, null_order::AFTER}),
                logic_error);
   // segmented_offsets beyond num_rows - undefined behavior, no throw.
-  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, col2));
+  CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, segments));
 }
 
 }  // namespace test

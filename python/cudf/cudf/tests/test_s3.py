@@ -7,9 +7,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pyarrow.fs as pa_fs
-import pyarrow.orc
 import pytest
 from fsspec.core import get_fs_token_paths
 
@@ -151,7 +149,6 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
         got = cudf.read_csv(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
-            bytes_per_thread=bytes_per_thread,
             use_python_file_object=True,
         )
     assert_eq(pdf, got)
@@ -188,7 +185,9 @@ def test_read_csv_byte_range(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             byte_range=(74, 73),
-            bytes_per_thread=bytes_per_thread,
+            bytes_per_thread=bytes_per_thread
+            if not use_python_file_object
+            else None,
             header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
             use_python_file_object=use_python_file_object,
@@ -297,7 +296,6 @@ def test_read_parquet_ext(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
-            footer_sample_size=3200,
             columns=columns,
         )
     if index:
@@ -442,7 +440,7 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -465,7 +463,7 @@ def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -491,7 +489,7 @@ def test_write_orc(s3_base, s3so, pdf):
         assert s3fs.exists(f"s3://{bucket}/{fname}")
 
         with s3fs.open(f"s3://{bucket}/{fname}") as f:
-            got = pa.orc.ORCFile(f).read().to_pandas()
+            got = pd.read_orc(f)
 
     assert_eq(pdf, got)
 
