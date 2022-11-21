@@ -977,7 +977,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           [[fallthrough]];
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
-        case BYTE_ARRAY: s->dtype_len = sizeof(string_index_pair); break;
+        case BYTE_ARRAY:
+          s->dtype_len =
+            s->col.converted_type == DECIMAL ? sizeof(__int128_t) : sizeof(string_index_pair);
+          break;
         default:  // FIXED_LEN_BYTE_ARRAY:
           s->dtype_len = dtype_len_out;
           s->error |= (s->dtype_len <= 0);
