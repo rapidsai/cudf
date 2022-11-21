@@ -1049,7 +1049,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
-      bool is_data_empty = true;
+      bool is_level_data_empty = true;
       std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
@@ -1069,37 +1069,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stream_info,
                                                           level == 0);
 
-          if (total_data_size == 0) {
-            CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
-
-            auto const are_all_empty = std::all_of(
-              thrust::make_counting_iterator(0ul),
-              thrust::make_counting_iterator(num_columns),
-              [&](auto col_idx) {
-                auto const col_stripe_num_rows =
-                  (level == 0)
-                    ? stripe_info->numberOfRows
-                    : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-                return col_stripe_num_rows == 0;
-              });
-
-            auto const are_all_structs =
-              std::all_of(column_types.begin(), column_types.end(), [](auto dtype) {
-                return dtype.id() == type_id::STRUCT;
-              });
-
-            // In case ROW GROUP INDEX is not present and all columns are structs with no null
-            // stream, there is nothing to read at this level.
-            CUDF_EXPECTS(are_all_empty or are_all_structs, "Expected streams data within stripe");
-          } else {
-            is_data_empty = false;
-          }
+          auto const is_stripe_data_empty = total_data_size == 0;
+          if (not is_stripe_data_empty) { is_level_data_empty = false; }
+          CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
+                       "Invalid index rowgroup stream data");
 
           stripe_data.emplace_back(total_data_size, stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
-          while (not is_data_empty and stream_count < stream_info.size()) {
+          while (not is_stripe_data_empty and stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
             auto len          = stream_info[stream_count].length;
@@ -1177,7 +1156,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.timestamp_type_id = _timestamp_type.id();
             }
-            if (not is_data_empty) {
+            if (not is_stripe_data_empty) {
               for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
                 chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
               }
@@ -1214,7 +1193,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          });
         }
         // Setup row group descriptors if using indexes
-        if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
+        if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and
+            not is_level_data_empty) {
           auto decomp_data = decompress_stripe_data(chunks,
                                                     stripe_data,
                                                     *_metadata.per_file_metadata[0].decompressor,
@@ -1257,7 +1237,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        if (not is_data_empty) {
+        if (not is_level_data_empty) {
           decode_stream_data(chunks,
                              num_dict_entries,
                              skip_rows,
@@ -1271,7 +1251,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
-          if (not is_data_empty) {
+          if (not is_level_data_empty) {
             scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           }
           row_groups.device_to_host(stream, true);
