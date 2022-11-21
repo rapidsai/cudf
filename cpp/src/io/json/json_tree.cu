@@ -87,9 +87,7 @@ OutputIterator thrust_copy_if(rmm::cuda_stream_view stream,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    auto const end_it =
-      thrust::copy_if(rmm::exec_policy(stream), itr, copy_end, stencil, result, pred);
-    result += std::distance(result, end_it);
+    result = thrust::copy_if(rmm::exec_policy(stream), itr, copy_end, stencil, result, pred);
     stencil += std::distance(itr, copy_end);
     itr = copy_end;
   }
