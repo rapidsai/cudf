@@ -774,6 +774,10 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
     uint8_t v = ptr[i];
     unscaled  = (unscaled << 8) | v;
   }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
+  unscaled <<= (sizeof(T) - len) * 8;
+  unscaled >>= (sizeof(T) - len) * 8;
   *dst = unscaled;
 }
 
