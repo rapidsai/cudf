@@ -2010,3 +2010,26 @@ def test_series_to_dict(into):
     expected = ps.to_dict(into=into)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+        [],
+    ],
+)
+def test_series_hasnans(data):
+    gs = cudf.Series(data, nan_as_null=False)
+    ps = gs.to_pandas(nullable=True)
+
+    assert_eq(gs.hasnans, ps.hasnans)

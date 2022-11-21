@@ -31,6 +31,7 @@ Attributes
    Series.size
    Series.T
    Series.memory_usage
+   Series.hasnans
    Series.has_nulls
    Series.empty
    Series.name
