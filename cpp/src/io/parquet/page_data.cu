@@ -766,18 +766,17 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
  * @param[in] len Byte array length
  * @param[out] dst Pointer to row output data
  */
-template <typename T>
-__device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
+__device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, __int128_t* dst)
 {
-  T unscaled = 0;
+  __int128_t unscaled = 0;
   for (auto i = 0; i < len; i++) {
     uint8_t v = ptr[i];
     unscaled  = (unscaled << 8) | v;
   }
   // Shift the unscaled value up and back down when it isn't all 8 bytes,
   // which sign extend the value for correctly representing negative numbers.
-  unscaled <<= (sizeof(T) - len) * 8;
-  unscaled >>= (sizeof(T) - len) * 8;
+  unscaled <<= (sizeof(__int128_t) - len) * 8;
+  unscaled >>= (sizeof(__int128_t) - len) * 8;
   *dst = unscaled;
 }
 
