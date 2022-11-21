@@ -123,7 +123,7 @@ endif()
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
-add_subdirectory(cudf/core/udf)
+add_subdirectory(udf_cpp/groupby)
 
 include(cmake/Modules/ProtobufHelpers.cmake)
 codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)

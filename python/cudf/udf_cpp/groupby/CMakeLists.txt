@@ -29,22 +29,6 @@ project(
 
 rapids_find_package(CUDAToolkit REQUIRED)
 
-# include(${rapids-cmake-dir}/cpm/libcudacxx.cmake) rapids_cpm_libcudacxx(BUILD_EXPORT_SET
-# strings-udf-exports INSTALL_EXPORT_SET strings-udf-exports)
-
-# add_library(groupby_udf_cpp SHARED function.cu) target_include_directories( groupby_udf_cpp PUBLIC
-# "$<BUILD_INTERFACE:${strings-udf-cpp_SOURCE_DIR}/include>" )
-
-# set_target_properties( groupby_udf_cpp PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN"
-# CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
-# POSITION_INDEPENDENT_CODE ON INTERFACE_POSITION_INDEPENDENT_CODE ON )
-#
-# set(UDF_CXX_FLAGS) set(UDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
-# target_compile_options( groupby_udf_cpp PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
-# "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
-# ) target_link_libraries(groupby_udf_cpp PUBLIC cudf::cudf CUDA::nvrtc) install(TARGETS
-# groupby_udf_cpp DESTINATION ./cudf/core/udf/)
-
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.
 function(copy_ptx_to_location target destination)
