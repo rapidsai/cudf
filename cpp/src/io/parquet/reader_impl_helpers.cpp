@@ -120,7 +120,7 @@ type_id to_type_id(SchemaElement const& schema,
         }
       }
       if (physical == parquet::BYTE_ARRAY) {
-        CUDF_EXPECTS(decimal_precision < max_decimal128_precision, "Invalid decimal precision");
+        CUDF_EXPECTS(decimal_precision <= max_decimal128_precision, "Invalid decimal precision");
         return type_id::DECIMAL128;
       }
       CUDF_FAIL("Invalid representation of decimal type");
