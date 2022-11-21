@@ -105,7 +105,6 @@ message("\n\n\n")
 message("${CMAKE_CUDA_ARCHITECTURES}")
 message("\n\n\n")
 
-
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 

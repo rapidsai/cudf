@@ -3,6 +3,7 @@
 import glob
 import math
 import os
+from typing import Any, Dict
 
 import cupy as cp
 import numba
@@ -46,6 +47,7 @@ numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 index_default_type = types.int64
 
+
 class Group(object):
     def __init__(self, group_data, size, index, dtype, index_dtype):
         self.group_data = group_data
@@ -75,7 +77,8 @@ def typeof_group(val, c):
     )  # Identifies instances of the Group class as GroupType
 
 
-# The typing of the python "function" Group.__init__ as it appears in python code
+# The typing of the python "function" Group.__init__
+# as it appears in python code
 @type_callable(Group)
 def type_group(context):
     def typer(group_data, size, index):
@@ -268,33 +271,34 @@ def call_idxmin_float64(data, index, size):
     return my_idxmin_float64(data, index, size)
 
 
-call_cuda_functions = {}
-call_cuda_functions['max'] = {}
-call_cuda_functions['min'] = {}
-call_cuda_functions['sum'] = {}
-call_cuda_functions['mean'] = {}
-call_cuda_functions['var'] = {}
-call_cuda_functions['std'] = {}
-call_cuda_functions['idxmax'] = {}
-call_cuda_functions['idxmin'] = {}
+call_cuda_functions: Dict[Any, Any] = {}
+call_cuda_functions["max"] = {}
+call_cuda_functions["min"] = {}
+call_cuda_functions["sum"] = {}
+call_cuda_functions["mean"] = {}
+call_cuda_functions["var"] = {}
+call_cuda_functions["std"] = {}
+call_cuda_functions["idxmax"] = {}
+call_cuda_functions["idxmin"] = {}
 
-call_cuda_functions['max'][types.int64] = call_max_int64
-call_cuda_functions['min'][types.int64] = call_min_int64
-call_cuda_functions['sum'][types.int64] = call_sum_int64
-call_cuda_functions['mean'][types.int64] = call_mean_int64
-call_cuda_functions['std'][types.int64] = call_std_int64
-call_cuda_functions['var'][types.int64] = call_var_int64
-call_cuda_functions['idxmax'][types.int64] = call_idxmax_int64
-call_cuda_functions['idxmin'][types.int64] = call_idxmin_int64
+call_cuda_functions["max"][types.int64] = call_max_int64
+call_cuda_functions["min"][types.int64] = call_min_int64
+call_cuda_functions["sum"][types.int64] = call_sum_int64
+call_cuda_functions["mean"][types.int64] = call_mean_int64
+call_cuda_functions["std"][types.int64] = call_std_int64
+call_cuda_functions["var"][types.int64] = call_var_int64
+call_cuda_functions["idxmax"][types.int64] = call_idxmax_int64
+call_cuda_functions["idxmin"][types.int64] = call_idxmin_int64
 
-call_cuda_functions['max'][types.float64] = call_max_float64
-call_cuda_functions['min'][types.float64] = call_min_float64
-call_cuda_functions['sum'][types.float64] = call_sum_float64
-call_cuda_functions['mean'][types.float64] = call_mean_float64
-call_cuda_functions['std'][types.float64] = call_std_float64
-call_cuda_functions['var'][types.float64] = call_var_float64
-call_cuda_functions['idxmax'][types.float64] = call_idxmax_float64
-call_cuda_functions['idxmin'][types.float64] = call_idxmin_float64
+call_cuda_functions["max"][types.float64] = call_max_float64
+call_cuda_functions["min"][types.float64] = call_min_float64
+call_cuda_functions["sum"][types.float64] = call_sum_float64
+call_cuda_functions["mean"][types.float64] = call_mean_float64
+call_cuda_functions["std"][types.float64] = call_std_float64
+call_cuda_functions["var"][types.float64] = call_var_float64
+call_cuda_functions["idxmax"][types.float64] = call_idxmax_float64
+call_cuda_functions["idxmin"][types.float64] = call_idxmin_float64
+
 
 @lower_builtin(Group, types.Array, types.int64, types.Array)
 def group_constructor(context, builder, sig, args):
@@ -448,6 +452,7 @@ class GroupAttr(AttributeTemplate):
             GroupIdxMin, GroupType(mod.group_scalar_type, mod.index_type)
         )
 
+
 def lowering_function(context, builder, sig, args, function):
     retty = sig.return_type
 
@@ -469,16 +474,17 @@ def lowering_function(context, builder, sig, args, function):
         (builder.load(group_data_ptr), grp.size),
     )
 
+
 @cuda_lower("GroupType.max", GroupType(types.int64))
 @cuda_lower("GroupType.max", GroupType(types.float64))
 def cuda_Group_max(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'max')
+    return lowering_function(context, builder, sig, args, "max")
 
 
 @cuda_lower("GroupType.min", GroupType(types.int64))
 @cuda_lower("GroupType.min", GroupType(types.float64))
 def cuda_Group_min(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'min')
+    return lowering_function(context, builder, sig, args, "min")
 
 
 @cuda_lower("GroupType.size", GroupType(types.int64))
@@ -502,25 +508,25 @@ def cuda_Group_count(context, builder, sig, args):
 @cuda_lower("GroupType.sum", GroupType(types.int64))
 @cuda_lower("GroupType.sum", GroupType(types.float64))
 def cuda_Group_sum(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'sum')
+    return lowering_function(context, builder, sig, args, "sum")
 
 
 @cuda_lower("GroupType.mean", GroupType(types.int64))
 @cuda_lower("GroupType.mean", GroupType(types.float64))
 def cuda_Group_mean(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'mean')
+    return lowering_function(context, builder, sig, args, "mean")
 
 
 @cuda_lower("GroupType.std", GroupType(types.int64))
 @cuda_lower("GroupType.std", GroupType(types.float64))
 def cuda_Group_std(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'std')
+    return lowering_function(context, builder, sig, args, "std")
 
 
 @cuda_lower("GroupType.var", GroupType(types.int64))
 @cuda_lower("GroupType.var", GroupType(types.float64))
 def cuda_Group_var(context, builder, sig, args):
-    return lowering_function(context, builder, sig, args, 'var')
+    return lowering_function(context, builder, sig, args, "var")
 
 
 @cuda_lower("GroupType.idxmax", GroupType(types.int64, types.int64))
@@ -541,7 +547,7 @@ def cuda_Group_idxmax(context, builder, sig, args):
     index_ptr = builder.alloca(grp.index.type)
     builder.store(grp.index, index_ptr)
 
-    func = call_cuda_functions['idxmax'][grp_type.group_scalar_type]
+    func = call_cuda_functions["idxmax"][grp_type.group_scalar_type]
 
     return context.compile_internal(
         builder,
@@ -569,7 +575,7 @@ def cuda_Group_idxmin(context, builder, sig, args):
     index_ptr = builder.alloca(grp.index.type)
     builder.store(grp.index, index_ptr)
 
-    func = call_cuda_functions['idxmin'][grp_type.group_scalar_type]
+    func = call_cuda_functions["idxmin"][grp_type.group_scalar_type]
 
     return context.compile_internal(
         builder,
@@ -736,10 +742,12 @@ def jit_groupby_apply(offsets, grouped_values, function, *args, cache=True):
     # Dispatcher is specialized, so there's only one definition - get
     # it so we can get the cufunc from the code library
     kern_def = next(iter(specialized.overloads.values()))
-    grid, tpb = ctx.get_max_potential_block_size(func=kern_def._codelibrary.get_cufunc(),
-                                                b2d_func=0,
-                                                memsize=0,
-                                                blocksizelimit=blocklim)
+    grid, tpb = ctx.get_max_potential_block_size(
+        func=kern_def._codelibrary.get_cufunc(),
+        b2d_func=0,
+        memsize=0,
+        blocksizelimit=blocklim,
+    )
 
     stream = cuda.default_stream()
 

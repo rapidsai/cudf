@@ -253,9 +253,6 @@ def _get_kernel_groupby_apply(kernel_string, globals_, func, dev_func_ptx):
     return kernel
 
 
-launch_arg_getters: Dict[Any, Any] = {}
-
-
 def _get_input_args_from_frame(fr):
     args = []
     offsets = []
