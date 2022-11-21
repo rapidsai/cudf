@@ -17,7 +17,6 @@ set +e
 rapids-logger "pytest dask_cudf"
 pushd python/dask_cudf
 pytest \
-  --verbose \
   --cache-clear \
   --junitxml="${TESTRESULTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
@@ -38,7 +37,6 @@ popd
 rapids-logger "pytest custreamz"
 pushd python/custreamz
 pytest \
-  --verbose \
   --cache-clear \
   --junitxml="${TESTRESULTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
@@ -64,7 +62,6 @@ rapids-mamba-retry install \
 rapids-logger "pytest strings_udf"
 pushd python/strings_udf/strings_udf
 pytest \
-  --verbose \
   --cache-clear \
   --junitxml="${TESTRESULTS_DIR}/junit-strings-udf.xml" \
   --numprocesses=8 \
@@ -85,7 +82,6 @@ popd
 rapids-logger "pytest cudf with strings_udf"
 pushd python/cudf/cudf
 pytest \
-  --verbose \
   --cache-clear \
   --ignore="benchmarks" \
   --junitxml="${TESTRESULTS_DIR}/junit-cudf-strings-udf.xml" \

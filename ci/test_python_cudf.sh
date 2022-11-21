@@ -19,7 +19,6 @@ pushd python/cudf/cudf
 # (TODO: Copied the comment below from gpuCI, need to verify on GitHub Actions)
 # It is essential to cd into python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
 pytest \
-  --verbose \
   --cache-clear \
   --ignore="benchmarks" \
   --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" \
@@ -46,7 +45,6 @@ pushd python/cudf
 rapids-logger "pytest for cudf benchmarks"
 CUDF_BENCHMARKS_DEBUG_ONLY=ON \
 pytest \
-  --verbose \
   --cache-clear \
   --numprocesses=8 \
   --dist=loadscope \
@@ -66,7 +64,6 @@ rapids-logger "pytest for cudf benchmarks using pandas"
 CUDF_BENCHMARKS_USE_PANDAS=ON \
 CUDF_BENCHMARKS_DEBUG_ONLY=ON \
 pytest \
-  --verbose \
   --cache-clear \
   --numprocesses=8 \
   --dist=loadscope \
