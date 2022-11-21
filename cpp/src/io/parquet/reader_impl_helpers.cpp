@@ -23,6 +23,7 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
+// log10(2^(sizeof(int128_t) * 8 - 1) - 1)
 auto constexpr max_decimal128_precision = 38;
 
 ConvertedType logical_type_to_converted_type(LogicalType const& logical)
