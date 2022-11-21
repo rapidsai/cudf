@@ -675,13 +675,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def hasnans(self):
         """
-        Return True if there are any NaNs.
+        Return True if there are any NaNs or nulls.
 
         Returns
         -------
         out : bool
-            If Series has at least one NaN value, return True, if not
-            return False.
+            If Series has at least one NaN or null value, return True,
+            if not return False.
 
         Examples
         --------
