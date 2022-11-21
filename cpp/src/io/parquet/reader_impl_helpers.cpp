@@ -23,9 +23,6 @@ namespace cudf::io::detail::parquet {
 
 namespace {
 
-// log10(2^(sizeof(int128_t) * 8 - 1) - 1)
-auto constexpr max_decimal128_precision = 38;
-
 ConvertedType logical_type_to_converted_type(LogicalType const& logical)
 {
   if (logical.isset.STRING) {
@@ -121,8 +118,14 @@ type_id to_type_id(SchemaElement const& schema,
         }
       }
       if (physical == parquet::BYTE_ARRAY) {
-        CUDF_EXPECTS(decimal_precision <= max_decimal128_precision, "Invalid decimal precision");
-        return type_id::DECIMAL128;
+        CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
+        if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+          return type_id::DECIMAL32;
+        } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+          return type_id::DECIMAL64;
+        } else {
+          return type_id::DECIMAL128;
+        }
       }
       CUDF_FAIL("Invalid representation of decimal type");
       break;

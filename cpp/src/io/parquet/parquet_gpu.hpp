@@ -39,6 +39,12 @@ namespace cudf::io::parquet {
 
 using cudf::io::detail::string_index_pair;
 
+// Max decimal precisions according to the parquet spec:
+// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
+auto constexpr MAX_DECIMAL32_PRECISION  = 9;
+auto constexpr MAX_DECIMAL64_PRECISION  = 18;
+auto constexpr MAX_DECIMAL128_PRECISION = 38;  // log10(2^(sizeof(int128_t) * 8 - 1) - 1)
+
 // Largest number of bits to use for dictionary keys
 constexpr int MAX_DICT_BITS = 24;
 
@@ -184,6 +190,7 @@ struct ColumnChunkDesc {
                            int8_t codec_,
                            int8_t converted_type_,
                            LogicalType logical_type_,
+                           int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_)
@@ -206,6 +213,7 @@ struct ColumnChunkDesc {
       codec(codec_),
       converted_type(converted_type_),
       logical_type(logical_type_),
+      decimal_precision(decimal_precision_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
       src_col_schema(src_col_schema_)
@@ -234,6 +242,7 @@ struct ColumnChunkDesc {
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
   LogicalType logical_type;                   // logical type
+  int8_t decimal_precision;                   // Decimal precision
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index;   // my input column index
