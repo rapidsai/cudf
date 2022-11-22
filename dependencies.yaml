@@ -46,6 +46,7 @@ channels:
   - pytorch
   - conda-forge
   - nvidia
+  - gmarkall  # Test gmarkall::cubinlinker on aarch64
 dependencies:
   build:
     common:
