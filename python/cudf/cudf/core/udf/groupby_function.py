@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import glob
 import math
 import os
 from typing import Any, Dict
@@ -35,6 +34,7 @@ from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
     _compile_or_get,
     _get_kernel_groupby_apply,
+    _get_ptx_file,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
@@ -46,6 +46,7 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 index_default_type = types.int64
+dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
 
 
 class Group(object):
@@ -105,23 +106,34 @@ class GroupModel(models.StructModel):
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 
-my_max_int64 = cuda.declare_device(
-    "BlockMax_int64", "types.int64(types.CPointer(types.int64),types.int64)"
-)
+_funcs = ["Max", "Min"]
+_types = [types.int64, types.float64]
+_cuda_funcs = {}
+for func in _funcs:
+    for ty in _types:
+        _cuda_funcs[func.lower()] = cuda.declare_device(
+            f"Block{func}_{ty}", ty(types.CPointer(ty), types.int64)
+        )
 
-my_max_float64 = cuda.declare_device(
-    "BlockMax_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
+call_cuda_functions: Dict[Any, Any] = {}
 
-my_min_int64 = cuda.declare_device(
-    "BlockMin_int64", "types.int64(types.CPointer(types.int64),types.int64)"
-)
 
-my_min_float64 = cuda.declare_device(
-    "BlockMin_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
+def _register_cuda_reduction_caller(func, ty):
+    func = func.lower()
+    cuda_func = _cuda_funcs[func]
+
+    def caller(data, size):
+        return cuda_func(data, size)
+
+    if call_cuda_functions.get(func.lower()) is None:
+        call_cuda_functions[func] = {}
+    call_cuda_functions[func][ty] = caller
+
+
+_register_cuda_reduction_caller("max", types.int64)
+_register_cuda_reduction_caller("max", types.float64)
+_register_cuda_reduction_caller("min", types.int64)
+_register_cuda_reduction_caller("min", types.float64)
 
 my_sum_int64 = cuda.declare_device(
     "BlockSum_int64", "types.int64(types.CPointer(types.int64),types.int64)"
@@ -187,42 +199,6 @@ my_idxmin_float64 = cuda.declare_device(
 )
 
 
-# Load the highest compute capability file available that is less than
-# the current device's.
-files = glob.glob(
-    os.path.join(os.path.dirname(os.path.realpath(__file__)), "function_*.ptx")
-)
-if len(files) == 0:
-    raise RuntimeError(
-        "This strings_udf installation is missing the necessary PTX "
-        "files. Please file an issue reporting this error and how you "
-        "installed cudf and strings_udf."
-    )
-dev = cuda.get_current_device()
-cc = "".join(str(x) for x in dev.compute_capability)
-sms = [os.path.basename(f).rstrip(".ptx").lstrip("function_") for f in files]
-selected_sm = max(sm for sm in sms if sm <= cc)
-dev_func_ptx = os.path.join(
-    os.path.dirname(__file__), f"function_{selected_sm}.ptx"
-)
-
-
-def call_max_int64(data, size):
-    return my_max_int64(data, size)
-
-
-def call_max_float64(data, size):
-    return my_max_float64(data, size)
-
-
-def call_min_int64(data, size):
-    return my_min_int64(data, size)
-
-
-def call_min_float64(data, size):
-    return my_min_float64(data, size)
-
-
 def call_sum_int64(data, size):
     return my_sum_int64(data, size)
 
@@ -271,9 +247,6 @@ def call_idxmin_float64(data, index, size):
     return my_idxmin_float64(data, index, size)
 
 
-call_cuda_functions: Dict[Any, Any] = {}
-call_cuda_functions["max"] = {}
-call_cuda_functions["min"] = {}
 call_cuda_functions["sum"] = {}
 call_cuda_functions["mean"] = {}
 call_cuda_functions["var"] = {}
@@ -281,8 +254,6 @@ call_cuda_functions["std"] = {}
 call_cuda_functions["idxmax"] = {}
 call_cuda_functions["idxmin"] = {}
 
-call_cuda_functions["max"][types.int64] = call_max_int64
-call_cuda_functions["min"][types.int64] = call_min_int64
 call_cuda_functions["sum"][types.int64] = call_sum_int64
 call_cuda_functions["mean"][types.int64] = call_mean_int64
 call_cuda_functions["std"][types.int64] = call_std_int64
@@ -290,8 +261,6 @@ call_cuda_functions["var"][types.int64] = call_var_int64
 call_cuda_functions["idxmax"][types.int64] = call_idxmax_int64
 call_cuda_functions["idxmin"][types.int64] = call_idxmin_int64
 
-call_cuda_functions["max"][types.float64] = call_max_float64
-call_cuda_functions["min"][types.float64] = call_min_float64
 call_cuda_functions["sum"][types.float64] = call_sum_float64
 call_cuda_functions["mean"][types.float64] = call_mean_float64
 call_cuda_functions["std"][types.float64] = call_std_float64
