@@ -671,6 +671,48 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return [self.index]
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        """
+        Return True if there are any NaNs or nulls.
+
+        Returns
+        -------
+        out : bool
+            If Series has at least one NaN or null value, return True,
+            if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, 3, 4], nan_as_null=False)
+        >>> series
+        0    1.0
+        1    2.0
+        2    NaN
+        3    3.0
+        4    4.0
+        dtype: float64
+        >>> series.hasnans
+        True
+
+        `hasnans` returns `True` for the presence of any `NA` values:
+
+        >>> series = cudf.Series([1, 2, 3, None, 4])
+        >>> series
+        0       1
+        1       2
+        2       3
+        3    <NA>
+        4       4
+        dtype: int64
+        >>> series.hasnans
+        True
+        """
+        return self._column.has_nulls(include_nan=True)
+
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()

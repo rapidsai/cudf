@@ -1772,7 +1772,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                         cudaMemcpyDeviceToHost,
                                         stream.value()));
 
-          // calculate offsets while the column index is transfering
+          // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;

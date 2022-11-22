@@ -292,7 +292,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Node parent ids:
   // previous push node_id transform, stable sort by level, segmented scan with Max, reorder.
   rmm::device_uvector<NodeIndexT> parent_node_ids(num_nodes, stream, mr);
-  // This block of code is generalized logical stack algorithm. TODO: make this a seperate function.
+  // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
     rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
     thrust::copy_if(rmm::exec_policy(stream),
@@ -480,7 +480,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 //   a. Create a hash map with hash of {node_level, node_type} of its node and the entire parent
 //      until root.
 //   b. While creating hashmap, transform node id to unique node ids that are inserted into the
-//      hash map. This mimicks set operation with hash map. This unique node ids are set ids.
+//      hash map. This mimics set operation with hash map. This unique node ids are set ids.
 //   c. Return this converted set ids, which are the hash map keys/values, and unique set ids.
 std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_node_path(
   device_span<TreeDepthT const> node_levels,
@@ -728,7 +728,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 //   c. sort and use binary search to generate column ids.
 //   d. Translate parent node ids to parent column ids.
 // 2. Generate row_offset.
-//   a. filter only list childs
+//   a. filter only list children
 //   a. stable_sort by parent_col_id.
 //   b. scan_by_key {parent_col_id} (done only on nodes whose parent is a list)
 //   c. propagate to non-list leaves from parent list node by recursion
