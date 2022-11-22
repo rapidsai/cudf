@@ -7,6 +7,7 @@ source "$(dirname "$0")/test_python_common.sh"
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   -c "${PYTHON_CHANNEL}" \
+  -c gmarkall \
   dask-cudf cudf_kafka custreamz
 
 rapids-logger "Check GPU usage"

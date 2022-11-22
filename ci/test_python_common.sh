@@ -36,4 +36,5 @@ mkdir -p "${RAPIDS_COVERAGE_DIR}"
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   -c "${PYTHON_CHANNEL}" \
+  -c gmarkall \
   cudf libcudf
