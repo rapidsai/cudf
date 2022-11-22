@@ -186,12 +186,20 @@ def test_environment_variables(monkeypatch):
     assert isinstance(manager, SpillManager)
     assert manager._spill_on_demand is False
     assert manager._device_memory_limit is None
+    assert manager.statistics.level == 0
 
     monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
     reload_options()
     manager = get_global_manager()
     assert isinstance(manager, SpillManager)
     assert manager._device_memory_limit == 1000
+    assert manager.statistics.level == 0
+
+    monkeypatch.setenv("CUDF_SPILL_STATS", "1")
+    reload_options()
+    manager = get_global_manager()
+    assert isinstance(manager, SpillManager)
+    assert manager.statistics.level == 1
 
 
 def test_spill_device_memory(manager: SpillManager):

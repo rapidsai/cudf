@@ -56,20 +56,30 @@ class SpillStatistics:
 
     The statistics are printed when spilling-on-demand fails to find
     any buffer to spill. It is possible to retrieve the statistics
-    manually through the spill manager like:
-
-    >>> import cudf
-    >>> from cudf.core.buffer.spill_manager import get_global_manager
-    >>> cudf.set_option("spill", True)  # Enable spilling
-    >>> get_global_manager().statistics
-    <SpillStatistics level=0>
-    >>> print(_)
-    Spill Statistics (level=0): N/A
+    manually through the spill manager, see example.
 
     Parameters
     ----------
     level : int
         If not 0, enables statistics at the specified level.
+
+
+    Examples
+    --------
+    >>> import cudf
+    >>> from cudf.core.buffer.spill_manager import get_global_manager
+    >>> cudf.set_option("spill", True)  # Enable spilling
+    >>> cudf.set_option("spill_stats", 1)  # Set statistic level
+    >>> manager = get_global_manager()
+    >>> manager.statistics
+    <SpillStatistics level=1>
+    >>> df = cudf.DataFrame({"a": [1,2,3]})
+    >>> manager.spill_to_device_limit(1)  # Spill df
+    24
+    >>> print(get_global_manager().statistics)
+    Spill Statistics (level=1):
+     Spilling (level >= 1):
+      gpu => cpu: 24B in 0.0033579860000827466s
     """
 
     spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
@@ -94,7 +104,7 @@ class SpillStatistics:
         ret += "\n"
         for (src, dst), (nbytes, time) in self.spills_totals.items():
             ret += f"  {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
-        return ret
+        return ret[:-1]  # Remove last `\n`
 
     def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
         if self.level < 1:
@@ -360,6 +370,7 @@ def get_global_manager() -> Optional[SpillManager]:
             manager = SpillManager(
                 spill_on_demand=get_option("spill_on_demand"),
                 device_memory_limit=get_option("spill_device_limit"),
+                statistic_level=get_option("spill_stats"),
             )
         set_global_manager(manager)
     return _global_manager
