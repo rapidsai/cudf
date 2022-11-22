@@ -95,7 +95,6 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_SUITE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
-// Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
 template <typename DecimalType>
 struct CsvFixedPointReaderTest : public CsvReaderTest {
   void run_tests(const std::vector<std::string>& reference_strings, numeric::scale_type scale)
