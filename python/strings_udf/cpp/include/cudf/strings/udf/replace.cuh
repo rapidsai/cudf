@@ -25,6 +25,8 @@ namespace udf {
 /**
  * @brief Returns new string replacing all occurrences of target with replacement
  *
+ * If target is empty then replacement is inserted between every character.
+ *
  * @param source Source string to search
  * @param target String to match within source
  * @param replacement String to replace the target within the source
@@ -34,8 +36,6 @@ __device__ inline udf_string replace(string_view source,
                                      string_view target,
                                      string_view replacement)
 {
-  if (target.empty()) return udf_string(source);
-
   udf_string result;
   auto const tgt_length   = target.length();
   auto const src_length   = source.length();
@@ -47,6 +47,9 @@ __device__ inline udf_string replace(string_view source,
       result.append(source.substr(last_position, position - last_position));
       result.append(replacement);
       last_position = position + tgt_length;
+      if ((tgt_length == 0) && (++last_position <= src_length)) {
+        result.append(source.substr(position, 1));
+      }
     }
   }
   if (last_position < src_length) {
