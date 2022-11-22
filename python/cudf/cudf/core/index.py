@@ -281,6 +281,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def hasnans(self):
+        return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
             {self.name: self._values}
@@ -1390,6 +1395,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def is_interval(self):
         return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        return self._column.has_nulls(include_nan=True)
 
     @_cudf_nvtx_annotate
     def argsort(
