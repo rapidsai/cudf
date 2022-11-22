@@ -42,6 +42,7 @@ option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream"
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
+option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
@@ -85,6 +86,10 @@ endif()
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
   add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+endif()
+
+if(CUDF_JNI_ENABLE_PROFILING)
+  target_compile_definitions(cudfjni PUBLIC CUDF_JNI_ENABLE_PROFILING)
 endif()
 
 # ##################################################################################################

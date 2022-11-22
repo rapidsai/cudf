@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
-#include <cuda_profiler_api.h>
 #include <cudf/utilities/error.hpp>
 #include <rmm/device_buffer.hpp>
+
+#ifdef CUDF_JNI_ENABLE_PROFILING
+#include <cuda_profiler_api.h>
+#endif
 
 #include "jni_utils.hpp"
 
@@ -376,19 +379,33 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_asyncMemcpyOnStream(JNIEnv *env,
   CATCH_STD(env, );
 }
 
+#ifdef CUDF_JNI_ENABLE_PROFILING
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv *env, jclass clazz) {
   try {
     cudaProfilerStart();
   }
   CATCH_STD(env, );
 }
+#else
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv *env, jclass clazz) {
+  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_ERROR_CLASS,
+                                  "This library was built without CUDA profiler support.");
+}
+#endif
 
+#ifdef CUDF_JNI_ENABLE_PROFILING
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass clazz) {
   try {
     cudaProfilerStop();
   }
   CATCH_STD(env, );
 }
+#else
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass clazz) {
+  cudf::jni::throw_java_exception(env, cudf::jni::CUDF_ERROR_CLASS,
+                                  "This library was built without CUDA profiler support.");
+}
+#endif
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_deviceSynchronize(JNIEnv *env, jclass clazz) {
   try {
