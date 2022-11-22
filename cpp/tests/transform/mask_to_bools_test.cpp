@@ -57,9 +57,8 @@ TEST_P(MaskToBoolsTest, LargeDataSizeTest)
 {
   auto data                       = std::vector<bool>(10000);
   auto const [begin_bit, end_bit] = GetParam();
-  std::transform(data.cbegin(), data.cend(), data.begin(), [](auto val) {
-    return rand() % 2 == 0 ? true : false;
-  });
+  std::transform(
+    data.cbegin(), data.cend(), data.begin(), [](auto val) { return rand() % 2 == 0; });
 
   auto col      = cudf::test::fixed_width_column_wrapper<bool>(data.begin(), data.end());
   auto expected = cudf::detail::slice(static_cast<cudf::column_view>(col), begin_bit, end_bit);

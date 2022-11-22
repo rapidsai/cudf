@@ -600,8 +600,8 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   auto expect_valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? false : true; });

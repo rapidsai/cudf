@@ -120,7 +120,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   std::iota(input_values.begin(), input_values.end(), 0);
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < input_valids.size(); i++) {
-    input_valids[i] = (i % 2) == 0 ? true : false;
+    input_valids[i] = (i % 2) == 0;
   }
 
   std::vector<cudf::size_type> counts(num_values);
@@ -190,7 +190,7 @@ TEST_F(RepeatStringTestFixture, RepeatNullable)
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < num_values; i++) {
     input_values[i] = "#" + std::to_string(i);
-    input_valids[i] = (i % 2) == 0 ? true : false;
+    input_valids[i] = (i % 2) == 0;
   }
 
   std::vector<cudf::size_type> counts(num_values);
