@@ -512,7 +512,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
 
     // info for the offsets buffer
     auto offset_col = current;
-    CUDF_EXPECTS(scv.offsets().nullable() == false, "Encountered nullable string offsets column");
+    CUDF_EXPECTS(not scv.offsets().nullable(), "Encountered nullable string offsets column");
     *current = src_buf_info(type_id::INT32,
                             // note: offsets can be null in the case where the string column
                             // has been created with empty_like().
@@ -530,7 +530,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     parent_offset_index = offset_col - head;
 
     // prevent appending buf_info for non-existent chars buffer
-    CUDF_EXPECTS(scv.chars().nullable() == false, "Encountered nullable string chars column");
+    CUDF_EXPECTS(not scv.chars().nullable(), "Encountered nullable string chars column");
 
     // info for the chars buffer
     *current = src_buf_info(

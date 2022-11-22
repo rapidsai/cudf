@@ -363,8 +363,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   std::vector<std::string> reference_strings = {
     "1.23", "-8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"};
 
-  auto validity = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -410,8 +410,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   std::vector<std::string> reference_strings = {
     "123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"};
 
-  auto validity = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
