@@ -475,3 +475,30 @@ def test_memoryview_slice(manager: SpillManager, dtype):
     # sliced memoryview of data as bytes
     m2 = memoryview(data).cast("B")[1:-1]
     assert m1 == m2
+
+
+@pytest.mark.parametrize(
+    "manager", [{"statistic_level": 0}, {"statistic_level": 1}], indirect=True
+)
+def test_statistics(manager: SpillManager):
+    assert len(manager.statistics.spills_totals) == 0
+
+    buf: SpillableBuffer = as_buffer(
+        data=rmm.DeviceBuffer(size=10), exposed=False
+    )
+    buf.spill(target="cpu")
+
+    if manager.statistics.level == 0:
+        assert len(manager.statistics.spills_totals) == 0
+        return
+
+    assert len(manager.statistics.spills_totals) == 1
+    nbytes, time = manager.statistics.spills_totals[("gpu", "cpu")]
+    assert nbytes == buf.size
+    assert time > 0
+
+    buf.spill(target="gpu")
+    assert len(manager.statistics.spills_totals) == 2
+    nbytes, time = manager.statistics.spills_totals[("cpu", "gpu")]
+    assert nbytes == buf.size
+    assert time > 0

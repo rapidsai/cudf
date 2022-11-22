@@ -8,7 +8,8 @@ import threading
 import traceback
 import warnings
 import weakref
-from typing import List, Optional, Tuple
+from collections import defaultdict
+from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
@@ -46,6 +47,66 @@ def get_rmm_memory_resource_stack(
     return [mr]
 
 
+class SpillStatistics:
+    """Gather spill statistics
+
+    Levels of information gathered:
+      0 - disabled (no overhead)
+      1 - duration and number of bytes spilled (very low overhead)
+
+    The statistics are printed when spilling-on-demand fails to find
+    any buffer to spill. It is possible to retrieve the statistics
+    manually through the spill manager like:
+
+    >>> import cudf
+    >>> from cudf.core.buffer.spill_manager import get_global_manager
+    >>> cudf.set_option("spill", True)  # Enable spilling
+    >>> get_global_manager().statistics
+    <SpillStatistics level=0>
+    >>> print(_)
+    Spill Statistics (level=0): N/A
+
+    Parameters
+    ----------
+    level : int
+        If not 0, enables statistics at the specified level.
+    """
+
+    spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
+
+    def __init__(self, level) -> None:
+        self.lock = threading.Lock()
+        self.level = level
+        self.spills_totals = defaultdict(lambda: (0, 0))
+
+    def __repr__(self) -> str:
+        return f"<SpillStatistics level={self.level}>"
+
+    def __str__(self) -> str:
+        ret = f"Spill Statistics (level={self.level}):\n"
+        if self.level == 0:
+            return ret[:-1] + " N/A"
+
+        # Print spilling stats
+        ret += " Spilling (level >= 1):"
+        if len(self.spills_totals) == 0:
+            ret += " None"
+        ret += "\n"
+        for (src, dst), (nbytes, time) in self.spills_totals.items():
+            ret += f"  {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
+        return ret
+
+    def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
+        if self.level < 1:
+            return
+        with self.lock:
+            total_nbytes, total_time = self.spills_totals[(src, dst)]
+            self.spills_totals[(src, dst)] = (
+                total_nbytes + nbytes,
+                total_time + time,
+            )
+
+
 class SpillManager:
     """Manager of spillable buffers.
 
@@ -68,21 +129,27 @@ class SpillManager:
         If not None, this is the device memory limit in bytes that triggers
         device to host spilling. The global manager sets this to the value
         of `CUDF_SPILL_DEVICE_LIMIT` or None.
+    statistic_level: int, optional
+        If not 0, enables statistics at the specified level. See
+        SpillStatistics for the different levels.
     """
 
     _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    statistics: SpillStatistics
 
     def __init__(
         self,
         *,
         spill_on_demand: bool = False,
         device_memory_limit: int = None,
+        statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
         self._buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
+        self.statistics = SpillStatistics(statistic_level)
 
         if self._spill_on_demand:
             # Set the RMM out-of-memory handle if not already set
@@ -136,7 +203,8 @@ class SpillManager:
         print(
             f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
             "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
+            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+            f"{self.statistics}"
         )
         return False  # Since we didn't find anything to spill, we give up
 
