@@ -1491,9 +1491,9 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
   // elem is one of (no 5 or 6 byte chars allowed):
   //  0b0vvvvvvv a 1 byte character
   //  0b10vvvvvv a continuation byte
-  //  0b110vvvvv start of a 2 byte characther
-  //  0b1110vvvv start of a 3 byte characther
-  //  0b11110vvv start of a 4 byte characther
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
 
   // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
   uint8_t mask  = 0xF8;

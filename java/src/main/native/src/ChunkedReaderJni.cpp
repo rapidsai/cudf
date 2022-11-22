@@ -29,7 +29,7 @@ jlongArray
 cudf::jni::convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_result,
                                     std::vector<std::unique_ptr<cudf::column>> &&extra_columns);
 
-// This file is for the code releated to chunked reader (Parquet, ORC, etc.).
+// This file is for the code related to chunked reader (Parquet, ORC, etc.).
 
 extern "C" {
 

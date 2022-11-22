@@ -80,7 +80,7 @@ type_id to_type_id(SchemaElement const& schema,
   int32_t decimal_scale                   = schema.decimal_scale;
 
   // Logical type used for actual data interpretation; the legacy converted type
-  // is superceded by 'logical' type whenever available.
+  // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)

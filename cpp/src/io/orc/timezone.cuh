@@ -49,9 +49,9 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
- * @param ttimes Transition times; trailing `cycle_entry_cnt` entires are used for all times
+ * @param ttimes Transition times; trailing `cycle_entry_cnt` entries are used for all times
  * beyond the one covered by the TZif file
- * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entires are used
+ * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entries are used
  * for all times beyond the one covered by the TZif file
  * @param count Number of elements in @p ttimes and @p offsets
  * @param ts ORC timestamp

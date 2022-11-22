@@ -85,7 +85,7 @@ def get(Column source_strings,
         object index):
     """
     Returns a Column which contains only single
-    charater from each input string. The index of
+    character from each input string. The index of
     characters required can be controlled by passing `index`.
     """
     cdef unique_ptr[column] c_result
