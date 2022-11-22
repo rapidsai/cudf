@@ -4,11 +4,6 @@
 # Common setup steps shared by Python test jobs
 source "$(dirname "$0")/test_python_common.sh"
 
-rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
-  cudf libcudf
-
 rapids-logger "Check GPU usage"
 nvidia-smi
 

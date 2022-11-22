@@ -32,3 +32,8 @@ SUITEERROR=0
 
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_COVERAGE_DIR}"
+
+rapids-mamba-retry install \
+  -c "${CPP_CHANNEL}" \
+  -c "${PYTHON_CHANNEL}" \
+  cudf libcudf
