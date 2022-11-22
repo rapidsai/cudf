@@ -27,8 +27,6 @@ rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   libcudf
 
-# TESTRESULTS_DIR="${PWD}/test-results"
-# mkdir -p "${TESTRESULTS_DIR}"
 SUITEERROR=0
 
 rapids-logger "Check GPU usage"
