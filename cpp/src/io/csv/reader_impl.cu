@@ -859,7 +859,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     for (size_t i = 0; i < column_types.size(); ++i) {
       metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && parse_opts.quotechar != '\0' &&
-          parse_opts.doublequote == true) {
+          parse_opts.doublequote) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place

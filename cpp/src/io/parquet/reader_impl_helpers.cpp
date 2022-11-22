@@ -268,10 +268,10 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
-  auto col = std::find_if(
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
-    [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx ? true : false; });
+  auto col =
+    std::find_if(per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
+                 per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
+                 [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
                "Found no metadata for schema index");
   return col->meta_data;
