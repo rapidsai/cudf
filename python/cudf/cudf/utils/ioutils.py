@@ -1011,7 +1011,7 @@ pycapsule_obj : PyCapsule
 doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
 
 _docstring_read_csv = """
-Load a comma-seperated-values (CSV) dataset into a DataFrame
+Load a comma-separated-values (CSV) dataset into a DataFrame
 
 Parameters
 ----------

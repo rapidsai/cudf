@@ -179,7 +179,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
 
   auto const child = input.get_sliced_child(stream);
 
-  // Genereate labels for the input list elements.
+  // Generate labels for the input list elements.
   auto labels = rmm::device_uvector<cudf::size_type>(child.size(), stream);
   cudf::detail::label_segments(input.offsets_begin(), input.offsets_end(), labels.begin(),
                                labels.end(), stream);

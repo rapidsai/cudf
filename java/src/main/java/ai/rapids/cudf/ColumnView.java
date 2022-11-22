@@ -2867,7 +2867,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * replacement string.
    * The replacement proceeds from the beginning of the string to the end, for example,
    * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
-   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Specifying an empty string for replace will essentially remove the target string if found in each string.
    * Null string entries will return null output string entries.
    * target Scalar should be string and should not be empty or null.
    *
