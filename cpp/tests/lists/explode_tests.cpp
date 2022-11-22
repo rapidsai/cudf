@@ -109,7 +109,7 @@ TEST_F(ExplodeTest, SingleNull)
   constexpr auto null = 0;
 
   auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -603,7 +603,7 @@ TEST_F(ExplodeOuterTest, SingleNull)
   constexpr auto null = 0;
 
   auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -696,7 +696,7 @@ TEST_F(ExplodeOuterTest, SequentialNulls)
   constexpr auto null = 0;
 
   auto third_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 2 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
 
   LCW a{LCW({1, 2, null}, third_invalid), LCW{3, 4}, LCW{}, LCW{}, LCW{5, 6, 7}};
   FCW b{100, 200, 300, 400, 500};
@@ -888,7 +888,7 @@ TEST_F(ExplodeOuterTest, NestedNulls)
   FCW b({100, 200, 300});
 
   auto expected_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 2 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
   LCW expected_a({LCW{1, 2}, LCW{7, 6, 5}, LCW{null}, LCW{0, 3}, LCW{5}, LCW{2, 1}},
                  expected_valids);
   FCW expected_b({100, 100, 200, 300, 300, 300});

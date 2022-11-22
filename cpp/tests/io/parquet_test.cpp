@@ -3763,7 +3763,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < num_ordered_rows / 2 ? false : true; });
+    0, [](auto i) { return i >= num_ordered_rows / 2; });
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 

@@ -86,7 +86,7 @@ struct genericAtomicOperationImpl<T, Op, 2> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, Op op)
   {
     using T_int      = unsigned int;
-    bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? false : true;
+    bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) == 0;
     auto* address_uint32 =
       reinterpret_cast<T_int*>(reinterpret_cast<size_t>(addr) - (is_32_align ? 0 : 2));
 
@@ -352,7 +352,7 @@ struct typesAtomicCASImpl<T, 2> {
   {
     using T_int = unsigned int;
 
-    bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? false : true;
+    bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) == 0;
     auto* address_uint32 =
       reinterpret_cast<T_int*>(reinterpret_cast<size_t>(addr) - (is_32_align ? 0 : 2));
 

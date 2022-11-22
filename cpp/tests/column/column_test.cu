@@ -603,8 +603,8 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  auto expect_valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? false : true; });
+  auto expect_valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
 
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 

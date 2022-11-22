@@ -99,7 +99,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
   auto split = 2;
   auto size  = this->size();
   auto valid = cudf::detail::make_counting_transform_iterator(
-    0, [&split](auto i) { return (i < (split + 1) or i > 10) ? false : true; });
+    0, [&split](auto i) { return i <= 10 and i > split; });
   std::vector<TypeParam> data(sequence, sequence + size);
   std::vector<TypeParam> expected_data(sequence + split, sequence + size);
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end(), valid);
