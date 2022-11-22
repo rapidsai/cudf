@@ -28,7 +28,7 @@ rapids-mamba-retry install \
   -c "${PYTHON_CHANNEL}" \
   cudf
 
-NBTEST="$(dirname "$0")/utils/nbtest.sh"
+NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
 
 # Add notebooks that should be skipped here
