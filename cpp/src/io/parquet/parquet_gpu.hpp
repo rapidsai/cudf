@@ -39,12 +39,6 @@ namespace cudf::io::parquet {
 
 using cudf::io::detail::string_index_pair;
 
-// Max decimal precisions according to the parquet spec:
-// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
-auto constexpr MAX_DECIMAL32_PRECISION  = 9;
-auto constexpr MAX_DECIMAL64_PRECISION  = 18;
-auto constexpr MAX_DECIMAL128_PRECISION = 38;  // log10(2^(sizeof(int128_t) * 8 - 1) - 1)
-
 // Largest number of bits to use for dictionary keys
 constexpr int MAX_DICT_BITS = 24;
 
