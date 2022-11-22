@@ -67,7 +67,7 @@ pytest \
   --cache-clear \
   --numprocesses=8 \
   --dist=loadscope \
-  --cov-config=../.coveragerc \
+  --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
   --cov-report=term \

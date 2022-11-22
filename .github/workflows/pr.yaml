@@ -13,11 +13,14 @@ jobs:
   # pr-builder:
   #   secrets: inherit
   #   uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@custom-test-job
-  # checks:
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@custom-test-job
+  # TODO: Enable style checks
+  checks:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@custom-test-job
+    with:
+      enable_check_style: false
   conda-cpp-build:
-    # needs: checks
+    # needs: checks # TODO: make checks a prerequisite for builds
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@custom-test-job
     with:
