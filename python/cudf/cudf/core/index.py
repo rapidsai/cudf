@@ -1295,8 +1295,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only incase of non-StringIndex types,
-                # as we want to preserve single quotes incase
+                # to happen only in case of non-StringIndex types,
+                # as we want to preserve single quotes in case
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:

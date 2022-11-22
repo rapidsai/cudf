@@ -17,7 +17,7 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
 def is_integer(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
-    that have intergers.
+    that have integers.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
