@@ -29,11 +29,13 @@ struct StringsReverseTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsReverseTest, Reverse)
 {
-  cudf::test::strings_column_wrapper input({"abcdef", "12345", "", "", "aébé", "A é Z"});
+  cudf::test::strings_column_wrapper input({"abcdef", "12345", "", "", "aébé", "A é Z"},
+                                           {1, 1, 1, 0, 1, 1});
 
   auto results = cudf::strings::reverse(cudf::strings_column_view(input));
 
-  cudf::test::strings_column_wrapper expected({"fedcba", "54321", "", "", "ébéa", "Z é A"});
+  cudf::test::strings_column_wrapper expected({"fedcba", "54321", "", "", "ébéa", "Z é A"},
+                                              {1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
