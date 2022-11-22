@@ -244,6 +244,7 @@ struct JsonFixedPointReaderTest : public JsonReaderTest {
     const auto result_view = result.tbl->view();
 
     ASSERT_EQ(result_view.num_columns(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_column, result_view.column(0));
   }
 
