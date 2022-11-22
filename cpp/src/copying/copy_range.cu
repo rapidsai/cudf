@@ -228,7 +228,7 @@ void copy_range_in_place(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
-  CUDF_EXPECTS(target.nullable() || (source.has_nulls() == false),
+  CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
