@@ -1179,8 +1179,9 @@ __global__ void __launch_bounds__(256)
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    inputs[ss.first_block + b]  = {src + b * comp_blk_size, blk_size};
-    auto const dst_offset       = b * (padded_block_header_size + padded_comp_block_size);
+    inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset =
+      padded_block_header_size + b * (padded_block_header_size + padded_comp_block_size);
     outputs[ss.first_block + b] = {dst + dst_offset, max_comp_blk_size};
     results[ss.first_block + b] = {0, compression_status::FAILURE};
   }
@@ -1234,7 +1235,9 @@ __global__ void __launch_bounds__(1024)
                        ? results[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
-      if (results[ss.first_block + b].status == compression_status::SUCCESS) {
+      // Only use the compressed block if it's smaller than the uncompressed
+      // If compression failed, dst_len == src_len, so the uncompressed block will be used
+      if (src_len < dst_len) {
         // Copy from uncompressed source
         src                                       = inputs[ss.first_block + b].data();
         results[ss.first_block + b].bytes_written = src_len;
