@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false  # TODO: enable this after CI scripts are more complete
 
 jobs:
   # pr-builder:
