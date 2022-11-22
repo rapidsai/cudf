@@ -108,8 +108,8 @@ TYPED_TEST(GatherTestListTyped, GatherNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>
   LCW<T> list{{{1, 2, 3, 4}, valids}, {5}, {{6, 7}, valids}, {{8, 9, 10}, valids}};
@@ -190,8 +190,8 @@ TYPED_TEST(GatherTestListTyped, GatherNestedNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<T>>
   {

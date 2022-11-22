@@ -1432,7 +1432,7 @@ class header_encoder {
 
   inline __device__ void end(uint8_t** header_end, bool termination_flag = true)
   {
-    if (termination_flag == false) { *current_header_ptr++ = 0; }
+    if (not termination_flag) { *current_header_ptr++ = 0; }
     *header_end = current_header_ptr;
   }
 
