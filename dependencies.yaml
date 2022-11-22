@@ -187,7 +187,8 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - ipython
-          - notebook>=0.5.0
+          - notebook
+          - scipy
   py_version:
     specific:
       - output_types: conda
