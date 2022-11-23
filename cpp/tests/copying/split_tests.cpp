@@ -173,8 +173,8 @@ TYPED_TEST(SplitTest, SplitEndLessThanSize)
 
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
 
@@ -196,8 +196,8 @@ TYPED_TEST(SplitTest, SplitEndToSize)
 
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
 
@@ -311,8 +311,8 @@ TEST_F(SplitStringTest, StringWithInvalids)
 {
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
 
   std::vector<cudf::size_type> splits{2, 5, 9};
@@ -347,8 +347,8 @@ TEST_F(SplitCornerCases, EmptyIndices)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -365,8 +365,8 @@ TEST_F(SplitCornerCases, InvalidSetOfIndices)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> splits{11, 12};
@@ -378,8 +378,8 @@ TEST_F(SplitCornerCases, ImproperRange)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -392,8 +392,8 @@ TEST_F(SplitCornerCases, NegativeValue)
 {
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
-  auto valids           = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::test::fixed_width_column_wrapper<int8_t> col =
     create_fixed_columns<int8_t>(start, size, valids);
@@ -408,8 +408,8 @@ void split_end_less_than_size(SplitFunc Split, CompareFunc Compare)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
@@ -432,8 +432,8 @@ void split_end_to_size(SplitFunc Split, CompareFunc Compare)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<T>(num_cols, start, col_size, valids);
@@ -469,8 +469,8 @@ void split_empty_indices(SplitFunc Split)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -488,8 +488,8 @@ void split_invalid_indices(SplitFunc Split)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -504,8 +504,8 @@ void split_improper_range(SplitFunc Split)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -520,8 +520,8 @@ void split_negative_value(SplitFunc Split)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -536,8 +536,8 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
 {
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
-  auto valids              = cudf::detail::make_counting_transform_iterator(
-    start, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i % 2 == 0; });
 
   cudf::size_type num_cols = 5;
   cudf::table src_table    = create_fixed_table<int8_t>(num_cols, start, col_size, valids);
@@ -628,8 +628,8 @@ TEST_F(SplitTableCornerCases, EmptyOutputColumn)
 template <typename SplitFunc, typename CompareFunc>
 void split_string_with_invalids(SplitFunc Split, CompareFunc Compare)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   std::vector<std::string> strings[2] = {
     {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
@@ -659,8 +659,8 @@ void split_string_with_invalids(SplitFunc Split, CompareFunc Compare)
 template <typename SplitFunc, typename CompareFunc>
 void split_empty_output_strings_column_value(SplitFunc Split, CompareFunc Compare)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   std::vector<std::string> strings[2] = {
     {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
@@ -687,8 +687,8 @@ template <typename SplitFunc, typename CompareFunc>
 void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 {
   auto no_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
-  auto valids    = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   std::vector<std::string> strings[2] = {
     {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
@@ -715,9 +715,8 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 
   std::vector<bool> validity_masks[2] = {std::vector<bool>(strings[0].size()),
                                          std::vector<bool>(strings[0].size())};
-  std::generate(validity_masks[1].begin(), validity_masks[1].end(), [i = 0]() mutable {
-    return i++ % 2 == 0 ? true : false;
-  });
+  std::generate(
+    validity_masks[1].begin(), validity_masks[1].end(), [i = 0]() mutable { return i++ % 2 == 0; });
 
   auto expected = create_expected_string_tables_for_splits(strings, validity_masks, splits);
 

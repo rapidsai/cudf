@@ -2795,3 +2795,21 @@ def test_index_error_list_index():
         ),
     ):
         cudf.Index(s)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        [np.nan, 10, 15, 16],
+        range(0, 10),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+    ],
+)
+def test_index_hasnans(data):
+    gs = cudf.Index(data, nan_as_null=False)
+    ps = gs.to_pandas()
+
+    assert_eq(gs.hasnans, ps.hasnans)

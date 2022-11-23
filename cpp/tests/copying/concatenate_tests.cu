@@ -1095,8 +1095,8 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateListsWithNulls)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // nulls in the leaves
   {
@@ -1195,8 +1195,8 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
 
 TEST_F(ListsColumnTest, ConcatenateNestedListsWithNulls)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // nulls in the lists
   {

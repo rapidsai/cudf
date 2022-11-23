@@ -71,7 +71,7 @@ void BM_contiguous_split(benchmark::State& state)
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
   cudf::size_type const num_splits  = state.range(2);
-  bool const include_validity       = state.range(3) == 0 ? false : true;
+  bool const include_validity       = state.range(3) != 0;
 
   cudf::size_type el_size = 4;  // ints and floats
   int64_t const num_rows  = total_desired_bytes / (num_cols * el_size);
@@ -102,7 +102,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   int64_t const total_desired_bytes = state.range(0);
   cudf::size_type const num_cols    = state.range(1);
   cudf::size_type const num_splits  = state.range(2);
-  bool const include_validity       = state.range(3) == 0 ? false : true;
+  bool const include_validity       = state.range(3) != 0;
 
   constexpr int64_t string_len = 8;
   std::vector<const char*> h_strings{

@@ -193,7 +193,7 @@ class reader::impl {
                                       std::vector<std::unique_ptr<column>>& out_columns);
 
   /**
-   * @brief Allocate data bufers for the output columns.
+   * @brief Allocate data buffers for the output columns.
    *
    * @param skip_rows Crop all rows below skip_rows
    * @param num_rows Maximum number of rows to read

@@ -80,7 +80,7 @@ type_id to_type_id(SchemaElement const& schema,
   int32_t decimal_scale                   = schema.decimal_scale;
 
   // Logical type used for actual data interpretation; the legacy converted type
-  // is superceded by 'logical' type whenever available.
+  // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
@@ -268,10 +268,10 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
-  auto col = std::find_if(
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
-    [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx ? true : false; });
+  auto col =
+    std::find_if(per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
+                 per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
+                 [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
                "Found no metadata for schema index");
   return col->meta_data;
