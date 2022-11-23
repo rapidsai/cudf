@@ -184,7 +184,8 @@ struct device_json_column {
   using row_offset_t = size_type;
 
   // The inferred type of this column (list, struct, or value/string column)
-  json_col_t type = json_col_t::Unknown;
+  json_col_t type   = json_col_t::Unknown;
+  type_id cudf_type = type_id::EMPTY;
 
   rmm::device_uvector<row_offset_t> string_offsets;
   rmm::device_uvector<row_offset_t> string_lengths;

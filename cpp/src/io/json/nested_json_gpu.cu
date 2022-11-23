@@ -1536,7 +1536,7 @@ void make_json_column(json_column& root_column,
  * @param options The reader options to influence the relevant type inference and type casting
  * options
  */
-auto parsing_options(cudf::io::json_reader_options const& options)
+auto parsing_options(cudf::io::json_reader_options const& options)  // TODO pass stream.
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
