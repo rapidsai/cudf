@@ -187,7 +187,7 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling);
+  return detail::distinct_count(input, null_handling, nan_handling, cudf::get_default_stream());
 }
 
 cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)

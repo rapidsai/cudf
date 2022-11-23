@@ -17,6 +17,7 @@
 #include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -265,7 +266,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
   using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
-  // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
+  // use ELEMENTS_PER_THREAD=2 to support up to 1024 partitions
   size_type temp_histo[ELEMENTS_PER_THREAD];
 
   for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
@@ -436,15 +437,13 @@ struct copy_block_partitions_dispatcher {
                                          grid_size,
                                          stream);
 
-    // Use gather instead for non-fixed width types
-    return type_dispatcher(input.type(),
-                           detail::column_gatherer{},
-                           input,
-                           gather_map.begin(),
-                           gather_map.end(),
-                           false,
-                           stream,
-                           mr);
+    auto gather_table = cudf::detail::gather(cudf::table_view({input}),
+                                             gather_map,
+                                             out_of_bounds_policy::DONT_CHECK,
+                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             stream,
+                                             mr);
+    return std::move(gather_table->release().front());
   }
 };
 

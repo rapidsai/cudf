@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/quantiles.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -62,7 +62,7 @@ std::unique_ptr<table> quantiles(
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

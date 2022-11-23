@@ -245,7 +245,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
            row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
             auto const row_index = i % num_rows;
             return row_null_counts[row_index] != num_columns;
-          });
+          },
+          stream);
       }
       // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
       return cudf::detail::valid_if(
@@ -255,7 +256,8 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
          row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
           auto const row_index = i % num_rows;
           return row_null_counts[row_index] == 0;
-        });
+        },
+        stream);
     }();
     concat->set_null_mask(std::move(null_mask), null_count);
   }

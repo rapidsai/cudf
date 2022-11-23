@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 22.12.00
+  VERSION 23.02.00
   LANGUAGES C CXX CUDA
 )
 
@@ -130,6 +130,7 @@ add_library(
   cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
+  src/ChunkedReaderJni.cpp
   src/CudfJni.cpp
   src/CudaJni.cpp
   src/ColumnVectorJni.cpp

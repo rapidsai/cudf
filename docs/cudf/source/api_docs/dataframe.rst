@@ -179,6 +179,7 @@ Reindexing / selection / label manipulation
    DataFrame.tail
    DataFrame.take
    DataFrame.tile
+   DataFrame.truncate
 
 .. _api.dataframe.missing:
 
@@ -210,6 +211,7 @@ Reshaping, sorting, transposing
    DataFrame.interleave_columns
    DataFrame.partition_by_hash
    DataFrame.pivot
+   DataFrame.pivot_table
    DataFrame.scatter_by_map
    DataFrame.sort_values
    DataFrame.sort_index
@@ -248,10 +250,12 @@ Serialization / IO / conversion
    :toctree: api/
 
    DataFrame.from_arrow
+   DataFrame.from_dict
    DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_values
    DataFrame.to_arrow
+   DataFrame.to_dict
    DataFrame.to_dlpack
    DataFrame.to_parquet
    DataFrame.to_csv

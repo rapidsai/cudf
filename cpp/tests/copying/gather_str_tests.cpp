@@ -86,7 +86,8 @@ TEST_F(GatherTestStr, Gather)
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::get_default_stream());
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;
@@ -116,7 +117,8 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
                                       cudf::out_of_bounds_policy::DONT_CHECK,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::get_default_stream());
 
   std::vector<const char*> h_expected;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
@@ -134,7 +136,8 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::get_default_stream());
   cudf::test::expect_column_empty(results->get_column(0).view());
 }
 
@@ -147,6 +150,7 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results->get_column(0).view());
 }

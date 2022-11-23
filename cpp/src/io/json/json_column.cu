@@ -73,7 +73,7 @@ auto print_vec = [](auto const& cpu, auto const name, auto converter) {
 
 void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
-                rmm::cuda_stream_view stream = cudf::get_default_stream())
+                rmm::cuda_stream_view stream)
 {
   print_vec(cudf::detail::make_std_vector_async(d_gpu_tree.node_categories, stream),
             "node_categories",
@@ -525,14 +525,15 @@ void make_device_json_column(device_span<SymbolT const> input,
       auto parent_node_id = ordered_parent_node_ids[i];
       if (parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST) {
         // unique item
-        if (i == 0 ||
+        if (i == 0 or
             (col_ids[i - 1] != col_ids[i] or ordered_parent_node_ids[i - 1] != parent_node_id)) {
           // scatter to list_offset
           d_columns_data[original_col_ids[parent_node_id]]
             .child_offsets[row_offsets[parent_node_id]] = ordered_row_offsets[i];
         }
         // TODO: verify if this code is right. check with more test cases.
-        if (i == num_nodes - 1 || (col_ids[i] != col_ids[i + 1])) {
+        if (i == num_nodes - 1 or
+            (col_ids[i] != col_ids[i + 1] or ordered_parent_node_ids[i + 1] != parent_node_id)) {
           // last value of list child_offset is its size.
           d_columns_data[original_col_ids[parent_node_id]]
             .child_offsets[row_offsets[parent_node_id] + 1] = ordered_row_offsets[i] + 1;
@@ -722,15 +723,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
-table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
+table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
 
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
@@ -739,7 +737,8 @@ table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
-  print_tree(input, gpu_tree, stream);
+  auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
+  print_tree(h_input, gpu_tree, stream);
 #endif
 
   auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(d_input, gpu_tree, stream);
@@ -841,5 +840,17 @@ table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
                              {{}, out_column_names}};
 }
 
+table_with_metadata device_parse_nested_json(host_span<SymbolT const> input,
+                                             cudf::io::json_reader_options const& options,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Allocate device memory for the JSON input & copy over to device
+  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
+
+  return device_parse_nested_json(device_span<SymbolT const>{d_input}, options, stream, mr);
+}
 }  // namespace detail
 }  // namespace cudf::io::json

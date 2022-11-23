@@ -23,13 +23,9 @@
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/lists_column_device_view.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <cuco/static_map.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
@@ -39,9 +35,7 @@
 
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet {
 
 using cudf::io::detail::string_index_pair;
 
@@ -72,11 +66,6 @@ struct input_column_info {
 
 namespace gpu {
 
-auto constexpr KEY_SENTINEL   = size_type{-1};
-auto constexpr VALUE_SENTINEL = size_type{-1};
-using map_type                = cuco::static_map<size_type, size_type>;
-using slot_type               = map_type::pair_atomic_type;
-
 /**
  * @brief Enums for the flags in the page header
  */
@@ -106,9 +95,13 @@ struct PageNestingInfo {
   // set at initialization
   int32_t max_def_level;
   int32_t max_rep_level;
+  cudf::type_id type;  // type of the corresponding cudf output column
+  bool nullable;
 
   // set during preprocessing
-  int32_t size;              // this page/nesting-level's size contribution to the output column
+  int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
+                 // decoded
+  int32_t batch_size;        // the size of the page for this batch
   int32_t page_start_value;  // absolute output start index in output column data
 
   // set during data decoding
@@ -162,6 +155,9 @@ struct PageInfo {
   int skipped_values;
   // # of values skipped in the actual data stream.
   int skipped_leaf_values;
+  // for string columns only, the size of all the chars in the string for
+  // this page. only valid/computed during the base preprocess pass
+  int32_t str_bytes;
 
   // nesting information (input/output) for each page
   int num_nesting_levels;
@@ -248,6 +244,34 @@ struct ColumnChunkDesc {
 };
 
 /**
+ * @brief Struct to store raw/intermediate file data before parsing.
+ */
+struct file_intermediate_data {
+  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  rmm::device_buffer decomp_page_data;
+  hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
+  hostdevice_vector<gpu::PageInfo> pages_info{};
+  hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+};
+
+/**
+ * @brief Struct to store intermediate page data for parsing each chunk of rows in chunked reading.
+ */
+struct chunk_intermediate_data {
+  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
+  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+};
+
+/**
+ * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
+ */
+struct chunk_read_info {
+  size_t skip_rows;
+  size_t num_rows;
+};
+
+/**
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
@@ -293,48 +317,8 @@ struct PageFragment {
 constexpr unsigned int kDictHashBits = 16;
 constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 
-/**
- * @brief Return the byte length of parquet dtypes that are physically represented by INT32
- */
-inline uint32_t __device__ int32_logical_len(type_id id)
-{
-  switch (id) {
-    case cudf::type_id::INT8:
-    case cudf::type_id::UINT8: return 1;
-    case cudf::type_id::INT16:
-    case cudf::type_id::UINT16: return 2;
-    default: return 4;
-  }
-}
-
-/**
- * @brief Translate the row index of a parent column_device_view into the index of the first value
- * in the leaf child.
- * Only works in the context of parquet writer where struct columns are previously modified s.t.
- * they only have one immediate child.
- */
-inline size_type __device__ row_to_value_idx(size_type idx,
-                                             parquet_column_device_view const& parquet_col)
-{
-  // with a byte array, we can't go all the way down to the leaf node, but instead we want to leave
-  // the size at the parent level because we are writing out parent row byte arrays.
-  auto col = *parquet_col.parent_column;
-  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-    if (col.type().id() == type_id::STRUCT) {
-      idx += col.offset();
-      col = col.child(0);
-    } else {
-      auto list_col = cudf::detail::lists_column_device_view(col);
-      auto child    = list_col.child();
-      if (parquet_col.output_as_byte_array && child.type().id() == type_id::UINT8) { break; }
-      idx = list_col.offset_at(idx);
-      col = child;
-    }
-  }
-  return idx;
-}
-
 struct EncPage;
+struct slot_type;
 
 /**
  * @brief Struct describing an encoder column chunk
@@ -417,35 +401,35 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 rmm::cuda_stream_view stream);
 
 /**
- * @brief Preprocess column information for nested schemas.
+ * @brief Compute page output size information.
  *
- * There are several pieces of information we can't compute directly from row counts in
- * the parquet headers when dealing with nested schemas.
- * - The total sizes of all output columns at all nesting levels
- * - The starting output buffer offset for each page, for each nesting level
- * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
+ * When dealing with nested hierarchies (those that contain lists), or when doing a chunked
+ * read, we need to obtain more information up front than we have with just the row counts.
  *
- * Note : this function is where output device memory is allocated for nested columns.
+ * - We need to determine the sizes of each output cudf column per page
+ * - We need to determine information about where to start decoding the value stream
+ *   if we are using custom user bounds (skip_rows / num_rows)
+ * - We need to determine actual number of top level rows per page
+ * - If we are doing a chunked read, we need to determine the total string size per page
+ *
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param input_columns Input column information
- * @param output_columns Output column information
  * @param num_rows Maximum number of rows to read
  * @param min_rows crop all rows below min_row
- * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
- * bounds
- * @param stream Cuda stream
+ * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
+ * computed
+ * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
+ * be computed
+ * @param stream CUDA stream to use, default 0
  */
-void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
-                          hostdevice_vector<ColumnChunkDesc> const& chunks,
-                          std::vector<input_column_info>& input_columns,
-                          std::vector<cudf::io::detail::column_buffer>& output_columns,
-                          size_t num_rows,
-                          size_t min_row,
-                          bool uses_custom_row_bounds,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
+                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      bool compute_num_rows,
+                      bool compute_string_sizes,
+                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages
@@ -628,6 +612,4 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
 }  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet

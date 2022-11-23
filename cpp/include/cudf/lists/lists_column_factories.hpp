@@ -38,7 +38,7 @@ namespace detail {
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(
   list_scalar const& value,
   size_type size,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

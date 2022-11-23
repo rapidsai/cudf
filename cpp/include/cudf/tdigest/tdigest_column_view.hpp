@@ -16,29 +16,10 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
 namespace tdigest {
-
-/**
- * @brief Functor to compute the size of each tdigest of a column.
- *
- */
-struct tdigest_size {
-  size_type const* offsets;  ///< Offsets of the t-digest column
-  /**
-   * @brief Returns size of the each tdigest in the column
-   *
-   * @param tdigest_index Index of the tdigest in the column
-   * @return Size of the tdigest
-   */
-  __device__ size_type operator()(size_type tdigest_index)
-  {
-    return offsets[tdigest_index + 1] - offsets[tdigest_index];
-  }
-};
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
@@ -126,18 +107,6 @@ class tdigest_column_view : private column_view {
    * @return The internal column of weight values
    */
   [[nodiscard]] column_view weights() const;
-
-  /**
-   * @brief Returns an iterator that returns the size of each tdigest
-   * in the column (each row is 1 digest)
-   *
-   * @return An iterator that returns the size of each tdigest in the column
-   */
-  [[nodiscard]] auto size_begin() const
-  {
-    return cudf::detail::make_counting_transform_iterator(
-      0, tdigest_size{centroids().offsets_begin()});
-  }
 
   /**
    * @brief Returns the first min value for the column. Each row corresponds

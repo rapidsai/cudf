@@ -17,10 +17,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/pad_impl.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -53,13 +55,12 @@ struct compute_pad_output_length_fn {
 
 }  // namespace
 
-std::unique_ptr<column> pad(
-  strings_column_view const& strings,
-  size_type width,
-  side_type side                      = side_type::RIGHT,
-  std::string_view fill_char          = " ",
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> pad(strings_column_view const& strings,
+                            size_type width,
+                            side_type side,
+                            std::string_view fill_char,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -128,11 +129,10 @@ std::unique_ptr<column> pad(
                              std::move(null_mask));
 }
 
-std::unique_ptr<column> zfill(
-  strings_column_view const& input,
-  size_type width,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> zfill(strings_column_view const& input,
+                              size_type width,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 

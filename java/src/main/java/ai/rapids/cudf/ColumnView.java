@@ -2632,12 +2632,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * Overloading subString to support if end index is not provided. Appending -1 to indicate to
-   * read until end of string.
+   * The character positions to retrieve in each string are `[start, <the string end>)`..
+   *
    * @param start first character index to begin the substring(inclusive).
    */
   public final ColumnVector substring(int start) {
-    return substring(start, -1);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(substringS(getNativeView(), start));
   }
 
   /**
@@ -2866,7 +2867,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * replacement string.
    * The replacement proceeds from the beginning of the string to the end, for example,
    * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
-   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Specifying an empty string for replace will essentially remove the target string if found in each string.
    * Null string entries will return null output string entries.
    * target Scalar should be string and should not be empty or null.
    *
@@ -3274,6 +3275,46 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert idx >= 0 : "group index must be at least 0";
 
     return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given like pattern.
+   *
+   * The like pattern expects only 2 wildcard special characters
+   * - `%` any number of any character (including no characters)
+   * - `_` any single character
+   *
+   * ```
+   * cv = ["azaa", "ababaabba", "aaxa"]
+   * r = cv.like("%a_aa%", "\\")
+   * r is now [true, true, false]
+   * r = cv.like("a__a", "\\")
+   * r is now [true, false, true]
+   * ```
+   *
+   * The escape character is specified to include either `%` or `_` in the search,
+   * which is expected to be either 0 or 1 character.
+   * If more than one character is specified, only the first character is used.
+   *
+   * ```
+   * cv = ["abc_def", "abc1def", "abc_"]
+   * r = cv.like("abc/_d%", "/")
+   * r is now [true, false, false]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param pattern Like pattern to match to each string.
+   * @param escapeChar Character specifies the escape prefix; default is "\\".
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector like(Scalar pattern, Scalar escapeChar) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert pattern != null : "pattern scalar must not be null";
+    assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
+    assert escapeChar != null : "escapeChar scalar must not be null";
+    assert escapeChar.getType().equals(DType.STRING) : "escapeChar scalar must be a string scalar";
+    return new ColumnVector(like(getNativeView(), pattern.getScalarHandle(), escapeChar.getScalarHandle()));
   }
 
 
@@ -3944,6 +3985,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substring(long columnView, int start, int end) throws CudfException;
 
   /**
+   * Native method to extract substrings from a given strings column.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substrings (inclusive).
+   */
+  private static native long substringS(long columnView, int start) throws CudfException;
+
+  /**
    * Native method to calculate substring from a given string column.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param startColumn handle of cudf::column_view which has start indices of each string.
@@ -4033,6 +4081,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in like pattern
+   * and escape character.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param patternHandle handle of scalar containing the string like pattern.
+   * @param escapeCharHandle handle of scalar containing the string escape character.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long like(long cudfViewHandle, long patternHandle, long escapeCharHandle) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.

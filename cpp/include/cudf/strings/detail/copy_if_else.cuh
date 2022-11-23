@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -56,13 +56,12 @@ namespace detail {
  * @return New strings column.
  */
 template <typename StringIterLeft, typename StringIterRight, typename Filter>
-std::unique_ptr<cudf::column> copy_if_else(
-  StringIterLeft lhs_begin,
-  StringIterLeft lhs_end,
-  StringIterRight rhs_begin,
-  Filter filter_fn,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
+                                           StringIterLeft lhs_end,
+                                           StringIterRight rhs_begin,
+                                           Filter filter_fn,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);

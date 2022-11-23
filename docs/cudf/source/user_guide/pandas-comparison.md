@@ -152,7 +152,7 @@ can do the following:
 dtype: object
 ```
 
-For compatibilty with Pandas, cuDF reports the data type for strings
+For compatibility with Pandas, cuDF reports the data type for strings
 as `"object"`, but we do *not* support storing or operating on
 collections of arbitrary Python objects.
 

@@ -72,7 +72,7 @@ rmm::device_uvector<T> make_zeroed_device_uvector_async(
 template <typename T>
 rmm::device_uvector<T> make_zeroed_device_uvector_sync(
   std::size_t size,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   rmm::device_uvector<T> ret(size, stream, mr);
@@ -148,7 +148,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_async(
   device_span<T const> source_data,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
@@ -201,7 +201,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(
   host_span<T const> source_data,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
@@ -228,7 +228,7 @@ template <
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
   Container const& c,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   return make_device_uvector_sync(host_span<typename Container::value_type const>{c}, stream, mr);
@@ -249,7 +249,7 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
 template <typename T>
 rmm::device_uvector<T> make_device_uvector_sync(
   device_span<T const> source_data,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
@@ -276,7 +276,7 @@ template <
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
   Container const& c,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
@@ -366,8 +366,8 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-std::vector<typename Container::value_type> make_std_vector_sync(
-  Container const& c, rmm::cuda_stream_view stream = cudf::get_default_stream())
+std::vector<typename Container::value_type> make_std_vector_sync(Container const& c,
+                                                                 rmm::cuda_stream_view stream)
 {
   return make_std_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }
@@ -423,8 +423,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_async(
  * @return The data copied to the host
  */
 template <typename T>
-thrust::host_vector<T> make_host_vector_sync(
-  device_span<T const> v, rmm::cuda_stream_view stream = cudf::get_default_stream())
+thrust::host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_host_vector_async(v, stream);
   stream.synchronize();
@@ -448,7 +447,7 @@ template <
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
 thrust::host_vector<typename Container::value_type> make_host_vector_sync(
-  Container const& c, rmm::cuda_stream_view stream = cudf::get_default_stream())
+  Container const& c, rmm::cuda_stream_view stream)
 {
   return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }

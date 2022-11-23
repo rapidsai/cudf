@@ -14,7 +14,6 @@ from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
-    finalize,
     handle_out,
     make_meta as dask_make_meta,
     map_partitions,
@@ -55,35 +54,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    __dask_scheduler__ = staticmethod(dask.get)
-
-    def __dask_postcompute__(self):
-        return finalize, ()
-
-    def __dask_postpersist__(self):
-        return type(self), (self._name, self._meta, self.divisions)
-
-    @_dask_cudf_nvtx_annotate
-    def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        meta = dask_make_meta(meta)
-        if not isinstance(meta, self._partition_type):
-            raise TypeError(
-                f"Expected meta to specify type "
-                f"{self._partition_type.__name__}, got type "
-                f"{type(meta).__name__}"
-            )
-        self._meta = meta
-        self.divisions = tuple(divisions)
-
-    def __getstate__(self):
-        return (self.dask, self._name, self._meta, self.divisions)
-
-    def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+    def _is_partition_type(self, meta):
+        return isinstance(meta, self._partition_type)
 
     def __repr__(self):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"

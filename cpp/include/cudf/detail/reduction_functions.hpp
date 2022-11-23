@@ -46,7 +46,7 @@ std::unique_ptr<scalar> sum(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -67,7 +67,7 @@ std::unique_ptr<scalar> min(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -88,7 +88,7 @@ std::unique_ptr<scalar> max(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -110,7 +110,7 @@ std::unique_ptr<scalar> any(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -132,7 +132,7 @@ std::unique_ptr<scalar> all(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -154,7 +154,7 @@ std::unique_ptr<scalar> product(
   column_view const& col,
   data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -174,7 +174,7 @@ std::unique_ptr<scalar> product(
 std::unique_ptr<scalar> sum_of_squares(
   column_view const& col,
   data_type const output_dtype,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -194,7 +194,7 @@ std::unique_ptr<scalar> sum_of_squares(
 std::unique_ptr<scalar> mean(
   column_view const& col,
   data_type const output_dtype,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -217,7 +217,7 @@ std::unique_ptr<scalar> variance(
   column_view const& col,
   data_type const output_dtype,
   cudf::size_type ddof,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -240,7 +240,7 @@ std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
   data_type const output_dtype,
   cudf::size_type ddof,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -271,7 +271,7 @@ std::unique_ptr<scalar> nth_element(
   column_view const& col,
   size_type n,
   null_policy null_handling,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -286,7 +286,7 @@ std::unique_ptr<scalar> nth_element(
 std::unique_ptr<scalar> collect_list(
   column_view const& col,
   null_policy null_handling,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -299,7 +299,7 @@ std::unique_ptr<scalar> collect_list(
  */
 std::unique_ptr<scalar> merge_lists(
   lists_column_view const& col,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -318,7 +318,7 @@ std::unique_ptr<scalar> collect_set(
   null_policy null_handling,
   null_equality nulls_equal,
   nan_equality nans_equal,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -335,7 +335,7 @@ std::unique_ptr<scalar> merge_sets(
   lists_column_view const& col,
   null_equality nulls_equal,
   nan_equality nans_equal,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -363,7 +363,7 @@ std::unique_ptr<column> segmented_sum(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -391,7 +391,7 @@ std::unique_ptr<column> segmented_product(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -418,7 +418,7 @@ std::unique_ptr<column> segmented_min(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -445,7 +445,7 @@ std::unique_ptr<column> segmented_max(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -473,7 +473,7 @@ std::unique_ptr<column> segmented_any(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -501,7 +501,7 @@ std::unique_ptr<column> segmented_all(
   data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace reduction

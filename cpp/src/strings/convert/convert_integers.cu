@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -23,8 +24,7 @@
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/convert/string_to_int.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -157,10 +157,9 @@ struct dispatch_is_integer_fn {
 
 }  // namespace
 
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   auto const d_column = column_device_view::create(strings.parent(), stream);
   auto results        = make_numeric_column(data_type{type_id::BOOL8},
@@ -192,11 +191,10 @@ std::unique_ptr<column> is_integer(
   return results;
 }
 
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  data_type int_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   data_type int_type,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
