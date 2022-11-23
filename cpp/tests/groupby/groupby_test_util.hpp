@@ -73,6 +73,12 @@ inline void test_single_agg(column_view const& keys,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
 {
+  auto const sort_expect_order = sorted_order(table_view{{expect_keys}}, {}, {null_order::AFTER});
+  auto const sorted_expect_keys =
+    gather(table_view{{expect_keys}}, *sort_expect_order)->view().column(0);
+  auto const sorted_expect_vals =
+    gather(table_view{{expect_vals}}, *sort_expect_order)->view().column(0);
+
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
   requests[0].values = values;
@@ -90,17 +96,17 @@ inline void test_single_agg(column_view const& keys,
   auto result = gb_obj.aggregate(requests);
 
   if (use_sort == force_use_sort_impl::YES) {
-    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({sorted_expect_keys}), result.first->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
+      sorted_expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
   } else {
     auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
     auto const sorted_keys = gather(result.first->view(), *sort_order);
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), *sorted_keys);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({sorted_expect_keys}), *sorted_keys);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      expect_vals, sorted_vals->get_column(0), debug_output_level::ALL_ERRORS);
+      sorted_expect_vals, sorted_vals->get_column(0), debug_output_level::ALL_ERRORS);
   }
 }
 

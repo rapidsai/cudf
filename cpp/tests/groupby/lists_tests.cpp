@@ -23,7 +23,6 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -69,14 +68,10 @@ inline void test_hash_based_sum_agg(column_view const& keys,
                                     column_view const& expect_keys,
                                     column_view const& expect_vals)
 {
-  auto const sort_order         = sorted_order(table_view{{expect_keys}}, {}, {null_order::AFTER});
-  auto const sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_order);
-  auto const sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_order);
-
   test_single_agg(keys,
                   values,
-                  sorted_expect_keys->view().column(0),
-                  sorted_expect_vals->view().column(0),
+                  expect_keys,
+                  expect_vals,
                   sum_agg(),
                   force_use_sort_impl::NO,
                   null_policy::INCLUDE);
