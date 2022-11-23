@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool, int
 from libcpp.map cimport map
@@ -231,15 +232,18 @@ cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
         raise ValueError(f"Unsupported `statistics_freq` type {statistics}")
 
 
-cpdef write_orc(table,
-                object path_or_buf,
-                object compression="snappy",
-                object statistics="ROWGROUP",
-                object stripe_size_bytes=None,
-                object stripe_size_rows=None,
-                object row_index_stride=None,
-                object cols_as_map_type=None,
-                object index=None):
+@acquire_spill_lock()
+def write_orc(
+    table,
+    object path_or_buf,
+    object compression="snappy",
+    object statistics="ROWGROUP",
+    object stripe_size_bytes=None,
+    object stripe_size_rows=None,
+    object row_index_stride=None,
+    object cols_as_map_type=None,
+    object index=None
+):
     """
     Cython function to call into libcudf API, see `cudf::io::write_orc`.
 
