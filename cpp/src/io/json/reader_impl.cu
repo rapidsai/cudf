@@ -661,6 +661,53 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                                mr);
 }
 
+table_with_metadata read_json(device_span<char const> d_data,
+                              host_span<char const> h_data,
+                              json_reader_options const& reader_opts,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
+
+  auto parse_opts = parse_options{',', '\n', '\"', '.'};
+
+  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
+
+  parse_opts.dayfirst = reader_opts.is_enabled_dayfirst();
+
+  auto rec_starts = find_record_starts(reader_opts, h_data, d_data, stream);
+
+  CUDF_EXPECTS(rec_starts.size() > 0, "Error enumerating records.\n");
+
+  CUDF_EXPECTS(d_data.size() != 0, "Error uploading input data to the GPU.\n");
+
+  auto column_names_and_map =
+    get_column_names_and_map(parse_opts.view(), h_data, rec_starts, d_data, stream);
+
+  auto column_names = std::get<0>(column_names_and_map);
+  auto column_map   = std::move(std::get<1>(column_names_and_map));
+
+  CUDF_EXPECTS(not column_names.empty(), "Error determining column names.\n");
+
+  auto dtypes = get_data_types(
+    reader_opts, parse_opts.view(), column_names, column_map.get(), rec_starts, d_data, stream);
+
+  CUDF_EXPECTS(not dtypes.empty(), "Error in data type detection.\n");
+
+  return convert_data_to_table(parse_opts.view(),
+                               dtypes,
+                               std::move(column_names),
+                               column_map.get(),
+                               rec_starts,
+                               d_data,
+                               stream,
+                               mr);
+}
+
 }  // namespace json
 }  // namespace detail
 }  // namespace io
