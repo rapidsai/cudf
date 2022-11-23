@@ -45,11 +45,11 @@ if get_global_manager() is not None:
     )
 
 
-def std_df(target="gpu") -> cudf.DataFrame:
+def single_column_df(target="gpu") -> cudf.DataFrame:
     """Create a standard single column dataframe used for testing
 
-    Use `std_df_data`, `std_df_base_data`, `gen_df_data_nbytes`
-    for easy access to the buffer of the column.
+    Use `single_column_df_data`, `single_column_df_base_data`,
+    `gen_df_data_nbytes` for easy access to the buffer of the column.
 
     Notice, this is just for convenience, there is nothing special
     about this dataframe.
@@ -66,18 +66,18 @@ def std_df(target="gpu") -> cudf.DataFrame:
     """
     ret = cudf.DataFrame({"a": [1, 2, 3]})
     if target != "gpu":
-        std_df_data(ret).spill(target=target)
+        single_column_df_data(ret).spill(target=target)
     return ret
 
 
-def std_df_data(df: cudf.DataFrame) -> SpillableBuffer:
+def single_column_df_data(df: cudf.DataFrame) -> SpillableBuffer:
     """Access `.data` of the column of a standard dataframe"""
     ret = df._data._data["a"].data
     assert isinstance(ret, SpillableBuffer)
     return ret
 
 
-def std_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
+def single_column_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
     """Access `.base_data` of the column of a standard dataframe"""
     ret = df._data._data["a"].base_data
     assert isinstance(ret, SpillableBuffer)
@@ -85,7 +85,7 @@ def std_df_base_data(df: cudf.DataFrame) -> SpillableBuffer:
 
 
 # Get number of bytes of the column of a standard dataframe
-gen_df_data_nbytes = std_df()._data._data["a"].data.nbytes
+gen_df_data_nbytes = single_column_df()._data._data["a"].data.nbytes
 
 
 def spilled_and_unspilled(manager: SpillManager) -> Tuple[int, int]:
@@ -160,32 +160,32 @@ def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
 def test_from_pandas(manager: SpillManager):
     pdf1 = pandas.DataFrame({"a": [1, 2, 3]})
     df = cudf.from_pandas(pdf1)
-    assert std_df_data(df).spillable
+    assert single_column_df_data(df).spillable
     pdf2 = df.to_pandas()
     pandas.testing.assert_frame_equal(pdf1, pdf2)
 
 
 def test_creations(manager: SpillManager):
-    df = std_df()
-    assert std_df_data(df).spillable
+    df = single_column_df()
+    assert single_column_df_data(df).spillable
 
     df = cudf.datasets.timeseries(dtypes={"a": float})
-    assert std_df_data(df).spillable
+    assert single_column_df_data(df).spillable
 
     df = cudf.datasets.randomdata(dtypes={"a": float})
-    assert std_df_data(df).spillable
+    assert single_column_df_data(df).spillable
 
 
 def test_spillable_df_groupby(manager: SpillManager):
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
-    assert len(std_df_base_data(df)._spill_locks) == 0
+    assert len(single_column_df_base_data(df)._spill_locks) == 0
     gb._groupby
     # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(std_df_base_data(df)._spill_locks) == 1
-    assert not std_df_data(df).spillable
+    assert len(single_column_df_base_data(df)._spill_locks) == 1
+    assert not single_column_df_data(df).spillable
     del gb
-    assert std_df_data(df).spillable
+    assert single_column_df_data(df).spillable
 
 
 def test_spilling_buffer(manager: SpillManager):
@@ -226,47 +226,47 @@ def test_environment_variables(monkeypatch):
 
 
 def test_spill_device_memory(manager: SpillManager):
-    df = std_df()
+    df = single_column_df()
     assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
     manager.spill_device_memory(nbytes=1)
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)
     del df
     assert spilled_and_unspilled(manager) == (0, 0)
-    df1 = std_df()
-    df2 = std_df()
+    df1 = single_column_df()
+    df2 = single_column_df()
     manager.spill_device_memory(nbytes=1)
-    assert std_df_data(df1).is_spilled
-    assert not std_df_data(df2).is_spilled
+    assert single_column_df_data(df1).is_spilled
+    assert not single_column_df_data(df2).is_spilled
     manager.spill_device_memory(nbytes=1)
-    assert std_df_data(df1).is_spilled
-    assert std_df_data(df2).is_spilled
+    assert single_column_df_data(df1).is_spilled
+    assert single_column_df_data(df2).is_spilled
     df3 = df1 + df2
-    assert not std_df_data(df1).is_spilled
-    assert not std_df_data(df2).is_spilled
-    assert not std_df_data(df3).is_spilled
+    assert not single_column_df_data(df1).is_spilled
+    assert not single_column_df_data(df2).is_spilled
+    assert not single_column_df_data(df3).is_spilled
     manager.spill_device_memory(nbytes=1)
-    assert std_df_data(df1).is_spilled
-    assert not std_df_data(df2).is_spilled
-    assert not std_df_data(df3).is_spilled
+    assert single_column_df_data(df1).is_spilled
+    assert not single_column_df_data(df2).is_spilled
+    assert not single_column_df_data(df3).is_spilled
     df2.abs()  # Should change the access time
     manager.spill_device_memory(nbytes=1)
-    assert std_df_data(df1).is_spilled
-    assert not std_df_data(df2).is_spilled
-    assert std_df_data(df3).is_spilled
+    assert single_column_df_data(df1).is_spilled
+    assert not single_column_df_data(df2).is_spilled
+    assert single_column_df_data(df3).is_spilled
 
 
 def test_spill_to_device_limit(manager: SpillManager):
-    df1 = std_df()
-    df2 = std_df()
+    df1 = single_column_df()
+    df2 = single_column_df()
     assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes * 2)
     manager.spill_to_device_limit(device_limit=0)
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
     df3 = df1 + df2
     manager.spill_to_device_limit(device_limit=0)
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 3, 0)
-    assert std_df_data(df1).is_spilled
-    assert std_df_data(df2).is_spilled
-    assert std_df_data(df3).is_spilled
+    assert single_column_df_data(df1).is_spilled
+    assert single_column_df_data(df2).is_spilled
+    assert single_column_df_data(df3).is_spilled
 
 
 @pytest.mark.parametrize(
@@ -274,8 +274,8 @@ def test_spill_to_device_limit(manager: SpillManager):
 )
 def test_zero_device_limit(manager: SpillManager):
     assert manager._device_memory_limit == 0
-    df1 = std_df()
-    df2 = std_df()
+    df1 = single_column_df()
+    df2 = single_column_df()
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
     df1 + df2
     # Notice, while performing the addintion both df1 and df2 are unspillable
@@ -299,17 +299,17 @@ def test_external_memory_never_spills(manager):
 
 
 def test_spilling_df_views(manager):
-    df = std_df(target="cpu")
-    assert std_df_data(df).is_spilled
+    df = single_column_df(target="cpu")
+    assert single_column_df_data(df).is_spilled
     df_view = df.loc[1:]
-    assert std_df_data(df_view).spillable
-    assert std_df_data(df).spillable
+    assert single_column_df_data(df_view).spillable
+    assert single_column_df_data(df).spillable
 
 
 def test_modify_spilled_views(manager):
-    df = std_df()
+    df = single_column_df()
     df_view = df.iloc[1:]
-    buf = std_df_data(df)
+    buf = single_column_df_data(df)
     buf.spill(target="cpu")
 
     # modify the spilled df and check that the changes are reflected
@@ -388,22 +388,22 @@ def test_get_spill_lock_no_manager():
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
 @pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
 def test_serialize_device(manager, target, view):
-    df1 = std_df()
+    df1 = single_column_df()
     if view is not None:
         df1 = df1.iloc[view]
-    std_df_data(df1).spill(target=target)
+    single_column_df_data(df1).spill(target=target)
 
     header, frames = df1.device_serialize()
     assert len(frames) == 1
     if target == "gpu":
         assert isinstance(frames[0], Buffer)
-        assert not std_df_data(df1).is_spilled
-        assert not std_df_data(df1).spillable
+        assert not single_column_df_data(df1).is_spilled
+        assert not single_column_df_data(df1).spillable
         frames[0] = cupy.array(frames[0], copy=True)
     else:
         assert isinstance(frames[0], memoryview)
-        assert std_df_data(df1).is_spilled
-        assert std_df_data(df1).spillable
+        assert single_column_df_data(df1).is_spilled
+        assert single_column_df_data(df1).spillable
 
     df2 = Serializable.device_deserialize(header, frames)
     assert_eq(df1, df2)
@@ -412,27 +412,27 @@ def test_serialize_device(manager, target, view):
 @pytest.mark.parametrize("target", ["gpu", "cpu"])
 @pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
 def test_serialize_host(manager, target, view):
-    df1 = std_df()
+    df1 = single_column_df()
     if view is not None:
         df1 = df1.iloc[view]
-    std_df_data(df1).spill(target=target)
+    single_column_df_data(df1).spill(target=target)
 
     # Unspilled df becomes spilled after host serialization
     header, frames = df1.host_serialize()
     assert all(isinstance(f, memoryview) for f in frames)
     df2 = Serializable.host_deserialize(header, frames)
-    assert std_df_data(df2).is_spilled
+    assert single_column_df_data(df2).is_spilled
     assert_eq(df1, df2)
 
 
 def test_serialize_dask_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
-    df1 = std_df(target="gpu")
+    df1 = single_column_df(target="gpu")
     header, frames = protocol.serialize(
         df1, serializers=("dask",), on_error="raise"
     )
-    buf = std_df_data(df1)
+    buf = single_column_df_data(df1)
     assert len(frames) == 1
     assert isinstance(frames[0], memoryview)
     # Check that the memoryview and frames is the same memory
@@ -442,18 +442,18 @@ def test_serialize_dask_dataframe(manager: SpillManager):
     )
 
     df2 = protocol.deserialize(header, frames)
-    assert std_df_data(df2).is_spilled
+    assert single_column_df_data(df2).is_spilled
     assert_eq(df1, df2)
 
 
 def test_serialize_cuda_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
-    df1 = std_df(target="gpu")
+    df1 = single_column_df(target="gpu")
     header, frames = protocol.serialize(
         df1, serializers=("cuda",), on_error="raise"
     )
-    buf: SpillableBufferSlice = std_df_data(df1)
+    buf: SpillableBufferSlice = single_column_df_data(df1)
     assert len(buf._base._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
