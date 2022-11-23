@@ -17,10 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/scan_reduce_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -29,14 +27,14 @@
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 /**
- * @brief Create an offsets column to be a child of a strings column.
+ * @brief Create an offsets column to be a child of a strings column
+ *
  * This will set the offsets values by executing scan on the provided
  * Iterator.
  *
@@ -71,7 +69,9 @@ std::unique_ptr<column> make_offsets_child_column(InputIterator begin,
 
 /**
  * @brief Creates child offsets and chars columns by applying the template function that
- * can be used for computing the output size of each string as well as create the output.
+ * can be used for computing the output size of each string as well as create the output
+ *
+ * @throws cudf::logic_error if the output strings column exceeds the column size limit
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must also have members d_offsets and d_chars which are set to
@@ -107,9 +107,10 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                        size_and_exec_fn);
   };
 
-  // Compute the offsets values
+  // Compute the output sizes
   for_each_fn(size_and_exec_fn);
 
+  // Convert the sizes to offsets
   auto const bytes = cudf::detail::exclusive_scan_reduce(
     d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(bytes <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
