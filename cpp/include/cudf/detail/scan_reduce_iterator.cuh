@@ -24,15 +24,13 @@
 
 #include <thrust/scan.h>
 
-#include <cuda_runtime.h>
-
 namespace cudf {
 namespace detail {
 
 /**
  * @brief Iterator that can be used with a scan algorithm to also perform reduce
  *
- * Use cudf::detail::make_scan_reduce_output_iterator to create an instance
+ * Use cudf::detail::make_scan_reduce_output_iterator to create an instance of this class.
  *
  * @tparam ScanIterator Output iterator type for use in a scan operation
  * @tparam ReduceType Type used for final scan result
@@ -198,10 +196,10 @@ struct scan_reduce_iterator {
  *  auto begin = // begin input iterator
  *  auto end = // end input iterator
  *  auto reduction = rmm::device_scalar<std::size_t>(0, stream);
- *  auto output_itr =
- *    make_scan_reduce_output_iterator(result, result + std::distance(begin, end),
- * reduction.data()); thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr,
- * std::size_t{0});
+ *  auto itr = make_scan_reduce_output_iterator(result,
+ *                                              result + std::distance(begin, end),
+ *                                              reduction.data());
+ *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, std::size_t{0});
  *  // reduction contains the reduce result
  * @endcode
  *
@@ -228,9 +226,9 @@ static scan_reduce_iterator<ScanIterator, ReduceType> make_scan_reduce_output_it
  *
  * This implementation will return the reduction result in `size_t` precision regardless
  * of the input or result types. This can be used to check if the scan will overflow
- * when the input and result provide smaller types (i.e. computing offsets from sizes).
+ * when the input and result are declared as smaller types (i.e. computing offsets from sizes).
  *
- * The input and result types are expected to be numeric and using any other type is undefined.
+ * Only numeric types for input and result types are supported.
  *
  * Note that `begin == result` is allowed but `result` may not overlap `[begin,end)` otherwise the
  * behavior is undefined.
@@ -255,10 +253,15 @@ std::size_t exclusive_scan_reduce(ScanIterator begin,
                                   ScanIterator result,
                                   rmm::cuda_stream_view stream)
 {
+  using ScanType = typename thrust::iterator_traits<ScanIterator>::value_type;
+  static_assert(cudf::is_numeric<ScanType>(),
+                "Only numeric types are supported by exclusive_scan_reduce");
+
   auto reduction = rmm::device_scalar<std::size_t>(0, stream);
   auto output_itr =
     make_scan_reduce_output_iterator(result, result + std::distance(begin, end), reduction.data());
-  // this function uses the type of the initialization parameter as its accumulator type
+  // This function uses the type of the initialization parameter as the accumulator type
+  // when computing the individual scan output elements.
   thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, std::size_t{0});
   return reduction.value(stream);
 }
