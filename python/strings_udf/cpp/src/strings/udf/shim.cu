@@ -16,6 +16,7 @@
 
 #include <cudf/strings/udf/case.cuh>
 #include <cudf/strings/udf/char_types.cuh>
+#include <cudf/strings/udf/replace.cuh>
 #include <cudf/strings/udf/search.cuh>
 #include <cudf/strings/udf/starts_with.cuh>
 #include <cudf/strings/udf/strip.cuh>
@@ -340,8 +341,7 @@ extern "C" __device__ int replace(
   auto udf_str_ptr = new (udf_str) udf_string;
   udf_string result;
 
-  // not implemented yet
-  // result = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
+  result = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
 
   *udf_str_ptr = result;
 
