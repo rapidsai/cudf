@@ -525,13 +525,12 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   auto ids_itr       = device_token_ids.begin();
   auto const ids_end = device_token_ids.end();
   while (ids_itr != ids_end) {
-    auto const copy_end = static_cast<std::size_t>(std::distance(ids_itr, ids_end)) <= copy_size
-                            ? ids_end
-                            : ids_itr + copy_size;
-    auto const end_itr  = thrust::copy_if(
+    auto const copy_end  = (static_cast<std::size_t>(std::distance(ids_itr, ids_end)) <= copy_size)
+                             ? ids_end
+                             : ids_itr + copy_size;
+    contiguous_token_ids = thrust::copy_if(
       rmm::exec_policy(stream), ids_itr, copy_end, contiguous_token_ids, copy_if_fn{});
-    contiguous_token_ids = end_itr;
-    ids_itr              = copy_end;
+    ids_itr = copy_end;
   }
 
   // Repurpose start word indices since it is the same size and type as the required output.
