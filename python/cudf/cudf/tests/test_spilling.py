@@ -5,7 +5,7 @@ import random
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple
+from typing import List, Tuple
 
 import cupy
 import numpy as np
@@ -200,6 +200,12 @@ def test_environment_variables(monkeypatch):
     manager = get_global_manager()
     assert isinstance(manager, SpillManager)
     assert manager.statistics.level == 1
+
+    monkeypatch.setenv("CUDF_SPILL_STATS", "2")
+    reload_options()
+    manager = get_global_manager()
+    assert isinstance(manager, SpillManager)
+    assert manager.statistics.level == 2
 
 
 def test_spill_device_memory(manager: SpillManager):
@@ -510,3 +516,49 @@ def test_statistics(manager: SpillManager):
     nbytes, time = manager.statistics.spills_totals[("cpu", "gpu")]
     assert nbytes == buf.size
     assert time > 0
+
+
+@pytest.mark.parametrize("manager", [{"statistic_level": 2}], indirect=True)
+def test_statistics_expose(manager: SpillManager):
+    assert len(manager.statistics.spills_totals) == 0
+
+    buffers: List[SpillableBuffer] = [
+        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+        for _ in range(10)
+    ]
+
+    # Expose the first buffer
+    buffers[0].ptr
+    assert len(manager.statistics.exposes) == 1
+    stat = list(manager.statistics.exposes.values())[0]
+    assert stat.count == 1
+    assert stat.total_nbytes == buffers[0].nbytes
+    assert stat.spilled_nbytes == 0
+
+    # Expose all 10 buffers
+    for i in range(10):
+        buffers[i].ptr
+
+    # The rest should accumulate to a single stat
+    assert len(manager.statistics.exposes) == 2
+    stat = list(manager.statistics.exposes.values())[1]
+    assert stat.count == 9
+    assert stat.total_nbytes == buffers[0].nbytes * 9
+    assert stat.spilled_nbytes == 0
+
+    # Create and spill 10 new buffers
+    buffers: List[SpillableBuffer] = [
+        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+        for _ in range(10)
+    ]
+
+    manager.spill_to_device_limit(0)
+
+    # Expose the new buffers and check that they are counted as spilled
+    for i in range(10):
+        buffers[i].ptr
+    assert len(manager.statistics.exposes) == 3
+    stat = list(manager.statistics.exposes.values())[2]
+    assert stat.count == 10
+    assert stat.total_nbytes == buffers[0].nbytes * 10
+    assert stat.spilled_nbytes == buffers[0].nbytes * 10

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import gc
 import io
+import textwrap
 import threading
 import traceback
 import warnings
 import weakref
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
@@ -50,26 +52,25 @@ def get_rmm_memory_resource_stack(
 class SpillStatistics:
     """Gather spill statistics
 
-    Levels of information gathered:
-      0 - disabled (no overhead)
-      1 - duration and number of bytes spilled (very low overhead)
+    Levels of information gathered (cascading):
+      0  - disabled (no overhead)
+      1+ - duration and number of bytes spilled (very low overhead).
+      2+ - a traceback for each time a spillable buffer is exposed
+           permanently (potential high overhead).
 
     The statistics are printed when spilling-on-demand fails to find
     any buffer to spill. It is possible to retrieve the statistics
-    manually through the spill manager, see example.
+    manually through the spill manager, see example below.
 
     Parameters
     ----------
     level : int
         If not 0, enables statistics at the specified level.
 
-
     Examples
     --------
     >>> import cudf
     >>> from cudf.core.buffer.spill_manager import get_global_manager
-    >>> cudf.set_option("spill", True)  # Enable spilling
-    >>> cudf.set_option("spill_stats", 1)  # Set statistic level
     >>> manager = get_global_manager()
     >>> manager.statistics
     <SpillStatistics level=1>
@@ -82,12 +83,73 @@ class SpillStatistics:
       gpu => cpu: 24B in 0.0033579860000827466s
     """
 
+    @dataclass
+    class Expose:
+        traceback: str
+        count: int = 1
+        total_nbytes: int = 0
+        spilled_nbytes: int = 0
+
     spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
         self.spills_totals = defaultdict(lambda: (0, 0))
+        # Maps each traceback to a Expose
+        self.exposes: Dict[str, SpillStatistics.Expose] = {}
+
+    def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
+        """Log a (un-)spilling event
+
+        Parameters
+        ----------
+        src : str
+            The memory location before the spilling.
+        dst : str
+            The memory location after the spilling.
+        nbytes : int
+            Number of bytes (un-)spilled.
+        nbytes : float
+            Elapsed time the event took in seconds.
+        """
+        if self.level < 1:
+            return
+        with self.lock:
+            total_nbytes, total_time = self.spills_totals[(src, dst)]
+            self.spills_totals[(src, dst)] = (
+                total_nbytes + nbytes,
+                total_time + time,
+            )
+
+    def log_expose(self, buf: SpillableBuffer) -> None:
+        """Log an expose event
+
+        We track logged exposes by grouping them by their traceback such
+        that `self.exposes` maps tracebacks (as strings) to their logged
+        data (as `Expose`).
+
+        Parameters
+        ----------
+        buf : spillabe-buffer
+            The buffer being exposed.
+        """
+        if self.level < 2:
+            return
+        with self.lock:
+            tb = get_traceback()
+            stat = self.exposes.get(tb, None)
+            spilled_nbytes = buf.nbytes if buf.is_spilled else 0
+            if stat is None:
+                self.exposes[tb] = self.Expose(
+                    traceback=tb,
+                    total_nbytes=buf.nbytes,
+                    spilled_nbytes=spilled_nbytes,
+                )
+            else:
+                stat.count += 1
+                stat.total_nbytes += buf.nbytes
+                stat.spilled_nbytes += spilled_nbytes
 
     def __repr__(self) -> str:
         return f"<SpillStatistics level={self.level}>"
@@ -98,23 +160,30 @@ class SpillStatistics:
             return ret[:-1] + " N/A"
 
         # Print spilling stats
-        ret += " Spilling (level >= 1):"
+        ret += "  Spilling (level >= 1):"
         if len(self.spills_totals) == 0:
             ret += " None"
         ret += "\n"
         for (src, dst), (nbytes, time) in self.spills_totals.items():
-            ret += f"  {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
-        return ret[:-1]  # Remove last `\n`
+            ret += f"    {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
 
-    def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
-        if self.level < 1:
-            return
-        with self.lock:
-            total_nbytes, total_time = self.spills_totals[(src, dst)]
-            self.spills_totals[(src, dst)] = (
-                total_nbytes + nbytes,
-                total_time + time,
+        # Print expose stats
+        ret += "  Expose (level >= 2): "
+        if self.level < 2:
+            return ret + "disabled"
+        if len(self.exposes) == 0:
+            ret += "None"
+        ret += "\n"
+        for s in sorted(self.exposes.values(), key=lambda x: -x.count):
+            ret += textwrap.indent(
+                (
+                    f"count: {s.count}, total: {format_bytes(s.total_nbytes)} "
+                    f"spilled: {format_bytes(s.spilled_nbytes)}, traceback:\n"
+                    + s.traceback
+                ),
+                prefix=" " * 4,
             )
+        return ret[:-1]  # Remove last `\n`
 
 
 class SpillManager:

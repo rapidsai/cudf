@@ -251,8 +251,10 @@ _register_option(
     textwrap.dedent(
         """
         If not 0, enables statistics at the specified level:
-            0 - disabled (no overhead)
-            1 - duration and number of bytes spilled (very low overhead)
+            0  - disabled (no overhead)
+            1+ - duration and number of bytes spilled (very low overhead).
+            2+ - a traceback for each time a spillable buffer is exposed
+                permanently (potential high overhead).
         \tValid values are any positive integer.
         \tDefault is 0 (disabled).
         """

@@ -243,6 +243,10 @@ The `SpillableBuffer.get_ptr()` returns the device pointer of the buffer memory 
 
 For convenience, one can use the decorator/context `with_spill_lock` to associate a `SpillLock` with a lifetime bound to the context automatically.
 
+#### Statistics
+TODO
+
+
 ## The Cython layer
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
