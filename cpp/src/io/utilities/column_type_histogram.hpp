@@ -40,5 +40,62 @@ struct column_type_histogram {
   }
 };
 
+struct column_type_bool_any {
+  enum class type {
+    NULL_COUNT,
+    FLOAT_COUNT,
+    DATETIME_COUNT,
+    STRING_COUNT,
+    NEGATIVE_SMALL_INT_COUNT,
+    POSITIVE_SMALL_INT_COUNT,
+    BIG_INT_COUNT,
+    BOOL_COUNT,
+    VALID_COUNT,
+    TOTAL_COUNT
+  };
+  uint32_t bitfield{};
+  constexpr bool null_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::NULL_COUNT));
+  }
+  constexpr bool float_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::FLOAT_COUNT));
+  }
+  constexpr bool datetime_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::DATETIME_COUNT));
+  }
+  constexpr bool string_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::STRING_COUNT));
+  }
+  constexpr bool negative_small_int_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::NEGATIVE_SMALL_INT_COUNT));
+  }
+  constexpr bool positive_small_int_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::POSITIVE_SMALL_INT_COUNT));
+  }
+  constexpr bool big_int_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::BIG_INT_COUNT));
+  }
+  constexpr bool bool_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::BOOL_COUNT));
+  }
+  constexpr bool valid_count() const
+  {
+    return bitfield & (1 << static_cast<uint32_t>(type::VALID_COUNT));
+  }
+};
+// ==null, OR => any null or all valid.
+// ==null, AND=> all null or any valid.
+// ==valid, OR=> any valid or all null.
+// ==valid, AND=> all valid or any null.
+/// null_count == size --> all null. (any way to infer this without size?)
+/// null_count > 0  --> any null.
 }  // namespace io
 }  // namespace cudf
