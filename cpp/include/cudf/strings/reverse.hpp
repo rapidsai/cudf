@@ -35,9 +35,9 @@ namespace strings {
  *
  * @code{.pseudo}
  * Example:
- * s = ["abcdef", "12345"]
+ * s = ["abcdef", "12345", "", "A"]
  * r = reverse(s)
- * r is now ["fedcba", "54321"]
+ * r is now ["fedcba", "54321", "", "A"]
  * @endcode
  *
  * @param input Strings column for this operation

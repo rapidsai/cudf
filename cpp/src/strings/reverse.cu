@@ -43,12 +43,12 @@ struct reverse_characters_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto d_str = d_strings.element<string_view>(idx);
+    auto const d_str = d_strings.element<string_view>(idx);
     // pointer to the end of the output string
     auto d_output = d_chars + d_offsets[idx] + d_str.size_bytes();
-    for (auto chr : d_str) {                // iterate through each character;
+    for (auto const chr : d_str) {          // iterate through each character;
       d_output -= bytes_in_char_utf8(chr);  // position output;
-      from_char_utf8(chr, d_output);        // place char in output
+      from_char_utf8(chr, d_output);        // place character into output
     }
   }
 };
@@ -59,11 +59,11 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // copy the column; replace data in the chars column
   auto result = std::make_unique<column>(input.parent(), stream, mr);
-  auto d_offsets =
+  auto const d_offsets =
     result->view().child(strings_column_view::offsets_column_index).data<offset_type>();
   auto d_chars = result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
 
@@ -77,8 +77,6 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 }
 
 }  // namespace detail
-
-// external APIs
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::mr::device_memory_resource* mr)
