@@ -984,9 +984,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case BYTE_ARRAY:
           if (s->col.converted_type == DECIMAL) {
             auto const decimal_precision = s->col.decimal_precision;
-            s->dtype_len = decimal_precision <= MAX_DECIMAL32_PRECISION   ? sizeof(int32_t)
-                           : decimal_precision <= MAX_DECIMAL64_PRECISION ? sizeof(int64_t)
-                                                                          : sizeof(__int128_t);
+            s->dtype_len                 = [decimal_precision]() {
+              if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+                return sizeof(int32_t);
+              } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+                return sizeof(int64_t);
+              } else {
+                return sizeof(__int128_t);
+              }
+            }();
           } else {
             s->dtype_len = sizeof(string_index_pair);
           }
@@ -999,9 +1005,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
       if (s->col.converted_type == DECIMAL && data_type == FIXED_LEN_BYTE_ARRAY) {
-        s->dtype_len = s->dtype_len <= sizeof(int32_t)   ? sizeof(int32_t)
-                       : s->dtype_len <= sizeof(int64_t) ? sizeof(int64_t)
-                                                         : sizeof(__int128_t);
+        s->dtype_len = [dtype_len = s->dtype_len]() {
+          if (dtype_len <= sizeof(int32_t)) {
+            return sizeof(int32_t);
+          } else if (dtype_len <= sizeof(int64_t)) {
+            return sizeof(int64_t);
+          } else {
+            return sizeof(__int128_t);
+          }
+        }();
       } else if (data_type == INT32) {
         if (dtype_len_out == 1) {
           // INT8 output
