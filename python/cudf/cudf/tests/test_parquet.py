@@ -2520,6 +2520,15 @@ def test_parquet_reader_one_level_list(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_binary_decimal(datadir):
+    fname = datadir / "binary_decimal.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
 # testing a specific bug-fix/edge case.
 # specifically:  int a parquet file containing a particular way of representing
 #                a list column in a schema, the cudf reader was confusing
