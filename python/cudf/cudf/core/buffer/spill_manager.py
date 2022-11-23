@@ -52,8 +52,8 @@ def get_rmm_memory_resource_stack(
 class SpillStatistics:
     """Gather spill statistics
 
-    Levels of information gathered (cascading):
-      0  - disabled (no overhead)
+    Levels of information gathered:
+      0  - disabled (no overhead).
       1+ - duration and number of bytes spilled (very low overhead).
       2+ - a traceback for each time a spillable buffer is exposed
            permanently (potential high overhead).
@@ -168,7 +168,7 @@ class SpillStatistics:
             ret += f"    {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
 
         # Print expose stats
-        ret += "  Expose (level >= 2): "
+        ret += "  Exposes (level >= 2): "
         if self.level < 2:
             return ret + "disabled"
         if len(self.exposes) == 0:
@@ -177,9 +177,10 @@ class SpillStatistics:
         for s in sorted(self.exposes.values(), key=lambda x: -x.count):
             ret += textwrap.indent(
                 (
-                    f"count: {s.count}, total: {format_bytes(s.total_nbytes)} "
-                    f"spilled: {format_bytes(s.spilled_nbytes)}, traceback:\n"
-                    + s.traceback
+                    f"exposed {s.count} times, "
+                    f"total: {format_bytes(s.total_nbytes)}, "
+                    f"spilled: {format_bytes(s.spilled_nbytes)}, "
+                    f"traceback:\n{s.traceback}"
                 ),
                 prefix=" " * 4,
             )
