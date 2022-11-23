@@ -266,7 +266,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
   using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
-  // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
+  // use ELEMENTS_PER_THREAD=2 to support up to 1024 partitions
   size_type temp_histo[ELEMENTS_PER_THREAD];
 
   for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {

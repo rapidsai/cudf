@@ -107,7 +107,7 @@ class SubwordTokenizer:
             The value of this argument defines the number of
             overlapping tokens.
             The information about the overlapping tokens is
-            present in the metadata outputed.
+            present in the metadata outputted.
 
         return_tensors : str, {"cp", "pt", "tf"} defaults to "cp"
             "cp" : Return cupy cp.ndarray objects

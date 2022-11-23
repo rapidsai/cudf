@@ -107,7 +107,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
-  CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
+  CUDF_EXPECTS(not count.has_nulls(), "count cannot contain nulls");
 
   if (input_table.num_rows() == 0) { return cudf::empty_like(input_table); }
 

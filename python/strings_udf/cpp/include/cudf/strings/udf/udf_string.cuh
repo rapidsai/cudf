@@ -34,7 +34,7 @@ namespace detail {
  * @brief Count the bytes in a null-terminated character array
  *
  * @param str Null-terminated string
- * @return Number of bytes in `str` upto but not including the null-terminator
+ * @return Number of bytes in `str` up to but not including the null-terminator
  */
 __device__ inline static cudf::size_type bytes_in_null_terminated_string(char const* str)
 {

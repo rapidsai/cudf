@@ -21,7 +21,7 @@
 namespace cudf::io::statistics {
 
 /**
- * @brief Wrapper for a row of a list<int8> or list<uint8> column. This is analagous to
+ * @brief Wrapper for a row of a list<int8> or list<uint8> column. This is analogous to
  * `string_view` in type. It was created due to the need for comparison operators for cub reduce on
  * statistics. Otherwise, it is a device_span in all but name.
  *

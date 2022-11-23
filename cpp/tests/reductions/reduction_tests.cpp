@@ -85,8 +85,7 @@ std::vector<T> replace_nulls(std::vector<T> const& values,
 template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
-  static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic_v<T> || std::is_same_v<T, bool>) ? true : false;
+  static constexpr bool ret_non_arithmetic = (std::is_arithmetic_v<T> || std::is_same_v<T, bool>);
 
   ReductionTest() {}
 

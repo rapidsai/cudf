@@ -20,6 +20,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>

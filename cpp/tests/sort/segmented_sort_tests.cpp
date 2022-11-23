@@ -274,5 +274,24 @@ TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, segments));
 }
 
+TEST_F(SegmentedSortInt, Bool)
+{
+  cudf::test::fixed_width_column_wrapper<bool> col1{
+    {true,  false, false, true, true,  true,  true, true, true,  true, true,  true, true, false,
+     false, false, false, true, false, false, true, true, true,  true, true,  true, true, false,
+     true,  false, true,  true, true,  true,  true, true, false, true, false, false}};
+
+  cudf::test::fixed_width_column_wrapper<int> segments{{0, 5, 10, 15, 20, 25, 30, 40}};
+
+  auto test_col = cudf::column_view{col1};
+  auto result   = cudf::segmented_sorted_order(cudf::table_view({test_col}), segments);
+
+  cudf::test::fixed_width_column_wrapper<int> expected(
+    {1,  2,  0,  3,  4,  5,  6,  7,  8,  9,  13, 14, 10, 11, 12, 15, 16, 18, 19, 17,
+     20, 21, 22, 23, 24, 27, 29, 25, 26, 28, 36, 38, 39, 30, 31, 32, 33, 34, 35, 37});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+}
+
 }  // namespace test
 }  // namespace cudf

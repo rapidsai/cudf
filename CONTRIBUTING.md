@@ -377,6 +377,11 @@ Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
 
+cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
+mistakes, and this check is run as part of the pre-commit hook. To apply the suggested spelling
+fixes, you can run  `codespell -i 3 -w .` from the command-line in the cuDF root directory.
+This will bring up an interactive prompt to select which spelling fixes to apply.
+
 ## Developer Guidelines
 
 The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
