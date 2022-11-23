@@ -1815,3 +1815,22 @@ def test_statistics_string_sum():
 
     file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
     assert_eq(file_stats[0]["str"].get("sum"), sum(len(s) for s in strings))
+
+
+@pytest.mark.parametrize(
+    "fname",
+    [
+        "TestOrcFile.Hive.OneEmptyMap.orc",
+        "TestOrcFile.Hive.OneEmptyList.orc",
+        "TestOrcFile.Hive.OneNullStruct.orc",
+        "TestOrcFile.Hive.EmptyListStripe.orc",
+        "TestOrcFile.Hive.NullStructStripe.orc",
+        "TestOrcFile.Hive.AllNulls.orc",
+    ],
+)
+def test_reader_empty_stripe(datadir, fname):
+    path = datadir / fname
+
+    expected = pd.read_orc(path)
+    got = cudf.read_orc(path)
+    assert_eq(expected, got)

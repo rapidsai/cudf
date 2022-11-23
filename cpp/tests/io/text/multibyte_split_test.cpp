@@ -240,7 +240,7 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
     "another::|"
     "simple::|"
     "text::|"
-    "seperated::|"
+    "separated::|"
     "by::|"
     "emojis::|"
     "which::|"
@@ -258,7 +258,7 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
   auto expected = strings_column_wrapper{
     "aaa::|",         "bbb::|",      "ccc::|",       "ddd::|",  "eee::|",    "fff::|",
     "ggg::|",         "hhh::|",      "___::|",       "here::|", "is::|",     "another::|",
-    "simple::|",      "text::|",     "seperated::|", "by::|",   "emojis::|", "which::|",
+    "simple::|",      "text::|",     "separated::|", "by::|",   "emojis::|", "which::|",
     "are::|",         "multiple::|", "bytes::|",     "and::|",  "used::|",   "as::|",
     "delimiters.::|", "::|",         "::|",          "::|"};
 

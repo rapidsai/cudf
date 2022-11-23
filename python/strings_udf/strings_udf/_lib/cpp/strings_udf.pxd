@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport uint8_t, uint16_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -28,3 +28,5 @@ cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
 cdef extern from "cudf/strings/detail/char_tables.hpp" namespace \
         "cudf::strings::detail" nogil:
     cdef const uint8_t* get_character_flags_table() except +
+    cdef const uint16_t* get_character_cases_table() except +
+    cdef const void* get_special_case_mapping_table() except +

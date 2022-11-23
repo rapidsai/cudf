@@ -178,7 +178,7 @@ struct source_info {
   source_info() = default;
 
   /**
-   * @brief Construct a new source info object for mutiple files
+   * @brief Construct a new source info object for multiple files
    *
    * @param file_paths Input files paths
    */

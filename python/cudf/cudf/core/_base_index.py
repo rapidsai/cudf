@@ -220,6 +220,37 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
+    def hasnans(self):
+        """
+        Return True if there are any NaNs or nulls.
+
+        Returns
+        -------
+        out : bool
+            If Series has at least one NaN or null value, return True,
+            if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> index = cudf.Index([1, 2, np.nan, 3, 4], nan_as_null=False)
+        >>> index
+        Float64Index([1.0, 2.0, nan, 3.0, 4.0], dtype='float64')
+        >>> index.hasnans
+        True
+
+        `hasnans` returns `True` for the presence of any `NA` values:
+
+        >>> index = cudf.Index([1, 2, None, 3, 4])
+        >>> index
+        Int64Index([1, 2, <NA>, 3, 4], dtype='int64')
+        >>> index.hasnans
+        True
+        """
+        raise NotImplementedError
+
+    @property
     def nlevels(self):
         """
         Number of levels.

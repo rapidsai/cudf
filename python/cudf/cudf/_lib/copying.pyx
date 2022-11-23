@@ -56,7 +56,7 @@ def _gather_map_is_valid(
     """Returns true if gather map is valid.
 
     A gather map is valid if empty or all indices are within the range
-    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    ``[-nrows, nrows)``, except when ``nullify`` is specified.
     """
     if not check_bounds or nullify or len(gather_map) == 0:
         return True

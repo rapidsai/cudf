@@ -158,7 +158,7 @@ __device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_
  * @return A four-tuple of (in_it_end, out_it_end, set_null, is_invalid), where in_it_end is an
  * iterator to one past the last character from the input that was processed, out_it_end is an
  * iterator to one past the last character that was written, set_null is true if a null literal
- * was read or a parsing error occured, and is_invalid is true if a parsing error was
+ * was read or a parsing error occurred, and is_invalid is true if a parsing error was
  * encountered
  */
 template <typename in_iterator_t, typename out_iterator_t>
@@ -334,7 +334,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
                          auto const num_chars_copied_out =
                            thrust::distance(out_it, str_process_info.output_processed_end);
 
-                         // If, during parsing, an error occured or we parsed the null literal ->
+                         // If, during parsing, an error occurred or we parsed the null literal ->
                          // set to null
                          if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
                            sizes[row] = 0;
