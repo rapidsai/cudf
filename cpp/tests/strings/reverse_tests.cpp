@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/strings/reverse.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -29,14 +30,18 @@ struct StringsReverseTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsReverseTest, Reverse)
 {
-  cudf::test::strings_column_wrapper input({"abcdef", "12345", "", "", "aébé", "A é Z"},
-                                           {1, 1, 1, 0, 1, 1});
+  auto input = cudf::test::strings_column_wrapper(
+    {"abcdef", "12345", "", "", "aébé", "A é Z", "X", "é"}, {1, 1, 1, 0, 1, 1, 1, 1});
+  auto results  = cudf::strings::reverse(cudf::strings_column_view(input));
+  auto expected = cudf::test::strings_column_wrapper(
+    {"fedcba", "54321", "", "", "ébéa", "Z é A", "X", "é"}, {1, 1, 1, 0, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
-  auto results = cudf::strings::reverse(cudf::strings_column_view(input));
-
-  cudf::test::strings_column_wrapper expected({"fedcba", "54321", "", "", "ébéa", "Z é A"},
-                                              {1, 1, 1, 0, 1, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  auto sliced = cudf::slice(input, {1, 7}).front();
+  results     = cudf::strings::reverse(cudf::strings_column_view(sliced));
+  expected =
+    cudf::test::strings_column_wrapper({"54321", "", "", "ébéa", "Z é A", "X"}, {1, 1, 0, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsReverseTest, EmptyStringsColumn)
