@@ -51,6 +51,13 @@ def masked_len_impl(context, builder, sig, args):
     return ret._getvalue()
 
 
+def _masked_proxies(context, builder, maskedty, *args):
+    return tuple(
+        cgutils.create_struct_proxy(maskedty)(context, builder, value=arg)
+        for arg in args
+    )
+
+
 @cuda_lower(
     "MaskedType.replace",
     MaskedType(string_view),
@@ -59,17 +66,9 @@ def masked_len_impl(context, builder, sig, args):
 )
 def masked_string_view_replace_impl(context, builder, sig, args):
     ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
-
-    src_masked = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
+    src_masked, to_replace_masked, replacement_masked = _masked_proxies(
+        context, builder, MaskedType(string_view), *args
     )
-    to_replace_masked = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[1]
-    )
-    replacement_masked = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[2]
-    )
-
     result = replace_impl(
         context,
         builder,
