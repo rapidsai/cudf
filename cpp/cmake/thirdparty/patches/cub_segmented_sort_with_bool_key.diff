@@ -12,4 +12,3 @@ index ad65f2a3..ad45a21e 100644
 
        WarpLoadKeysT(storage.load_keys)
          .Load(keys_input, keys, segment_size, oob_default);
-
