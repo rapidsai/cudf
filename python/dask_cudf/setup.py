@@ -8,8 +8,8 @@ from setuptools import find_packages, setup
 cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
-    "dask==2022.9.2",
-    "distributed==2022.9.2",
+    "dask>=2022.9.2",
+    "distributed>=2022.9.2",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
