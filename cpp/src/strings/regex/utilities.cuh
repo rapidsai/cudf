@@ -21,7 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/scan_reduce_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>

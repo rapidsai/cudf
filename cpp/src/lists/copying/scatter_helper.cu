@@ -20,7 +20,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <thrust/binary_search.h>
