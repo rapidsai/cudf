@@ -307,6 +307,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     return df
 
+
 @acquire_spill_lock()
 def write_parquet(
     table,
