@@ -73,11 +73,9 @@ inline void test_single_agg(column_view const& keys,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
 {
-  auto const sort_expect_order = sorted_order(table_view{{expect_keys}}, {}, {null_order::AFTER});
-  auto const sorted_expect_keys =
-    gather(table_view{{expect_keys}}, *sort_expect_order);
-  auto const sorted_expect_vals =
-    gather(table_view{{expect_vals}}, *sort_expect_order);
+  auto const sort_expect_order  = sorted_order(table_view{{expect_keys}}, column_order, null_precedence);
+  auto const sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_expect_order);
+  auto const sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_expect_order);
 
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
@@ -97,16 +95,18 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, result.first->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      sorted_expect_vals->get_column(0), *result.second[0].results[0], debug_output_level::ALL_ERRORS);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_expect_vals->get_column(0),
+                                        *result.second[0].results[0],
+                                        debug_output_level::ALL_ERRORS);
   } else {
-    auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
+    auto const sort_order  = sorted_order(result.first->view(), column_order, null_precedence);
     auto const sorted_keys = gather(result.first->view(), *sort_order);
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, *sorted_keys);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      sorted_expect_vals->get_column(0), sorted_vals->get_column(0), debug_output_level::ALL_ERRORS);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_expect_vals->get_column(0),
+                                        sorted_vals->get_column(0),
+                                        debug_output_level::ALL_ERRORS);
   }
 }
 
