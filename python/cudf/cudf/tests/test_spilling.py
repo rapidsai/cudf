@@ -539,7 +539,8 @@ def test_statistics_expose(manager: SpillManager):
     for i in range(10):
         buffers[i].ptr
 
-    # The rest should accumulate to a single stat
+    # The rest of the ptr accesses should accumulate to a single stat
+    # because they resolve to the same traceback.
     assert len(manager.statistics.exposes) == 2
     stat = list(manager.statistics.exposes.values())[1]
     assert stat.count == 9
