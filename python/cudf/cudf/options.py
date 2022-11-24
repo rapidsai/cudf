@@ -255,8 +255,9 @@ _register_option(
             1+ - duration and number of bytes spilled (very low overhead).
             2+ - a traceback for each time a spillable buffer is exposed
                 permanently (potential high overhead).
-        \tValid values are any positive integer.
-        \tDefault is 0 (disabled).
+
+        Valid values are any positive integer.
+        Default is 0 (disabled).
         """
     ),
     _integer_validator,

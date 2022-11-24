@@ -105,9 +105,9 @@ class SpillStatistics:
         Parameters
         ----------
         src : str
-            The memory location before the spilling.
+            The memory location before spilling.
         dst : str
-            The memory location after the spilling.
+            The memory location after spilling.
         nbytes : int
             Number of bytes (un-)spilled.
         nbytes : float
@@ -168,7 +168,7 @@ class SpillStatistics:
             ret += f"    {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
 
         # Print expose stats
-        ret += "  Exposes (level >= 2): "
+        ret += "  Exposed buffers (level >= 2): "
         if self.level < 2:
             return ret + "disabled"
         if len(self.exposes) == 0:

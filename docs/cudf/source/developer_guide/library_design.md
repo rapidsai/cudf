@@ -275,14 +275,6 @@ To have each work in dask print spill statistics, do something like:
     client.submit(spill_info)
 ```
 
-
-
-
-
-
-
-
-
 ## The Cython layer
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
