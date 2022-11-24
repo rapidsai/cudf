@@ -336,7 +336,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
     cudf::test::lists_column_wrapper<int> b{{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}}, all_valid};
 
     // properties
-    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(a, b);
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(a, b);
     EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
                 a, b, cudf::test::debug_output_level::QUIET),
               false);
