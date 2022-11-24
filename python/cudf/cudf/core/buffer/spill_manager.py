@@ -155,36 +155,38 @@ class SpillStatistics:
         return f"<SpillStatistics level={self.level}>"
 
     def __str__(self) -> str:
-        ret = f"Spill Statistics (level={self.level}):\n"
-        if self.level == 0:
-            return ret[:-1] + " N/A"
+        with self.lock:
+            ret = f"Spill Statistics (level={self.level}):\n"
+            if self.level == 0:
+                return ret[:-1] + " N/A"
 
-        # Print spilling stats
-        ret += "  Spilling (level >= 1):"
-        if len(self.spill_totals) == 0:
-            ret += " None"
-        ret += "\n"
-        for (src, dst), (nbytes, time) in self.spill_totals.items():
-            ret += f"    {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
+            # Print spilling stats
+            ret += "  Spilling (level >= 1):"
+            if len(self.spill_totals) == 0:
+                ret += " None"
+            ret += "\n"
+            for (src, dst), (nbytes, time) in self.spill_totals.items():
+                ret += " " * 4
+                ret += f"{src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
 
-        # Print expose stats
-        ret += "  Exposed buffers (level >= 2): "
-        if self.level < 2:
-            return ret + "disabled"
-        if len(self.exposes) == 0:
-            ret += "None"
-        ret += "\n"
-        for s in sorted(self.exposes.values(), key=lambda x: -x.count):
-            ret += textwrap.indent(
-                (
-                    f"exposed {s.count} times, "
-                    f"total: {format_bytes(s.total_nbytes)}, "
-                    f"spilled: {format_bytes(s.spilled_nbytes)}, "
-                    f"traceback:\n{s.traceback}"
-                ),
-                prefix=" " * 4,
-            )
-        return ret[:-1]  # Remove last `\n`
+            # Print expose stats
+            ret += "  Exposed buffers (level >= 2): "
+            if self.level < 2:
+                return ret + "disabled"
+            if len(self.exposes) == 0:
+                ret += "None"
+            ret += "\n"
+            for s in sorted(self.exposes.values(), key=lambda x: -x.count):
+                ret += textwrap.indent(
+                    (
+                        f"exposed {s.count} times, "
+                        f"total: {format_bytes(s.total_nbytes)}, "
+                        f"spilled: {format_bytes(s.spilled_nbytes)}, "
+                        f"traceback:\n{s.traceback}"
+                    ),
+                    prefix=" " * 4,
+                )
+            return ret[:-1]  # Remove last `\n`
 
 
 class SpillManager:
