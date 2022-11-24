@@ -355,14 +355,14 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       {{4, 4, 4}, {5, 5}, {6, 6}},
       {{7, 7, 7}, {8, 8}, {9, 9}},
     };
-    cudf::test::expect_columns_equal(expected0, result0->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected0, result0->get_column(0).view());
 
     auto result1 = cudf::gather(tbl1, cudf::test::fixed_width_column_wrapper<int>{0, 3});
     LCW<T> expected1{
       {{10, 10, 10}, {11, 11}, {12, 12}},
       {{50, 50, 50, 50}, {6, 13}},
     };
-    cudf::test::expect_columns_equal(expected1, result1->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->get_column(0).view());
   }
 
   auto valids =
@@ -397,7 +397,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       cudf::test::fixed_width_column_wrapper<int> map{0};
       auto result = cudf::gather(tbl, map);
       LCW<T> expected{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
 
     // gather from slice 1
@@ -419,7 +419,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
          {{0, 1, 3}, {5}},
          {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
       };
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
 
     // gather from slice 2
@@ -434,7 +434,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
                       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
                       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
                       {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
   }
 }

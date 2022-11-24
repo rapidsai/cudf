@@ -135,7 +135,7 @@ TYPED_TEST(EncodeNumericTests, TableEncodeWithNulls)
   auto const result = cudf::encode(input);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result.first->view(), expect_keys);
-  cudf::test::expect_columns_equal(result.second->view(), expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second->view(), expect);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
