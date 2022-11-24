@@ -90,12 +90,12 @@ class SpillStatistics:
         total_nbytes: int = 0
         spilled_nbytes: int = 0
 
-    spills_totals: Dict[Tuple[str, str], Tuple[int, float]]
+    spill_totals: Dict[Tuple[str, str], Tuple[int, float]]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
-        self.spills_totals = defaultdict(lambda: (0, 0))
+        self.spill_totals = defaultdict(lambda: (0, 0))
         # Maps each traceback to a Expose
         self.exposes: Dict[str, SpillStatistics.Expose] = {}
 
@@ -116,8 +116,8 @@ class SpillStatistics:
         if self.level < 1:
             return
         with self.lock:
-            total_nbytes, total_time = self.spills_totals[(src, dst)]
-            self.spills_totals[(src, dst)] = (
+            total_nbytes, total_time = self.spill_totals[(src, dst)]
+            self.spill_totals[(src, dst)] = (
                 total_nbytes + nbytes,
                 total_time + time,
             )
@@ -161,10 +161,10 @@ class SpillStatistics:
 
         # Print spilling stats
         ret += "  Spilling (level >= 1):"
-        if len(self.spills_totals) == 0:
+        if len(self.spill_totals) == 0:
             ret += " None"
         ret += "\n"
-        for (src, dst), (nbytes, time) in self.spills_totals.items():
+        for (src, dst), (nbytes, time) in self.spill_totals.items():
             ret += f"    {src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
 
         # Print expose stats

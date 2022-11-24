@@ -495,7 +495,7 @@ def test_memoryview_slice(manager: SpillManager, dtype):
     "manager", [{"statistic_level": 0}, {"statistic_level": 1}], indirect=True
 )
 def test_statistics(manager: SpillManager):
-    assert len(manager.statistics.spills_totals) == 0
+    assert len(manager.statistics.spill_totals) == 0
 
     buf: SpillableBuffer = as_buffer(
         data=rmm.DeviceBuffer(size=10), exposed=False
@@ -503,24 +503,24 @@ def test_statistics(manager: SpillManager):
     buf.spill(target="cpu")
 
     if manager.statistics.level == 0:
-        assert len(manager.statistics.spills_totals) == 0
+        assert len(manager.statistics.spill_totals) == 0
         return
 
-    assert len(manager.statistics.spills_totals) == 1
-    nbytes, time = manager.statistics.spills_totals[("gpu", "cpu")]
+    assert len(manager.statistics.spill_totals) == 1
+    nbytes, time = manager.statistics.spill_totals[("gpu", "cpu")]
     assert nbytes == buf.size
     assert time > 0
 
     buf.spill(target="gpu")
-    assert len(manager.statistics.spills_totals) == 2
-    nbytes, time = manager.statistics.spills_totals[("cpu", "gpu")]
+    assert len(manager.statistics.spill_totals) == 2
+    nbytes, time = manager.statistics.spill_totals[("cpu", "gpu")]
     assert nbytes == buf.size
     assert time > 0
 
 
 @pytest.mark.parametrize("manager", [{"statistic_level": 2}], indirect=True)
 def test_statistics_expose(manager: SpillManager):
-    assert len(manager.statistics.spills_totals) == 0
+    assert len(manager.statistics.spill_totals) == 0
 
     buffers: List[SpillableBuffer] = [
         as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
