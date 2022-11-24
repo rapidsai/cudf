@@ -264,7 +264,7 @@ It is possible to access the statistics through the spill manager like:
 >>> print(stats)
     Spill Statistics (level=1):
      Spilling (level >= 1):
-      gpu => cpu: 24B in 0.0033579860000827466s
+      gpu => cpu: 24B in 0.0033
 ```
 
 To have each work in dask print spill statistics, do something like:

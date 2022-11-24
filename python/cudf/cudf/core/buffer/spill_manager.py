@@ -166,8 +166,8 @@ class SpillStatistics:
                 ret += " None"
             ret += "\n"
             for (src, dst), (nbytes, time) in self.spill_totals.items():
-                ret += " " * 4
-                ret += f"{src} => {dst}: {format_bytes(nbytes)} in {time}s\n"
+                ret += f"    {src} => {dst}: "
+                ret += f"{format_bytes(nbytes)} in {time:.4e}s\n"
 
             # Print expose stats
             ret += "  Exposed buffers (level >= 2): "
