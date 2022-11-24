@@ -402,9 +402,13 @@ class SpillManager:
                 unspillable += buf.size
         unspillable_ratio = unspillable / unspilled if unspilled else 0
 
+        dev_limit = "N/A"
+        if self._device_memory_limit is not None:
+            dev_limit = format_bytes(self._device_memory_limit)
+
         return (
             f"<SpillManager spill_on_demand={self._spill_on_demand} "
-            f"device_memory_limit={self._device_memory_limit} | "
+            f"device_memory_limit={dev_limit} | "
             f"{format_bytes(spilled)} spilled | "
             f"{format_bytes(unspilled)} ({unspillable_ratio:.0%}) "
             f"unspilled (unspillable)>"
