@@ -199,9 +199,11 @@ class SpillManager:
     error handler, which will spill spillable buffers in order to free up
     memory.
 
-    When `device_memory_limit=True`, the manager will try keep the device
-    memory usage below the specified limit by spilling of spillable buffers
-    continuously, which will introduce a modest overhead.
+    When `device_memory_limit=<limit-in-bytes>`, the manager will try keep
+    the device memory usage below the specified limit by spilling of spillable
+    buffers continuously, which will introduce a modest overhead.
+    Notice, this is a soft limit. The memory usage might exceed the limit if
+    too many buffers are unspillable.
 
     Parameters
     ----------

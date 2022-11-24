@@ -223,9 +223,11 @@ Spilling can be enabled in two ways (it is disabled by default):
   - setting the `spill` option in `cudf` by doing `cudf.set_option("spill", True)`.
 
 Additionally, parameters are:
-  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory error handler that spills buffers in order to free up memory.
-  - `CUDF_SPILL_DEVICE_LIMIT=...` / `cudf.set_option("spill_device_limit", ...)`, which sets a device memory limit in bytes.
-
+  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory
+    error handler that spills buffers in order to free up memory. This is **enabled by default**.
+  - `CUDF_SPILL_DEVICE_LIMIT=<X>` / `cudf.set_option("spill_device_limit", <X>)`, which sets a device memory limit
+    to `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
+    *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
 
 #### Design
 
