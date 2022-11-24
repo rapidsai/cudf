@@ -142,9 +142,12 @@ rmm::device_uvector<cudf::type_id> type_infer_column_tree(
 {
   // TODO transform, then sort, and then reduce.
   CUDF_FUNC_RANGE();
+  auto parse_opts = parsing_options(options);  // holds device_uvector<trie>.
+
   // column_type_histogram for type inference
   auto column_strings_begin = thrust::make_transform_iterator(
-    sorted_node_ids.begin(),
+    thrust::make_counting_iterator<size_type>(0),
+    // sorted_node_ids.begin(),
     [node_categories  = tree.node_categories.begin(),
      node_range_begin = tree.node_range_begin.begin(),
      node_range_end   = tree.node_range_end.begin()] __device__(auto const node_id) {
@@ -156,20 +159,29 @@ rmm::device_uvector<cudf::type_id> type_infer_column_tree(
         // TODO use sentinel? or how about inferring struct/list type too? is it useful?
       }
     });
-
-  rmm::device_uvector<cudf::io::column_type_bool_any> column_type_histogram_counts(num_columns,
-                                                                                   stream);
-  auto parse_opts = parsing_options(options);  // hold device_uvector<trie>.
   auto hist_it    = thrust::make_transform_iterator(
     column_strings_begin,
     cudf::io::detail::convert_to_histograms<json_inference_options_view>{parse_opts.json_view(),
                                                                          input});
+
+  rmm::device_uvector<cudf::io::column_type_bool_any16_t> column_type_histogram_bools(
+    tree.node_categories.size(), stream);
+  
+  thrust::copy(rmm::exec_policy(stream),
+               hist_it,
+               hist_it + tree.node_categories.size(),
+              //  thrust::make_permutation_iterator(column_type_histogram_bools.begin(), sorted_node_ids.begin()));
+               column_type_histogram_bools.begin());
+
+  rmm::device_uvector<cudf::io::column_type_bool_any16_t> column_type_histogram_counts(num_columns,
+                                                                                       stream);
   {
     CUDF_SCOPED_RANGE("histogram");
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           sorted_col_ids.begin(),
                           sorted_col_ids.end(),
-                          hist_it,
+                          // column_type_histogram_bools.begin(),
+                          thrust::make_permutation_iterator(column_type_histogram_bools.begin(), sorted_node_ids.begin()),
                           thrust::make_discard_iterator(),
                           column_type_histogram_counts.begin(),
                           thrust::equal_to{},
@@ -325,6 +337,11 @@ reduce_to_column_tree(device_span<SymbolT const> input,
   // node_ids is sorted by col_id.
   auto col_type_id =  // rmm::device_uvector<cudf::type_id>{0, stream};
     type_infer_column_tree(num_columns, tree, col_ids, node_ids, input, options, stream);
+    // TODO partition by category VAL, STR on col_id/sorted_col_id, then on range begin, end. 
+    // After this you don't need range_begin, range_end. So, you can use remove_if or partition.
+    // OR copy only col_id, node_id so that you can use to index range_begin, range_end.
+    // Then type infer
+    // Then parse_data (how to get string size or string column now?)
 
   // 4. unique_copy parent_node_ids, ranges
   rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
@@ -774,11 +791,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto offset_length_it =
         thrust::make_zip_iterator(json_col.string_offsets.begin(), json_col.string_lengths.begin());
       // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      // auto string_ranges_it =
-      //   thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-      //     return thrust::pair<json_column::row_offset_t, std::size_t>{
-      //       thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-      //   });
+      [[maybe_unused]] auto string_ranges_it =
+        thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
+          return thrust::pair<json_column::row_offset_t, std::size_t>{
+            thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
+        });
 
       // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
       auto string_spans_it = thrust::make_transform_iterator(

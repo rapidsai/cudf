@@ -47,10 +47,10 @@ namespace cudf::io::detail {
  * @brief Custom column_type_histogram sum reduction callable
  */
 struct custom_sum {
-  __device__ inline cudf::io::column_type_bool_any operator()(
-    cudf::io::column_type_bool_any const& lhs, cudf::io::column_type_bool_any const& rhs)
+  __device__ inline cudf::io::column_type_bool_any16_t operator()(
+    cudf::io::column_type_bool_any16_t const& lhs, cudf::io::column_type_bool_any16_t const& rhs)
   {
-    return {lhs.bitfield | rhs.bitfield};
+    return cudf::io::column_type_bool_any16_t{static_cast<unsigned short>(lhs.bitfield | rhs.bitfield)};
   }
 };
 
@@ -105,40 +105,49 @@ __device__ __inline__ bool is_like_float(std::size_t len,
 }
 
 template <typename OptionsView>
-__device__ __inline__ cudf::io::column_type_bool_any packed_type_info(char const* const field_begin,
+__device__ __inline__ cudf::io::column_type_bool_any16_t packed_type_info(char const* const field_begin,
                                                                       size_type const field_len,
                                                                       OptionsView options)
 {
-  auto thread_type_any        = cudf::io::column_type_bool_any{0};
+  auto thread_type_any        = cudf::io::column_type_bool_any16_t{0};
   auto& thread_type_histogram = thread_type_any.bitfield;
   if (field_len == 0) return thread_type_any;
 
   if (cudf::detail::serialized_trie_contains(options.trie_na,
                                              {field_begin, static_cast<std::size_t>(field_len)})) {
     //++thread_type_histogram.null_count;
-    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any::type::NULL_COUNT));
+    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::NULL_COUNT));
     // thread_type_any.any_valid |= false;
     return thread_type_any;
   }
-  thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any::type::VALID_COUNT));
+  thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::VALID_COUNT));
+  
+  if (cudf::detail::serialized_trie_contains(options.trie_true,
+                                             {field_begin, static_cast<std::size_t>(field_len)}) ||
+      cudf::detail::serialized_trie_contains(options.trie_false,
+                                             {field_begin, static_cast<std::size_t>(field_len)})) {
+    //++thread_type_histogram.bool_count;
+    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::BOOL_COUNT));
+    return thread_type_any;
+  }
 
   // Handling strings
   if (field_len >= 2 and *field_begin == options.quote_char and
       field_begin[field_len - 1] == options.quote_char) {
     //++thread_type_histogram.string_count;
     thread_type_histogram |=
-      (1u << static_cast<uint32_t>(column_type_bool_any::type::STRING_COUNT));
+      (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::STRING_COUNT));
     return thread_type_any;
   }
 
   uint32_t digit_count    = 0;
   uint32_t decimal_count  = 0;
-  uint32_t slash_count    = 0;
+  // uint32_t slash_count    = 0;
   uint32_t dash_count     = 0;
   uint32_t plus_count     = 0;
-  uint32_t colon_count    = 0;
+  // uint32_t colon_count    = 0;
   uint32_t exponent_count = 0;
-  uint32_t other_count    = 0;
+  // uint32_t other_count    = 0;
 
   auto const maybe_hex =
     (field_len > 2 && field_begin[0] == '0' && field_begin[1] == 'x') ||
@@ -151,18 +160,18 @@ __device__ __inline__ cudf::io::column_type_bool_any packed_type_info(char const
       continue;
     }
     // Looking for unique characters that will help identify column types
-    switch (*pos) {
-      case '.': decimal_count++; break;
-      case '-': dash_count++; break;
-      case '+': plus_count++; break;
-      case '/': slash_count++; break;
-      case ':': colon_count++; break;
-      case 'e':
-      case 'E':
-        if (!maybe_hex && pos > field_begin && pos < field_end - 1) exponent_count++;
-        break;
-      default: other_count++; break;
-    }
+    // switch (*pos) {
+    //   case '.': decimal_count++; break;
+    //   case '-': dash_count++; break;
+    //   case '+': plus_count++; break;
+    //   case '/': slash_count++; break;
+    //   case ':': colon_count++; break;
+    //   case 'e':
+    //   case 'E':
+    //     if (!maybe_hex && pos > field_begin && pos < field_end - 1) exponent_count++;
+    //     break;
+    //   default: other_count++; break;
+    // }
   }
 
   // All characters must be digits in an integer, except for the starting sign and 'x' in the
@@ -170,13 +179,7 @@ __device__ __inline__ cudf::io::column_type_bool_any packed_type_info(char const
   auto const int_req_number_cnt = static_cast<uint32_t>(field_len) -
                                   ((*field_begin == '-' || *field_begin == '+') && field_len > 1) -
                                   maybe_hex;
-  if (cudf::detail::serialized_trie_contains(options.trie_true,
-                                             {field_begin, static_cast<std::size_t>(field_len)}) ||
-      cudf::detail::serialized_trie_contains(options.trie_false,
-                                             {field_begin, static_cast<std::size_t>(field_len)})) {
-    //++thread_type_histogram.bool_count;
-    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any::type::BOOL_COUNT));
-  } else if (digit_count == int_req_number_cnt) {
+  if (digit_count == int_req_number_cnt) {
     auto const is_negative = (*field_begin == '-');
     char const* data_begin = field_begin + (is_negative || (*field_begin == '+'));
     auto bit               = cudf::io::gpu::infer_integral_field_counter2(
@@ -185,13 +188,13 @@ __device__ __inline__ cudf::io::column_type_bool_any packed_type_info(char const
   } else if (is_like_float(
                field_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
     //++thread_type_histogram.float_count;
-    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any::type::FLOAT_COUNT));
+    thread_type_histogram |= (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::FLOAT_COUNT));
   }
   // All invalid JSON values are treated as string
   else {
     //++thread_type_histogram.string_count;
     thread_type_histogram |=
-      (1u << static_cast<uint32_t>(column_type_bool_any::type::STRING_COUNT));
+      (1u << static_cast<uint32_t>(column_type_bool_any16_t::type::STRING_COUNT));
   }
   return thread_type_any;
 }
@@ -201,7 +204,7 @@ struct convert_to_histograms {
   OptionsView const options;
   cudf::device_span<char const> data;
   template <typename T>
-  __device__ inline cudf::io::column_type_bool_any operator()(T const& offset_len)
+  __device__ inline cudf::io::column_type_bool_any16_t operator()(T const& offset_len)
   {
     auto const field_offset = thrust::get<0>(offset_len);
     auto const field_len    = thrust::get<1>(offset_len);
