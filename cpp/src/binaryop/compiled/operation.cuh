@@ -91,12 +91,10 @@ struct TrueDiv {
 };
 
 struct FloorDiv {
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
-                      (cudf::is_fixed_point<TypeLhs>() and std::is_same_v<TypeLhs, TypeRhs>) or
-                      is_duration<TypeLhs>())>* = nullptr>
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+                              std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
     if ((x ^ y) >= 0) {
@@ -106,6 +104,15 @@ struct FloorDiv {
       const auto remainder = x % y;
       return quotient - !!remainder;
     }
+  }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+                              !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
+  {
+    return x / y;
   }
 
   template <
