@@ -97,13 +97,10 @@ struct FloorDiv {
                               std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
-    if ((x ^ y) >= 0) {
-      return x / y;
-    } else {
-      auto const quotient  = x / y;
-      auto const remainder = x % y;
-      return quotient - !!remainder;
-    }
+    auto const quotient          = x / y;
+    auto const nonzero_remainder = !!(x % y);
+    auto const mixed_sign        = (x ^ y) < 0;
+    return quotient - mixed_sign * nonzero_remainder;
   }
 
   template <typename TypeLhs,
