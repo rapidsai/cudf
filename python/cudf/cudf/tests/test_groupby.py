@@ -2,6 +2,7 @@
 
 import datetime
 import itertools
+from contextlib import nullcontext
 from decimal import Decimal
 
 import numpy as np
@@ -1070,11 +1071,12 @@ def test_groupby_quantile(interpolation, q):
     gdresult = gdresult["y"].reset_index(drop=True)
 
     if q == 0.5 and interpolation == "nearest":
-        pytest.xfail(
-            "Pandas NaN Rounding will fail nearest interpolation at 0.5"
-        )
-
-    assert_groupby_results_equal(pdresult, gdresult)
+        # Pandas NaN Rounding will fail nearest interpolation at 0.5
+        context = pytest.raises(AssertionError)
+    else:
+        context = nullcontext()
+    with context:
+        assert_groupby_results_equal(pdresult, gdresult)
 
 
 def test_groupby_std():
@@ -1330,9 +1332,10 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
+)
 def test_groupby_nunique(agg, by):
-    if not PANDAS_GE_110:
-        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )

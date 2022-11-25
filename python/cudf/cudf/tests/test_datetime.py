@@ -1573,18 +1573,23 @@ def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
-        if "nanoseconds" in freq:
-            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 
     expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
     got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
 
-    np.testing.assert_allclose(
-        expect.to_numpy().astype("int64"),
-        got.to_pandas().to_numpy().astype("int64"),
-    )
+    if "nanoseconds" in freq and periods != 1 and end == "1970-01-01 00:00:00":
+        # https://github.com/pandas-dev/pandas/issues/46877
+        context = pytest.raises(AssertionError)
+    else:
+        context = contextlib.nullcontext()
+
+    with context:
+        np.testing.assert_allclose(
+            expect.to_numpy().astype("int64"),
+            got.to_pandas().to_numpy().astype("int64"),
+        )
 
 
 def test_date_range_freq_does_not_divide_range():

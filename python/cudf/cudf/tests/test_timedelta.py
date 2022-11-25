@@ -903,7 +903,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         actual = other_scalars // gtdi
 
     if op == "floordiv":
-        # Hand-coding pytest.xfail behaviour for certain combinations
+        # Hand-coding xfail behaviour for certain combinations
         if (
             0 in ptdi.astype("int")
             and np.timedelta64(other_scalars).item() is not None
@@ -997,7 +997,7 @@ def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
         actual = gpu_scalar // gtdi
 
     if op == "floordiv":
-        # Hand-coding pytest.xfail behaviour for certain combinations
+        # Hand-coding xfail behaviour for certain combinations
         if (
             0 in ptdi.astype("int")
             and np.timedelta64(cpu_scalar).item() is not None

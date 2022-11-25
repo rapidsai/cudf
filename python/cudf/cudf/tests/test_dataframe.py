@@ -4491,11 +4491,11 @@ def test_isin_dataframe(data, values):
         try:
             expected = pdf.isin(values)
         except ValueError as e:
-            if str(e) == "Lengths must match.":
-                pytest.xfail(
-                    condition=not PANDAS_GE_110,
-                    reason="https://github.com/pandas-dev/pandas/issues/34256",
-                )
+            if str(e) == "Lengths must match." and not PANDAS_GE_110:
+                # https://github.com/pandas-dev/pandas/issues/34256
+                with pytest.raises(ValueError):
+                    raise
+                return
         except TypeError as e:
             # Can't do isin with different categories
             if str(e) == (
