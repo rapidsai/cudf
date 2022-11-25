@@ -98,7 +98,7 @@ struct FloorDiv {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
     auto const quotient          = x / y;
-    auto const nonzero_remainder = !!(x % y);
+    auto const nonzero_remainder = (x % y) != 0;
     auto const mixed_sign        = (x ^ y) < 0;
     return quotient - mixed_sign * nonzero_remainder;
   }
