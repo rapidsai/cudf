@@ -100,8 +100,8 @@ struct FloorDiv {
     if ((x ^ y) >= 0) {
       return x / y;
     } else {
-      const auto quotient  = x / y;
-      const auto remainder = x % y;
+      auto const quotient  = x / y;
+      auto const remainder = x % y;
       return quotient - !!remainder;
     }
   }
