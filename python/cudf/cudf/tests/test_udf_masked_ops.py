@@ -488,11 +488,12 @@ def test_series_arith_masked_vs_constant(op, constant):
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
     if constant is cudf.NA and op in {operator.pow, operator.ipow}:
-        # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
-        with pytest.xfail():
+        # in pandas, 1**NA == 1. In cudf, 1**NA == NA. See
+        # https://github.com/rapidsai/cudf/issues/7478
+        with pytest.raises(AssertionError):
             run_masked_udf_series(func, data, check_dtype=False)
-        return
-    run_masked_udf_series(func, data, check_dtype=False)
+    else:
+        run_masked_udf_series(func, data, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", arith_ops)
@@ -503,16 +504,15 @@ def test_series_arith_masked_vs_constant_reflected(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-    if (
-        constant is not cudf.NA
-        and constant == 1
-        and op in {operator.pow, operator.ipow}
-    ):
-        # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
-        with pytest.xfail():
+    # Using in {1} since bool(NA == 1) raises a TypeError since NA is
+    # neither truthy nor falsy
+    if constant in {1} and op in {operator.pow, operator.ipow}:
+        # in pandas, 1**NA == 1. In cudf, 1**NA == NA. See
+        # https://github.com/rapidsai/cudf/issues/7478
+        with pytest.raises(AssertionError):
             run_masked_udf_series(func, data, check_dtype=False)
-        return
-    run_masked_udf_series(func, data, check_dtype=False)
+    else:
+        run_masked_udf_series(func, data, check_dtype=False)
 
 
 def test_series_masked_is_null_conditional():

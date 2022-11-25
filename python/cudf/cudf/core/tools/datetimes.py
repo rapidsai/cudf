@@ -894,13 +894,6 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
-    # We compute `end_estim` (the estimated upper bound of the date
-    # range) below, but don't always use it.  We do this to ensure
-    # that the appropriate OverflowError is raised by Pandas in case
-    # of overflow.
-    # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
-    # we shouldn't raise but compute the sequence as is. The trailing overflow
-    # part should get trimmed at the end.
     end_estim = (
         pd.Timestamp(start.value)
         + periods * offset._maybe_as_fast_pandas_offset()
@@ -921,8 +914,8 @@ def date_range(
         # treating `start`, `stop` and `step` as ints:
         stop = end_estim.astype("int64")
         start = start.value.astype("int64")
-        step = int(_offset_to_nanoseconds_lower_bound(offset))
-        arr = cp.arange(start=start, stop=stop, step=step)
+        step = _offset_to_nanoseconds_lower_bound(offset)
+        arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
     return cudf.DatetimeIndex._from_data({name: res})
@@ -971,18 +964,18 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
     This utility is used to compute the upper bound of the count of timestamps
     given a range of datetime and an offset.
     """
-    nanoseconds_per_day = 24 * 60 * 60 * 1e9
+    nanoseconds_per_day = 24 * 60 * 60 * 10**9
     kwds = offset.kwds
     return (
         kwds.get("years", 0) * (365 * nanoseconds_per_day)
         + kwds.get("months", 0) * (28 * nanoseconds_per_day)
         + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
         + kwds.get("days", 0) * nanoseconds_per_day
-        + kwds.get("hours", 0) * 3600 * 1e9
-        + kwds.get("minutes", 0) * 60 * 1e9
-        + kwds.get("seconds", 0) * 1e9
-        + kwds.get("milliseconds", 0) * 1e6
-        + kwds.get("microseconds", 0) * 1e3
+        + kwds.get("hours", 0) * 3600 * 10**9
+        + kwds.get("minutes", 0) * 60 * 10**9
+        + kwds.get("seconds", 0) * 10**9
+        + kwds.get("milliseconds", 0) * 10**6
+        + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
 

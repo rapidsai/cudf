@@ -1031,9 +1031,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
                 ),
                 None,
             ],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6821"
-            ),
         ),
     ],
 )

@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+import contextlib
 import datetime
 import operator
 import re
@@ -13,7 +14,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -415,9 +416,7 @@ def test_datetime_to_arrow(dtype):
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
-@pytest.mark.parametrize(
-    "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
     psr = data.copy()
 
@@ -430,7 +429,11 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    assert_eq(pd.Series(expected), got.to_pandas())
+    # Unique does not provide a guarantee on ordering.
+    assert_eq(
+        pd.Series(expected).sort_values(ignore_index=True),
+        got.sort_values(ignore_index=True).to_pandas(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1485,7 +1488,7 @@ date_range_test_freq = [
     pytest.param(
         "110546789L",
         marks=pytest.mark.xfail(
-            True,
+            condition=not PANDAS_GE_150,
             reason="Pandas DateOffset ignores milliseconds. "
             "https://github.com/pandas-dev/pandas/issues/43371",
         ),
@@ -1534,10 +1537,20 @@ def test_date_range_start_end_freq(start, end, freq):
     expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
     got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
 
-    np.testing.assert_allclose(
-        expect.to_numpy().astype("int64"),
-        got.to_pandas().to_numpy().astype("int64"),
-    )
+    if (
+        start == "1831-05-08 15:23:21"
+        and end == "1996-11-21 04:05:30"
+        and freq == "110546789L"
+    ):
+        # https://github.com/rapidsai/cudf/issues/12133
+        context = pytest.raises(AssertionError)
+    else:
+        context = contextlib.nullcontext()
+    with context:
+        np.testing.assert_allclose(
+            expect.to_numpy().astype("int64"),
+            got.to_pandas().to_numpy().astype("int64"),
+        )
 
 
 def test_date_range_start_freq_periods(start, freq, periods):

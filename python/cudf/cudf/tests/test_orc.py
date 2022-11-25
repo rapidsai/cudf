@@ -1669,22 +1669,7 @@ def test_orc_writer_nvcomp(compression):
         assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
-@pytest.mark.parametrize("index", [True, False, None])
-@pytest.mark.parametrize(
-    "columns",
-    [
-        None,
-        [],
-        pytest.param(
-            ["b", "a"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12026"
-            ),
-        ),
-    ],
-)
-def test_orc_columns_and_index_param(index_obj, index, columns):
+def run_orc_columns_and_index_param(index_obj, index, columns):
     buffer = BytesIO()
     df = cudf.DataFrame(
         {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=index_obj
@@ -1704,6 +1689,72 @@ def test_orc_columns_and_index_param(index_obj, index, columns):
         )
     else:
         assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        [],
+    ],
+)
+def test_orc_columns_and_index_param(index_obj, index, columns):
+    run_orc_columns_and_index_param(index_obj, index, columns)
+
+
+@pytest.mark.parametrize(
+    "columns,index,index_obj",
+    [
+        pytest.param(
+            ["a", "b"],
+            True,
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12026"
+            ),
+        ),
+        pytest.param(
+            ["a", "b"],
+            True,
+            [10, 11, 12],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12026"
+            ),
+        ),
+        pytest.param(
+            ["a", "b"],
+            True,
+            ["x", "y", "z"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12026"
+            ),
+        ),
+        (["a", "b"], False, None),
+        (["a", "b"], False, [10, 11, 12]),
+        (["a", "b"], False, ["x", "y", "z"]),
+        (["a", "b"], None, None),
+        pytest.param(
+            ["a", "b"],
+            None,
+            [10, 11, 12],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12026"
+            ),
+        ),
+        pytest.param(
+            ["a", "b"],
+            None,
+            ["x", "y", "z"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12026"
+            ),
+        ),
+    ],
+)
+def test_orc_columns_and_index_param_read_index(index_obj, index, columns):
+    run_orc_columns_and_index_param(index_obj, index, columns)
 
 
 @pytest.mark.parametrize(
