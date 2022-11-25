@@ -153,8 +153,8 @@ struct FloorDiv {
     if ((lhs ^ rhs) >= 0) {
       return lhs / rhs;
     } else {
-      const auto quotient  = lhs / rhs;
-      const auto remainder = lhs % rhs;
+      auto const quotient  = lhs / rhs;
+      auto const remainder = lhs % rhs;
       return quotient - !!remainder;
     }
   }
@@ -175,7 +175,7 @@ struct FloorDiv {
             std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, float>)>* = nullptr>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(floorf(lhs / rhs));
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
   }
 
   template <typename OutT                                                               = TypeOut,
@@ -184,7 +184,7 @@ struct FloorDiv {
             std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, double>)>* = nullptr>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(floor(lhs / rhs));
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
   }
 };
 
