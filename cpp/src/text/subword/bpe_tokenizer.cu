@@ -24,8 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/combine.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +106,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 1 row
   //
@@ -197,8 +197,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<int>, 1 row
   //
@@ -312,8 +312,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<T>>, 1 row
   //
@@ -401,8 +401,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>, 2 rows
   //
@@ -599,8 +599,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T, int32_t>;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 2 rows
   //
@@ -1272,8 +1272,8 @@ TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
 {
   using namespace cudf;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<bool>, 3 rows
   //

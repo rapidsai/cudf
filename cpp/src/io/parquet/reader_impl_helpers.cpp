@@ -77,14 +77,15 @@ type_id to_type_id(SchemaElement const& schema,
   parquet::Type const physical            = schema.type;
   parquet::LogicalType const logical_type = schema.logical_type;
   parquet::ConvertedType converted_type   = schema.converted_type;
-  int32_t decimal_scale                   = schema.decimal_scale;
+  int32_t decimal_precision               = schema.decimal_precision;
 
   // Logical type used for actual data interpretation; the legacy converted type
   // is superseded by 'logical' type whenever available.
   auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
-  if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
-  if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
-    decimal_scale = schema.logical_type.DECIMAL.scale;
+  if (inferred_converted_type != parquet::UNKNOWN) { converted_type = inferred_converted_type; }
+  if (inferred_converted_type == parquet::DECIMAL) {
+    decimal_precision = schema.logical_type.DECIMAL.precision;
+  }
 
   switch (converted_type) {
     case parquet::UINT_8: return type_id::UINT8;
@@ -113,6 +114,16 @@ type_id to_type_id(SchemaElement const& schema,
           return type_id::DECIMAL64;
         }
         if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+          return type_id::DECIMAL128;
+        }
+      }
+      if (physical == parquet::BYTE_ARRAY) {
+        CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
+        if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+          return type_id::DECIMAL32;
+        } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+          return type_id::DECIMAL64;
+        } else {
           return type_id::DECIMAL128;
         }
       }
@@ -268,10 +279,10 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
                                                                           size_type src_idx,
                                                                           int schema_idx) const
 {
-  auto col = std::find_if(
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
-    per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
-    [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx ? true : false; });
+  auto col =
+    std::find_if(per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
+                 per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
+                 [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
                "Found no metadata for schema index");
   return col->meta_data;

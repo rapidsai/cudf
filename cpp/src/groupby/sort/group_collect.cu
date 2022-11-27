@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy_if.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
