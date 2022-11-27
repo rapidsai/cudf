@@ -36,7 +36,7 @@ set +e
 
 rapids-logger "Run Java tests"
 pushd java
-mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF
+mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF -DCUDF_JNI_ENABLE_PROFILING=OFF
 exitcode=$?
 
 if (( ${exitcode} != 0 )); then
