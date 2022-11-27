@@ -20,7 +20,7 @@ _wrapopts = {"width": 78, "replace_whitespace": False}
 def docfmt(**kwargs):
     """Format docstring.
 
-    Similiar to saving the result of ``__doc__.format(**kwargs)`` as the
+    Similar to saving the result of ``__doc__.format(**kwargs)`` as the
     function's docstring.
     """
     kwargs = {k: v.lstrip() for k, v in kwargs.items()}

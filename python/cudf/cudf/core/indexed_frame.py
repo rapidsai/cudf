@@ -416,7 +416,7 @@ class IndexedFrame(Frame):
             else:
                 if col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
-                    # incase of bools.
+                    # in case of bools.
                     first_index = int(
                         col.isnull().astype("int8").find_first_value(1)
                     )

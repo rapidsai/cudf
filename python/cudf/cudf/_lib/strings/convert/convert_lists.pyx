@@ -36,7 +36,7 @@ def format_list_column(Column source_list, Column separators):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_list.view()
     cdef column_view separators_view = separators.view()
-    # Use 'None' as null-replacment string
+    # Use 'None' as null-replacement string
     cdef DeviceScalar str_na_rep = as_device_scalar("None")
     cdef const string_scalar* string_scalar_na_rep = <const string_scalar*>(
         str_na_rep.get_raw_ptr())

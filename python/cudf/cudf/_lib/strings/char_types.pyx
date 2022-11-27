@@ -70,7 +70,7 @@ def is_decimal(Column source_strings):
 def is_alnum(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
-    that contain only alpha-numeric characters.
+    that contain only alphanumeric characters.
 
     Equivalent to: is_alpha() or is_digit() or is_numeric() or is_decimal()
     """

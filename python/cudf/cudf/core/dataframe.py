@@ -1797,7 +1797,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             output = self.copy(deep=False)
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
-            # Incase of Empty DataFrame with index, Pandas prints
+            # In case of Empty DataFrame with index, Pandas prints
             # first `pd.options.display.max_seq_items` index values
             # followed by ... To obtain ... at the end of index list,
             # adding 1 extra value.
