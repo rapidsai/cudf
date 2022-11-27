@@ -38,7 +38,6 @@ files:
   checks:
     output: none
     includes:
-      - build
       - develop
       - py_version
 channels:
