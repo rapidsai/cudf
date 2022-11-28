@@ -114,10 +114,10 @@ class datasource {
   /**
    * @brief Creates a source from a device memory buffer.
    *
-   * @param[in] buffer Device buffer object
+   * @param buffer Device buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(device_buffer const& buffer);
+  static std::unique_ptr<datasource> create(cudf::device_span<uint8_t> buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.

@@ -204,7 +204,7 @@ class direct_read_source : public file_source {
  */
 class device_buffer_source : public datasource {
  public:
-  explicit device_buffer_source(device_buffer const& d_buffer) : _d_buffer{d_buffer} {}
+  explicit device_buffer_source(cudf::device_span<uint8_t> d_buffer) : _d_buffer{d_buffer} {}
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) final
   {
@@ -222,7 +222,7 @@ class device_buffer_source : public datasource {
   {
     CUDF_FAIL("TODO: should this be invoked?");
     // TODO: to be finished with deep copy
-    dst = const_cast<uint8_t*>(_d_buffer._data) + offset;
+    dst = const_cast<uint8_t*>(_d_buffer.data()) + offset;
     return std::min(size, this->size() - offset);
   }
 
@@ -230,14 +230,14 @@ class device_buffer_source : public datasource {
                                       size_t size,
                                       rmm::cuda_stream_view stream) final
   {
-    return std::make_unique<non_owning_buffer>(const_cast<uint8_t*>(_d_buffer._data + offset),
+    return std::make_unique<non_owning_buffer>(const_cast<uint8_t*>(_d_buffer.data()) + offset,
                                                size);
   }
 
-  [[nodiscard]] size_t size() const final { return _d_buffer._size; }
+  [[nodiscard]] size_t size() const final { return _d_buffer.size(); }
 
  private:
-  device_buffer _d_buffer;  ///< A non-owning buffer to the existing device data
+  cudf::device_span<uint8_t> _d_buffer;  ///< A non-owning buffer to the existing device data
 };
 
 /**
@@ -310,7 +310,7 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
     reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
 }
 
-std::unique_ptr<datasource> datasource::create(device_buffer const& buffer)
+std::unique_ptr<datasource> datasource::create(cudf::device_span<uint8_t> buffer)
 {
   return std::make_unique<device_buffer_source>(buffer);
 }
