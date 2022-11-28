@@ -91,13 +91,15 @@ class SpillStatistics:
         spilled_nbytes: int = 0
 
     spill_totals: Dict[Tuple[str, str], Tuple[int, float]]
+    exposes: Dict[str, SpillStatistics.Expose]
+    lowest_utilization: Optional[int]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
         self.spill_totals = defaultdict(lambda: (0, 0))
-        # Maps each traceback to a Expose
-        self.exposes: Dict[str, SpillStatistics.Expose] = {}
+        self.exposes = {}
+        self.lowest_utilization = None
 
     def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
         """Log a (un-)spilling event
@@ -151,6 +153,21 @@ class SpillStatistics:
                 stat.total_nbytes += buf.nbytes
                 stat.spilled_nbytes += spilled_nbytes
 
+    def log_spill_on_demand(self, manager: SpillManager, nbytes: int):
+        if self.level < 3:
+            return
+
+        unspilled = sum(
+            buf.size for buf in manager.buffers() if not buf.is_spilled
+        )
+
+        if self.lowest_utilization is None:
+            self.lowest_utilization = unspilled + nbytes
+        else:
+            self.lowest_utilization = min(
+                self.lowest_utilization, unspilled + nbytes
+            )
+
     def __repr__(self) -> str:
         return f"<SpillStatistics level={self.level}>"
 
@@ -186,7 +203,15 @@ class SpillStatistics:
                     ),
                     prefix=" " * 4,
                 )
-            return ret[:-1]  # Remove last `\n`
+            ret += "  RMM fragmentation (level >= 3): "
+            if self.level < 3:
+                return ret + "disabled"
+            if self.lowest_utilization is None:
+                ret += "None"
+            else:
+                ret += "\n    lowest utilization: "
+                ret += format_bytes(self.lowest_utilization)
+            return ret
 
 
 class SpillManager:
@@ -271,6 +296,7 @@ class SpillManager:
         In order to avoid deadlock, this function should not lock
         already locked buffers.
         """
+        self.statistics.log_spill_on_demand(manager=self, nbytes=nbytes)
 
         # Let's try to spill device memory
         spilled = self.spill_device_memory(nbytes=nbytes)
