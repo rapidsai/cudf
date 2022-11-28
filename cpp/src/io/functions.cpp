@@ -254,6 +254,10 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_EXPECTS(src_info.host_buffers().size() == 1,
                  "Only a single source is currently supported.");
     source = cudf::io::datasource::create(src_info.host_buffers()[0]);
+  } else if (src_info.type() == io_type::DEVICE_BUFFER) {
+    CUDF_EXPECTS(src_info.device_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.device_buffers()[0]);
   } else if (src_info.type() == io_type::USER_IMPLEMENTED) {
     CUDF_EXPECTS(src_info.user_sources().size() == 1,
                  "Only a single source is currently supported.");
