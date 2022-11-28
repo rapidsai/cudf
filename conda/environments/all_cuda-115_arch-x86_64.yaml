@@ -7,7 +7,6 @@ channels:
 - pytorch
 - conda-forge
 - nvidia
-- gmarkall
 dependencies:
 - aiobotocore>=2.2.0
 - arrow-cpp=9

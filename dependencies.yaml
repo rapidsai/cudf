@@ -47,7 +47,6 @@ channels:
   - pytorch
   - conda-forge
   - nvidia
-  - gmarkall  # Test gmarkall::cubinlinker on aarch64
 dependencies:
   build:
     common:
@@ -116,7 +115,7 @@ dependencies:
           - pre-commit
       - output_types: conda
         packages:
-          - doxygen=1.8.20  # pre-commit hook needs a specific version.
+          - doxygen=1.8.20 # pre-commit hook needs a specific version.
   doc:
     common:
       - output_types: [conda, requirements]
@@ -124,7 +123,7 @@ dependencies:
           - myst-nb
           - nbsphinx
           - numpydoc
-          - pandoc<=2.0.0  # We should check and fix all "<=" pinnings
+          - pandoc<=2.0.0 # We should check and fix all "<=" pinnings
           - pydata-sphinx-theme
           - sphinx
           - sphinx-autobuild
@@ -258,7 +257,7 @@ dependencies:
           - maven
           - openjdk=8.*
           - rmm=23.02.*
-          - ucx-py=0.30.*  # TODO: Use variable, don't hard-code
+          - ucx-py=0.30.* # TODO: Use variable, don't hard-code
   test_python:
     common:
       - output_types: [conda, requirements]
