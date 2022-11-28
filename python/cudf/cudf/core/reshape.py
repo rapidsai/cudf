@@ -234,6 +234,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("All objects passed were None")
 
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
+        raise ValueError(
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
+        )
+
     # Return for single object
     if len(objs) == 1:
         obj = objs[0]
@@ -294,12 +300,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
-
-    axis = _AXIS_MAP.get(axis, None)
-    if axis is None:
-        raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
-        )
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
