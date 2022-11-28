@@ -106,73 +106,39 @@ class GroupModel(models.StructModel):
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 
-_funcs = ["Max", "Min"]
-_types = [types.int64, types.float64]
-_cuda_funcs = {}
-for func in _funcs:
-    for ty in _types:
-        _cuda_funcs[func.lower()] = cuda.declare_device(
-            f"Block{func}_{ty}", ty(types.CPointer(ty), types.int64)
-        )
+SUPPORTED_INPUT_TYPES = [types.int64, types.float64]
+
 
 call_cuda_functions: Dict[Any, Any] = {}
 
 
-def _register_cuda_reduction_caller(func, ty):
-    func = func.lower()
-    cuda_func = _cuda_funcs[func]
+def _register_cuda_reduction_caller(func, inputty, retty):
+    cuda_func = cuda.declare_device(
+        f"Block{func}_{inputty}", retty(types.CPointer(inputty), types.int64)
+    )
 
     def caller(data, size):
         return cuda_func(data, size)
 
     if call_cuda_functions.get(func.lower()) is None:
-        call_cuda_functions[func] = {}
-    call_cuda_functions[func][ty] = caller
+        call_cuda_functions[func.lower()] = {}
+    call_cuda_functions[func.lower()][retty] = caller
 
 
-_register_cuda_reduction_caller("max", types.int64)
-_register_cuda_reduction_caller("max", types.float64)
-_register_cuda_reduction_caller("min", types.int64)
-_register_cuda_reduction_caller("min", types.float64)
+_register_cuda_reduction_caller("Max", types.float64, types.float64)
+_register_cuda_reduction_caller("Max", types.int64, types.int64)
+_register_cuda_reduction_caller("Min", types.float64, types.float64)
+_register_cuda_reduction_caller("Min", types.int64, types.int64)
+_register_cuda_reduction_caller("Min", types.float64, types.float64)
+_register_cuda_reduction_caller("Sum", types.int64, types.int64)
+_register_cuda_reduction_caller("Sum", types.float64, types.float64)
+_register_cuda_reduction_caller("Mean", types.int64, types.float64)
+_register_cuda_reduction_caller("Mean", types.float64, types.float64)
+_register_cuda_reduction_caller("Std", types.int64, types.float64)
+_register_cuda_reduction_caller("Std", types.float64, types.float64)
+_register_cuda_reduction_caller("Var", types.int64, types.float64)
+_register_cuda_reduction_caller("Var", types.float64, types.float64)
 
-my_sum_int64 = cuda.declare_device(
-    "BlockSum_int64", "types.int64(types.CPointer(types.int64),types.int64)"
-)
-
-my_sum_float64 = cuda.declare_device(
-    "BlockSum_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
-
-my_mean_int64 = cuda.declare_device(
-    "BlockMean_int64",
-    "types.float64(types.CPointer(types.int64),types.int64)",
-)
-
-my_mean_float64 = cuda.declare_device(
-    "BlockMean_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
-
-my_std_int64 = cuda.declare_device(
-    "BlockStd_int64",
-    "types.float64(types.CPointer(types.int64),types.int64)",
-)
-
-my_std_float64 = cuda.declare_device(
-    "BlockStd_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
-
-my_var_int64 = cuda.declare_device(
-    "BlockVar_int64",
-    "types.float64(types.CPointer(types.int64),types.int64)",
-)
-
-my_var_float64 = cuda.declare_device(
-    "BlockVar_float64",
-    "types.float64(types.CPointer(types.float64),types.int64)",
-)
 
 my_idxmax_int64 = cuda.declare_device(
     "BlockIdxMax_int64",
@@ -199,38 +165,6 @@ my_idxmin_float64 = cuda.declare_device(
 )
 
 
-def call_sum_int64(data, size):
-    return my_sum_int64(data, size)
-
-
-def call_sum_float64(data, size):
-    return my_sum_float64(data, size)
-
-
-def call_mean_int64(data, size):
-    return my_mean_int64(data, size)
-
-
-def call_mean_float64(data, size):
-    return my_mean_float64(data, size)
-
-
-def call_std_int64(data, size):
-    return my_std_int64(data, size)
-
-
-def call_std_float64(data, size):
-    return my_std_float64(data, size)
-
-
-def call_var_int64(data, size):
-    return my_var_int64(data, size)
-
-
-def call_var_float64(data, size):
-    return my_var_float64(data, size)
-
-
 def call_idxmax_int64(data, index, size):
     return my_idxmax_int64(data, index, size)
 
@@ -247,24 +181,10 @@ def call_idxmin_float64(data, index, size):
     return my_idxmin_float64(data, index, size)
 
 
-call_cuda_functions["sum"] = {}
-call_cuda_functions["mean"] = {}
-call_cuda_functions["var"] = {}
-call_cuda_functions["std"] = {}
 call_cuda_functions["idxmax"] = {}
 call_cuda_functions["idxmin"] = {}
-
-call_cuda_functions["sum"][types.int64] = call_sum_int64
-call_cuda_functions["mean"][types.int64] = call_mean_int64
-call_cuda_functions["std"][types.int64] = call_std_int64
-call_cuda_functions["var"][types.int64] = call_var_int64
 call_cuda_functions["idxmax"][types.int64] = call_idxmax_int64
 call_cuda_functions["idxmin"][types.int64] = call_idxmin_int64
-
-call_cuda_functions["sum"][types.float64] = call_sum_float64
-call_cuda_functions["mean"][types.float64] = call_mean_float64
-call_cuda_functions["std"][types.float64] = call_std_float64
-call_cuda_functions["var"][types.float64] = call_var_float64
 call_cuda_functions["idxmax"][types.float64] = call_idxmax_float64
 call_cuda_functions["idxmin"][types.float64] = call_idxmin_float64
 
