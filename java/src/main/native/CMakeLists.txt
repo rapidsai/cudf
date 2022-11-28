@@ -154,7 +154,7 @@ if(NOT USE_NVTX)
 endif()
 
 if(CUDF_JNI_ENABLE_PROFILING)
-  target_compile_definitions(cudfjni PUBLIC CUDF_JNI_ENABLE_PROFILING)
+  target_compile_definitions(cudfjni PRIVATE CUDF_JNI_ENABLE_PROFILING)
 endif()
 
 if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
