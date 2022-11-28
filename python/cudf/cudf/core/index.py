@@ -344,6 +344,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self
 
     @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        return cupy.zeros(len(self), dtype=bool)
+
+    @_cudf_nvtx_annotate
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"

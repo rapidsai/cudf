@@ -2648,6 +2648,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         keep : {'first', 'last', False}, default 'first'
             Method to handle dropping duplicates:
+
             - 'first' : Mark duplicates as ``True`` except for the first
               occurrence.
             - 'last' : Mark duplicates as ``True`` except for the last
@@ -2712,24 +2713,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4     True
         dtype: bool
         """
-        df = cudf.DataFrame._from_data(
-            {
-                "None": self._column,
-                "index": cudf.core.column.arange(0, self.size, dtype="int32"),
-            }
-        )
-        new_df = df.drop_duplicates(subset=["None"], keep=keep)
-        idx = df.merge(new_df, how="inner")["index"]
-        s = cudf.Series._from_data(
-            {
-                self.name: cudf.core.column.full(
-                    size=len(self), fill_value=True, dtype="bool"
-                )
-            },
-            index=self.index,
-        )
-        s.iloc[idx] = False
-        return s
+        return super().duplicated(keep=keep)
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):

@@ -1801,6 +1801,60 @@ class IndexedFrame(Frame):
         )
 
     @_cudf_nvtx_annotate
+    def duplicated(self, subset=None, keep="first"):
+        """
+        Return boolean Series denoting duplicate rows.
+
+        Considering certain columns is optional.
+
+        Parameters
+        ----------
+        subset : column label or sequence of labels, optional
+            Only consider certain columns for identifying duplicates, by
+            default use all of the columns.
+        keep : {'first', 'last', False}, default 'first'
+            Determines which duplicates (if any) to mark.
+
+            - ``first`` : Mark duplicates as ``True`` except for the first occurrence.
+            - ``last`` : Mark duplicates as ``True`` except for the last occurrence.
+            - False : Mark all duplicates as ``True``.
+        """  # noqa: E501
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+
+        if isinstance(self, cudf.Series):
+            df = self.to_frame(name="None")
+            subset = ["None"]
+        else:
+            df = self.copy(deep=False)
+        df._data["index"] = cudf.core.column.arange(
+            0, len(self), dtype="int32"
+        )
+
+        new_df = df.drop_duplicates(subset=subset, keep=keep)
+        idx = df.merge(new_df, how="inner")["index"]
+        s = cudf.Series._from_data(
+            {
+                None: cudf.core.column.full(
+                    size=len(self), fill_value=True, dtype="bool"
+                )
+            },
+            index=self.index,
+        )
+        s.iloc[idx] = False
+        return s
+
+    @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True):
         return self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
