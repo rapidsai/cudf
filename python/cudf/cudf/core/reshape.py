@@ -255,7 +255,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # in the data that are not in `columns`, so we have to rename
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
-            elif axis == 0:
+            else:
                 if isinstance(obj, cudf.Series):
                     result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
