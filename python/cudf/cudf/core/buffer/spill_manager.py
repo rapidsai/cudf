@@ -180,18 +180,18 @@ class SpillStatistics:
             # Print spilling stats
             ret += "  Spilling (level >= 1):"
             if len(self.spill_totals) == 0:
-                ret += " None"
+                ret += " none spilled"
             ret += "\n"
             for (src, dst), (nbytes, time) in self.spill_totals.items():
                 ret += f"    {src} => {dst}: "
                 ret += f"{format_bytes(nbytes)} in {time:.3f}s\n"
 
             # Print expose stats
-            ret += "  Exposed buffers (level >= 2): "
+            ret += "  Permanent exposed buffers (level >= 2): "
             if self.level < 2:
                 return ret + "disabled"
             if len(self.exposes) == 0:
-                ret += "None"
+                ret += "none exposed"
             ret += "\n"
             for s in sorted(self.exposes.values(), key=lambda x: -x.count):
                 ret += textwrap.indent(
