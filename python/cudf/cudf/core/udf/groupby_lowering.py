@@ -25,7 +25,8 @@ def lowering_function(context, builder, sig, args, function):
     group_data_ptr = builder.alloca(grp.group_data.type)
     builder.store(grp.group_data, group_data_ptr)
 
-    func = call_cuda_functions[function][grp_type.group_scalar_type]
+    type_key = (sig.return_type, grp_type.group_scalar_type)
+    func = call_cuda_functions[function][type_key]
 
     return context.compile_internal(
         builder,
@@ -130,7 +131,8 @@ def cuda_Group_idxmax(context, builder, sig, args):
     index_ptr = builder.alloca(grp.index.type)
     builder.store(grp.index, index_ptr)
 
-    func = call_cuda_functions["idxmax"][grp_type.group_scalar_type]
+    type_key = (types.int64, grp_type.group_scalar_type)
+    func = call_cuda_functions["idxmax"][type_key]
 
     return context.compile_internal(
         builder,
