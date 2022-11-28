@@ -279,9 +279,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 if isinstance(obj, cudf.Series) and obj.name is None:
                     # If the Series has no name, pandas renames it to 0.
                     data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(data)
+                result = cudf.DataFrame._from_data(
+                    data, index=obj.index.copy(deep=True)
+                )
 
-        return result.sort_index(axis=axis) if sort else result
+        if isinstance(result, cudf.Series) and axis == 0:
+            # sort has no effect for series concatted along axis 0
+            return result
+        else:
+            return result.sort_index(axis=(1 - axis)) if sort else result
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
