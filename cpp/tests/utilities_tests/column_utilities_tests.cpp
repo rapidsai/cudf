@@ -566,9 +566,7 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
 
   // equivalent, but not equal
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(s_col0, s_col1);
-  EXPECT_EQ(
-    cudf::test::detail::expect_columns_equal(s_col0, s_col1, cudf::test::debug_output_level::QUIET),
-    false);
+  EXPECT_FALSE(cudf::test::detail::expect_columns_equal(s_col0, s_col1, cudf::test::debug_output_level::QUIET));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col0, s_col0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col1, s_col1);
