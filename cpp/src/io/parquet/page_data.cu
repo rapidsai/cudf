@@ -760,6 +760,28 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
 }
 
 /**
+ * @brief Output a byte array as int.
+ *
+ * @param[in] ptr Pointer to the byte array
+ * @param[in] len Byte array length
+ * @param[out] dst Pointer to row output data
+ */
+template <typename T>
+__device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
+{
+  T unscaled = 0;
+  for (auto i = 0; i < len; i++) {
+    uint8_t v = ptr[i];
+    unscaled  = (unscaled << 8) | v;
+  }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
+  unscaled <<= (sizeof(T) - len) * 8;
+  unscaled >>= (sizeof(T) - len) * 8;
+  *dst = unscaled;
+}
+
+/**
  * @brief Output a fixed-length byte array as int.
  *
  * @param[in,out] s Page state input/output
@@ -959,7 +981,22 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           [[fallthrough]];
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
-        case BYTE_ARRAY: s->dtype_len = sizeof(string_index_pair); break;
+        case BYTE_ARRAY:
+          if (s->col.converted_type == DECIMAL) {
+            auto const decimal_precision = s->col.decimal_precision;
+            s->dtype_len                 = [decimal_precision]() {
+              if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+                return sizeof(int32_t);
+              } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+                return sizeof(int64_t);
+              } else {
+                return sizeof(__int128_t);
+              }
+            }();
+          } else {
+            s->dtype_len = sizeof(string_index_pair);
+          }
+          break;
         default:  // FIXED_LEN_BYTE_ARRAY:
           s->dtype_len = dtype_len_out;
           s->error |= (s->dtype_len <= 0);
@@ -968,9 +1005,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
       if (s->col.converted_type == DECIMAL && data_type == FIXED_LEN_BYTE_ARRAY) {
-        s->dtype_len = s->dtype_len <= sizeof(int32_t)   ? sizeof(int32_t)
-                       : s->dtype_len <= sizeof(int64_t) ? sizeof(int64_t)
-                                                         : sizeof(__int128_t);
+        s->dtype_len = [dtype_len = s->dtype_len]() {
+          if (dtype_len <= sizeof(int32_t)) {
+            return sizeof(int32_t);
+          } else if (dtype_len <= sizeof(int64_t)) {
+            return sizeof(int64_t);
+          } else {
+            return sizeof(__int128_t);
+          }
+        }();
       } else if (data_type == INT32) {
         if (dtype_len_out == 1) {
           // INT8 output
@@ -1830,7 +1873,19 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
         void* dst =
           s->page.nesting[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (dtype == BYTE_ARRAY) {
-          gpuOutputString(s, val_src_pos, dst);
+          if (s->col.converted_type == DECIMAL) {
+            auto const [ptr, len]        = gpuGetStringData(s, val_src_pos);
+            auto const decimal_precision = s->col.decimal_precision;
+            if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
+            } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
+            } else {
+              gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
+            }
+          } else {
+            gpuOutputString(s, val_src_pos, dst);
+          }
         } else if (dtype == BOOLEAN) {
           gpuOutputBoolean(s, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (s->col.converted_type == DECIMAL) {
