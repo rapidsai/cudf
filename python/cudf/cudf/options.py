@@ -150,6 +150,16 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
+def _integer_validator(val):
+    try:
+        int(val)
+        return True
+    except ValueError:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be an integer."
+        )
+
+
 def _integer_and_none_validator(val):
     try:
         if val is None or int(val):
@@ -233,4 +243,22 @@ _register_option(
         """
     ),
     _integer_and_none_validator,
+)
+
+_register_option(
+    "spill_stats",
+    _env_get_int("CUDF_SPILL_STATS", 0),
+    textwrap.dedent(
+        """
+        If not 0, enables statistics at the specified level:
+            0  - disabled (no overhead).
+            1+ - duration and number of bytes spilled (very low overhead).
+            2+ - a traceback for each time a spillable buffer is exposed
+                permanently (potential high overhead).
+
+        Valid values are any positive integer.
+        Default is 0 (disabled).
+        """
+    ),
+    _integer_validator,
 )
