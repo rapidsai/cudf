@@ -225,12 +225,12 @@ static scan_reduce_iterator<ScanIterator, ReduceType> make_scan_reduce_output_it
  * This performs an exclusive-scan and reduce (addition only) on the given input `[begin, end)`.
  * The output of the scan is placed in `result` and the reduction result is returned.
  *
- * This implementation will return the reduction result in `int64_t` or `double` precision
+ * This implementation will return the reduction result in `int64_t` or `uint64_t` precision
  * as appropriate regardless of the input or result types.
  * This can be used to check if the scan will overflow when the input and result are declared
  * as smaller types (i.e. computing offsets from sizes).
  *
- * Only numeric types for input and result types are supported.
+ * Only integral types for input and result types are supported.
  *
  * Note that `begin == result` is allowed but `result` may not overlap `[begin,end)` otherwise the
  * behavior is undefined.
@@ -256,15 +256,11 @@ auto exclusive_scan_reduce(ScanIterator begin,
                            rmm::cuda_stream_view stream)
 {
   using ScanType = typename thrust::iterator_traits<ScanIterator>::value_type;
-  static_assert(cudf::is_numeric<ScanType>(),
+  static_assert(std::is_integral_v<ScanType>,
                 "Only numeric types are supported by exclusive_scan_reduce");
 
-  // clang-format off
-  using ReduceType = std::conditional_t<std::is_integral_v<ScanType> && std::is_signed_v<ScanType>, int64_t,
-                     std::conditional_t<std::is_integral_v<ScanType> && std::is_unsigned_v<ScanType>, uint64_t,
-                     std::conditional_t<std::is_floating_point_v<ScanType>, double, ScanType>>>;
-  // clang-format on
-  auto reduction = rmm::device_scalar<ReduceType>(0, stream);
+  using ReduceType = std::conditional_t<std::is_signed_v<ScanType>, int64_t, uint64_t>;
+  auto reduction   = rmm::device_scalar<ReduceType>(0, stream);
   auto output_itr =
     make_scan_reduce_output_iterator(result, result + std::distance(begin, end), reduction.data());
   // This function uses the type of the initialization parameter as the accumulator type

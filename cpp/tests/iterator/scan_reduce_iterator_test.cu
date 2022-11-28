@@ -29,8 +29,7 @@
 
 #include <algorithm>
 
-using TestingTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
 struct ScanReduceIteratorTest : public cudf::test::BaseFixture {
