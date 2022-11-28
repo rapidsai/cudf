@@ -3269,7 +3269,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         Series
-            Boolean series for each duplicated rows.
+            Boolean series indicating duplicated rows.
 
         See Also
         --------
@@ -3280,7 +3280,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        Consider dataset containing ramen rating.
+        Consider a dataset containing ramen product ratings.
 
         >>> import cudf
         >>> df = cudf.DataFrame({
@@ -3297,7 +3297,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  Indomie  pack     5.0
 
         By default, for each set of duplicated values, the first occurrence
-        is set on False and all others on True.
+        is set to False and all others to True.
 
         >>> df.duplicated()
         0    False
@@ -3308,7 +3308,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: bool
 
         By using 'last', the last occurrence of each set of duplicated values
-        is set on False and all others on True.
+        is set to False and all others to True.
 
         >>> df.duplicated(keep='last')
         0     True
@@ -3318,7 +3318,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4    False
         dtype: bool
 
-        By setting ``keep`` on False, all duplicates are True.
+        By setting ``keep`` to False, all duplicates are True.
 
         >>> df.duplicated(keep=False)
         0     True
