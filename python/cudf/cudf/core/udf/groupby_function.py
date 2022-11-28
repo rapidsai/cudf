@@ -122,6 +122,22 @@ def _register_cuda_reduction_caller(func, inputty, retty):
     call_cuda_functions[func.lower()][retty] = caller
 
 
+def _register_cuda_idxreduction_caller(func, inputty):
+    cuda_func = cuda.declare_device(
+        f"Block{func}_{inputty}",
+        types.int64(
+            types.CPointer(inputty), types.CPointer(types.int64), types.int64
+        ),
+    )
+
+    def caller(data, index, size):
+        return cuda_func(data, index, size)
+
+    if call_cuda_functions.get(func.lower()) is None:
+        call_cuda_functions[func.lower()] = {}
+    call_cuda_functions[func.lower()][types.int64] = caller
+
+
 _register_cuda_reduction_caller("Max", types.float64, types.float64)
 _register_cuda_reduction_caller("Max", types.int64, types.int64)
 _register_cuda_reduction_caller("Min", types.float64, types.float64)
@@ -135,55 +151,10 @@ _register_cuda_reduction_caller("Std", types.int64, types.float64)
 _register_cuda_reduction_caller("Std", types.float64, types.float64)
 _register_cuda_reduction_caller("Var", types.int64, types.float64)
 _register_cuda_reduction_caller("Var", types.float64, types.float64)
-
-
-my_idxmax_int64 = cuda.declare_device(
-    "BlockIdxMax_int64",
-    "types.int64(types.CPointer(types.int64),"
-    "types.CPointer(types.int64),types.int64)",
-)
-
-my_idxmax_float64 = cuda.declare_device(
-    "BlockIdxMax_float64",
-    "types.int64(types.CPointer(types.float64),"
-    "types.CPointer(types.int64),types.int64)",
-)
-
-my_idxmin_int64 = cuda.declare_device(
-    "BlockIdxMin_int64",
-    "types.int64(types.CPointer(types.int64),"
-    "types.CPointer(types.int64),types.int64)",
-)
-
-my_idxmin_float64 = cuda.declare_device(
-    "BlockIdxMin_float64",
-    "types.int64(types.CPointer(types.float64),"
-    "types.CPointer(types.int64),types.int64)",
-)
-
-
-def call_idxmax_int64(data, index, size):
-    return my_idxmax_int64(data, index, size)
-
-
-def call_idxmax_float64(data, index, size):
-    return my_idxmax_float64(data, index, size)
-
-
-def call_idxmin_int64(data, index, size):
-    return my_idxmin_int64(data, index, size)
-
-
-def call_idxmin_float64(data, index, size):
-    return my_idxmin_float64(data, index, size)
-
-
-call_cuda_functions["idxmax"] = {}
-call_cuda_functions["idxmin"] = {}
-call_cuda_functions["idxmax"][types.int64] = call_idxmax_int64
-call_cuda_functions["idxmin"][types.int64] = call_idxmin_int64
-call_cuda_functions["idxmax"][types.float64] = call_idxmax_float64
-call_cuda_functions["idxmin"][types.float64] = call_idxmin_float64
+_register_cuda_idxreduction_caller("IdxMax", types.int64)
+_register_cuda_idxreduction_caller("IdxMax", types.float64)
+_register_cuda_idxreduction_caller("IdxMin", types.int64)
+_register_cuda_idxreduction_caller("IdxMin", types.float64)
 
 
 make_attribute_wrapper(GroupType, "group_data", "group_data")
