@@ -71,7 +71,7 @@ def modifiedFiles():
     # Use the environment variable TARGET_BRANCH or GITHUB_BASE_REF (defined in CI) if possible
     for k in os.environ:
         print(k, os.environ[k])
-    target_branch = os.environ.get("TARGET_BRANCH", os.environ.get("GITHUB_BASE_REF"))
+    target_branch = os.environ.get("TARGET_BRANCH", os.environ.get("RAPIDS_BASE_BRANCH"))
     if target_branch is None:
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(
