@@ -4961,6 +4961,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .row_group_size_rows(nrows)
       .row_group_size_bytes(512 * 1024 * 1024);
   cudf::io::write_parquet(out_opts);
