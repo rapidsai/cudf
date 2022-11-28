@@ -42,6 +42,7 @@ constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million r
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
 constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
+constexpr size_t default_max_dictionary_size             = 1024 * 1024;  ///< 1MB dictionary size
 
 class parquet_reader_options_builder;
 
@@ -511,6 +512,8 @@ class parquet_writer_options {
   size_type _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
 
   /**
    * @brief Constructor from sink and table.
@@ -672,6 +675,13 @@ class parquet_writer_options {
   [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
 
   /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -805,6 +815,13 @@ class parquet_writer_options {
    * @param policy Policy for dictionary use
    */
   void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
 };
 
 /**
@@ -940,7 +957,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
-   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances.
    * Cannot be larger than the row group size in bytes, and will be adjusted to
    * match if it is.
    *
@@ -1003,6 +1020,23 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
   {
     options.set_dictionary_policy(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'DEFAULT'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_dictionary_size(size_t val)
+  {
+    options.set_max_dictionary_size(val);
     return *this;
   }
 
@@ -1097,6 +1131,8 @@ class chunked_parquet_writer_options {
   size_type _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
 
   /**
    * @brief Constructor from sink.
@@ -1214,6 +1250,13 @@ class chunked_parquet_writer_options {
   [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
 
   /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1322,6 +1365,13 @@ class chunked_parquet_writer_options {
    * @param policy Policy for dictionary use
    */
   void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1509,6 +1559,23 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
   {
     options.set_dictionary_policy(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'DEFAULT'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_dictionary_size(size_t val)
+  {
+    options.set_max_dictionary_size(val);
     return *this;
   }
 

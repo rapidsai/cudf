@@ -1035,6 +1035,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                               device_2dspan<gpu::PageFragment const> frags,
                               Compression compression,
                               dictionary_policy dict_policy,
+                              size_t max_dict_size,
                               rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
@@ -1056,7 +1057,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
          col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
       chunk.use_dictionary = false;
     } else {
-      chunk.use_dictionary = dict_policy == dictionary_policy::NEVER ? false : true;
+      chunk.use_dictionary = dict_policy != dictionary_policy::NEVER;
       // cuCollections suggests using a hash map of size N * (1/0.7) = num_values * 1.43
       // https://github.com/NVIDIA/cuCollections/blob/3a49fc71/include/cuco/static_map.cuh#L190-L193
       auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.43, stream);
@@ -1096,8 +1097,8 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       // that over compression.
       if (dict_policy == dictionary_policy::DEFAULT) {
         constexpr int DICT_THRESHOLD = 4;  // FIXME: need a defensible value here
-        if (static_cast<size_t>(ck.uniq_data_size) >
-              max_page_bytes(compression, ck.uniq_data_size) and
+        auto unique_size             = static_cast<size_t>(ck.uniq_data_size);
+        if (unique_size > max_page_bytes(compression, std::min(unique_size, max_dict_size)) and
             (ck.plain_data_size / dict_enc_size) < DICT_THRESHOLD) {
           return {false, 0};
         }
@@ -1284,6 +1285,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     max_page_size_rows(options.get_max_page_size_rows()),
     stats_granularity_(options.get_stats_level()),
     dict_policy_(options.get_dictionary_policy()),
+    max_dictionary_size_(options.get_max_dictionary_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1310,6 +1312,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     max_page_size_rows(options.get_max_page_size_rows()),
     stats_granularity_(options.get_stats_level()),
     dict_policy_(options.get_dictionary_policy()),
+    max_dictionary_size_(options.get_max_dictionary_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1547,8 +1550,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   fragments.host_to_device(stream);
-  auto dict_info_owner =
-    build_chunk_dictionaries(chunks, col_desc, fragments, compression_, dict_policy_, stream);
+  auto dict_info_owner = build_chunk_dictionaries(
+    chunks, col_desc, fragments, compression_, dict_policy_, max_dictionary_size_, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
       size_t global_rg = global_rowgroup_base[p] + rg;

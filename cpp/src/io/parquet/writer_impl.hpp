@@ -215,6 +215,7 @@ class writer::impl {
   size_type max_page_size_rows           = default_max_page_size_rows;
   statistics_freq stats_granularity_     = statistics_freq::STATISTICS_NONE;
   dictionary_policy dict_policy_         = dictionary_policy::DEFAULT;
+  size_t max_dictionary_size_            = default_max_dictionary_size;
   bool int96_timestamps                  = false;
   size_type column_index_truncate_length = default_column_index_truncate_length;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
