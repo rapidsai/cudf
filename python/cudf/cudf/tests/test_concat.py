@@ -1831,3 +1831,10 @@ def test_concat_singleton_sorting(axis, sort, ignore_index, concat_obj):
         [concat_obj], axis=axis, sort=sort, ignore_index=ignore_index
     )
     assert_eq(pconcat, gconcat)
+
+
+@pytest.mark.parametrize("axis", [2, "invalid"])
+def test_concat_invalid_axis(axis):
+    s = gd.Series([1, 2, 3])
+    with pytest.raises(ValueError):
+        gd.concat([s], axis=axis)
