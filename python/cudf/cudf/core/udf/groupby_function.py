@@ -19,6 +19,7 @@ from numba.cuda.cudadecl import registry as cuda_registry
 numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 index_default_type = types.int64
+SUPPORTED_GROUPBY_JIT_TYPES = [types.int64, types.float64]
 
 
 class Group(object):
