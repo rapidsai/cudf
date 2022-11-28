@@ -135,7 +135,7 @@ def _register_cuda_idxreduction_caller(func, inputty):
 
     if call_cuda_functions.get(func.lower()) is None:
         call_cuda_functions[func.lower()] = {}
-    call_cuda_functions[func.lower()][types.int64] = caller
+    call_cuda_functions[func.lower()][inputty] = caller
 
 
 _register_cuda_reduction_caller("Max", types.float64, types.float64)

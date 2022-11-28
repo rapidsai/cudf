@@ -369,7 +369,14 @@ def test_groupby_apply_grouped():
     assert_groupby_results_equal(expect, got)
 
 
-def test_groupby_apply_jit():
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df["val1"].max() + df["val2"].min(),
+        lambda df: df["val1"].idxmax() + df["val2"].idxmin(),
+    ],
+)
+def test_groupby_apply_jit(func):
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
@@ -381,10 +388,7 @@ def test_groupby_apply_jit():
     expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
     got_grpby = df.groupby(["key1", "key2"])
 
-    def foo(df):
-        return df["val1"].max() + df["val2"].min()
-
-    expect = expect_grpby.apply(foo)
+    expect = expect_grpby.apply(func)
     # TODO: Due to some inconsistencies between how pandas and cudf handle the
     # created index we get different columns in the index vs the data and a
     # different name. For now I'm hacking around this to test the core
@@ -392,11 +396,15 @@ def test_groupby_apply_jit():
     names = list(expect.columns)
     names[2] = 0
     expect.columns = names
+
+    got_jit = got_grpby.apply(func, engine="jit").reset_index()
     # TODO: Shouldn't have to reset_index below
-    got_nonjit = got_grpby.apply(foo).reset_index()
-    got_jit = got_grpby.apply(foo, engine="jit").reset_index()
-    assert_groupby_results_equal(expect, got_nonjit)
-    assert_groupby_results_equal(expect, got_jit)
+    try:
+        got_nonjit = got_grpby.apply(func).reset_index()
+        assert_groupby_results_equal(expect, got_nonjit)
+        assert_groupby_results_equal(expect, got_jit)
+    except AttributeError:
+        assert_groupby_results_equal(expect, got_jit)
 
 
 def create_test_groupby_apply_jit_args_params():
