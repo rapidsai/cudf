@@ -337,14 +337,13 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
-                a, b, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      a, b, cudf::test::debug_output_level::QUIET));
 
     // values
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
   }
 
   // list<list<int>>, nullable vs. non-nullable
@@ -356,13 +355,12 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
-                a, b, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      a, b, cudf::test::debug_output_level::QUIET));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
   }
 }
 
@@ -439,15 +437,13 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
-                *c0, *c1, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      *c0, *c1, cudf::test::debug_output_level::QUIET));
 
     // values
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(
-      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-      false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET));
   }
 
   // list<list<struct<int, float>>>
@@ -497,15 +493,13 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
 
     // properties
     CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
-                *c0, *c1, cudf::test::debug_output_level::QUIET),
-              false);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      *c0, *c1, cudf::test::debug_output_level::QUIET));
 
     // values
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(
-      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-      false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET));
   }
 }
 
@@ -535,9 +529,8 @@ TEST_F(ColumnUtilitiesStructsTest, Properties)
 
   // equivalent, but not equal
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(s_col0, s_col1);
-  EXPECT_EQ(cudf::test::detail::expect_column_properties_equal(
-              s_col0, s_col1, cudf::test::debug_output_level::QUIET),
-            false);
+  EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+    s_col0, s_col1, cudf::test::debug_output_level::QUIET));
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(s_col0, s_col0);
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(s_col1, s_col1);
@@ -566,7 +559,8 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
 
   // equivalent, but not equal
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(s_col0, s_col1);
-  EXPECT_FALSE(cudf::test::detail::expect_columns_equal(s_col0, s_col1, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(cudf::test::detail::expect_columns_equal(
+    s_col0, s_col1, cudf::test::debug_output_level::QUIET));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col0, s_col0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col1, s_col1);
