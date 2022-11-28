@@ -251,13 +251,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          # This list is copied from ci/gpu/java.sh and needs to be filtered
           - *cmake_ver
-          - dask-cuda=23.02.*
           - maven
           - openjdk=8.*
-          - rmm=23.02.*
-          - ucx-py=0.30.* # TODO: Use variable, don't hard-code
   test_python:
     common:
       - output_types: [conda, requirements]
