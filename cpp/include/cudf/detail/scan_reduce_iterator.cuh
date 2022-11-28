@@ -195,11 +195,12 @@ struct scan_reduce_iterator {
  * @code{.pseudo}
  *  auto begin = // begin input iterator
  *  auto end = // end input iterator
- *  auto reduction = rmm::device_scalar<std::size_t>(0, stream);
- *  auto itr = make_scan_reduce_output_iterator(result,
- *                                              result + std::distance(begin, end),
+ *  auto result = rmm::device_uvector(std::distance(begin,end), stream);
+ *  auto reduction = rmm::device_scalar<int64_t>(0, stream);
+ *  auto itr = make_scan_reduce_output_iterator(result.begin(),
+ *                                              result.end(),
  *                                              reduction.data());
- *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, std::size_t{0});
+ *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, itr, int64_t{0});
  *  // reduction contains the reduce result
  * @endcode
  *
@@ -224,9 +225,10 @@ static scan_reduce_iterator<ScanIterator, ReduceType> make_scan_reduce_output_it
  * This performs an exclusive-scan and reduce (addition only) on the given input `[begin, end)`.
  * The output of the scan is placed in `result` and the reduction result is returned.
  *
- * This implementation will return the reduction result in `size_t` precision regardless
- * of the input or result types. This can be used to check if the scan will overflow
- * when the input and result are declared as smaller types (i.e. computing offsets from sizes).
+ * This implementation will return the reduction result in `int64_t` or `double` precision
+ * as appropriate regardless of the input or result types.
+ * This can be used to check if the scan will overflow when the input and result are declared
+ * as smaller types (i.e. computing offsets from sizes).
  *
  * Only numeric types for input and result types are supported.
  *
@@ -236,7 +238,7 @@ static scan_reduce_iterator<ScanIterator, ReduceType> make_scan_reduce_output_it
  * @code{.pseudo}
  *   auto const bytes = cudf::detail::exclusive_scan_reduce(
  *     d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
- *   CUDF_EXPECTS(bytes <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+ *   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
  *               "Size of output exceeds column size limit");
  * @endcode
  *
@@ -248,21 +250,26 @@ static scan_reduce_iterator<ScanIterator, ReduceType> make_scan_reduce_output_it
  * @return Result of the reduce operation
  */
 template <typename ScanIterator>
-std::size_t exclusive_scan_reduce(ScanIterator begin,
-                                  ScanIterator end,
-                                  ScanIterator result,
-                                  rmm::cuda_stream_view stream)
+auto exclusive_scan_reduce(ScanIterator begin,
+                           ScanIterator end,
+                           ScanIterator result,
+                           rmm::cuda_stream_view stream)
 {
   using ScanType = typename thrust::iterator_traits<ScanIterator>::value_type;
   static_assert(cudf::is_numeric<ScanType>(),
                 "Only numeric types are supported by exclusive_scan_reduce");
 
-  auto reduction = rmm::device_scalar<std::size_t>(0, stream);
+  // clang-format off
+  using ReduceType = std::conditional_t<std::is_integral_v<ScanType> && std::is_signed_v<ScanType>, int64_t,
+                     std::conditional_t<std::is_integral_v<ScanType> && std::is_unsigned_v<ScanType>, uint64_t,
+                     std::conditional_t<std::is_floating_point_v<ScanType>, double, ScanType>>>;
+  // clang-format on
+  auto reduction = rmm::device_scalar<ReduceType>(0, stream);
   auto output_itr =
     make_scan_reduce_output_iterator(result, result + std::distance(begin, end), reduction.data());
   // This function uses the type of the initialization parameter as the accumulator type
   // when computing the individual scan output elements.
-  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, std::size_t{0});
+  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, ReduceType{0});
   return reduction.value(stream);
 }
 

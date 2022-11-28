@@ -113,7 +113,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   // Convert the sizes to offsets
   auto const bytes = cudf::detail::exclusive_scan_reduce(
     d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds column size limit");
 
   // Now build the chars column
