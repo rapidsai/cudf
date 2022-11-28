@@ -23,7 +23,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_function import jit_groupby_apply
+from cudf.core.udf.groupby_utils import jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -770,7 +770,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args, engine="cudf", cache=True):
+    def apply(self, function, *args, engine="cudf"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -841,7 +841,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if engine == "jit":
             chunk_results = jit_groupby_apply(
-                offsets, grouped_values, function, *args, cache=cache
+                offsets, grouped_values, function, *args
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names

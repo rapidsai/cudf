@@ -244,17 +244,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
     return kernel
 
 
-def _get_kernel_groupby_apply(kernel_string, globals_, func, dev_func_ptx):
-    """Template kernel compilation helper function for groupby apply"""
-    f_ = cuda.jit(device=True)(func)
-    globals_["f_"] = f_
-    exec(kernel_string, globals_)
-    _kernel = globals_["_kernel"]
-    kernel = cuda.jit(link=[dev_func_ptx])(_kernel)
-
-    return kernel
-
-
 def _get_input_args_from_frame(fr):
     args = []
     offsets = []
