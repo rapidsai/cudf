@@ -317,7 +317,11 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             }
             break;
           case EOL:
-            if (last_character || (c == '\n' && inst.u1.c == '$')) {
+            // after the last character OR:
+            // - for MULTILINE, if current character is new-line
+            // - for non-MULTILINE, the very last character of the string can also be a new-line
+            if (last_character || (c == '\n' && ((inst.u1.c == '$') ||
+                                                 (itr.byte_offset() + 1 == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
