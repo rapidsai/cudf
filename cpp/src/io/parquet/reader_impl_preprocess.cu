@@ -710,7 +710,7 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
                                             col_meta.codec,
                                             converted_type,
                                             schema.logical_type,
-                                            schema.decimal_scale,
+                                            schema.decimal_precision,
                                             clock_rate,
                                             i,
                                             col.schema_idx));
