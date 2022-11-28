@@ -69,14 +69,19 @@ def modifiedFiles():
     """
     repo = git.Repo()
     # Use the environment variable TARGET_BRANCH or GITHUB_BASE_REF (defined in CI) if possible
+    for k in os.environ:
+        print(k, os.environ[k])
     target_branch = os.environ.get("TARGET_BRANCH", os.environ.get("GITHUB_BASE_REF"))
     if target_branch is None:
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
+    print(f"{target_branch=}")
 
     upstream_target_branch = None
+    print("repo.heads:")
+    print(repo.heads)
     if target_branch in repo.heads:
         # Use the tracking branch of the local reference if it exists. This
         # returns None if no tracking branch is set.
@@ -92,6 +97,13 @@ def modifiedFiles():
             remote.refs[target_branch] for remote in repo.remotes
             if target_branch in remote.refs
         ]
+        print("candidate_branches")
+        print(candidate_branches)
+        print("repo.remotes")
+        print(repo.remotes)
+        for remote in repo.remotes:
+            print("remote.refs")
+            print(remote.refs)
         if len(candidate_branches) > 0:
             upstream_target_branch = sorted(
                 candidate_branches,
