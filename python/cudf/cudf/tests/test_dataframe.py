@@ -9836,7 +9836,7 @@ def test_complex_types_from_arrow():
     "subset", [None, ["brand"], ["rating"], ["style", "rating"]]
 )
 @pytest.mark.parametrize("keep", ["first", "last", False])
-def test_dataframe_duuplicated(data, subset, keep):
+def test_dataframe_duplicated(data, subset, keep):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
