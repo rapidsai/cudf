@@ -19,11 +19,11 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "parquet_gpu.cuh"
-#include "writer_impl.hpp"
-
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "parquet_common.hpp"
+#include "parquet_gpu.cuh"
+#include "writer_impl.hpp"
 
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
@@ -430,16 +430,16 @@ struct leaf_schema_fn {
     if (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type              = Type::INT32;
       col_schema.stats_dtype       = statistics_dtype::dtype_int32;
-      col_schema.decimal_precision = 9;
+      col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type              = Type::INT64;
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
-      col_schema.decimal_precision = 18;
+      col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal128>) {
       col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
       col_schema.type_length       = sizeof(__int128_t);
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
-      col_schema.decimal_precision = 38;
+      col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
