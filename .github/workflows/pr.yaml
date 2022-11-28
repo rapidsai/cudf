@@ -10,9 +10,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # pr-builder:
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@custom-test-job
+  pr-builder:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@custom-test-job
   checks:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/checks.yaml@custom-test-job
