@@ -2636,6 +2636,102 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     T = property(transpose, doc=transpose.__doc__)
 
     @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate Series values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        Series. Either all duplicates, all except the first or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            Method to handle dropping duplicates:
+            - 'first' : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - 'last' : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series[bool]
+            Series indicating whether each value has occurred in the
+            preceding values.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on pandas.Index.
+        DataFrame.duplicated : Equivalent method on pandas.DataFrame.
+        Series.drop_duplicates : Remove duplicate values from Series.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set on False and all others on True:
+
+        >>> import cudf
+        >>> animals = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> animals.duplicated()
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        which is equivalent to
+
+        >>> animals.duplicated(keep='first')
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set on False and all others on True:
+
+        >>> animals.duplicated(keep='last')
+        0     True
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        By setting keep on ``False``, all duplicates are True:
+
+        >>> animals.duplicated(keep=False)
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+        """
+        df = cudf.DataFrame._from_data(
+            {
+                "None": self._column,
+                "index": cudf.core.column.arange(0, self.size, dtype="int32"),
+            }
+        )
+        new_df = df.drop_duplicates(subset=["None"], keep=keep)
+        idx = df.merge(new_df, how="inner")["index"]
+        s = cudf.Series._from_data(
+            {
+                self.name: cudf.core.column.full(
+                    size=len(self), fill_value=True, dtype="bool"
+                )
+            },
+            index=self.index,
+        )
+        s.iloc[idx] = False
+        return s
+
+    @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
