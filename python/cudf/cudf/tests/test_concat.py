@@ -1793,3 +1793,41 @@ def test_concat_categorical_ordering():
     got = gd.concat([gdf, gdf, gdf])
 
     assert_eq(expect, got)
+
+
+@pytest.fixture(params=["rangeindex", "index"])
+def concat_index(request):
+    if request.param == "rangeindex":
+        return pd.RangeIndex(0, 4)
+    else:
+        return pd.Index(["a", "h", "g", "f"])
+
+
+@pytest.fixture(params=["dataframe", "series"])
+def concat_obj(request, concat_index):
+    if request == "dataframe":
+        return pd.DataFrame(
+            {
+                "b": [1, 2, 3, 4],
+                "d": [7, 8, 9, 10],
+                "a": [4, 5, 6, 7],
+                "c": [10, 11, 12, 13],
+            },
+            index=concat_index,
+        )
+    else:
+        return pd.Series([4, 5, 5, 6], index=concat_index)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "columns", "index"])
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("ignore_index", [False, True])
+def test_concat_singleton_sorting(axis, sort, ignore_index, concat_obj):
+    gobj = gd.from_pandas(concat_obj)
+    gconcat = gd.concat(
+        [gobj], axis=axis, sort=sort, ignore_index=ignore_index
+    )
+    pconcat = pd.concat(
+        [concat_obj], axis=axis, sort=sort, ignore_index=ignore_index
+    )
+    assert_eq(pconcat, gconcat)
