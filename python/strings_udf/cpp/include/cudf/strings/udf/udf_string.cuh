@@ -145,6 +145,7 @@ __device__ inline udf_string& udf_string::operator=(char const* str) { return as
 __device__ udf_string& udf_string::assign(udf_string&& str) noexcept
 {
   if (this == &str) { return *this; }
+  deallocate(m_data);
   m_data         = str.m_data;
   m_bytes        = str.m_bytes;
   m_capacity     = str.m_capacity;
