@@ -38,15 +38,14 @@ namespace {
  * This handles the output size calculation while delegating the
  * pad operation to Derived.
  *
- * @tparam Derived class uses the CRTP pattern to reuse code logic.
- *         The derived class must include a `pad(string_view,char*)`
- *         member function.
+ * @tparam Derived class uses the CRTP pattern to reuse code logic
+ *         and must include a `pad(string_view,char*)` member function.
  */
 template <typename Derived>
 struct base_fn {
   column_device_view const d_column;
-  size_type width;
-  size_type fill_char_size;
+  size_type const width;
+  size_type const fill_char_size;
   offset_type* d_offsets{};
   char* d_chars{};
 
@@ -55,14 +54,14 @@ struct base_fn {
   {
   }
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
     }
 
-    auto const d_str = d_column.element<string_view>(idx);
-    auto& derived    = static_cast<Derived&>(*this);
+    auto const d_str    = d_column.element<string_view>(idx);
+    auto const& derived = static_cast<Derived const&>(*this);
     if (d_chars) {
       derived.pad(d_str, d_chars + d_offsets[idx]);
     } else {
@@ -80,7 +79,7 @@ template <side_type side>
 struct pad_fn : base_fn<pad_fn<side>> {
   using Base = base_fn<pad_fn<side>>;
 
-  cudf::char_utf8 d_fill_char;
+  cudf::char_utf8 const d_fill_char;
 
   pad_fn(column_device_view const& d_column,
          size_type width,
@@ -90,7 +89,7 @@ struct pad_fn : base_fn<pad_fn<side>> {
   {
   }
 
-  __device__ void pad(string_view d_str, char* output)
+  __device__ void pad(string_view d_str, char* output) const
   {
     pad_impl<side>(d_str, Base::width, d_fill_char, output);
   }
@@ -139,7 +138,7 @@ namespace {
 struct zfill_fn : base_fn<zfill_fn> {
   zfill_fn(column_device_view const& d_column, size_type width) : base_fn(d_column, width, 1) {}
 
-  __device__ void pad(string_view d_str, char* output) { zfill_impl(d_str, width, output); }
+  __device__ void pad(string_view d_str, char* output) const { zfill_impl(d_str, width, output); }
 };
 }  // namespace
 
