@@ -641,44 +641,44 @@ TEST_F(StringsContainsTests, IncompleteClassesRange)
 
 TEST_F(StringsContainsTests, MultiLine)
 {
-  auto input =
-    cudf::test::strings_column_wrapper({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto input = cudf::test::strings_column_wrapper(
+    {"abé\nfff\nabé", "fff\nabé\nlll", "abé", "", "abé\n", "abe\nabé\n"});
   auto view = cudf::strings_column_view(input);
 
-  auto pattern = std::string("^abc$");
+  auto pattern = std::string("^abé$");
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto prog_ml =
     cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
 
   auto results = cudf::strings::contains_re(view, pattern, cudf::strings::regex_flags::MULTILINE);
-  auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1});
+  auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   results = cudf::strings::contains_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   results           = cudf::strings::contains_re(view, pattern);
-  expected_contains = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0});
+  expected_contains = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   results = cudf::strings::contains_re(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
 
   results = cudf::strings::matches_re(view, pattern, cudf::strings::regex_flags::MULTILINE);
-  auto expected_matches = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1});
+  auto expected_matches = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
   results = cudf::strings::matches_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
   results          = cudf::strings::matches_re(view, pattern);
-  expected_matches = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0});
+  expected_matches = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
   results = cudf::strings::matches_re(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
 
   results = cudf::strings::count_re(view, pattern, cudf::strings::regex_flags::MULTILINE);
-  auto expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({2, 1, 1, 0, 1});
+  auto expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({2, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
   results = cudf::strings::count_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
   results        = cudf::strings::count_re(view, pattern);
-  expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0, 0});
+  expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
   results = cudf::strings::count_re(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
