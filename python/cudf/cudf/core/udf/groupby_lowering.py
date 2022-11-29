@@ -7,7 +7,7 @@ from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower
 
 from cudf.core.udf.groupby_function import (
-    SUPPORTED_GROUPBY_JIT_TYPES,
+    SUPPORTED_GROUPBY_NUMBA_TYPES,
     Group,
     GroupType,
     call_cuda_functions,
@@ -132,7 +132,7 @@ def cuda_Group_idxmin(context, builder, sig, args):
     return cuda_Group_idx_max_or_min(context, builder, sig, args, "idxmin")
 
 
-for ty in SUPPORTED_GROUPBY_JIT_TYPES:
+for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupType.max", GroupType(ty))(cuda_Group_max)
     cuda_lower("GroupType.min", GroupType(ty))(cuda_Group_min)
     cuda_lower("GroupType.sum", GroupType(ty))(cuda_Group_sum)

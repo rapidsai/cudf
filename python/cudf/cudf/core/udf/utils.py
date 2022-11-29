@@ -89,35 +89,35 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     return result
 
 
-def _is_jit_supported_type(dtype):
+def _is_jit_supported_type(dtype, supported_types):
     # category dtype isn't hashable
     if isinstance(dtype, CategoricalDtype):
         return False
-    return str(dtype) in JIT_SUPPORTED_TYPES
+    return str(dtype) in supported_types
 
 
-def _all_dtypes_from_frame(frame):
+def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
-        if _is_jit_supported_type(col.dtype)
+        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
         else np.dtype("O")
         for colname, col in frame._data.items()
     }
 
 
-def _supported_dtypes_from_frame(frame):
+def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype)
+        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
     }
 
 
-def _supported_cols_from_frame(frame):
+def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype)
+        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
     }
 
 
