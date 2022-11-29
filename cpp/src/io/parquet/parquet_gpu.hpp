@@ -95,10 +95,13 @@ struct PageNestingInfo {
   // set at initialization
   int32_t max_def_level;
   int32_t max_rep_level;
+  cudf::type_id type;  // type of the corresponding cudf output column
+  bool nullable;
 
   // set during preprocessing
   int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
                  // decoded
+  int32_t batch_size;        // the size of the page for this batch
   int32_t page_start_value;  // absolute output start index in output column data
 
   // set during data decoding
@@ -152,6 +155,9 @@ struct PageInfo {
   int skipped_values;
   // # of values skipped in the actual data stream.
   int skipped_leaf_values;
+  // for string columns only, the size of all the chars in the string for
+  // this page. only valid/computed during the base preprocess pass
+  int32_t str_bytes;
 
   // nesting information (input/output) for each page
   int num_nesting_levels;
@@ -238,7 +244,7 @@ struct ColumnChunkDesc {
 };
 
 /**
- * @brief The struct to store raw/intermediate file data before parsing.
+ * @brief Struct to store raw/intermediate file data before parsing.
  */
 struct file_intermediate_data {
   std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
@@ -246,6 +252,23 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+};
+
+/**
+ * @brief Struct to store intermediate page data for parsing each chunk of rows in chunked reading.
+ */
+struct chunk_intermediate_data {
+  rmm::device_uvector<int32_t> page_keys{0, rmm::cuda_stream_default};
+  rmm::device_uvector<int32_t> page_index{0, rmm::cuda_stream_default};
+  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+};
+
+/**
+ * @brief Structs to identify the reading row range for each chunk of rows in chunked reading.
+ */
+struct chunk_read_info {
+  size_t skip_rows;
+  size_t num_rows;
 };
 
 /**
@@ -378,35 +401,35 @@ void BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
                                 rmm::cuda_stream_view stream);
 
 /**
- * @brief Preprocess column information for nested schemas.
+ * @brief Compute page output size information.
  *
- * There are several pieces of information we can't compute directly from row counts in
- * the parquet headers when dealing with nested schemas.
- * - The total sizes of all output columns at all nesting levels
- * - The starting output buffer offset for each page, for each nesting level
- * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
+ * When dealing with nested hierarchies (those that contain lists), or when doing a chunked
+ * read, we need to obtain more information up front than we have with just the row counts.
  *
- * Note : this function is where output device memory is allocated for nested columns.
+ * - We need to determine the sizes of each output cudf column per page
+ * - We need to determine information about where to start decoding the value stream
+ *   if we are using custom user bounds (skip_rows / num_rows)
+ * - We need to determine actual number of top level rows per page
+ * - If we are doing a chunked read, we need to determine the total string size per page
+ *
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param input_columns Input column information
- * @param output_columns Output column information
  * @param num_rows Maximum number of rows to read
  * @param min_rows crop all rows below min_row
- * @param uses_custom_row_bounds Whether or not num_rows and min_rows represents user-specific
- * bounds
- * @param stream Cuda stream
+ * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
+ * computed
+ * @param compute_string_sizes If set to true, the str_bytes field in PageInfo will
+ * be computed
+ * @param stream CUDA stream to use, default 0
  */
-void PreprocessColumnData(hostdevice_vector<PageInfo>& pages,
-                          hostdevice_vector<ColumnChunkDesc> const& chunks,
-                          std::vector<input_column_info>& input_columns,
-                          std::vector<cudf::io::detail::column_buffer>& output_columns,
-                          size_t num_rows,
-                          size_t min_row,
-                          bool uses_custom_row_bounds,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+void ComputePageSizes(hostdevice_vector<PageInfo>& pages,
+                      hostdevice_vector<ColumnChunkDesc> const& chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      bool compute_num_rows,
+                      bool compute_string_sizes,
+                      rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages

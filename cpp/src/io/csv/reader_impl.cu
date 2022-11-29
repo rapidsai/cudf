@@ -676,32 +676,37 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   auto const& data        = data_row_offsets.first;
   auto const& row_offsets = data_row_offsets.second;
 
-  // Exclude the end-of-data row from number of rows with actual data
-  auto num_records        = std::max(row_offsets.size(), 1ul) - 1;
-  auto column_flags       = std::vector<column_parse::flags>();
-  auto column_names       = std::vector<std::string>();
-  auto num_actual_columns = static_cast<int32_t>(reader_opts.get_names().size());
-  auto num_active_columns = num_actual_columns;
+  auto const unique_use_cols_indexes = std::set(reader_opts.get_use_cols_indexes().cbegin(),
+                                                reader_opts.get_use_cols_indexes().cend());
 
-  // Check if the user gave us a list of column names
-  if (not reader_opts.get_names().empty()) {
-    column_flags.resize(reader_opts.get_names().size(),
-                        column_parse::enabled | column_parse::inferred);
-    column_names = reader_opts.get_names();
-  } else {
-    column_names = get_column_names(
-      header, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
+  auto const detected_column_names =
+    get_column_names(header, parse_opts.view(), reader_opts.get_header(), reader_opts.get_prefix());
+  auto const opts_have_all_col_names =
+    not reader_opts.get_names().empty() and
+    (
+      // no data to detect (the number of) columns
+      detected_column_names.empty() or
+      // number of user specified names matches what is detected
+      reader_opts.get_names().size() == detected_column_names.size() or
+      // Columns are not selected by indices; read first reader_opts.get_names().size() columns
+      unique_use_cols_indexes.empty());
+  auto column_names = opts_have_all_col_names ? reader_opts.get_names() : detected_column_names;
 
-    num_actual_columns = num_active_columns = column_names.size();
+  auto const num_actual_columns = static_cast<int32_t>(column_names.size());
+  auto num_active_columns       = num_actual_columns;
+  auto column_flags             = std::vector<column_parse::flags>(
+    num_actual_columns, column_parse::enabled | column_parse::inferred);
 
-    column_flags.resize(num_actual_columns, column_parse::enabled | column_parse::inferred);
-
+  // User did not pass column names to override names in the file
+  // Process names from the file to remove empty and duplicated strings
+  if (not opts_have_all_col_names) {
     std::vector<size_t> col_loop_order(column_names.size());
     auto unnamed_it = std::copy_if(
       thrust::make_counting_iterator<size_t>(0),
       thrust::make_counting_iterator<size_t>(column_names.size()),
       col_loop_order.begin(),
       [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
+
     // Rename empty column names to "Unnamed: col_index"
     std::copy_if(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator<size_t>(column_names.size()),
@@ -756,24 +761,44 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   }
 
   // User can specify which columns should be parsed
-  if (!reader_opts.get_use_cols_indexes().empty() || !reader_opts.get_use_cols_names().empty()) {
+  auto const unique_use_cols_names = std::unordered_set(reader_opts.get_use_cols_names().cbegin(),
+                                                        reader_opts.get_use_cols_names().cend());
+  auto const is_column_selection_used =
+    not unique_use_cols_names.empty() or not unique_use_cols_indexes.empty();
+
+  // Reset flags and output column count; columns will be reactivated based on the selection options
+  if (is_column_selection_used) {
     std::fill(column_flags.begin(), column_flags.end(), column_parse::disabled);
+    num_active_columns = 0;
+  }
 
-    for (const auto index : reader_opts.get_use_cols_indexes()) {
+  // Column selection via column indexes
+  if (not unique_use_cols_indexes.empty()) {
+    // Users can pass names for the selected columns only, if selecting column by their indices
+    auto const are_opts_col_names_used =
+      not reader_opts.get_names().empty() and not opts_have_all_col_names;
+    CUDF_EXPECTS(not are_opts_col_names_used or
+                   reader_opts.get_names().size() == unique_use_cols_indexes.size(),
+                 "Specify names of all columns in the file, or names of all selected columns");
+
+    for (auto const index : unique_use_cols_indexes) {
       column_flags[index] = column_parse::enabled | column_parse::inferred;
+      if (are_opts_col_names_used) {
+        column_names[index] = reader_opts.get_names()[num_active_columns];
+      }
+      ++num_active_columns;
     }
-    num_active_columns = std::unordered_set<int>(reader_opts.get_use_cols_indexes().begin(),
-                                                 reader_opts.get_use_cols_indexes().end())
-                           .size();
+  }
 
-    for (const auto& name : reader_opts.get_use_cols_names()) {
-      const auto it = std::find(column_names.begin(), column_names.end(), name);
-      if (it != column_names.end()) {
-        auto curr_it = it - column_names.begin();
-        if (column_flags[curr_it] == column_parse::disabled) {
-          column_flags[curr_it] = column_parse::enabled | column_parse::inferred;
-          num_active_columns++;
-        }
+  // Column selection via column names
+  if (not unique_use_cols_names.empty()) {
+    for (auto const& name : unique_use_cols_names) {
+      auto const it = std::find(column_names.cbegin(), column_names.cend(), name);
+      CUDF_EXPECTS(it != column_names.end(), "Nonexistent column selected");
+      auto const col_idx = std::distance(column_names.cbegin(), it);
+      if (column_flags[col_idx] == column_parse::disabled) {
+        column_flags[col_idx] = column_parse::enabled | column_parse::inferred;
+        ++num_active_columns;
       }
     }
   }
@@ -810,6 +835,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   // Return empty table rather than exception if nothing to load
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
+  // Exclude the end-of-data row from number of rows with actual data
+  auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
   auto const column_types = determine_column_types(
     reader_opts, parse_opts, column_names, data, row_offsets, num_records, column_flags, stream);
 
