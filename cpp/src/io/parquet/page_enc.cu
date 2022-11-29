@@ -352,9 +352,9 @@ __global__ void __launch_bounds__(128)
           ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                            : 512 * 1024;
+      long this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                          : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
       this_max_page_size = min(this_max_page_size, max_page_size_bytes);

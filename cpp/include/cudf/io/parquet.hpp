@@ -43,6 +43,7 @@ constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per p
 constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
 constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
 constexpr size_t default_max_dictionary_size             = 1024 * 1024;  ///< 1MB dictionary size
+constexpr size_type default_max_page_fragment_size       = 5000;  ///< 5000 rows per page fragment
 
 class parquet_reader_options_builder;
 
@@ -514,6 +515,8 @@ class parquet_writer_options {
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  size_type _max_page_fragment_size = default_max_page_fragment_size;
 
   /**
    * @brief Constructor from sink and table.
@@ -682,6 +685,13 @@ class parquet_writer_options {
   [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
 
   /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -818,6 +828,13 @@ class parquet_writer_options {
    * @param size_bytes Maximum dictionary size, in bytes
    */
   void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows) { _max_page_fragment_size = size_rows; }
 };
 
 /**
@@ -1037,6 +1054,22 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_page_fragment_size(size_type val)
+  {
+    options.set_max_page_fragment_size(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps
@@ -1129,6 +1162,8 @@ class chunked_parquet_writer_options {
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  size_type _max_page_fragment_size = default_max_page_fragment_size;
 
   /**
    * @brief Constructor from sink.
@@ -1253,6 +1288,13 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
 
   /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1364,6 +1406,13 @@ class chunked_parquet_writer_options {
    * @param size_bytes Maximum dictionary size, in bytes
    */
   void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows) { _max_page_fragment_size = size_rows; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1568,6 +1617,22 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& max_dictionary_size(size_t val)
   {
     options.set_max_dictionary_size(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val)
+  {
+    options.set_max_page_fragment_size(val);
     return *this;
   }
 

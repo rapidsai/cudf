@@ -1286,6 +1286,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     stats_granularity_(options.get_stats_level()),
     dict_policy_(options.get_dictionary_policy()),
     max_dictionary_size_(options.get_max_dictionary_size()),
+    max_page_fragment_size_(options.get_max_page_fragment_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1313,6 +1314,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     stats_granularity_(options.get_stats_level()),
     dict_policy_(options.get_dictionary_policy()),
     max_dictionary_size_(options.get_max_dictionary_size()),
+    max_page_fragment_size_(options.get_max_page_fragment_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1406,16 +1408,18 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
-  auto max_page_fragment_size =
-    (cudf::io::parquet::gpu::max_page_fragment_size * max_page_size_bytes) /
-    default_max_page_size_bytes;
+  // If using the default fragment size, scale it up or down depending on the requested page size.
+  if (max_page_fragment_size_ == cudf::io::default_max_page_fragment_size) {
+    max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
+                              cudf::io::default_max_page_size_bytes;
+  }
 
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                 [this](auto const& part) {
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size_);
                  });
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
@@ -1436,7 +1440,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
+      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size_);
   }
 
   std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
@@ -1508,7 +1512,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = md->file(p).row_groups[global_r];
       uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size_);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {

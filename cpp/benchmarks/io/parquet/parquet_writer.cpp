@@ -123,9 +123,7 @@ void BM_parq_write_io_compression(
                timer.start();
                cudf::io::parquet_writer_options opts =
                  cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-                   //.max_page_size_bytes(1024 * 1024)
-                   //.max_dictionary_size(128 * 1024)
-                   //.max_page_size_rows(100000)
+                   .max_page_fragment_size(1000)
                    .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
                    .compression(compression);
                cudf::io::write_parquet(opts);
