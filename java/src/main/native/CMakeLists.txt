@@ -42,6 +42,7 @@ option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream"
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
+option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
@@ -76,11 +77,6 @@ set(CUDF_CUDA_DEFINITIONS "")
 
 rapids_find_package(CUDAToolkit REQUIRED)
 include(ConfigureCUDA) # set other CUDA compilation flags
-
-# Disable NVTX if necessary
-if(NOT USE_NVTX)
-  target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
-endif()
 
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
@@ -151,6 +147,15 @@ add_library(
   src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
+
+# Disable NVTX if necessary
+if(NOT USE_NVTX)
+  target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
+endif()
+
+if(CUDF_JNI_ENABLE_PROFILING)
+  target_compile_definitions(cudfjni PRIVATE CUDF_JNI_ENABLE_PROFILING)
+endif()
 
 if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
   # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
