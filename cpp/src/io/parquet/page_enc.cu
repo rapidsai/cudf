@@ -357,7 +357,7 @@ __global__ void __launch_bounds__(128)
                                                                           : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
-      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
+      this_max_page_size = min(this_max_page_size, static_cast<long>(max_page_size_bytes));
 
       // subtract size of rep and def level vectors
       auto num_vals = values_in_page + frag_g.num_values;
