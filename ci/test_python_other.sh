@@ -54,10 +54,12 @@ if (( ${exitcode} != 0 )); then
 fi
 popd
 
+set -e
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
   -c "${PYTHON_CHANNEL}" \
   strings_udf
+set +e
 
 rapids-logger "pytest strings_udf"
 pushd python/strings_udf/strings_udf
