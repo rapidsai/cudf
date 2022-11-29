@@ -1804,10 +1804,12 @@ class IndexedFrame(Frame):
         keep : {'first', 'last', False}, default 'first'
             Determines which duplicates (if any) to mark.
 
-            - ``first`` : Mark duplicates as ``True`` except for the first occurrence.
-            - ``last`` : Mark duplicates as ``True`` except for the last occurrence.
-            - False : Mark all duplicates as ``True``.
-        """  # noqa: E501
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+                occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+                occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+        """
         subset = self._preprocess_subset(subset)
 
         if isinstance(self, cudf.Series):

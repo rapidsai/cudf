@@ -3262,9 +3262,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         keep : {'first', 'last', False}, default 'first'
             Determines which duplicates (if any) to mark.
 
-            - ``first`` : Mark duplicates as ``True`` except for the first occurrence.
-            - ``last`` : Mark duplicates as ``True`` except for the last occurrence.
-            - False : Mark all duplicates as ``True``.
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+                occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+                occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
 
         Returns
         -------
@@ -3284,7 +3286,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         >>> import cudf
         >>> df = cudf.DataFrame({
-        ...     'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
+        ...     'brand': ['Yum Yum', 'Yum Yum', 'Maggie', 'Maggie', 'Maggie'],
         ...     'style': ['cup', 'cup', 'cup', 'pack', 'pack'],
         ...     'rating': [4, 4, 3.5, 15, 5]
         ... })
@@ -3292,9 +3294,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
              brand style  rating
         0  Yum Yum   cup     4.0
         1  Yum Yum   cup     4.0
-        2  Indomie   cup     3.5
-        3  Indomie  pack    15.0
-        4  Indomie  pack     5.0
+        2   Maggie   cup     3.5
+        3   Maggie  pack    15.0
+        4   Maggie  pack     5.0
 
         By default, for each set of duplicated values, the first occurrence
         is set to False and all others to True.
@@ -3337,7 +3339,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     True
         4     True
         dtype: bool
-        """  # noqa: E501
+        """
         return super().duplicated(subset=subset, keep=keep)
 
     @_cudf_nvtx_annotate
