@@ -306,7 +306,7 @@ ConfigureTest(
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/indexalator_test.cu
-  iterator/scan_reduce_iterator_test.cu
+  iterator/sizes_to_offsets_iterator_test.cu
 )
 
 # ##################################################################################################

@@ -17,7 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/scan_reduce_iterator.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -111,8 +111,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   for_each_fn(size_and_exec_fn);
 
   // Convert the sizes to offsets
-  auto const bytes = cudf::detail::exclusive_scan_reduce(
-    d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  auto const bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds column size limit");
 

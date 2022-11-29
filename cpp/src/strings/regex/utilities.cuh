@@ -19,7 +19,7 @@
 #include <strings/regex/regex.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/scan_reduce_iterator.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 
@@ -131,8 +131,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
       size_and_exec_fn, d_prog, strings_count);
   }
 
-  auto const char_bytes = cudf::detail::exclusive_scan_reduce(
-    d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  auto const char_bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(char_bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds column size limit");
 

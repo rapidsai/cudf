@@ -17,7 +17,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/scan_reduce_iterator.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_scalar.hpp>
@@ -32,35 +32,35 @@
 using TestingTypes = cudf::test::IntegralTypesNotBool;
 
 template <typename T>
-struct ScanReduceIteratorTest : public cudf::test::BaseFixture {
+struct SizesToOffsetsIteratorTestTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(ScanReduceIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(SizesToOffsetsIteratorTestTyped, TestingTypes);
 
-TYPED_TEST(ScanReduceIteratorTest, ScanReduce)
+TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
 {
   using T  = TypeParam;
-  using RT = int64_t;
+  using LT = int64_t;
 
   auto stream = cudf::get_default_stream();
 
-  auto host_values = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
+  auto sizes = std::vector<T>({0, 6, 0, 14, 13, 64, 10, 20, 41});
 
-  auto d_col  = cudf::test::fixed_width_column_wrapper<T>(host_values.begin(), host_values.end());
+  auto d_col  = cudf::test::fixed_width_column_wrapper<T>(sizes.begin(), sizes.end());
   auto d_view = cudf::column_view(d_col);
 
-  auto reduction = rmm::device_scalar<RT>(0, stream);
-  auto result    = rmm::device_uvector<T>(d_view.size(), stream);
+  auto last   = rmm::device_scalar<LT>(0, stream);
+  auto result = rmm::device_uvector<T>(d_view.size(), stream);
   auto output_itr =
-    cudf::detail::make_scan_reduce_output_iterator(result.begin(), result.end(), reduction.data());
+    cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, RT{0});
+    rmm::exec_policy(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, LT{0});
 
-  auto expected_values = thrust::host_vector<T>(host_values.size());
-  std::exclusive_scan(host_values.begin(), host_values.end(), expected_values.begin(), T{0});
-  auto expected_reduce = static_cast<RT>(
-    std::reduce(host_values.begin(), host_values.begin() + host_values.size() - 1, T{0}));
+  auto expected_values = std::vector<T>(sizes.size());
+  std::exclusive_scan(sizes.begin(), sizes.end(), expected_values.begin(), T{0});
+  auto expected_reduce =
+    static_cast<LT>(std::reduce(sizes.begin(), sizes.begin() + sizes.size() - 1, T{0}));
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<T>(expected_values.begin(), expected_values.end());
@@ -68,13 +68,13 @@ TYPED_TEST(ScanReduceIteratorTest, ScanReduce)
     cudf::column_view(cudf::data_type(cudf::type_to_id<T>()), d_view.size(), result.data());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_col, expected);
-  EXPECT_EQ(reduction.value(stream), expected_reduce);
+  EXPECT_EQ(last.value(stream), expected_reduce);
 }
 
-struct ScanReduceIteratorIntTest : public cudf::test::BaseFixture {
+struct SizesToOffsetsIteratorTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ScanReduceIteratorIntTest, ScanWithOverflow)
+TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
 {
   auto stream = cudf::get_default_stream();
 
@@ -83,10 +83,10 @@ TEST_F(ScanReduceIteratorIntTest, ScanWithOverflow)
     cudf::test::fixed_width_column_wrapper<int32_t>(host_values.begin(), host_values.end());
   auto d_view = cudf::column_view(d_col);
 
-  auto reduction = rmm::device_scalar<int64_t>(0, stream);
-  auto result    = rmm::device_uvector<int32_t>(d_view.size(), stream);
+  auto last   = rmm::device_scalar<int64_t>(0, stream);
+  auto result = rmm::device_uvector<int32_t>(d_view.size(), stream);
   auto output_itr =
-    cudf::detail::make_scan_reduce_output_iterator(result.begin(), result.end(), reduction.data());
+    cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
 
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          d_view.begin<int32_t>(),
@@ -96,5 +96,5 @@ TEST_F(ScanReduceIteratorIntTest, ScanWithOverflow)
 
   auto expected = static_cast<int64_t>(
     std::reduce(host_values.begin(), host_values.begin() + host_values.size() - 1, int64_t{0}));
-  EXPECT_EQ(reduction.value(stream), expected);
+  EXPECT_EQ(last.value(stream), expected);
 }
