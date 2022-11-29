@@ -222,11 +222,12 @@ struct JsonFixedPointReaderTest : public JsonReaderTest {
                 numeric::scale_type scale,
                 bool use_experimental_parser)
   {
-    cudf::test::strings_column_wrapper strings(reference_strings.begin(), reference_strings.end());
-    auto input_column = cudf::strings::to_fixed_point(cudf::strings_column_view(strings),
-                                                      data_type{type_to_id<DecimalType>(), scale});
+    cudf::test::strings_column_wrapper const strings(reference_strings.begin(),
+                                                     reference_strings.end());
+    auto const expected = cudf::strings::to_fixed_point(
+      cudf::strings_column_view(strings), data_type{type_to_id<DecimalType>(), scale});
 
-    std::string buffer =
+    auto const buffer =
       std::accumulate(reference_strings.begin(),
                       reference_strings.end(),
                       std::string{},
@@ -234,18 +235,18 @@ struct JsonFixedPointReaderTest : public JsonReaderTest {
                         return acc + (acc.empty() ? "" : "\n") + "{\"col0\":" + rhs + "}";
                       });
 
-    cudf::io::json_reader_options in_opts =
+    cudf::io::json_reader_options const in_opts =
       cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .dtypes({data_type{type_to_id<DecimalType>(), scale}})
         .lines(true)
         .experimental(use_experimental_parser);
 
-    const auto result      = cudf::io::read_json(in_opts);
-    const auto result_view = result.tbl->view();
+    auto const result      = cudf::io::read_json(in_opts);
+    auto const result_view = result.tbl->view();
 
     ASSERT_EQ(result_view.num_columns(), 1);
     EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_column, result_view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, result_view.column(0));
   }
 
   void run_tests(std::vector<std::string> const& reference_strings, numeric::scale_type scale)
