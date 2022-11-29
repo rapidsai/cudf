@@ -756,8 +756,8 @@ class parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+      size_bytes >= 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -768,9 +768,7 @@ class parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
     _row_group_size_rows = size_rows;
   }
 
@@ -781,7 +779,7 @@ class parquet_writer_options {
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -792,9 +790,7 @@ class parquet_writer_options {
    */
   void set_max_page_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
     _max_page_size_rows = size_rows;
   }
 
@@ -1306,8 +1302,8 @@ class chunked_parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+      size_bytes >= 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -1318,9 +1314,7 @@ class chunked_parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
     _row_group_size_rows = size_rows;
   }
 
@@ -1331,7 +1325,7 @@ class chunked_parquet_writer_options {
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -1342,9 +1336,7 @@ class chunked_parquet_writer_options {
    */
   void set_max_page_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
     _max_page_size_rows = size_rows;
   }
 
