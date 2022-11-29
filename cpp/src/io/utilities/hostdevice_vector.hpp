@@ -56,7 +56,8 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    auto const use_pageable_buffer = cudf::io::detail::getenv_or("LIBCUDF_AVOID_PINNED_MEMORY", 0);
+    auto const use_pageable_buffer =
+      cudf::io::detail::getenv_or("LIBCUDF_PREFER_PAGEABLE_MEMORY", 0);
     if (use_pageable_buffer) {
       h_data_owner = thrust::host_vector<T>();
       std::get<0>(h_data_owner).reserve(max_size);
@@ -68,6 +69,7 @@ class hostdevice_vector {
       std::get<1>(h_data_owner).resize(initial_size);
       host_data = std::get<1>(h_data_owner).data();
     }
+
     current_size = initial_size;
     d_data.resize(max_size, stream);
   }
