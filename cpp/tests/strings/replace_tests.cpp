@@ -235,15 +235,15 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
 
   auto results =
     cudf::strings::replace(strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::CHAR_PARALLEL>(
     strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "), -1, stream, mr);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::ROW_PARALLEL>(
     strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "), -1, stream, mr);
-  cudf::test::expect_columns_equal(*results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceTest, ReplaceSlice)

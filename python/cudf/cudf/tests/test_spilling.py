@@ -298,6 +298,21 @@ def test_zero_device_limit(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
 
 
+def test_spill_df_index(manager: SpillManager):
+    df = single_column_df()
+    df.index = [1, 3, 2]  # use a materialized index
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes * 2)
+
+    manager.spill_to_device_limit(gen_df_data_nbytes)
+    assert spilled_and_unspilled(manager) == (
+        gen_df_data_nbytes,
+        gen_df_data_nbytes,
+    )
+
+    manager.spill_to_device_limit(0)
+    assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
+
+
 def test_external_memory_never_spills(manager):
     """
     Test that external data, i.e., data not managed by RMM,
