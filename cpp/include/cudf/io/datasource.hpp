@@ -117,7 +117,7 @@ class datasource {
    * @param buffer Device buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(cudf::device_span<uint8_t> buffer);
+  static std::unique_ptr<datasource> create(device_buffer const& buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
