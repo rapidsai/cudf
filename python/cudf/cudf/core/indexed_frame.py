@@ -1768,18 +1768,7 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
+        subset = self._preprocess_subset(subset)
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
@@ -1819,18 +1808,7 @@ class IndexedFrame(Frame):
             - ``last`` : Mark duplicates as ``True`` except for the last occurrence.
             - False : Mark all duplicates as ``True``.
         """  # noqa: E501
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
+        subset = self._preprocess_subset(subset)
 
         if isinstance(self, cudf.Series):
             df = self.to_frame(name="None")
@@ -2755,18 +2733,7 @@ class IndexedFrame(Frame):
             If specified, then drops every row containing
             less than `thresh` non-null values.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
+        subset = self._preprocess_subset(subset)
 
         if len(subset) == 0:
             return self.copy(deep=True)
@@ -4686,6 +4653,21 @@ class IndexedFrame(Frame):
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
+
+    def _preprocess_subset(self, subset):
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+        return subset
 
     @_cudf_nvtx_annotate
     def rank(
