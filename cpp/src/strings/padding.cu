@@ -106,8 +106,8 @@ std::unique_ptr<column> pad(strings_column_view const& input,
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
-  char_utf8 d_fill_char    = 0;
-  size_type fill_char_size = to_char_utf8(fill_char.data(), d_fill_char);
+  auto d_fill_char          = char_utf8{0};
+  auto const fill_char_size = to_char_utf8(fill_char.data(), d_fill_char);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
