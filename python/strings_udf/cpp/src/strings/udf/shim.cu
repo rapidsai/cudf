@@ -339,11 +339,7 @@ extern "C" __device__ int replace(
   auto replacement_ptr = reinterpret_cast<cudf::string_view const*>(replacement);
 
   auto udf_str_ptr = new (udf_str) udf_string;
-  udf_string result;
-
-  result = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
-
-  *udf_str_ptr = result;
+  *udf_str_ptr = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
 
   return 0;
 }
