@@ -58,7 +58,7 @@ class hostdevice_vector {
 
     auto const use_pageable_buffer =
       cudf::io::detail::getenv_or("LIBCUDF_PREFER_PAGEABLE_MEMORY", 0);
-    auto const allocate_data = [&] (auto& h_data) {
+    auto const allocate_data = [&](auto& h_data) {
       h_data.reserve(max_size);
       h_data.resize(initial_size);
       host_data = h_data.data();
