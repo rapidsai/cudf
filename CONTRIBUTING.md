@@ -99,13 +99,13 @@ cd $CUDF_HOME
 **Note:** Using a conda environment is the easiest way to satisfy the library's dependencies.
 Instructions for a minimal build environment without conda are included below.
 
-- Create the conda development environment `cudf_dev`:
+- Create the conda development environment:
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
+conda env create --name cudf_dev --file conda/environments/all_cuda-115_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -113,9 +113,6 @@ conda activate cudf_dev
 - **Note**: the conda environment files are updated frequently, so the
   development environment may also need to be updated if dependency versions or
   pinnings are changed.
-
-- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
-  `conda/environments/`.
 
 #### Building without a conda environment
 
@@ -379,6 +376,11 @@ pre-commit install
 Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
+
+cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
+mistakes, and this check is run as part of the pre-commit hook. To apply the suggested spelling
+fixes, you can run  `codespell -i 3 -w .` from the command-line in the cuDF root directory.
+This will bring up an interactive prompt to select which spelling fixes to apply.
 
 ## Developer Guidelines
 

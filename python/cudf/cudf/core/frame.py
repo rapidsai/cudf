@@ -321,15 +321,19 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
-        result = {}
+        result_data = {}
         for col_name, col in self._data.items():
             dt = dtype.get(col_name, col.dtype)
             if not is_dtype_equal(dt, col.dtype):
-                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
             else:
-                result[col_name] = col.copy() if copy else col
+                result_data[col_name] = col.copy() if copy else col
 
-        return result
+        return ColumnAccessor._create_unsafe(
+            data=result_data,
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+        )
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -1210,7 +1214,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1289,7 +1293,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns

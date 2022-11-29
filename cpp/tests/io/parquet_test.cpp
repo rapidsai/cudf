@@ -66,8 +66,8 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 bool include_validity,
                                                 Elements elements)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
   for (int idx = 0; idx < num_columns; idx++) {
     if (include_validity) {
@@ -2698,7 +2698,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
                                      c1_floats.release(),
                                      cudf::UNKNOWN_NULL_COUNT,
                                      cudf::test::detail::make_null_mask(valids, valids + num_rows));
-  auto c1  = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c1));
+  auto c1  = cudf::purge_nonempty_nulls(*_c1);
 
   // list<list<int>>
   auto c2 = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
@@ -2727,7 +2727,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
                             string_col.release(),
                             cudf::UNKNOWN_NULL_COUNT,
                             cudf::test::detail::make_null_mask(valids, valids + num_rows));
-  auto c3_list = cudf::purge_nonempty_nulls(static_cast<cudf::lists_column_view>(*_c3_list));
+  auto c3_list = cudf::purge_nonempty_nulls(*_c3_list);
   cudf::test::fixed_width_column_wrapper<int> c3_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> c3_floats(values, values + num_rows, valids);
   std::vector<std::unique_ptr<cudf::column>> c3_children;
@@ -2735,7 +2735,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   c3_children.push_back(c3_ints.release());
   c3_children.push_back(c3_floats.release());
   cudf::test::structs_column_wrapper _c3(std::move(c3_children), c3_valids);
-  auto c3 = cudf::purge_nonempty_nulls(static_cast<cudf::structs_column_view>(_c3));
+  auto c3 = cudf::purge_nonempty_nulls(_c3);
 
   // write it out
   cudf::table_view tbl({c0, *c1, *c2, *c3});
@@ -3763,7 +3763,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < num_ordered_rows / 2 ? false : true; });
+    0, [](auto i) { return i >= num_ordered_rows / 2; });
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 
@@ -3771,7 +3771,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < num_ordered_rows / 2 ? true : false; });
+    0, [](auto i) { return i < num_ordered_rows / 2; });
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 

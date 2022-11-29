@@ -114,7 +114,7 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  *
  * @param[in] options View of inference options
  * @param[in] data JSON string input
- * @param[in] column_strings_begin The begining of an offset-length tuple sequence
+ * @param[in] column_strings_begin The beginning of an offset-length tuple sequence
  * @param[in] size Size of the string input
  * @param[out] column_info Histogram of column type counters
  */
@@ -234,7 +234,7 @@ __global__ void infer_column_type_kernel(OptionsView options,
  *
  * @param options View of inference options
  * @param data JSON string input
- * @param column_strings_begin The begining of an offset-length tuple sequence
+ * @param column_strings_begin The beginning of an offset-length tuple sequence
  * @param size Size of the string input
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A histogram containing column-specific type counters
@@ -272,7 +272,7 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
  *
  * @param options View of inference options
  * @param data JSON string input
- * @param column_strings_begin The begining of an offset-length tuple sequence
+ * @param column_strings_begin The beginning of an offset-length tuple sequence
  * @param size Size of the string input
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The inferred data type

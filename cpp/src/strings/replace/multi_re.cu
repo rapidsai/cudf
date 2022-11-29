@@ -15,6 +15,7 @@
  */
 
 #include <strings/regex/regex.cuh>
+#include <strings/regex/regex_program_impl.h>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -22,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -144,7 +146,8 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
     patterns.size());
   std::transform(
     patterns.begin(), patterns.end(), h_progs.begin(), [flags, stream](auto const& ptn) {
-      return reprog_device::create(ptn, flags, capture_groups::NON_CAPTURE, stream);
+      auto h_prog = regex_program::create(ptn, flags, capture_groups::NON_CAPTURE);
+      return regex_device_builder::create_prog_device(*h_prog, stream);
     });
 
   // get the longest regex for the dispatcher

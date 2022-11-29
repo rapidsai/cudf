@@ -281,6 +281,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def hasnans(self):
+        return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
             {self.name: self._values}
@@ -1290,8 +1295,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only incase of non-StringIndex types,
-                # as we want to preserve single quotes incase
+                # to happen only in case of non-StringIndex types,
+                # as we want to preserve single quotes in case
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
@@ -1390,6 +1395,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def is_interval(self):
         return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        return self._column.has_nulls(include_nan=True)
 
     @_cudf_nvtx_annotate
     def argsort(
@@ -2072,7 +2082,10 @@ class DatetimeIndex(GenericIndex):
         """  # noqa: E501
         return as_index(
             (
-                self._values.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self._values.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self._values.get_dt_field("microsecond"),

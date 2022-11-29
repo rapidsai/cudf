@@ -671,6 +671,48 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return [self.index]
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        """
+        Return True if there are any NaNs or nulls.
+
+        Returns
+        -------
+        out : bool
+            If Series has at least one NaN or null value, return True,
+            if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, 3, 4], nan_as_null=False)
+        >>> series
+        0    1.0
+        1    2.0
+        2    NaN
+        3    3.0
+        4    4.0
+        dtype: float64
+        >>> series.hasnans
+        True
+
+        `hasnans` returns `True` for the presence of any `NA` values:
+
+        >>> series = cudf.Series([1, 2, 3, None, 4])
+        >>> series
+        0       1
+        1       2
+        2       3
+        3    <NA>
+        4       4
+        dtype: int64
+        >>> series.hasnans
+        True
+        """
+        return self._column.has_nulls(include_nan=True)
+
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
@@ -730,6 +772,45 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().drop(
             labels, axis, index, columns, level, inplace, errors
         )
+
+    @_cudf_nvtx_annotate
+    def to_dict(self, into: type[dict] = dict) -> dict:
+        """
+        Convert Series to {label -> value} dict or dict-like object.
+
+        Parameters
+        ----------
+        into : class, default dict
+            The collections.abc.Mapping subclass to use as the return
+            object. Can be the actual class or an empty
+            instance of the mapping type you want.  If you want a
+            collections.defaultdict, you must pass it initialized.
+
+        Returns
+        -------
+        collections.abc.Mapping
+            Key-value representation of Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.to_dict()
+        {0: 1, 1: 2, 2: 3, 3: 4}
+        >>> from collections import OrderedDict, defaultdict
+        >>> s.to_dict(OrderedDict)
+        OrderedDict([(0, 1), (1, 2), (2, 3), (3, 4)])
+        >>> dd = defaultdict(list)
+        >>> s.to_dict(dd)
+        defaultdict(<class 'list'>, {0: 1, 1: 2, 2: 3, 3: 4})
+        """
+        return self.to_pandas().to_dict(into=into)
 
     @_cudf_nvtx_annotate
     def append(self, to_append, ignore_index=False, verify_integrity=False):
@@ -3621,7 +3702,10 @@ class DatetimeProperties:
         """
         return Series(
             data=(
-                self.series._column.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self.series._column.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self.series._column.get_dt_field("microsecond"),

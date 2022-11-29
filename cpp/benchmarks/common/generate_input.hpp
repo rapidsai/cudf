@@ -430,7 +430,7 @@ class data_profile {
  * initialization. The `profile` object in the example above is initialized from
  * `data_profile_builder` using an implicit conversion operator.
  *
- * The builder API also includes a few additional convinience setters:
+ * The builder API also includes a few additional convenience setters:
  * Overload of `distribution` that only takes the distribution type (not the range).
  * `no_validity`, which is a simpler equivalent of `null_probability(std::nullopr)`.
  */

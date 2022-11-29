@@ -35,7 +35,7 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, as_buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -225,10 +225,18 @@ class NumericalColumn(NumericalBaseColumn):
                     (tmp.dtype.type in int_float_dtype_mapping)
                     and (tmp.dtype.type != np.bool_)
                     and (
-                        (np.isscalar(tmp) and (0 == tmp))
-                        or (
-                            (isinstance(tmp, NumericalColumn)) and (0.0 in tmp)
+                        (
+                            (
+                                np.isscalar(tmp)
+                                or (
+                                    isinstance(tmp, cudf.Scalar)
+                                    # host to device copy
+                                    and tmp.is_valid()
+                                )
+                            )
+                            and (0 == tmp)
                         )
+                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
                     )
                 ):
                     out_dtype = cudf.dtype("float64")
@@ -274,7 +282,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> Union[ColumnBase, cudf.Scalar]:
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalColumn):
                 return NotImplemented
@@ -285,25 +293,24 @@ class NumericalColumn(NumericalBaseColumn):
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
-        other_dtype = np.min_scalar_type(other)
-        if other_dtype.kind in {"b", "i", "u", "f"}:
-            if isinstance(other, cudf.Scalar):
-                return other
-            other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype("float16"):
-                other_dtype = cudf.dtype("float32")
-                other = other_dtype.type(other)
+        # Try and match pandas and hence numpy. Deduce the common
+        # dtype via the _value_ of other, and the dtype of self. TODO:
+        # When NEP50 is accepted, this might want changed or
+        # simplified.
+        # This is not at all simple:
+        # np.result_type(np.int64(0), np.uint8)
+        #   => np.uint8
+        # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.int64(0), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
+        #   => np.int64
+        common_dtype = np.result_type(self.dtype, other)
+        if common_dtype.kind in {"b", "i", "u", "f"}:
             if self.dtype.kind == "b":
-                other_dtype = min_signed_type(other)
-            if np.isscalar(other):
-                return cudf.dtype(other_dtype).type(other)
-            else:
-                ary = full(len(self), other, dtype=other_dtype)
-                return column.build_column(
-                    data=as_buffer(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
-                )
+                common_dtype = min_signed_type(other)
+            return cudf.Scalar(other, dtype=common_dtype)
         else:
             return NotImplemented
 

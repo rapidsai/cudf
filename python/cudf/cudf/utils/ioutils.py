@@ -1011,7 +1011,7 @@ pycapsule_obj : PyCapsule
 doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
 
 _docstring_read_csv = """
-Load a comma-seperated-values (CSV) dataset into a DataFrame
+Load a comma-separated-values (CSV) dataset into a DataFrame
 
 Parameters
 ----------
@@ -1029,16 +1029,22 @@ header : int, default 'infer'
     the column names: if no names are passed, header=0;
     if column names are passed explicitly, header=None.
 names : list of str, default None
-    List of column names to be used.
+    List of column names to be used. Needs to include names of all columns in
+    the file, or names of all columns selected using `usecols` (only when
+    `usecols` holds integer indices). When `usecols` is not used to select
+    column indices, `names` can contain more names than there are columns i.n
+    the file. In this case the extra columns will only contain null rows.
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
 usecols : list of int or str, default None
     Returns subset of the columns given in the list. All elements must be
     either integer indices (column number) or strings that correspond to
-    column names
+    column names. When an integer index is passed for each name in the `names`
+    parameter, the names are interpreted as names in the output table, not as
+    names in the input file.
 prefix : str, default None
-    Prefix to add to column numbers when parsing without a header row
+    Prefix to add to column numbers when parsing without a header row.
 mangle_dupe_cols : boolean, default True
     Duplicate columns will be specified as 'X','X.1',...'X.N'.
 dtype : type, str, list of types, or dict of column -> type, default None
@@ -1953,7 +1959,15 @@ def _fsspec_data_transfer(
 
     # Calculate total file size
     if file_like:
-        file_size = path_or_fob.size
+        try:
+            file_size = path_or_fob.size
+        except AttributeError:
+            # Find file size if there is no `size`
+            # attribute
+            old_file_position = path_or_fob.tell()
+            path_or_fob.seek(0, os.SEEK_END)
+            file_size = path_or_fob.tell()
+            path_or_fob.seek(old_file_position, os.SEEK_SET)
     file_size = file_size or fs.size(path_or_fob)
 
     # Check if a direct read makes the most sense

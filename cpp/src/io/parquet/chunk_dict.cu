@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>

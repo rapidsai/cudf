@@ -712,7 +712,7 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
 def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     # Check that we can read a file opened with the
-    # Arrow FileSystem inferface
+    # Arrow FileSystem interface
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
@@ -2520,6 +2520,15 @@ def test_parquet_reader_one_level_list(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_binary_decimal(datadir):
+    fname = datadir / "binary_decimal.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
 # testing a specific bug-fix/edge case.
 # specifically:  int a parquet file containing a particular way of representing
 #                a list column in a schema, the cudf reader was confusing
@@ -2658,11 +2667,11 @@ def test_parquet_writer_zstd():
 
     buff = BytesIO()
     try:
-        expected.to_orc(buff, compression="ZSTD")
+        expected.to_parquet(buff, compression="ZSTD")
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
     else:
-        got = pd.read_orc(buff)
+        got = pd.read_parquet(buff)
         assert_eq(expected, got)
 
 

@@ -1179,8 +1179,9 @@ __global__ void __launch_bounds__(256)
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    inputs[ss.first_block + b]  = {src + b * comp_blk_size, blk_size};
-    auto const dst_offset       = b * (padded_block_header_size + padded_comp_block_size);
+    inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset =
+      padded_block_header_size + b * (padded_block_header_size + padded_comp_block_size);
     outputs[ss.first_block + b] = {dst + dst_offset, max_comp_blk_size};
     results[ss.first_block + b] = {0, compression_status::FAILURE};
   }
@@ -1234,7 +1235,9 @@ __global__ void __launch_bounds__(1024)
                        ? results[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
-      if (results[ss.first_block + b].status == compression_status::SUCCESS) {
+      // Only use the compressed block if it's smaller than the uncompressed
+      // If compression failed, dst_len == src_len, so the uncompressed block will be used
+      if (src_len < dst_len) {
         // Copy from uncompressed source
         src                                       = inputs[ss.first_block + b].data();
         results[ss.first_block + b].bytes_written = src_len;
@@ -1332,11 +1335,11 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
 
   if (compression == SNAPPY) {
     try {
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
+        gpu_snap(comp_in, comp_out, comp_res, stream);
+      } else {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      } else {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
     } catch (...) {
       // There was an error in compressing so set an error status for each block
@@ -1348,12 +1351,18 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
       // Since SNAPPY is the default compression (may not be explicitly requested), fall back to
       // writing without compression
     }
-  } else if (compression == ZLIB and
-             nvcomp::is_compression_enabled(nvcomp::compression_type::DEFLATE)) {
+  } else if (compression == ZLIB) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
     nvcomp::batched_compress(
       nvcomp::compression_type::DEFLATE, comp_in, comp_out, comp_res, stream);
-  } else if (compression == ZSTD and
-             nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
+  } else if (compression == ZSTD) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
