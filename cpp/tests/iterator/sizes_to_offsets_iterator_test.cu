@@ -78,9 +78,8 @@ TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
 {
   auto stream = cudf::get_default_stream();
 
-  std::vector<int32_t> host_values(30000, 100000);
-  auto d_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>(host_values.begin(), host_values.end());
+  std::vector<int32_t> values(30000, 100000);
+  auto d_col  = cudf::test::fixed_width_column_wrapper<int32_t>(values.begin(), values.end());
   auto d_view = cudf::column_view(d_col);
 
   auto last   = rmm::device_scalar<int64_t>(0, stream);
@@ -95,6 +94,6 @@ TEST_F(SizesToOffsetsIteratorTest, ScanWithOverflow)
                          int64_t{0});
 
   auto expected = static_cast<int64_t>(
-    std::reduce(host_values.begin(), host_values.begin() + host_values.size() - 1, int64_t{0}));
+    std::reduce(values.begin(), values.begin() + values.size() - 1, int64_t{0}));
   EXPECT_EQ(last.value(stream), expected);
 }

@@ -33,7 +33,7 @@ namespace detail {
  * Use cudf::detail::make_sizes_to_offsets_iterator to create an instance of this class.
  *
  * @tparam ScanIterator Output iterator type for use in a scan operation
- * @tparam LastType Type used for final scan result
+ * @tparam LastType Type used for final scan element
  */
 template <typename ScanIterator, typename LastType>
 struct sizes_to_offsets_iterator {
@@ -201,7 +201,7 @@ struct sizes_to_offsets_iterator {
  *                                            result.end(),
  *                                            last.data());
  *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, itr, int64_t{0});
- *  // last contains value of the last element in the scan result
+ *  // last contains value of the final element in the scan result
  * @endcode
  *
  * @tparam ScanIterator Output iterator type for use in a scan operation
@@ -209,14 +209,14 @@ struct sizes_to_offsets_iterator {
  *
  * @param begin Output iterator for scan
  * @param end End of the output iterator for scan
- * @param reduction Reduce operation result is stored here
+ * @param last Last element in the scan is stored here
  * @return Instance of iterator
  */
 template <typename ScanIterator, typename LastType>
 static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_iterator(
-  ScanIterator begin, ScanIterator end, LastType* reduction)
+  ScanIterator begin, ScanIterator end, LastType* last)
 {
-  return sizes_to_offsets_iterator<ScanIterator, LastType>(begin, end, reduction);
+  return sizes_to_offsets_iterator<ScanIterator, LastType>(begin, end, last);
 }
 
 /**
@@ -227,8 +227,8 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *
  * This implementation will return the last element in `int64_t` or `uint64_t` precision
  * as appropriate regardless of the input or result types.
- * This can be used to check if the scan will overflow when the input and result are declared
- * as smaller types.
+ * This can be used to check if the scan operation overflows when the input and result are
+ * declared as smaller types.
  *
  * Only integral types for input and result types are supported.
  *
