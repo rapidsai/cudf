@@ -254,6 +254,13 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cuda-nvtx=11.5
   test_python:
     common:
       - output_types: [conda, requirements]
