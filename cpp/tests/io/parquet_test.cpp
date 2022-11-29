@@ -66,8 +66,8 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 bool include_validity,
                                                 Elements elements)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
   for (int idx = 0; idx < num_columns; idx++) {
     if (include_validity) {
@@ -3763,7 +3763,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < num_ordered_rows / 2 ? false : true; });
+    0, [](auto i) { return i >= num_ordered_rows / 2; });
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 
@@ -3771,7 +3771,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < num_ordered_rows / 2 ? true : false; });
+    0, [](auto i) { return i < num_ordered_rows / 2; });
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 

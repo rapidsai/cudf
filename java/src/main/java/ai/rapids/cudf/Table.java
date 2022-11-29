@@ -3306,7 +3306,7 @@ public final class Table implements AutoCloseable {
    * {@link #convertToRowsFixedWidthOptimized()}.
    *
    * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
-   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle roughly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
    * can only handle columns less than 100
    */
   public ColumnVector[] convertToRows() {

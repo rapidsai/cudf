@@ -137,7 +137,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
     auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
-      - input_data[input_view.offset()]               // subract first offset if non-zero
+      - input_data[input_view.offset()]               // subtract first offset if non-zero
       + partition_offsets[partition_index];           // add offset of source column
 
     if (Nullable) {

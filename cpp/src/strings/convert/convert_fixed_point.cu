@@ -24,8 +24,7 @@
 #include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

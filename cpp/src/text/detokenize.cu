@@ -22,8 +22,8 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -148,7 +148,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
                "Parameter row_indices must be the same size as the input column");
-  CUDF_EXPECTS(row_indices.has_nulls() == false, "Parameter row_indices must not have nulls");
+  CUDF_EXPECTS(not row_indices.has_nulls(), "Parameter row_indices must not have nulls");
 
   auto tokens_counts = strings.size();
   if (tokens_counts == 0)  // if no input strings, return an empty column
