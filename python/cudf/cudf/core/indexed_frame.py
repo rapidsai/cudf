@@ -1818,7 +1818,7 @@ class IndexedFrame(Frame):
             - ``first`` : Mark duplicates as ``True`` except for the first occurrence.
             - ``last`` : Mark duplicates as ``True`` except for the last occurrence.
             - False : Mark all duplicates as ``True``.
-        """  # noqa: E501
+        """
         if subset is None:
             subset = self._column_names
         elif (
