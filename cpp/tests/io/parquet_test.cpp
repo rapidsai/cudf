@@ -3505,32 +3505,32 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 
   EXPECT_THROW(cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer),
                                                          unused_table->view())
-                 .row_group_size_rows(4999),
+                 .row_group_size_rows(0),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer),
                                                          unused_table->view())
-                 .max_page_size_rows(4999),
+                 .max_page_size_rows(0),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer),
                                                          unused_table->view())
-                 .row_group_size_bytes(3 << 10),
+                 .row_group_size_bytes(512),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer),
                                                          unused_table->view())
-                 .max_page_size_bytes(3 << 10),
+                 .max_page_size_bytes(512),
                cudf::logic_error);
 
   EXPECT_THROW(cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(&out_buffer))
-                 .row_group_size_rows(4999),
+                 .row_group_size_rows(0),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(&out_buffer))
-                 .max_page_size_rows(4999),
+                 .max_page_size_rows(0),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(&out_buffer))
-                 .row_group_size_bytes(3 << 10),
+                 .row_group_size_bytes(512),
                cudf::logic_error);
   EXPECT_THROW(cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info(&out_buffer))
-                 .max_page_size_bytes(3 << 10),
+                 .max_page_size_bytes(512),
                cudf::logic_error);
 }
 
