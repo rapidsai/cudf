@@ -163,7 +163,7 @@ TEST_F(SliceListTest, Lists)
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index]);
     }
   }
 
@@ -186,7 +186,7 @@ TEST_F(SliceListTest, Lists)
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index]);
     }
   }
 }
@@ -228,7 +228,7 @@ TEST_F(SliceListTest, ListsWithNulls)
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index]);
     }
   }
 
@@ -253,7 +253,7 @@ TEST_F(SliceListTest, ListsWithNulls)
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-      cudf::test::expect_columns_equivalent(expected[index], result[index]);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index]);
     }
   }
 }

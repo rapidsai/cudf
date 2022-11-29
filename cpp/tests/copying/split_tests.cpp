@@ -2056,6 +2056,6 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
   CUDF_EXPECTS(result.size() == expected.size(), "Split result size mismatch");
 
   for (std::size_t index = 0; index < result.size(); index++) {
-    cudf::test::expect_columns_equivalent(expected[index], result[index].table.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index].table.column(0));
   }
 }

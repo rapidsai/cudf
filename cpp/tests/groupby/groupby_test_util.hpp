@@ -91,7 +91,7 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::test::detail::expect_columns_equivalent(
       expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
   } else {
     auto const sort_order  = sorted_order(result.first->view(), {}, {null_order::AFTER});
@@ -99,7 +99,7 @@ inline void test_single_agg(column_view const& keys,
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), *sorted_keys);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::test::detail::expect_columns_equivalent(
       expect_vals, sorted_vals->get_column(0), debug_output_level::ALL_ERRORS);
   }
 }
@@ -127,7 +127,7 @@ inline void test_single_scan(column_view const& keys,
   auto result = gb_obj.scan(requests);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+  cudf::test::detail::expect_columns_equivalent(
     expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
 }
 
