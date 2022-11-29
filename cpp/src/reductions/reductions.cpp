@@ -70,7 +70,11 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto sorted_indices = sorted_order(table_view{{col}},
+                                           {},
+                                           {null_order::AFTER},
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
         auto col_ptr =
@@ -81,7 +85,11 @@ struct reduce_dispatch_functor {
         auto quantile_agg = static_cast<quantile_aggregation const&>(agg);
         CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto sorted_indices = sorted_order(table_view{{col}},
+                                           {},
+                                           {null_order::AFTER},
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
