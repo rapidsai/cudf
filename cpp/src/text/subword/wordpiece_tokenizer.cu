@@ -520,11 +520,18 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
-  thrust::copy_if(rmm::exec_policy(stream),
-                  device_token_ids.begin(),
-                  device_token_ids.end(),
-                  contiguous_token_ids,
-                  copy_if_fn{});
+  auto const copy_size           =  // thrust::copy_if limited to copying int-max values
+    std::min(device_token_ids.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()));
+  auto ids_itr       = device_token_ids.begin();
+  auto const ids_end = device_token_ids.end();
+  while (ids_itr != ids_end) {
+    auto const copy_end  = (static_cast<std::size_t>(std::distance(ids_itr, ids_end)) <= copy_size)
+                             ? ids_end
+                             : ids_itr + copy_size;
+    contiguous_token_ids = thrust::copy_if(
+      rmm::exec_policy(stream), ids_itr, copy_end, contiguous_token_ids, copy_if_fn{});
+    ids_itr = copy_end;
+  }
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;

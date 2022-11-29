@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import gc
 import io
+import textwrap
 import threading
 import traceback
 import warnings
 import weakref
-from typing import List, Optional, Tuple
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
@@ -46,6 +49,146 @@ def get_rmm_memory_resource_stack(
     return [mr]
 
 
+class SpillStatistics:
+    """Gather spill statistics
+
+    Levels of information gathered:
+      0  - disabled (no overhead).
+      1+ - duration and number of bytes spilled (very low overhead).
+      2+ - a traceback for each time a spillable buffer is exposed
+           permanently (potential high overhead).
+
+    The statistics are printed when spilling-on-demand fails to find
+    any buffer to spill. It is possible to retrieve the statistics
+    manually through the spill manager, see example below.
+
+    Parameters
+    ----------
+    level : int
+        If not 0, enables statistics at the specified level.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> from cudf.core.buffer.spill_manager import get_global_manager
+    >>> manager = get_global_manager()
+    >>> manager.statistics
+    <SpillStatistics level=1>
+    >>> df = cudf.DataFrame({"a": [1,2,3]})
+    >>> manager.spill_to_device_limit(1)  # Spill df
+    24
+    >>> print(get_global_manager().statistics)
+    Spill Statistics (level=1):
+     Spilling (level >= 1):
+      gpu => cpu: 24B in 0.0033579860000827466s
+    """
+
+    @dataclass
+    class Expose:
+        traceback: str
+        count: int = 1
+        total_nbytes: int = 0
+        spilled_nbytes: int = 0
+
+    spill_totals: Dict[Tuple[str, str], Tuple[int, float]]
+
+    def __init__(self, level) -> None:
+        self.lock = threading.Lock()
+        self.level = level
+        self.spill_totals = defaultdict(lambda: (0, 0))
+        # Maps each traceback to a Expose
+        self.exposes: Dict[str, SpillStatistics.Expose] = {}
+
+    def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
+        """Log a (un-)spilling event
+
+        Parameters
+        ----------
+        src : str
+            The memory location before spilling.
+        dst : str
+            The memory location after spilling.
+        nbytes : int
+            Number of bytes (un-)spilled.
+        nbytes : float
+            Elapsed time the event took in seconds.
+        """
+        if self.level < 1:
+            return
+        with self.lock:
+            total_nbytes, total_time = self.spill_totals[(src, dst)]
+            self.spill_totals[(src, dst)] = (
+                total_nbytes + nbytes,
+                total_time + time,
+            )
+
+    def log_expose(self, buf: SpillableBuffer) -> None:
+        """Log an expose event
+
+        We track logged exposes by grouping them by their traceback such
+        that `self.exposes` maps tracebacks (as strings) to their logged
+        data (as `Expose`).
+
+        Parameters
+        ----------
+        buf : spillabe-buffer
+            The buffer being exposed.
+        """
+        if self.level < 2:
+            return
+        with self.lock:
+            tb = get_traceback()
+            stat = self.exposes.get(tb, None)
+            spilled_nbytes = buf.nbytes if buf.is_spilled else 0
+            if stat is None:
+                self.exposes[tb] = self.Expose(
+                    traceback=tb,
+                    total_nbytes=buf.nbytes,
+                    spilled_nbytes=spilled_nbytes,
+                )
+            else:
+                stat.count += 1
+                stat.total_nbytes += buf.nbytes
+                stat.spilled_nbytes += spilled_nbytes
+
+    def __repr__(self) -> str:
+        return f"<SpillStatistics level={self.level}>"
+
+    def __str__(self) -> str:
+        with self.lock:
+            ret = f"Spill Statistics (level={self.level}):\n"
+            if self.level == 0:
+                return ret[:-1] + " N/A"
+
+            # Print spilling stats
+            ret += "  Spilling (level >= 1):"
+            if len(self.spill_totals) == 0:
+                ret += " None"
+            ret += "\n"
+            for (src, dst), (nbytes, time) in self.spill_totals.items():
+                ret += f"    {src} => {dst}: "
+                ret += f"{format_bytes(nbytes)} in {time:.3f}s\n"
+
+            # Print expose stats
+            ret += "  Exposed buffers (level >= 2): "
+            if self.level < 2:
+                return ret + "disabled"
+            if len(self.exposes) == 0:
+                ret += "None"
+            ret += "\n"
+            for s in sorted(self.exposes.values(), key=lambda x: -x.count):
+                ret += textwrap.indent(
+                    (
+                        f"exposed {s.count} times, "
+                        f"total: {format_bytes(s.total_nbytes)}, "
+                        f"spilled: {format_bytes(s.spilled_nbytes)}, "
+                        f"traceback:\n{s.traceback}"
+                    ),
+                    prefix=" " * 4,
+                )
+            return ret[:-1]  # Remove last `\n`
+
+
 class SpillManager:
     """Manager of spillable buffers.
 
@@ -56,9 +199,11 @@ class SpillManager:
     error handler, which will spill spillable buffers in order to free up
     memory.
 
-    When `device_memory_limit=True`, the manager will try keep the device
-    memory usage below the specified limit by spilling of spillable buffers
-    continuously, which will introduce a modest overhead.
+    When `device_memory_limit=<limit-in-bytes>`, the manager will try keep
+    the device memory usage below the specified limit by spilling of spillable
+    buffers continuously, which will introduce a modest overhead.
+    Notice, this is a soft limit. The memory usage might exceed the limit if
+    too many buffers are unspillable.
 
     Parameters
     ----------
@@ -68,21 +213,27 @@ class SpillManager:
         If not None, this is the device memory limit in bytes that triggers
         device to host spilling. The global manager sets this to the value
         of `CUDF_SPILL_DEVICE_LIMIT` or None.
+    statistic_level: int, optional
+        If not 0, enables statistics at the specified level. See
+        SpillStatistics for the different levels.
     """
 
     _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    statistics: SpillStatistics
 
     def __init__(
         self,
         *,
         spill_on_demand: bool = False,
         device_memory_limit: int = None,
+        statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
         self._buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
+        self.statistics = SpillStatistics(statistic_level)
 
         if self._spill_on_demand:
             # Set the RMM out-of-memory handle if not already set
@@ -136,7 +287,8 @@ class SpillManager:
         print(
             f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
             "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}"
+            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+            f"{self.statistics}"
         )
         return False  # Since we didn't find anything to spill, we give up
 
@@ -252,9 +404,13 @@ class SpillManager:
                 unspillable += buf.size
         unspillable_ratio = unspillable / unspilled if unspilled else 0
 
+        dev_limit = "N/A"
+        if self._device_memory_limit is not None:
+            dev_limit = format_bytes(self._device_memory_limit)
+
         return (
             f"<SpillManager spill_on_demand={self._spill_on_demand} "
-            f"device_memory_limit={self._device_memory_limit} | "
+            f"device_memory_limit={dev_limit} | "
             f"{format_bytes(spilled)} spilled | "
             f"{format_bytes(unspilled)} ({unspillable_ratio:.0%}) "
             f"unspilled (unspillable)>"
@@ -292,6 +448,7 @@ def get_global_manager() -> Optional[SpillManager]:
             manager = SpillManager(
                 spill_on_demand=get_option("spill_on_demand"),
                 device_memory_limit=get_option("spill_device_limit"),
+                statistic_level=get_option("spill_stats"),
             )
         set_global_manager(manager)
     return _global_manager

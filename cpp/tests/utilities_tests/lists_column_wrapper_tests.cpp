@@ -1391,8 +1391,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
@@ -1427,8 +1426,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
@@ -1467,7 +1465,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1515,7 +1513,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1580,6 +1578,5 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
       std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
       .release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
