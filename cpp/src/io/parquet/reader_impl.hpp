@@ -225,6 +225,7 @@ class reader::impl {
                         rmm::cuda_stream_view stream);
 
   rowgroup_data read_row_group(row_group_info const& rgi,
+                               cudf::io::parquet::RowGroup const& row_group,
                                size_type const remaining_rows,
                                rmm::cuda_stream_view stream);
 

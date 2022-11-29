@@ -1677,12 +1677,12 @@ std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_p
 }
 
 rowgroup_data reader::impl::read_row_group(row_group_info const& rgi,
+                                           cudf::io::parquet::RowGroup const& row_group,
                                            size_type const remaining_rows,
                                            rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   const auto num_input_columns   = _input_columns.size();
-  const auto& row_group          = _metadata->get_row_group(rgi.index, rgi.source_index);
   auto const row_group_start     = rgi.start_row;
   auto const row_group_source    = rgi.source_index;
   auto const row_group_rows      = std::min<int>(remaining_rows, row_group.num_rows);
@@ -1841,37 +1841,79 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
     };
 
-    constexpr auto num_streams         = 2;
-    constexpr auto num_read_threads    = 2;
-    constexpr auto num_process_threads = 2;
+    constexpr auto num_streams = 2;
 
     auto stream_pool = rmm::cuda_stream_pool(num_streams);
     auto streams     = get_streams(num_streams, stream_pool);
 
-    std::array<rowgroup_data, num_streams> concurrent_tasks;
-    concurrent_tasks[0].stream = streams[0];
-    concurrent_tasks[1].stream = streams[1];
-    auto& read_task            = concurrent_tasks[0];
-    auto& process_task         = concurrent_tasks[1];
-
     fork_stream(streams, _stream);
 
-    auto rowgroup_iter = selected_row_groups.begin();
-    read_task          = read_row_group(*rowgroup_iter++, remaining_rows, read_task.stream);
-    remaining_rows -= read_task.num_rows;
-    std::swap(read_task, process_task);
+    std::mutex queue_mutex;
+    std::deque<rowgroup_data> reads;
 
-    while (rowgroup_iter != selected_row_groups.end()) {
-      read_task = read_row_group(*rowgroup_iter++, remaining_rows, read_task.stream);
-      remaining_rows -= read_task.num_rows;
-      if (process_task.task.valid()) process_task.task.wait();
-      process(process_task);
-      std::swap(read_task, process_task);
+    constexpr bool multi_threaded = false;
+
+    auto spawn_reads = [&]() {
+      CUDF_FUNC_RANGE();
+      for (uint i = 0; i < selected_row_groups.size(); ++i) {
+        auto& rgi             = selected_row_groups[i];
+        const auto& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
+        auto read_data        = read_row_group(
+          selected_row_groups[i], row_group, remaining_rows, streams[i % num_streams]);
+        {
+          const std::scoped_lock lock(queue_mutex);
+          reads.push_back(std::move(read_data));
+        }
+
+        remaining_rows -= row_group.num_rows;
+      }
+      assert(remaining_rows <= 0);
+      return true;
+    };
+
+    if (multi_threaded) {
+      // spawn a thread to burn through queuing all the reads
+      auto read_task = std::async(std::launch::async, spawn_reads);
+
+      while (read_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
+             !reads.empty()) {
+        // attempt to grab from queue and process
+        if (!reads.empty()) {
+          auto read_data = [&]() -> std::optional<cudf::io::detail::parquet::rowgroup_data> {
+            {
+              const std::scoped_lock lock(queue_mutex);
+              if (!reads.empty()) {
+                auto read_data = std::move(reads.front());
+                reads.pop_front();
+                return std::optional<rowgroup_data>(std::move(read_data));
+              }
+            }
+            return std::nullopt;
+          }();
+          if (read_data) {
+            read_data->task.wait();
+            process(*read_data);
+          }
+        }
+        std::this_thread::yield();
+      }
+    } else {
+      // spawn all reads
+      spawn_reads();
+
+      // wait for all the reads
+      for (auto& read : reads) {
+        read.task.wait();
+      }
+
+      // process reads
+      while (!reads.empty()) {
+        auto read_data = std::move(reads.front());
+        reads.pop_front();
+        process(read_data);
+      }
     }
-    if (process_task.task.valid()) process_task.task.wait();
-    process(process_task);
 
-    assert(remaining_rows <= 0);
     join_stream(streams, _stream);
 
     // create the final output cudf columns
