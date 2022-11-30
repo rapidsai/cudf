@@ -764,8 +764,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     [stream](device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
-    auto null_count =
-      cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
+    auto null_count = cudf::UNKNOWN_NULL_COUNT;
+    // TODO compute null count at the end for all column null_masks, or is it needed?
+    //   cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
     // full null_mask is always required for parse_data
     return {json_col.validity.release(), null_count};
     // Note: json_col modified here, moves this memory
@@ -861,10 +862,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {
-        make_structs_column(
-          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
-        column_names};
+      auto ret_col                      = make_structs_column(
+        num_rows, std::move(child_columns), cudf::UNKNOWN_NULL_COUNT, {}, stream, mr);
+      // Adding null_mask later to avoid superimpose_parent_nulls
+      // TODO handle superimpose_parent_nulls later for top level struct columns, and list's
+      // immediate children struct columns.
+      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size() - 1;
