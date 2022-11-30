@@ -100,7 +100,7 @@ def output_xml(entries, sorted_list, args):
     print(xmlstr)
 
 
-# utility converts a millisecond value to a colum width in pixels
+# utility converts a millisecond value to a column width in pixels
 def time_to_width(value, end):
     # map a value from (0,end) to (0,1000)
     r = (float(value) / float(end)) * 1000.0

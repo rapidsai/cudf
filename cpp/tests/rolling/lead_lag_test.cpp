@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, -1, -1, -1, 30, 40, 50, -1, -1, -1},
                                   {1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0}}
@@ -98,7 +98,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, 0, 1, 2, 3, -1, -1, 0, 10, 20, 30},
                                   {0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1}}
@@ -129,7 +129,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, -1, -1, -1, 30, 40, 50, -1, -1, -1},
                                   {1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0}}
@@ -144,7 +144,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, 0, 1, -1, 3, -1, -1, 0, 10, -1, 30},
                                   {0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1}}
@@ -179,7 +179,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
                                  following,
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99, 30, 40, 50, 99, 99, 99},
                                   {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}
@@ -195,7 +195,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{99, 99, 0, 1, -1, 3, 99, 99, 0, 10, -1, 30},
                                   {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1}}
@@ -231,7 +231,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
                                  following,
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, -1, 30, 40, 50, 99, 99, -1},
                                   {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0}}
@@ -247,7 +247,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{-1, 99, 0, 1, -1, 3, 99, 99, 0, 10, -1, 30},
                                   {0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1}}
@@ -282,7 +282,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(30));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_30_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
                                   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
@@ -298,7 +298,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(20));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_20_output_col,
     fixed_width_column_wrapper<T>{{99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99},
                                   {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}
@@ -329,7 +329,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(0));
 
-  expect_columns_equivalent(*lead_0_output_col, *input_col);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*lead_0_output_col, *input_col);
 
   auto const lag_0_output_col =
     cudf::grouped_rolling_window(grouping_keys,
@@ -339,7 +339,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(0));
 
-  expect_columns_equivalent(*lag_0_output_col, *input_col);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*lag_0_output_col, *input_col);
 }
 
 TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
@@ -370,7 +370,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(-3));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_minus_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99, 30, 40, 50, 99, 99, 99},
                                   {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}
@@ -386,7 +386,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(-2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_minus_2_output_col,
     fixed_width_column_wrapper<T>{{99, 99, 0, 1, -1, 3, 99, 99, 0, 10, -1, 30},
                                   {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1}}
@@ -420,7 +420,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99}, {1, 1, 1, 1, 1, 1}}.release()->view());
 
@@ -433,7 +433,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{99, 99, 0, 1, -1, 3}, {1, 1, 1, 1, 0, 1}}.release()->view());
 }
@@ -467,7 +467,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
                                  following,
                                  min_periods,
                                  *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, -1, 99, 99, 99, -1, -1, -1, 99, 99, 99},
                                   {0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1}}
@@ -483,7 +483,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
-  expect_columns_equivalent(
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     *lag_2_output_col,
     fixed_width_column_wrapper<T>{{99, 99, -1, -1, -1, -1, 99, 99, -1, -1, -1, -1},
                                   {1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0}}
@@ -599,22 +599,22 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
 
-  expect_columns_equivalent(lag_1_output_col->view(),
-                            lcw{{{},
-                                 {0, 0},
-                                 {1, 1},
-                                 {2, 2},
-                                 {3, 3, 3},
-                                 {{4, 4, 4, 4}, null_at_2},
-                                 {},
-                                 {0, 0},
-                                 {10, 10},
-                                 {20, 20},
-                                 {30, 30, 30},
-                                 {40, 40, 40, 40}},
-                                nulls_at({0, 3, 6})}
-                              .release()
-                              ->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1_output_col->view(),
+                                      lcw{{{},
+                                           {0, 0},
+                                           {1, 1},
+                                           {2, 2},
+                                           {3, 3, 3},
+                                           {{4, 4, 4, 4}, null_at_2},
+                                           {},
+                                           {0, 0},
+                                           {10, 10},
+                                           {20, 20},
+                                           {30, 30, 30},
+                                           {40, 40, 40, 40}},
+                                          nulls_at({0, 3, 6})}
+                                        .release()
+                                        ->view());
 }
 
 TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
@@ -697,22 +697,22 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
                                  min_periods,
                                  *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
 
-  expect_columns_equivalent(lag_1_output_col->view(),
-                            lcw{{{},
-                                 {0, 0},
-                                 {1, 1},
-                                 {2, 2},
-                                 {3, 3, 3},
-                                 {{4, 4, 4, 4}, null_at_2},
-                                 {},
-                                 {0, 0},
-                                 {10, 10},
-                                 {20, 20},
-                                 {30, 30, 30},
-                                 {40, 40, 40, 40}},
-                                nulls_at({0, 3, 6})}
-                              .release()
-                              ->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1_output_col->view(),
+                                      lcw{{{},
+                                           {0, 0},
+                                           {1, 1},
+                                           {2, 2},
+                                           {3, 3, 3},
+                                           {{4, 4, 4, 4}, null_at_2},
+                                           {},
+                                           {0, 0},
+                                           {10, 10},
+                                           {20, 20},
+                                           {30, 30, 30},
+                                           {40, 40, 40, 40}},
+                                          nulls_at({0, 3, 6})}
+                                        .release()
+                                        ->view());
 }
 
 TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)

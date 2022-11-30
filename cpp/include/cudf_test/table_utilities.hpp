@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace test {
+namespace cudf::test::detail {
 /**
  * @brief Verifies the property equality of two tables.
  *
@@ -50,24 +49,23 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  */
 void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
-}  // namespace test
-}  // namespace cudf
+}  // namespace cudf::test::detail
 
 // Macros for showing line of failure.
-#define CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(lhs, rhs) \
-  do {                                                    \
-    SCOPED_TRACE(" <--  line of failure\n");              \
-    cudf::test::expect_table_properties_equal(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(lhs, rhs)        \
+  do {                                                           \
+    SCOPED_TRACE(" <--  line of failure\n");                     \
+    cudf::test::detail::expect_table_properties_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, rhs) \
-  do {                                          \
-    SCOPED_TRACE(" <--  line of failure\n");    \
-    cudf::test::expect_tables_equal(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, rhs)        \
+  do {                                                 \
+    SCOPED_TRACE(" <--  line of failure\n");           \
+    cudf::test::detail::expect_tables_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_TABLES_EQUIVALENT(lhs, rhs) \
-  do {                                               \
-    SCOPED_TRACE(" <--  line of failure\n");         \
-    cudf::test::expect_tables_equivalent(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_TABLES_EQUIVALENT(lhs, rhs)        \
+  do {                                                      \
+    SCOPED_TRACE(" <--  line of failure\n");                \
+    cudf::test::detail::expect_tables_equivalent(lhs, rhs); \
   } while (0)

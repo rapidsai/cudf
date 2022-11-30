@@ -66,8 +66,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypesWithNulls)
   using T = TypeParam;
 
   auto iter   = thrust::make_counting_iterator(0);
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](int i) { return i % 2 == 0 ? true : false; });
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
   cudf::test::fixed_width_column_wrapper<T> col(iter, iter + 16, valids);
 
   table_view t({col});
