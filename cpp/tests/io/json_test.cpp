@@ -914,8 +914,7 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
 
   const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
   // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
+  // ignore all data because it is all nulls.
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }
@@ -1496,7 +1495,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
 
   auto int_col = int_wrapper{
     {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
-    cudf::test::iterators::nulls_at(std::vector<int>{8})};
+    make_validity(validity)};
   auto float_col = float_wrapper{{0.0,
                                   0.0,
                                   double_NA,
@@ -1535,7 +1534,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                 false,
                                 bool_NA,
                                 bool_NA},
-                               cudf::test::iterators::nulls_at(std::vector<int>{8})};
+                               make_validity(validity)};
 
   // Types to test
   const std::vector<data_type> dtypes = {
