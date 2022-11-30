@@ -35,11 +35,10 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> tokenize(
-  cudf::strings_column_view const& strings,
-  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+                                       cudf::string_scalar const& delimiter,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view
@@ -51,11 +50,10 @@ std::unique_ptr<cudf::column> tokenize(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> tokenize(
-  cudf::strings_column_view const& strings,
-  cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+                                       cudf::strings_column_view const& delimiters,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc nvtext::count_tokens(strings_column_view const&, string_scalar
@@ -68,11 +66,10 @@ std::unique_ptr<cudf::column> tokenize(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<cudf::column> count_tokens(
-  cudf::strings_column_view const& strings,
-  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::cuda_stream_view stream         = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+                                           cudf::string_scalar const& delimiter,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view
@@ -84,11 +81,10 @@ std::unique_ptr<cudf::column> count_tokens(
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<cudf::column> count_tokens(
-  cudf::strings_column_view const& strings,
-  cudf::strings_column_view const& delimiters,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+                                           cudf::strings_column_view const& delimiters,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace nvtext

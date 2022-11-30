@@ -21,6 +21,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -270,7 +271,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::default_stream_value, mr);
+    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -286,7 +287,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              separator_narep,
                              col_narep,
                              separate_nulls,
-                             cudf::default_stream_value,
+                             cudf::get_default_stream(),
                              mr);
 }
 

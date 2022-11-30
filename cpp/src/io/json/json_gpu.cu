@@ -156,6 +156,7 @@ struct field_descriptor {
   cudf::size_type column;
   char const* value_begin;
   char const* value_end;
+  bool is_quoted;
 };
 
 /**
@@ -178,7 +179,10 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
   auto const desc_pre_trim =
     col_map.capacity() == 0
       // No key - column and begin are trivial
-      ? field_descriptor{field_idx, begin, cudf::io::gpu::seek_field_end(begin, end, opts, true)}
+      ? field_descriptor{field_idx,
+                         begin,
+                         cudf::io::gpu::seek_field_end(begin, end, opts, true),
+                         false}
       : [&]() {
           auto const key_range = get_next_key(begin, end, opts.quotechar);
           auto const key_hash  = cudf::detail::MurmurHash3_32<cudf::string_view>{}(
@@ -189,14 +193,23 @@ __device__ field_descriptor next_field_descriptor(const char* begin,
 
           // Skip the colon between the key and the value
           auto const value_begin = thrust::find(thrust::seq, key_range.second, end, ':') + 1;
-          return field_descriptor{
-            column, value_begin, cudf::io::gpu::seek_field_end(value_begin, end, opts, true)};
+          return field_descriptor{column,
+                                  value_begin,
+                                  cudf::io::gpu::seek_field_end(value_begin, end, opts, true),
+                                  false};
         }();
 
   // Modify start & end to ignore whitespace and quotechars
   auto const trimmed_value_range =
-    trim_whitespaces_quotes(desc_pre_trim.value_begin, desc_pre_trim.value_end, opts.quotechar);
-  return {desc_pre_trim.column, trimmed_value_range.first, trimmed_value_range.second};
+    trim_whitespaces(desc_pre_trim.value_begin, desc_pre_trim.value_end);
+  bool const is_quoted =
+    thrust::distance(trimmed_value_range.first, trimmed_value_range.second) >= 2 and
+    *trimmed_value_range.first == opts.quotechar and
+    *thrust::prev(trimmed_value_range.second) == opts.quotechar;
+  return {desc_pre_trim.column,
+          trimmed_value_range.first + static_cast<std::ptrdiff_t>(is_quoted),
+          trimmed_value_range.second - static_cast<std::ptrdiff_t>(is_quoted),
+          is_quoted};
 }
 
 /**
@@ -255,13 +268,14 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
     auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
+    auto const is_quoted = static_cast<std::ptrdiff_t>(desc.is_quoted);
 
     current = desc.value_end + 1;
 
     using string_index_pair = thrust::pair<const char*, size_type>;
 
-    // Empty fields are not legal values
-    if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
+    if (!serialized_trie_contains(opts.trie_na,
+                                  {desc.value_begin - is_quoted, value_len + is_quoted * 2})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
         auto str_list           = static_cast<string_index_pair*>(output_columns[desc.column]);
@@ -345,7 +359,7 @@ __global__ void detect_data_types_kernel(
       atomicAdd(&column_infos[desc.column].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
-    if (*(desc.value_begin - 1) == opts.quotechar && *desc.value_end == opts.quotechar) {
+    if (desc.is_quoted) {
       atomicAdd(&column_infos[desc.column].string_count, 1);
       continue;
     }

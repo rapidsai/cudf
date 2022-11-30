@@ -30,7 +30,12 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries, NotImplementedType
+from cudf._typing import (
+    ColumnLike,
+    DataFrameOrSeries,
+    Dtype,
+    NotImplementedType,
+)
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -45,13 +50,19 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
-from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.core.udf.utils import (
+    _compile_or_get,
+    _get_input_args_from_frame,
+    _post_process_output_col,
+    _return_arr_from_dtype,
+)
 from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -259,13 +270,6 @@ class IndexedFrame(Frame):
         # to ensure that this constructor is always invoked with an index.
         self._index = index
 
-    def to_dict(self, *args, **kwargs):  # noqa: D102
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     @property
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
@@ -327,18 +331,28 @@ class IndexedFrame(Frame):
         columns: List[ColumnBase],
         column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
 
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
+
+        If override_dtypes is provided then any non-None entry will be
+        used for the dtype of the matching column in preference to the
+        dtype of the column in self.
         """
         if column_names is None:
             column_names = self._column_names
         frame = self.__class__._from_columns(
             columns, column_names, index_names
         )
-        return frame._copy_type_metadata(self, include_index=bool(index_names))
+        return frame._copy_type_metadata(
+            self,
+            include_index=bool(index_names),
+            override_dtypes=override_dtypes,
+        )
 
     def _mimic_inplace(
         self: T, result: T, inplace: bool = False
@@ -402,7 +416,7 @@ class IndexedFrame(Frame):
             else:
                 if col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
-                    # incase of bools.
+                    # in case of bools.
                     first_index = int(
                         col.isnull().astype("int8").find_first_value(1)
                     )
@@ -541,8 +555,8 @@ class IndexedFrame(Frame):
             * dict:
                 - Dicts can be used to specify different replacement values
                   for different existing values. For example, {'a': 'b',
-                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
-                  ‘y’ with ‘z’.
+                  'y': 'z'} replaces the value 'a' with 'b' and
+                  'y' with 'z'.
                   To use a dict in this way the ``value`` parameter should
                   be ``None``.
         value : scalar, dict, list-like, str, default None
@@ -899,40 +913,44 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(output, inplace=inplace)
 
     def _copy_type_metadata(
-        self: T, other: T, include_index: bool = True
+        self: T,
+        other: T,
+        include_index: bool = True,
+        *,
+        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
         See `ColumnBase._with_type_metadata` for more information.
         """
-        super()._copy_type_metadata(other)
-
-        if include_index:
-            if self._index is not None and other._index is not None:
-                self._index._copy_type_metadata(other._index)
-                # When other._index is a CategoricalIndex, the current index
-                # will be a NumericalIndex with an underlying CategoricalColumn
-                # (the above _copy_type_metadata call will have converted the
-                # column). Calling cudf.Index on that column generates the
-                # appropriate index.
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.Index(
-                        cast(
-                            cudf.core.index.NumericIndex, self._index
-                        )._column,
-                        name=self._index.name,
-                    )
-                elif isinstance(
-                    other._index, cudf.MultiIndex
-                ) and not isinstance(self._index, cudf.MultiIndex):
-                    self._index = cudf.MultiIndex._from_data(
-                        self._index._data, name=self._index.name
-                    )
+        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+        if (
+            include_index
+            and self._index is not None
+            and other._index is not None
+        ):
+            self._index._copy_type_metadata(other._index)
+            # When other._index is a CategoricalIndex, the current index
+            # will be a NumericalIndex with an underlying CategoricalColumn
+            # (the above _copy_type_metadata call will have converted the
+            # column). Calling cudf.Index on that column generates the
+            # appropriate index.
+            if isinstance(
+                other._index, cudf.core.index.CategoricalIndex
+            ) and not isinstance(
+                self._index, cudf.core.index.CategoricalIndex
+            ):
+                self._index = cudf.Index(
+                    cast(cudf.core.index.NumericIndex, self._index)._column,
+                    name=self._index.name,
+                )
+            elif isinstance(other._index, cudf.MultiIndex) and not isinstance(
+                self._index, cudf.MultiIndex
+            ):
+                self._index = cudf.MultiIndex._from_data(
+                    self._index._data, name=self._index.name
+                )
         return self
 
     @_cudf_nvtx_annotate
@@ -1019,6 +1037,206 @@ class IndexedFrame(Frame):
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
         )
+
+    @_cudf_nvtx_annotate
+    def truncate(self, before=None, after=None, axis=0, copy=True):
+        """
+        Truncate a Series or DataFrame before and after some index value.
+
+        This is a useful shorthand for boolean indexing based on index
+        values above or below certain thresholds.
+
+        Parameters
+        ----------
+        before : date, str, int
+            Truncate all rows before this index value.
+        after : date, str, int
+            Truncate all rows after this index value.
+        axis : {0 or 'index', 1 or 'columns'}, optional
+            Axis to truncate. Truncates the index (rows) by default.
+        copy : bool, default is True,
+            Return a copy of the truncated section.
+
+        Returns
+        -------
+            The truncated Series or DataFrame.
+
+        Notes
+        -----
+        If the index being truncated contains only datetime values,
+        `before` and `after` may be specified as strings instead of
+        Timestamps.
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> cs1 = cudf.Series([1, 2, 3, 4])
+        >>> cs1
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+
+        >>> cs1.truncate(before=1, after=2)
+        1    2
+        2    3
+        dtype: int64
+
+        >>> import cudf
+        >>> dates = cudf.date_range(
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
+        >>> cs2 = cudf.Series(range(len(dates)), index=dates)
+        >>> cs2
+        2021-01-01 23:45:00     0
+        2021-01-01 23:45:01     1
+        2021-01-01 23:45:02     2
+        2021-01-01 23:45:03     3
+        2021-01-01 23:45:04     4
+        2021-01-01 23:45:05     5
+        2021-01-01 23:45:06     6
+        2021-01-01 23:45:07     7
+        2021-01-01 23:45:08     8
+        2021-01-01 23:45:09     9
+        2021-01-01 23:45:10    10
+        2021-01-01 23:45:11    11
+        2021-01-01 23:45:12    12
+        2021-01-01 23:45:13    13
+        2021-01-01 23:45:14    14
+        2021-01-01 23:45:15    15
+        2021-01-01 23:45:16    16
+        2021-01-01 23:45:17    17
+        2021-01-01 23:45:18    18
+        2021-01-01 23:45:19    19
+        2021-01-01 23:45:20    20
+        2021-01-01 23:45:21    21
+        2021-01-01 23:45:22    22
+        2021-01-01 23:45:23    23
+        2021-01-01 23:45:24    24
+        ...
+        2021-01-01 23:45:56    56
+        2021-01-01 23:45:57    57
+        2021-01-01 23:45:58    58
+        2021-01-01 23:45:59    59
+        dtype: int64
+
+
+        >>> cs2.truncate(
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
+        2021-01-01 23:45:18    18
+        2021-01-01 23:45:19    19
+        2021-01-01 23:45:20    20
+        2021-01-01 23:45:21    21
+        2021-01-01 23:45:22    22
+        2021-01-01 23:45:23    23
+        2021-01-01 23:45:24    24
+        2021-01-01 23:45:25    25
+        2021-01-01 23:45:26    26
+        2021-01-01 23:45:27    27
+        dtype: int64
+
+        >>> cs3 = cudf.Series({'A': 1, 'B': 2, 'C': 3, 'D': 4})
+        >>> cs3
+        A    1
+        B    2
+        C    3
+        D    4
+        dtype: int64
+
+        >>> cs3.truncate(before='B', after='C')
+        B    2
+        C    3
+        dtype: int64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame({
+        ...     'A': ['a', 'b', 'c', 'd', 'e'],
+        ...     'B': ['f', 'g', 'h', 'i', 'j'],
+        ...     'C': ['k', 'l', 'm', 'n', 'o']
+        ... }, index=[1, 2, 3, 4, 5])
+        >>> df
+           A  B  C
+        1  a  f  k
+        2  b  g  l
+        3  c  h  m
+        4  d  i  n
+        5  e  j  o
+
+        >>> df.truncate(before=2, after=4)
+           A  B  C
+        2  b  g  l
+        3  c  h  m
+        4  d  i  n
+
+        >>> df.truncate(before="A", after="B", axis="columns")
+           A  B
+        1  a  f
+        2  b  g
+        3  c  h
+        4  d  i
+        5  e  j
+
+        >>> import cudf
+        >>> dates = cudf.date_range(
+        ...     '2021-01-01 23:45:00', '2021-01-01 23:46:00', freq='s'
+        ... )
+        >>> df2 = cudf.DataFrame(data={'A': 1, 'B': 2}, index=dates)
+        >>> df2.head()
+                             A  B
+        2021-01-01 23:45:00  1  2
+        2021-01-01 23:45:01  1  2
+        2021-01-01 23:45:02  1  2
+        2021-01-01 23:45:03  1  2
+        2021-01-01 23:45:04  1  2
+
+        >>> df2.truncate(
+        ...     before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ... )
+                             A  B
+        2021-01-01 23:45:18  1  2
+        2021-01-01 23:45:19  1  2
+        2021-01-01 23:45:20  1  2
+        2021-01-01 23:45:21  1  2
+        2021-01-01 23:45:22  1  2
+        2021-01-01 23:45:23  1  2
+        2021-01-01 23:45:24  1  2
+        2021-01-01 23:45:25  1  2
+        2021-01-01 23:45:26  1  2
+        2021-01-01 23:45:27  1  2
+        """
+        if not copy:
+            raise ValueError("Truncating with copy=False is not supported.")
+        axis = self._get_axis_from_axis_arg(axis)
+        ax = self._index if axis == 0 else self._data.to_pandas_index()
+
+        if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
+            raise ValueError("truncate requires a sorted index")
+
+        if type(ax) is cudf.core.index.DatetimeIndex:
+            before = pd.to_datetime(before)
+            after = pd.to_datetime(after)
+
+        if before is not None and after is not None and before > after:
+            raise ValueError(f"Truncate: {after} must be after {before}")
+
+        if len(ax) > 1 and ax.is_monotonic_decreasing and ax.nunique() > 1:
+            before, after = after, before
+
+        slicer = [slice(None, None)] * self.ndim
+        slicer[axis] = slice(before, after)
+        return self.loc[tuple(slicer)].copy()
 
     @cached_property
     def loc(self):
@@ -1596,6 +1814,9 @@ class IndexedFrame(Frame):
         )
 
     def _split(self, splits, keep_index=True):
+        if self._num_rows == 0:
+            return []
+
         columns_split = libcudf.copying.columns_split(
             [
                 *(self._index._data.columns if keep_index else []),
@@ -1799,30 +2020,19 @@ class IndexedFrame(Frame):
             ) from e
 
         # Mask and data column preallocated
-        ans_col = cp.empty(len(self), dtype=retty)
+        ans_col = _return_arr_from_dtype(retty, len(self))
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask), len(self)]
-        offsets = []
-
-        # if _compile_or_get succeeds, it is safe to create a kernel that only
-        # consumes the columns that are of supported dtype
-        for col in _supported_cols_from_frame(self).values():
-            data = col.data
-            mask = col.mask
-            if mask is None:
-                launch_args.append(data)
-            else:
-                launch_args.append((data, mask))
-            offsets.append(col.offset)
-        launch_args += offsets
-        launch_args += list(args)
+        output_args = [(ans_col, ans_mask), len(self)]
+        input_args = _get_input_args_from_frame(self)
+        launch_args = output_args + input_args + list(args)
 
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = cudf.core.column.as_column(ans_col)
+        col = _post_process_output_col(ans_col, retty)
+
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_data({None: col}, self._index)
 
@@ -1848,7 +2058,7 @@ class IndexedFrame(Frame):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -3476,22 +3686,32 @@ class IndexedFrame(Frame):
             idx = None if ignore_index else self._index.copy(deep=True)
             return self.__class__._from_data(data, index=idx)
 
-        explode_column_num = self._column_names.index(explode_column)
+        column_index = self._column_names.index(explode_column)
         if not ignore_index and self._index is not None:
-            explode_column_num += self._index.nlevels
+            index_offset = self._index.nlevels
+        else:
+            index_offset = 0
 
         exploded = libcudf.lists.explode_outer(
             [
                 *(self._index._data.columns if not ignore_index else ()),
                 *self._columns,
             ],
-            explode_column_num,
+            column_index + index_offset,
         )
-
+        # We must copy inner datatype of the exploded list column to
+        # maintain struct dtype key names
+        exploded_dtype = cast(
+            ListDtype, self._columns[column_index].dtype
+        ).element_type
         return self._from_columns_like_self(
             exploded,
             self._column_names,
             self._index_names if not ignore_index else None,
+            override_dtypes=(
+                exploded_dtype if i == column_index else None
+                for i in range(len(self._columns))
+            ),
         )
 
     @_cudf_nvtx_annotate
@@ -4692,10 +4912,12 @@ def _drop_rows_by_labels(
     level: Union[int, str],
     errors: str,
 ) -> DataFrameOrSeries:
-    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
-    if some items in `labels` do not exist in `obj._index`.
+    """Remove rows specified by `labels`.
 
-    Will raise if level(int) is greater or equal to index nlevels
+    If `errors="raise"`, an error is raised if some items in `labels` do not
+    exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels.
     """
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")

@@ -379,7 +379,10 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
-        if (nvcomp_integration::is_all_enabled()) {
+        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
+          gpuinflate(
+            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
+        } else {
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
                                      inflate_in_view,
                                      inflate_out_view,
@@ -387,13 +390,12 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
-        } else {
-          gpuinflate(
-            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
         }
         break;
       case compression_type::SNAPPY:
-        if (nvcomp_integration::is_stable_enabled()) {
+        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::SNAPPY)) {
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
+        } else {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,
@@ -401,11 +403,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                      max_uncomp_block_size,
                                      total_decomp_size,
                                      stream);
-        } else {
-          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
         }
         break;
       case compression_type::ZSTD:
+        if (auto const reason = nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD);
+            reason) {
+          CUDF_FAIL("Decompression error: " + reason.value());
+        }
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                                    inflate_in_view,
                                    inflate_out_view,
@@ -521,8 +525,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
         auto merged_mask      = static_cast<bitmask_type*>(merged_null_mask.data());
         uint32_t* dst_idx_ptr = dst_idx.data();
-        // Copy child valid bits from child column to valid indexes, this will merge both child and
-        // parent null masks
+        // Copy child valid bits from child column to valid indexes, this will merge both child
+        // and parent null masks
         thrust::for_each(rmm::exec_policy(stream),
                          thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(0) + dst_idx.size(),
@@ -963,7 +967,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
     std::vector<orc_column_meta> nested_col;
-    bool is_data_empty = false;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -987,7 +990,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
-      // TODO: Once MAP type is supported in cuDF, update this for MAP as well
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 
@@ -1016,7 +1018,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       memset(chunks.base_host_ptr(), 0, chunks.memory_size());
 
       const bool use_index =
-        (_use_index == true) &&
+        _use_index &&
         // Do stripes have row group index
         _metadata.is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
@@ -1047,6 +1049,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
 
+      bool is_level_data_empty = true;
       std::vector<std::pair<std::future<size_t>, size_t>> read_tasks;
       for (auto const& stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
@@ -1066,21 +1069,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stream_info,
                                                           level == 0);
 
-          if (total_data_size == 0) {
-            CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
-            // In case ROW GROUP INDEX is not present and all columns are structs with no null
-            // stream, there is nothing to read at this level.
-            auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
-            CUDF_EXPECTS(std::all_of(column_types.begin(), column_types.end(), fn_check_dtype),
-                         "Expected streams data within stripe");
-            is_data_empty = true;
-          }
+          auto const is_stripe_data_empty = total_data_size == 0;
+          if (not is_stripe_data_empty) { is_level_data_empty = false; }
+          CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
+                       "Invalid index rowgroup stream data");
 
           stripe_data.emplace_back(total_data_size, stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
-          while (not is_data_empty and stream_count < stream_info.size()) {
+          while (not is_stripe_data_empty and stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
             auto len          = stream_info[stream_count].length;
@@ -1158,7 +1156,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.timestamp_type_id = _timestamp_type.id();
             }
-            if (not is_data_empty) {
+            if (not is_stripe_data_empty) {
               for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
                 chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
               }
@@ -1195,7 +1193,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          });
         }
         // Setup row group descriptors if using indexes
-        if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
+        if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and
+            not is_level_data_empty) {
           auto decomp_data = decompress_stripe_data(chunks,
                                                     stripe_data,
                                                     *_metadata.per_file_metadata[0].decompressor,
@@ -1238,7 +1237,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        if (not is_data_empty) {
+        if (not is_level_data_empty) {
           decode_stream_data(chunks,
                              num_dict_entries,
                              skip_rows,
@@ -1252,7 +1251,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
-          if (not is_data_empty) {
+          if (not is_level_data_empty) {
             scan_null_counts(chunks, null_count_prefix_sums[level], stream);
           }
           row_groups.device_to_host(stream, true);

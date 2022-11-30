@@ -151,5 +151,62 @@ TYPED_TEST(NumericRangeWindowBoundsTest, WrongRangeType)
                cudf::logic_error);
 }
 
+template <typename T>
+struct DecimalRangeBoundsTest : RangeWindowBoundsTest {
+};
+
+TYPED_TEST_SUITE(DecimalRangeBoundsTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(DecimalRangeBoundsTest, BoundsConstruction)
+{
+  using namespace numeric;
+  using DecimalT = TypeParam;
+  using Rep      = cudf::detail::range_rep_type<DecimalT>;
+
+  // Interval type must match the decimal type.
+  static_assert(std::is_same_v<cudf::detail::range_type<DecimalT>, DecimalT>);
+
+  auto const range_3 =
+    range_window_bounds::get(fixed_point_scalar<DecimalT>{Rep{3}, scale_type{0}});
+  EXPECT_FALSE(range_3.is_unbounded() &&
+               "range_window_bounds constructed from scalar cannot be unbounded.");
+  EXPECT_EQ(cudf::detail::range_comparable_value<DecimalT>(range_3), Rep{3});
+
+  auto const range_unbounded = range_window_bounds::unbounded(data_type{type_to_id<DecimalT>()});
+  EXPECT_TRUE(range_unbounded.is_unbounded() &&
+              "range_window_bounds::unbounded() must return an unbounded range.");
+}
+
+TYPED_TEST(DecimalRangeBoundsTest, Rescale)
+{
+  using namespace numeric;
+  using DecimalT = TypeParam;
+  using RepT     = typename DecimalT::rep;
+
+  // Powers of 10.
+  auto constexpr pow10 = std::array{1, 10, 100, 1000, 10000, 100000};
+
+  // Check that the rep has expected values at different range scales.
+  auto const order_by_scale     = -2;
+  auto const order_by_data_type = data_type{type_to_id<DecimalT>(), order_by_scale};
+
+  for (auto const range_scale : {-2, -1, 0, 1, 2}) {
+    auto const decimal_range_bounds =
+      range_window_bounds::get(fixed_point_scalar<DecimalT>{RepT{20}, scale_type{range_scale}});
+    auto const rescaled_range_rep =
+      cudf::detail::range_comparable_value<DecimalT>(decimal_range_bounds, order_by_data_type);
+    EXPECT_EQ(rescaled_range_rep, RepT{20} * pow10[range_scale - order_by_scale]);
+  }
+
+  // Order By column scale cannot exceed range scale:
+  {
+    auto const decimal_range_bounds =
+      range_window_bounds::get(fixed_point_scalar<DecimalT>{RepT{200}, scale_type{-3}});
+    EXPECT_THROW(
+      cudf::detail::range_comparable_value<DecimalT>(decimal_range_bounds, order_by_data_type),
+      cudf::logic_error);
+  }
+}
+
 }  // namespace test
 }  // namespace cudf

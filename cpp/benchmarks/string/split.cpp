@@ -43,7 +43,7 @@ static void BM_split(benchmark::State& state, split_type rt)
   cudf::string_scalar target("+");
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (rt) {
       case split: cudf::strings::split(input, target); break;
       case split_ws: cudf::strings::split(input); break;

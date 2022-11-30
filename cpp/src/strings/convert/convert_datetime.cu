@@ -16,14 +16,15 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -653,7 +654,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(input, timestamp_type, format, cudf::default_stream_value, mr);
+  return detail::to_timestamps(input, timestamp_type, format, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
@@ -661,7 +662,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_timestamp(input, format, cudf::default_stream_value, mr);
+  return detail::is_timestamp(input, format, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -1149,7 +1150,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, names, cudf::default_stream_value, mr);
+  return detail::from_timestamps(timestamps, format, names, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

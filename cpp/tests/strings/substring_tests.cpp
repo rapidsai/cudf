@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -283,18 +282,18 @@ TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
 
   auto results = cudf::strings::slice_strings(strings_view, 1, 2);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("foo"), 1);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
   results = cudf::strings::slice_strings(strings_view, starts_column, stops_column);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::slice_strings(strings_view, strings_view, 1);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsSubstringsTest, AllEmpty)

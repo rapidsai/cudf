@@ -23,6 +23,7 @@ Properties
 
    Index.empty
    Index.has_duplicates
+   Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
@@ -262,12 +263,15 @@ Time/date components
    DatetimeIndex.hour
    DatetimeIndex.minute
    DatetimeIndex.second
-   DatetimeIndex.dayofweek
-   DatetimeIndex.dayofyear
+   DatetimeIndex.microsecond
+   DatetimeIndex.nanosecond
    DatetimeIndex.day_of_year
+   DatetimeIndex.dayofyear
+   DatetimeIndex.dayofweek
    DatetimeIndex.weekday
-   DatetimeIndex.is_leap_year
    DatetimeIndex.quarter
+   DatetimeIndex.is_leap_year
+
    DatetimeIndex.isocalendar
 
 Time-specific operations

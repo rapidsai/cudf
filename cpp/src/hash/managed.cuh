@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef MANAGED_CUH
-#define MANAGED_CUH
+#pragma once
 
 #include <new>
 
@@ -43,5 +42,3 @@ inline bool isPtrManaged(cudaPointerAttributes attr)
   return attr.isManaged;
 #endif
 }
-
-#endif  // MANAGED_CUH

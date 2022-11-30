@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -33,8 +34,7 @@
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -453,7 +453,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replacement, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
@@ -461,7 +461,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replacement, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replacement, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
@@ -469,7 +469,7 @@ std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nulls(input, replace_policy, cudf::default_stream_value, mr);
+  return detail::replace_nulls(input, replace_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

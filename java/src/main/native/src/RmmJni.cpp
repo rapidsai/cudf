@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <mutex>
 
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
@@ -50,6 +51,12 @@ constexpr char const *RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 class base_tracking_resource_adaptor : public device_memory_resource {
 public:
   virtual std::size_t get_total_allocated() = 0;
+
+  virtual std::size_t get_max_total_allocated() = 0;
+
+  virtual void reset_scoped_max_total_allocated(std::size_t initial_value) = 0;
+
+  virtual std::size_t get_scoped_max_total_allocated() = 0;
 };
 
 /**
@@ -79,10 +86,37 @@ public:
 
   std::size_t get_total_allocated() override { return total_allocated.load(); }
 
+  std::size_t get_max_total_allocated() override { return max_total_allocated; }
+
+  void reset_scoped_max_total_allocated(std::size_t initial_value) override {
+    std::scoped_lock lock(max_total_allocated_mutex);
+    scoped_allocated = initial_value;
+    scoped_max_total_allocated = initial_value;
+  }
+
+  std::size_t get_scoped_max_total_allocated() override {
+    std::scoped_lock lock(max_total_allocated_mutex);
+    return scoped_max_total_allocated;
+  }
+
 private:
   Upstream *const resource;
   std::size_t const size_align;
+  // sum of what is currently allocated
   std::atomic_size_t total_allocated{0};
+
+  // the maximum total allocated for the lifetime of this class
+  std::size_t max_total_allocated{0};
+
+  // the sum of what is currently outstanding from the last
+  // `reset_scoped_max_total_allocated` call. This can be negative.
+  std::atomic_long scoped_allocated{0};
+
+  // the maximum total allocated relative to the last
+  // `reset_scoped_max_total_allocated` call.
+  long scoped_max_total_allocated{0};
+
+  std::mutex max_total_allocated_mutex;
 
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
@@ -91,6 +125,10 @@ private:
     auto result = resource->allocate(num_bytes, stream);
     if (result) {
       total_allocated += num_bytes;
+      scoped_allocated += num_bytes;
+      std::scoped_lock lock(max_total_allocated_mutex);
+      max_total_allocated = std::max(total_allocated.load(), max_total_allocated);
+      scoped_max_total_allocated = std::max(scoped_allocated.load(), scoped_max_total_allocated);
     }
     return result;
   }
@@ -102,6 +140,7 @@ private:
 
     if (p) {
       total_allocated -= size;
+      scoped_allocated -= size;
     }
   }
 
@@ -132,11 +171,31 @@ std::size_t get_total_bytes_allocated() {
   return 0;
 }
 
+std::size_t get_max_total_allocated() {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->get_max_total_allocated();
+  }
+  return 0;
+}
+
+void reset_scoped_max_total_allocated(std::size_t initial_value) {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->reset_scoped_max_total_allocated(initial_value);
+  }
+}
+
+std::size_t get_scoped_max_total_allocated() {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->get_scoped_max_total_allocated();
+  }
+  return 0;
+}
+
 /**
  * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
  * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
  */
-class java_event_handler_memory_resource final : public device_memory_resource {
+class java_event_handler_memory_resource : public device_memory_resource {
 public:
   java_event_handler_memory_resource(JNIEnv *env, jobject jhandler, jlongArray jalloc_thresholds,
                                      jlongArray jdealloc_thresholds,
@@ -150,9 +209,15 @@ public:
     if (cls == nullptr) {
       throw cudf::jni::jni_exception("class not found");
     }
-    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(J)Z");
+    on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(JI)Z");
     if (on_alloc_fail_method == nullptr) {
-      throw cudf::jni::jni_exception("onAllocFailure method");
+      use_old_alloc_fail_interface = true;
+      on_alloc_fail_method = env->GetMethodID(cls, "onAllocFailure", "(J)Z");
+      if (on_alloc_fail_method == nullptr) {
+        throw cudf::jni::jni_exception("onAllocFailure method");
+      }
+    } else {
+      use_old_alloc_fail_interface = false;
     }
     on_alloc_threshold_method = env->GetMethodID(cls, "onAllocThreshold", "(J)V");
     if (on_alloc_threshold_method == nullptr) {
@@ -187,9 +252,8 @@ public:
 
 private:
   device_memory_resource *const resource;
-  JavaVM *jvm;
-  jobject handler_obj;
   jmethodID on_alloc_fail_method;
+  bool use_old_alloc_fail_interface;
   jmethodID on_alloc_threshold_method;
   jmethodID on_dealloc_threshold_method;
 
@@ -209,10 +273,18 @@ private:
     }
   }
 
-  bool on_alloc_fail(std::size_t num_bytes) {
+  bool on_alloc_fail(std::size_t num_bytes, int retry_count) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    jboolean result =
-        env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
+    jboolean result = false;
+    if (!use_old_alloc_fail_interface) {
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes),
+                                 static_cast<jint>(retry_count));
+
+    } else {
+      result =
+          env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
+    }
     if (env->ExceptionCheck()) {
       throw std::runtime_error("onAllocFailure handler threw an exception");
     }
@@ -237,16 +309,32 @@ private:
     }
   }
 
+  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
+
+  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
+    return resource->get_mem_info(stream);
+  }
+
+  bool supports_streams() const noexcept override { return resource->supports_streams(); }
+
+protected:
+  JavaVM *jvm;
+  jobject handler_obj;
+
   void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
+    // a non-zero retry_count signifies that the `on_alloc_fail`
+    // callback is being invoked while re-attempting an allocation
+    // that had previously failed.
+    int retry_count = 0;
     while (true) {
       try {
         total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (rmm::out_of_memory const &e) {
-        if (!on_alloc_fail(num_bytes)) {
+        if (!on_alloc_fail(num_bytes, retry_count++)) {
           throw;
         }
       }
@@ -272,20 +360,65 @@ private:
     check_for_threshold_callback(total_after, total_before, dealloc_thresholds,
                                  on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
+};
 
-  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
+class java_debug_event_handler_memory_resource final : public java_event_handler_memory_resource {
+public:
+  java_debug_event_handler_memory_resource(JNIEnv *env, jobject jhandler,
+                                           jlongArray jalloc_thresholds,
+                                           jlongArray jdealloc_thresholds,
+                                           device_memory_resource *resource_to_wrap)
+      : java_event_handler_memory_resource(env, jhandler, jalloc_thresholds, jdealloc_thresholds,
+                                           resource_to_wrap) {
+    jclass cls = env->GetObjectClass(jhandler);
+    if (cls == nullptr) {
+      throw cudf::jni::jni_exception("class not found");
+    }
 
-  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
-    return resource->get_mem_info(stream);
+    on_allocated_method = env->GetMethodID(cls, "onAllocated", "(J)V");
+    if (on_allocated_method == nullptr) {
+      throw cudf::jni::jni_exception("onAllocated method");
+    }
+
+    on_deallocated_method = env->GetMethodID(cls, "onDeallocated", "(J)V");
+    if (on_deallocated_method == nullptr) {
+      throw cudf::jni::jni_exception("onDeallocated method");
+    }
   }
 
-  bool supports_streams() const noexcept override { return resource->supports_streams(); }
+private:
+  jmethodID on_allocated_method;
+  jmethodID on_deallocated_method;
+
+  void on_allocated_callback(std::size_t num_bytes, rmm::cuda_stream_view stream) {
+    JNIEnv *env = cudf::jni::get_jni_env(jvm);
+    env->CallVoidMethod(handler_obj, on_allocated_method, num_bytes);
+    if (env->ExceptionCheck()) {
+      throw std::runtime_error("onAllocated handler threw an exception");
+    }
+  }
+
+  void on_deallocated_callback(void *p, std::size_t size, rmm::cuda_stream_view stream) {
+    JNIEnv *env = cudf::jni::get_jni_env(jvm);
+    env->CallVoidMethod(handler_obj, on_deallocated_method, size);
+  }
+
+  void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
+    void *result = java_event_handler_memory_resource::do_allocate(num_bytes, stream);
+    on_allocated_callback(num_bytes, stream);
+    return result;
+  }
+
+  void do_deallocate(void *p, std::size_t size, rmm::cuda_stream_view stream) override {
+    java_event_handler_memory_resource::do_deallocate(p, size, stream);
+    on_deallocated_callback(p, size, stream);
+  }
 };
 
 std::unique_ptr<java_event_handler_memory_resource> Java_memory_resource{};
 
 void set_java_device_memory_resource(JNIEnv *env, jobject handler_obj, jlongArray jalloc_thresholds,
-                                     jlongArray jdealloc_thresholds) {
+                                     jlongArray jdealloc_thresholds, jboolean enable_debug) {
   if (Java_memory_resource && handler_obj != nullptr) {
     JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS, "Another event handler is already set", )
   }
@@ -302,8 +435,13 @@ void set_java_device_memory_resource(JNIEnv *env, jobject handler_obj, jlongArra
   }
   if (handler_obj != nullptr) {
     auto resource = rmm::mr::get_current_device_resource();
-    Java_memory_resource.reset(new java_event_handler_memory_resource(
-        env, handler_obj, jalloc_thresholds, jdealloc_thresholds, resource));
+    if (enable_debug) {
+      Java_memory_resource.reset(new java_debug_event_handler_memory_resource(
+          env, handler_obj, jalloc_thresholds, jdealloc_thresholds, resource));
+    } else {
+      Java_memory_resource.reset(new java_event_handler_memory_resource(
+          env, handler_obj, jalloc_thresholds, jdealloc_thresholds, resource));
+    }
     auto replaced_resource = rmm::mr::set_current_device_resource(Java_memory_resource.get());
     if (resource != replaced_resource) {
       rmm::mr::set_current_device_resource(replaced_resource);
@@ -417,7 +555,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
     cudf::jni::auto_set_device(env);
-    set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
+    set_java_device_memory_resource(env, nullptr, nullptr, nullptr, false);
     // Instead of trying to undo all of the adaptors that we added in reverse order
     // we just reset the base adaptor so the others will not be called any more
     // and then clean them up in really any order.  There should be no interaction with
@@ -434,6 +572,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jcl
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv *env, jclass) {
   return get_total_bytes_allocated();
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getMaximumTotalBytesAllocated(JNIEnv *env, jclass) {
+  return get_max_total_allocated();
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_resetScopedMaximumBytesAllocatedInternal(
+    JNIEnv *env, jclass, jlong initialValue) {
+  reset_scoped_max_total_allocated(initialValue);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getScopedMaximumBytesAllocated(JNIEnv *env,
+                                                                               jclass) {
+  return get_scoped_max_total_allocated();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,
@@ -472,9 +624,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeDeviceBuffer(JNIEnv *env, jcl
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setEventHandlerInternal(
     JNIEnv *env, jclass, jobject handler_obj, jlongArray jalloc_thresholds,
-    jlongArray jdealloc_thresholds) {
+    jlongArray jdealloc_thresholds, jboolean enable_debug) {
   try {
-    set_java_device_memory_resource(env, handler_obj, jalloc_thresholds, jdealloc_thresholds);
+    set_java_device_memory_resource(env, handler_obj, jalloc_thresholds, jdealloc_thresholds,
+                                    enable_debug);
   }
   CATCH_STD(env, )
 }

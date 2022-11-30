@@ -3,9 +3,7 @@
 import pickle
 import warnings
 
-import pandas as pd
-
-from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
@@ -14,7 +12,7 @@ from libcpp.vector cimport vector
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
 
@@ -42,7 +40,6 @@ from cudf._lib.utils cimport (
     columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
 )
 
@@ -59,7 +56,7 @@ def _gather_map_is_valid(
     """Returns true if gather map is valid.
 
     A gather map is valid if empty or all indices are within the range
-    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    ``[-nrows, nrows)``, except when ``nullify`` is specified.
     """
     if not check_bounds or nullify or len(gather_map) == 0:
         return True
@@ -67,6 +64,7 @@ def _gather_map_is_valid(
     return gm_min >= -nrows and gm_max < nrows
 
 
+@acquire_spill_lock()
 def copy_column(Column input_column):
     """
     Deep copies a column
@@ -88,6 +86,7 @@ def copy_column(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def _copy_range_in_place(Column input_column,
                          Column target_column,
                          size_type input_begin,
@@ -135,38 +134,41 @@ def _copy_range(Column input_column,
     return Column.from_unique_ptr(move(c_result))
 
 
-def copy_range(Column input_column,
+@acquire_spill_lock()
+def copy_range(Column source_column,
                Column target_column,
-               size_type input_begin,
-               size_type input_end,
+               size_type source_begin,
+               size_type source_end,
                size_type target_begin,
                size_type target_end,
                bool inplace):
     """
-    Copy input_column from input_begin to input_end to
-    target_column from target_begin to target_end
+    Copy a contiguous range from a source to a target column
+
+    Notes
+    -----
+    Expects the source and target ranges to have been sanitised to be
+    in-range for the source and target column respectively. For
+    example via ``slice.indices``.
     """
 
-    if abs(target_end - target_begin) <= 1:
+    assert (
+        source_end - source_begin == target_end - target_begin,
+        "Source and target ranges must be same length"
+    )
+    if target_end >= target_begin and inplace:
+        # FIXME: Are we allowed to do this when inplace=False?
         return target_column
 
-    if target_begin < 0:
-        target_begin = target_begin + target_column.size
-
-    if target_end < 0:
-        target_end = target_end + target_column.size
-
-    if target_begin > target_end:
-        return target_column
-
-    if inplace is True:
-        _copy_range_in_place(input_column, target_column,
-                             input_begin, input_end, target_begin)
+    if inplace:
+        _copy_range_in_place(source_column, target_column,
+                             source_begin, source_end, target_begin)
     else:
-        return _copy_range(input_column, target_column,
-                           input_begin, input_end, target_begin)
+        return _copy_range(source_column, target_column,
+                           source_begin, source_end, target_begin)
 
 
+@acquire_spill_lock()
 def gather(
     list columns,
     Column gather_map,
@@ -194,8 +196,7 @@ def gather(
 
 cdef scatter_scalar(list source_device_slrs,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef vector[reference_wrapper[constscalar]] c_source
     cdef DeviceScalar d_slr
     cdef unique_ptr[table] c_result
@@ -212,7 +213,6 @@ cdef scatter_scalar(list source_device_slrs,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
 
@@ -221,8 +221,7 @@ cdef scatter_scalar(list source_device_slrs,
 
 cdef scatter_column(list source_columns,
                     column_view scatter_map,
-                    table_view target_table,
-                    bool bounds_check):
+                    table_view target_table):
     cdef table_view c_source = table_view_from_columns(source_columns)
     cdef unique_ptr[table] c_result
 
@@ -232,12 +231,12 @@ cdef scatter_column(list source_columns,
                 c_source,
                 scatter_map,
                 target_table,
-                bounds_check
             )
         )
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def scatter(list sources, Column scatter_map, list target_columns,
             bool bounds_check=True):
     """
@@ -257,17 +256,28 @@ def scatter(list sources, Column scatter_map, list target_columns,
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = table_view_from_columns(target_columns)
 
+    if bounds_check:
+        n_rows = len(target_columns[0])
+        if not (
+            (scatter_map >= -n_rows).all()
+            and (scatter_map < n_rows).all()
+        ):
+            raise IndexError(
+                f"index out of bounds for column of size {n_rows}"
+            )
+
     if isinstance(sources[0], Column):
         return scatter_column(
-            sources, scatter_map_view, target_table_view, bounds_check
+            sources, scatter_map_view, target_table_view
         )
     else:
         source_scalars = [as_device_scalar(slr) for slr in sources]
         return scatter_scalar(
-            source_scalars, scatter_map_view, target_table_view, bounds_check
+            source_scalars, scatter_map_view, target_table_view
         )
 
 
+@acquire_spill_lock()
 def column_empty_like(Column input_column):
 
     cdef column_view input_column_view = input_column.view()
@@ -279,6 +289,7 @@ def column_empty_like(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def column_allocate_like(Column input_column, size=None):
 
     cdef size_type c_size = 0
@@ -303,6 +314,7 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def columns_empty_like(list input_columns):
     cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
@@ -313,6 +325,7 @@ def columns_empty_like(list input_columns):
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def column_slice(Column input_column, object indices):
 
     cdef column_view input_column_view = input_column.view()
@@ -342,6 +355,7 @@ def column_slice(Column input_column, object indices):
     return result
 
 
+@acquire_spill_lock()
 def columns_slice(list input_columns, list indices):
     """
     Given a list of input columns, return columns sliced by ``indices``.
@@ -368,6 +382,7 @@ def columns_slice(list input_columns, list indices):
     ]
 
 
+@acquire_spill_lock()
 def column_split(Column input_column, object splits):
 
     cdef column_view input_column_view = input_column.view()
@@ -399,6 +414,7 @@ def column_split(Column input_column, object splits):
     return result
 
 
+@acquire_spill_lock()
 def columns_split(list input_columns, object splits):
 
     cdef table_view input_table_view = table_view_from_columns(input_columns)
@@ -505,6 +521,7 @@ def _copy_if_else_scalar_scalar(DeviceScalar lhs,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def copy_if_else(object lhs, object rhs, Column boolean_mask):
 
     if isinstance(lhs, Column):
@@ -572,6 +589,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
     return columns_from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
     """Copy the target columns, replacing masked rows with input data.
@@ -604,6 +622,7 @@ def boolean_mask_scatter(list input_, list target_columns,
         )
 
 
+@acquire_spill_lock()
 def shift(Column input, int offset, object fill_value=None):
 
     cdef DeviceScalar fill
@@ -640,6 +659,7 @@ def shift(Column input, int offset, object fill_value=None):
     return Column.from_unique_ptr(move(c_output))
 
 
+@acquire_spill_lock()
 def get_element(Column input_column, size_type index):
     cdef column_view col_view = input_column.view()
 
@@ -654,6 +674,7 @@ def get_element(Column input_column, size_type index):
     )
 
 
+@acquire_spill_lock()
 def segmented_gather(Column source_column, Column gather_map):
     cdef shared_ptr[lists_column_view] source_LCV = (
         make_shared[lists_column_view](source_column.view())
@@ -718,10 +739,11 @@ cdef class _CPackedColumns:
         header = {}
         frames = []
 
-        gpu_data = Buffer(
+        gpu_data = as_buffer(
             data=self.gpu_data_ptr,
             size=self.gpu_data_size,
-            owner=self
+            owner=self,
+            exposed=True
         )
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header

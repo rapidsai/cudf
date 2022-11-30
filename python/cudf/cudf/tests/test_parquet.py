@@ -712,7 +712,7 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
 def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     # Check that we can read a file opened with the
-    # Arrow FileSystem inferface
+    # Arrow FileSystem interface
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
@@ -1294,6 +1294,80 @@ def test_parquet_reader_struct_sol_table(tmpdir, params):
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert expect.equals(got.to_arrow())
+
+
+def test_parquet_reader_v2(tmpdir, simple_pdf):
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    simple_pdf.to_parquet(pdf_fname, data_page_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), simple_pdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # Structs
+        {
+            "being": [
+                None,
+                {"human?": True, "Deets": {"Name": "Carrot", "Age": 27}},
+                {"human?": None, "Deets": {"Name": "Angua", "Age": 25}},
+                {"human?": False, "Deets": {"Name": "Cheery", "Age": 31}},
+                {"human?": False, "Deets": None},
+                {"human?": None, "Deets": {"Name": "Mr", "Age": None}},
+            ]
+        },
+        # List of Structs
+        {
+            "family": [
+                [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}}],
+                [
+                    {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                    {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                    {"human?": False, "deets": None},
+                ],
+                [],
+                [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+            ]
+        },
+        # Struct of Lists
+        {
+            "Real estate records": [
+                None,
+                {
+                    "Status": "NRI",
+                    "Ownerships": {
+                        "land_unit": [None, 2, None],
+                        "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
+                    },
+                },
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [4, 5],
+                        "flats": [[7, 8], []],
+                    },
+                },
+                {
+                    "Status": "RI",
+                    "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {"Status": "RI", "Ownerships": None},
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [7, 8, 9],
+                        "flats": [[], [], []],
+                    },
+                },
+            ]
+        },
+    ],
+)
+def test_parquet_reader_nested_v2(tmpdir, data):
+    expect = pd.DataFrame(data)
+    pdf_fname = tmpdir.join("pdfv2.parquet")
+    expect.to_parquet(pdf_fname, data_page_version="2.0")
+    assert_eq(cudf.read_parquet(pdf_fname), expect)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -2206,6 +2280,8 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
         # pandas which interferes with series.max()/min()
         for t in TIMEDELTA_TYPES:
             pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+        # pyarrow can't read values with non-zero nanoseconds
+        pdf["col_timedelta64[ns]"] = pdf["col_timedelta64[ns]"] * 1000
 
     gdf = cudf.from_pandas(pdf)
     if add_nulls:
@@ -2444,6 +2520,15 @@ def test_parquet_reader_one_level_list(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_binary_decimal(datadir):
+    fname = datadir / "binary_decimal.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas()
+
+    assert_eq(expect, got)
+
+
 # testing a specific bug-fix/edge case.
 # specifically:  int a parquet file containing a particular way of representing
 #                a list column in a schema, the cudf reader was confusing
@@ -2582,9 +2667,63 @@ def test_parquet_writer_zstd():
 
     buff = BytesIO()
     try:
-        expected.to_orc(buff, compression="ZSTD")
+        expected.to_parquet(buff, compression="ZSTD")
     except RuntimeError:
         pytest.mark.xfail(reason="Newer nvCOMP version is required")
     else:
-        got = pd.read_orc(buff)
+        got = pd.read_parquet(buff)
         assert_eq(expected, got)
+
+
+def test_parquet_writer_time_delta_physical_type():
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series([1], dtype="timedelta64[s]"),
+            "ms": cudf.Series([2], dtype="timedelta64[ms]"),
+            "us": cudf.Series([3], dtype="timedelta64[us]"),
+            # 4K because Pandas/pyarrow don't support non-zero nanoseconds
+            # in Parquet files
+            "ns": cudf.Series([4000], dtype="timedelta64[ns]"),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    got = pd.read_parquet(buffer)
+    expected = pd.DataFrame(
+        {
+            "s": ["00:00:01"],
+            "ms": ["00:00:00.002000"],
+            "us": ["00:00:00.000003"],
+            "ns": ["00:00:00.000004"],
+        },
+        dtype="str",
+    )
+    assert_eq(got.astype("str"), expected)
+
+
+def test_parquet_roundtrip_time_delta():
+    num_rows = 12345
+    df = cudf.DataFrame(
+        {
+            "s": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[s]",
+            ),
+            "ms": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[ms]",
+            ),
+            "us": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[us]",
+            ),
+            "ns": cudf.Series(
+                random.sample(range(0, 200000), num_rows),
+                dtype="timedelta64[ns]",
+            ),
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    assert_eq(df, cudf.read_parquet(buffer))

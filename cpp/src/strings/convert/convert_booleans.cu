@@ -16,13 +16,13 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -86,7 +86,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_booleans(strings, true_string, cudf::default_stream_value, mr);
+  return detail::to_booleans(strings, true_string, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -155,7 +155,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_booleans(booleans, true_string, false_string, cudf::default_stream_value, mr);
+  return detail::from_booleans(booleans, true_string, false_string, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

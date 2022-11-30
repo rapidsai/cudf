@@ -41,12 +41,11 @@ class reprog_device;
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Integer column of match counts
  */
-std::unique_ptr<column> count_matches(
-  column_device_view const& d_strings,
-  reprog_device& d_prog,
-  size_type output_size,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> count_matches(column_device_view const& d_strings,
+                                      reprog_device& d_prog,
+                                      size_type output_size,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

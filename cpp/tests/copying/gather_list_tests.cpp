@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/strings/utilities.h>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -22,13 +28,6 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 template <typename T>
 class GatherTestListTyped : public cudf::test::BaseFixture {
@@ -109,8 +108,8 @@ TYPED_TEST(GatherTestListTyped, GatherNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>
   LCW<T> list{{{1, 2, 3, 4}, valids}, {5}, {{6, 7}, valids}, {{8, 9, 10}, valids}};
@@ -191,8 +190,8 @@ TYPED_TEST(GatherTestListTyped, GatherNestedNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<T>>
   {
@@ -267,7 +266,8 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
     auto results = cudf::detail::gather(source_table,
                                         gather_map,
                                         cudf::out_of_bounds_policy::NULLIFY,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        cudf::get_default_stream());
 
     std::vector<int32_t> expected_validity{1, 0, 0, 1};
     LCW<T> expected{{{{2, 3}, {4, 5}},
@@ -355,14 +355,14 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       {{4, 4, 4}, {5, 5}, {6, 6}},
       {{7, 7, 7}, {8, 8}, {9, 9}},
     };
-    cudf::test::expect_columns_equal(expected0, result0->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected0, result0->get_column(0).view());
 
     auto result1 = cudf::gather(tbl1, cudf::test::fixed_width_column_wrapper<int>{0, 3});
     LCW<T> expected1{
       {{10, 10, 10}, {11, 11}, {12, 12}},
       {{50, 50, 50, 50}, {6, 13}},
     };
-    cudf::test::expect_columns_equal(expected1, result1->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->get_column(0).view());
   }
 
   auto valids =
@@ -397,7 +397,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       cudf::test::fixed_width_column_wrapper<int> map{0};
       auto result = cudf::gather(tbl, map);
       LCW<T> expected{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
 
     // gather from slice 1
@@ -419,7 +419,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
          {{0, 1, 3}, {5}},
          {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
       };
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
 
     // gather from slice 2
@@ -434,7 +434,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
                       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
                       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
                       {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->get_column(0).view());
     }
   }
 }

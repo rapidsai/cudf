@@ -406,7 +406,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::default_stream_value, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
 }
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
@@ -415,7 +415,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::default_stream_value, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
 }
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
@@ -424,7 +424,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, cudf::default_stream_value, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
@@ -434,7 +434,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, ptx, output_type, cudf::default_stream_value, mr);
+  return detail::binary_operation(lhs, rhs, ptx, output_type, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

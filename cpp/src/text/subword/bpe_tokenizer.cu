@@ -24,8 +24,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/combine.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -565,7 +564,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, cudf::default_stream_value, mr);
+  return detail::byte_pair_encoding(input, merges_table, separator, cudf::get_default_stream(), mr);
 }
 
 }  // namespace nvtext

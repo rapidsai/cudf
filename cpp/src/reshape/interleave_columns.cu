@@ -16,10 +16,12 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -294,7 +296,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, cudf::default_stream_value, mr);
+  return detail::interleave_columns(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

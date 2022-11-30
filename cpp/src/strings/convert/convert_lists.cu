@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -235,7 +236,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, cudf::default_stream_value, mr);
+  return detail::format_list_column(input, na_rep, separators, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

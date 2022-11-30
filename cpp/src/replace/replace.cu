@@ -46,8 +46,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/replace.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -457,9 +456,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
-  auto matched_values = cudf::dictionary::detail::set_keys(values, matched_view.keys(), stream);
-  auto matched_replacements =
-    cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
+  auto matched_values = cudf::dictionary::detail::set_keys(
+    values, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
+  auto matched_replacements = cudf::dictionary::detail::set_keys(
+    replacements, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
@@ -497,7 +497,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   CUDF_EXPECTS(
     input_col.type() == values_to_replace.type() && input_col.type() == replacement_values.type(),
     "Columns type mismatch");
-  CUDF_EXPECTS(values_to_replace.has_nulls() == false, "values_to_replace must not have nulls");
+  CUDF_EXPECTS(not values_to_replace.has_nulls(), "values_to_replace must not have nulls");
 
   if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
     return std::make_unique<cudf::column>(input_col, stream, mr);
@@ -531,6 +531,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    rmm::mr::device_memory_resource* mr)
 {
   return detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, cudf::default_stream_value, mr);
+    input_col, values_to_replace, replacement_values, cudf::get_default_stream(), mr);
 }
 }  // namespace cudf

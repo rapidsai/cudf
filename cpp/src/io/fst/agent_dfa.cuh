@@ -422,7 +422,7 @@ struct AgentDFA {
     OffsetT const num_total_symbols,
     StateIndexT& state,
     CallbackOpT& callback_op,
-    cub::Int2Type<BYPASS_LOAD> /**/)
+    cub::Int2Type<BYPASS_LOAD>)
   {
     using StateTransitionOpT = StateTransitionOp<CallbackOpT, TransitionTableT>;
 

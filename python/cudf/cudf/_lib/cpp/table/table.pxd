@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -14,6 +14,7 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf" nogil:
         table(vector[unique_ptr[column]]&& columns) except +
         table(table_view) except +
         size_type num_columns() except +
+        size_type num_rows() except +
         table_view view() except +
         mutable_table_view mutable_view() except +
         vector[unique_ptr[column]] release() except +

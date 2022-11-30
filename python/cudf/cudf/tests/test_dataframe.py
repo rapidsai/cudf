@@ -9,6 +9,7 @@ import re
 import string
 import textwrap
 import warnings
+from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
@@ -27,6 +28,7 @@ from cudf.core._compat import (
     PANDAS_GE_134,
     PANDAS_LT_140,
 )
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
@@ -38,6 +40,23 @@ from cudf.testing._utils import (
     does_not_raise,
     gen_rand,
 )
+
+pytest_xfail = pytest.mark.xfail
+pytestmark = pytest.mark.spilling
+
+# Use this to "unmark" the module level spilling mark
+pytest_unmark_spilling = pytest.mark.skipif(
+    get_global_manager() is not None, reason="unmarked spilling"
+)
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    # To save time, we skip tests marked "xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 def test_init_via_list_of_tuples():
@@ -260,19 +279,19 @@ def test_append_index(a, b):
         {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
         pytest.param(
             {},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
         pytest.param(
             {1: [], 2: [], 3: []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
         pytest.param(
             [1, 2, 3],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/11080"
             ),
         ),
@@ -287,6 +306,62 @@ def test_axes(data):
 
     for e, a in zip(expected, actual):
         assert_eq(e, a)
+
+
+def test_dataframe_truncate_axis_0():
+    df = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf = df.to_pandas()
+
+    expected = pdf.truncate(before=2, after=4, axis="index")
+    actual = df.truncate(before=2, after=4, axis="index")
+    assert_eq(actual, expected)
+
+    expected = pdf.truncate(before=1, after=4, axis=0)
+    actual = df.truncate(before=1, after=4, axis=0)
+    assert_eq(expected, actual)
+
+
+def test_dataframe_truncate_axis_1():
+    df = cudf.DataFrame(
+        {
+            "A": ["a", "b", "c", "d", "e"],
+            "B": ["f", "g", "h", "i", "j"],
+            "C": ["k", "l", "m", "n", "o"],
+        },
+        index=[1, 2, 3, 4, 5],
+    )
+    pdf = df.to_pandas()
+
+    expected = pdf.truncate(before="A", after="B", axis="columns")
+    actual = df.truncate(before="A", after="B", axis="columns")
+    assert_eq(actual, expected)
+
+    expected = pdf.truncate(before="A", after="B", axis=1)
+    actual = df.truncate(before="A", after="B", axis=1)
+    assert_eq(actual, expected)
+
+
+def test_dataframe_truncate_datetimeindex():
+    dates = cudf.date_range(
+        "2021-01-01 23:45:00", "2021-01-01 23:46:00", freq="s"
+    )
+    df = cudf.DataFrame(data={"A": 1, "B": 2}, index=dates)
+    pdf = df.to_pandas()
+    expected = pdf.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+    actual = df.truncate(
+        before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+    )
+
+    assert_eq(actual, expected)
 
 
 def test_series_init_none():
@@ -2008,6 +2083,7 @@ def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -2024,7 +2100,7 @@ def gdf(pdf):
         },
         pytest.param(
             {"x": [], "y": [], "z": []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=version.parse("11")
                 <= version.parse(cupy.__version__)
                 < version.parse("11.1"),
@@ -2034,7 +2110,7 @@ def gdf(pdf):
         ),
         pytest.param(
             {"x": []},
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=version.parse("11")
                 <= version.parse(cupy.__version__)
                 < version.parse("11.1"),
@@ -2155,6 +2231,7 @@ def _hide_host_other_warning(other):
         yield
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2245,6 +2322,7 @@ def test_bitwise_binops_df(pdf, gdf, binop):
     assert_eq(d, g)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2550,7 +2628,7 @@ def test_dataframe_boolmask(mask_shape):
         [True, False, True],
         pytest.param(
             cudf.Series([True, False, True]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Pandas can't index a multiindex with a Series"
             ),
         ),
@@ -2702,6 +2780,7 @@ def test_tail_for_string():
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize(
@@ -2745,6 +2824,7 @@ def test_reset_index(level, drop, column_names, inplace, col_level, col_fill):
     assert_eq(expect, got)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("level", [None, 0, 1, [None]])
 @pytest.mark.parametrize("drop", [False, True])
 @pytest.mark.parametrize("inplace", [False, True])
@@ -2905,7 +2985,7 @@ def test_set_index(data, index, drop, append, inplace):
 )
 @pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
 @pytest.mark.parametrize("verify_integrity", [True])
-@pytest.mark.xfail
+@pytest_xfail
 def test_set_index_verify_integrity(data, index, verify_integrity):
     gdf = cudf.DataFrame(data)
     gdf.set_index(index, verify_integrity=verify_integrity)
@@ -2963,6 +3043,7 @@ def reindex_data_numeric():
     )
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("copy", [True, False])
 @pytest.mark.parametrize(
     "args,gd_kwargs",
@@ -3106,7 +3187,7 @@ def test_to_frame(pdf, gdf):
     gdf_new_name = gdf.x.to_frame(name=name)
     pdf_new_name = pdf.x.to_frame(name=name)
     assert_eq(gdf_new_name, pdf_new_name)
-    assert gdf_new_name.columns[0] is name
+    assert gdf_new_name.columns[0] == np.bool(name)
 
 
 def test_dataframe_empty_sort_index():
@@ -3119,6 +3200,7 @@ def test_dataframe_empty_sort_index():
     assert_eq(expect, got, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "index",
     [
@@ -3133,7 +3215,7 @@ def test_dataframe_empty_sort_index():
         pytest.param(
             pd.RangeIndex(2, -1, -1),
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     condition=PANDAS_LT_140,
                     reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
@@ -3176,6 +3258,7 @@ def test_dataframe_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 @pytest.mark.parametrize(
     "level",
@@ -3713,7 +3796,7 @@ def test_dataframe_round(decimals):
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     reason="NotImplementedError: all does not "
                     "support columns of object dtype."
                 )
@@ -3765,7 +3848,7 @@ def test_all(data):
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
-                pytest.mark.xfail(
+                pytest_xfail(
                     reason="NotImplementedError: any does not "
                     "support columns of object dtype."
                 )
@@ -3813,6 +3896,7 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize("a", [[], ["123"]])
 @pytest.mark.parametrize("b", ["123", ["123"]])
 @pytest.mark.parametrize(
@@ -4260,11 +4344,11 @@ def test_series_values_host_property(data):
         [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
-            marks=pytest.mark.xfail(raises=NotImplementedError),
+            marks=pytest_xfail(raises=NotImplementedError),
         ),
         pytest.param(
             ["m", "a", "d", "v"],
-            marks=pytest.mark.xfail(raises=TypeError),
+            marks=pytest_xfail(raises=TypeError),
         ),
     ],
 )
@@ -4285,27 +4369,27 @@ def test_series_values_property(data):
         {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
         pytest.param(
             {"A": [1, None, 3], "B": [1, 2, None]},
-            marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+            marks=pytest_xfail(
+                reason="Nulls not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": [None, None, None], "B": [None, None, None]},
-            marks=pytest.mark.xfail(
-                reason="Nulls not supported by as_gpu_matrix"
+            marks=pytest_xfail(
+                reason="Nulls not supported by values accessor"
             ),
         ),
         {"A": [], "B": []},
         pytest.param(
             {"A": [1, 2, 3], "B": ["a", "b", "c"]},
-            marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+            marks=pytest_xfail(
+                reason="str or categorical not supported by values accessor"
             ),
         ),
         pytest.param(
             {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
-            marks=pytest.mark.xfail(
-                reason="str or categorical not supported by as_gpu_matrix"
+            marks=pytest_xfail(
+                reason="str or categorical not supported by values accessor"
             ),
         ),
     ],
@@ -4424,8 +4508,8 @@ def test_isin_dataframe(data, values):
         except ValueError as e:
             if str(e) == "Lengths must match.":
                 pytest.xfail(
-                    not PANDAS_GE_110,
-                    "https://github.com/pandas-dev/pandas/issues/34256",
+                    condition=not PANDAS_GE_110,
+                    reason="https://github.com/pandas-dev/pandas/issues/34256",
                 )
         except TypeError as e:
             # Can't do isin with different categories
@@ -4640,9 +4724,9 @@ def test_empty_df_astype(dtype, args):
     "errors",
     [
         pytest.param(
-            "raise", marks=pytest.mark.xfail(reason="should raise error here")
+            "raise", marks=pytest_xfail(reason="should raise error here")
         ),
-        pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
+        pytest.param("other", marks=pytest_xfail(raises=ValueError)),
         "ignore",
     ],
 )
@@ -4675,6 +4759,7 @@ def test_df_constructor_dtype(dtype):
     assert_eq(expect, got)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -5129,7 +5214,7 @@ def test_cov():
     assert_eq(pdf.cov(), gdf.cov())
 
 
-@pytest.mark.xfail(reason="cupy-based cov does not support nulls")
+@pytest_xfail(reason="cupy-based cov does not support nulls")
 def test_cov_nans():
     pdf = pd.DataFrame()
     pdf["a"] = [None, None, None, 2.00758632, None]
@@ -5141,6 +5226,7 @@ def test_cov_nans():
     assert_eq(pdf.cov(), gdf.cov())
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "gsr",
     [
@@ -5151,7 +5237,7 @@ def test_cov_nans():
         cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
         pytest.param(
             cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
-            marks=pytest.mark.xfail,
+            marks=pytest_xfail,
         ),
     ],
 )
@@ -5193,6 +5279,7 @@ def test_df_sr_binop(gsr, colnames, op):
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "op",
     [
@@ -5204,12 +5291,12 @@ def test_df_sr_binop(gsr, colnames, op):
         operator.pow,
         # comparison ops will temporarily XFAIL
         # see PR  https://github.com/rapidsai/cudf/pull/7491
-        pytest.param(operator.eq, marks=pytest.mark.xfail()),
-        pytest.param(operator.lt, marks=pytest.mark.xfail()),
-        pytest.param(operator.le, marks=pytest.mark.xfail()),
-        pytest.param(operator.gt, marks=pytest.mark.xfail()),
-        pytest.param(operator.ge, marks=pytest.mark.xfail()),
-        pytest.param(operator.ne, marks=pytest.mark.xfail()),
+        pytest.param(operator.eq, marks=pytest_xfail()),
+        pytest.param(operator.lt, marks=pytest_xfail()),
+        pytest.param(operator.le, marks=pytest_xfail()),
+        pytest.param(operator.gt, marks=pytest_xfail()),
+        pytest.param(operator.ge, marks=pytest_xfail()),
+        pytest.param(operator.ne, marks=pytest_xfail()),
     ],
 )
 @pytest.mark.parametrize(
@@ -5271,7 +5358,7 @@ def test_memory_usage(deep, index, set_index):
         )
 
 
-@pytest.mark.xfail
+@pytest_xfail
 def test_memory_usage_string():
     rows = int(100)
     df = pd.DataFrame(
@@ -6190,6 +6277,7 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         assert_eq(pdf, gdf, check_dtype=False)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "col_data",
     [
@@ -6233,6 +6321,7 @@ def test_dataframe_assign_scalar(col_data, assign_val):
     assert_eq(pdf, gdf)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "col_data",
     [
@@ -6528,6 +6617,7 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data1",
     [
@@ -6762,27 +6852,172 @@ def test_cudf_isclose_different_index():
     assert_eq(expected, cudf.isclose(s1, s2))
 
 
-def test_dataframe_to_dict_error():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]})
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
-        ),
-    ):
-        df.to_dict()
+@pytest.mark.parametrize(
+    "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
+)
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_dataframe_to_dict(orient, into):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [9, 5, 3]}, index=[10, 11, 12])
+    pdf = df.to_pandas()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            r"cuDF does not support conversion to host memory "
-            r"via `to_dict()` method. Consider using "
-            r"`.to_pandas().to_dict()` to construct a Python dictionary."
+    actual = df.to_dict(orient=orient, into=into)
+    expected = pdf.to_dict(orient=orient, into=into)
+    if orient == "series":
+        assert actual.keys() == expected.keys()
+        for key in actual.keys():
+            assert_eq(expected[key], actual[key])
+    else:
+        assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data, orient, dtype, columns",
+    [
+        (
+            {"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]},
+            "columns",
+            None,
+            None,
         ),
-    ):
-        df["a"].to_dict()
+        ({"col_1": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}, "index", None, None),
+        (
+            {"col_1": [None, 2, 1, 0], "col_2": [3, None, 1, 0]},
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": ["ab", "cd", "ef", "gh"],
+                "col_2": ["zx", "one", "two", "three"],
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [[1, 3], [2, 4]],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict(data, orient, dtype, columns):
+
+    expected = pd.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str", None])
+def test_dataframe_from_dict_transposed(dtype):
+    pd_data = {"a": [3, 2, 1, 0], "col_2": [3, 2, 1, 0]}
+    gd_data = {key: cudf.Series(val) for key, val in pd_data.items()}
+
+    expected = pd.DataFrame.from_dict(pd_data, orient="index", dtype=dtype)
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+
+    gd_data = {key: cupy.asarray(val) for key, val in pd_data.items()}
+    actual = cudf.DataFrame.from_dict(gd_data, orient="index", dtype=dtype)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pd_data, gd_data, orient, dtype, columns",
+    [
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "columns",
+            None,
+            None,
+        ),
+        (
+            {"col_1": np.array([3, 2, 1, 0]), "col_2": np.array([3, 2, 1, 0])},
+            {
+                "col_1": cupy.array([3, 2, 1, 0]),
+                "col_2": cupy.array([3, 2, 1, 0]),
+            },
+            "index",
+            None,
+            None,
+        ),
+        (
+            {
+                "col_1": np.array([None, 2, 1, 0]),
+                "col_2": np.array([3, None, 1, 0]),
+            },
+            {
+                "col_1": cupy.array([np.nan, 2, 1, 0]),
+                "col_2": cupy.array([3, np.nan, 1, 0]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            {
+                "col_1": np.array(["ab", "cd", "ef", "gh"]),
+                "col_2": np.array(["zx", "one", "two", "three"]),
+            },
+            "index",
+            None,
+            ["A", "B", "C", "D"],
+        ),
+        (
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [np.array([1, 3]), np.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            {
+                "index": [("a", "b"), ("a", "c")],
+                "columns": [("x", 1), ("y", 2)],
+                "data": [cupy.array([1, 3]), cupy.array([2, 4])],
+                "index_names": ["n1", "n2"],
+                "column_names": ["z1", "z2"],
+            },
+            "tight",
+            "float64",
+            None,
+        ),
+    ],
+)
+def test_dataframe_from_dict_cp_np_arrays(
+    pd_data, gd_data, orient, dtype, columns
+):
+
+    expected = pd.DataFrame.from_dict(
+        data=pd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    actual = cudf.DataFrame.from_dict(
+        data=gd_data, orient=orient, dtype=dtype, columns=columns
+    )
+
+    assert_eq(expected, actual, check_dtype=dtype is not None)
 
 
 @pytest.mark.parametrize(
@@ -6860,6 +7095,7 @@ def test_series_keys(ps):
         assert_eq(ps.keys(), gds.keys())
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -6940,6 +7176,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
         assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -6970,7 +7207,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
         pd.Series([10, 11, 23, 234, 13]),
         pytest.param(
             pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="pandas bug: "
                 "https://github.com/pandas-dev/pandas/issues/35092"
             ),
@@ -7023,6 +7260,7 @@ def test_dataframe_append_series_mixed_index():
         df.append(sr, ignore_index=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7192,6 +7430,7 @@ def test_dataframe_ffill(df):
     assert_eq(expected, actual)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7542,6 +7781,7 @@ def test_dataframe_init_with_columns(data, columns):
     )
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data, ignore_dtype",
     [
@@ -7621,6 +7861,7 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
         assert_eq(expected, actual, check_index_type=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data, ignore_dtype, index",
     [
@@ -7791,6 +8032,7 @@ def test_dataframe_iterrows_itertuples():
         df.iterrows()
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7823,7 +8065,7 @@ def test_dataframe_iterrows_itertuples():
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -7844,7 +8086,7 @@ def test_dataframe_iterrows_itertuples():
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -7868,6 +8110,7 @@ def test_describe_misc_include(df, include):
     assert_eq(expected, actual)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "df",
     [
@@ -7900,7 +8143,7 @@ def test_describe_misc_include(df, include):
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -7921,7 +8164,7 @@ def test_describe_misc_include(df, include):
                     ),
                 }
             ),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="https://github.com/rapidsai/cudf/issues/6219"
             ),
         ),
@@ -8350,6 +8593,7 @@ def test_dataframe_constructor_column_index_only():
     ) == id(gdf["c"]._column)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -8451,6 +8695,7 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         gdf.agg(aggs)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "join",
     ["left"],
@@ -8678,7 +8923,7 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="level=None not implemented yet")
+@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
@@ -9111,7 +9356,7 @@ def test_groupby_cov_positive_semidefinite_matrix():
     )
 
 
-@pytest.mark.xfail
+@pytest_xfail
 def test_groupby_cov_for_pandas_bug_case():
     # Handles case: pandas bug using ddof with missing data.
     # Filed an issue in Pandas on GH, link below:
@@ -9265,6 +9510,7 @@ def test_dataframe_rename_duplicate_column():
         gdf.rename(columns={"a": "b"}, inplace=True)
 
 
+@pytest_unmark_spilling
 @pytest.mark.parametrize(
     "data",
     [
@@ -9507,14 +9753,14 @@ def test_multiindex_wildcard_selection_all(wildcard_df):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="Not yet properly supported.")
+@pytest_xfail(reason="Not yet properly supported.")
 def test_multiindex_wildcard_selection_partial(wildcard_df):
     expect = wildcard_df.to_pandas().loc[:, (slice("a", "b"), "b")]
     got = wildcard_df.loc[:, (slice("a", "b"), "b")]
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="Not yet properly supported.")
+@pytest_xfail(reason="Not yet properly supported.")
 def test_multiindex_wildcard_selection_three_level_all():
     midx = cudf.MultiIndex.from_tuples(
         [(c1, c2, c3) for c1 in "abcd" for c2 in "abc" for c3 in "ab"]
@@ -9547,5 +9793,25 @@ def test_non_string_column_name_to_arrow(data):
 
     expected = df.to_arrow()
     actual = pa.Table.from_pandas(df.to_pandas())
+
+    assert expected.equals(actual)
+
+
+def test_complex_types_from_arrow():
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3]),
+            pa.array([10, 20, 30]),
+            pa.array([{"a": 9}, {"b": 10}, {"c": 11}]),
+            pa.array([[{"a": 1}], [{"b": 2}], [{"c": 3}]]),
+            pa.array([10, 11, 12]).cast(pa.decimal128(21, 2)),
+            pa.array([{"a": 9}, {"b": 10, "c": {"g": 43}}, {"c": {"a": 10}}]),
+        ],
+        names=["a", "b", "c", "d", "e", "f"],
+    )
+
+    df = cudf.DataFrame.from_arrow(expected)
+    actual = df.to_arrow()
 
     assert expected.equals(actual)

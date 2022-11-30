@@ -33,7 +33,7 @@
 #include <type_traits>
 
 /**
- * @brief Real Type that has atleast number of bits of integral type in its mantissa.
+ * @brief Real Type that has at least number of bits of integral type in its mantissa.
  *  number of bits of integrals < 23 bits of mantissa in float
  * to allow full range of integer bits to be generated.
  * @tparam T integral type
@@ -148,7 +148,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
     case distribution_id::NORMAL:
       return [lower_bound, upper_bound, dist = make_normal_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, cudf::default_stream_value);
+        rmm::device_uvector<T> result(size, cudf::get_default_stream());
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
@@ -158,7 +158,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
     case distribution_id::UNIFORM:
       return [lower_bound, upper_bound, dist = make_uniform_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, cudf::default_stream_value);
+        rmm::device_uvector<T> result(size, cudf::get_default_stream());
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
@@ -169,7 +169,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       // kind of exponential distribution from lower_bound to upper_bound.
       return [lower_bound, upper_bound, dist = geometric_distribution<T>(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, cudf::default_stream_value);
+        rmm::device_uvector<T> result(size, cudf::get_default_stream());
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),

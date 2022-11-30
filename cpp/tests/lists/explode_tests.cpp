@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/explode.hpp>
 
-using namespace cudf::test;
-using FCW = fixed_width_column_wrapper<int32_t>;
-using LCW = lists_column_wrapper<int32_t>;
+using FCW = cudf::test::fixed_width_column_wrapper<int32_t>;
+using LCW = cudf::test::lists_column_wrapper<int32_t>;
 
 class ExplodeTest : public cudf::test::BaseFixture {
 };
@@ -78,11 +77,11 @@ TEST_F(ExplodeTest, Basics)
 
   FCW a{100, 200, 300};
   LCW b{LCW{1, 2, 7}, LCW{5, 6}, LCW{0, 3}};
-  strings_column_wrapper c{"string0", "string1", "string2"};
+  cudf::test::strings_column_wrapper c{"string0", "string1", "string2"};
 
   FCW expected_a{100, 100, 100, 200, 200, 300, 300};
   FCW expected_b{1, 2, 7, 5, 6, 0, 3};
-  strings_column_wrapper expected_c{
+  cudf::test::strings_column_wrapper expected_c{
     "string0", "string0", "string0", "string1", "string1", "string2", "string2"};
 
   cudf::table_view t({a, b, c});
@@ -110,7 +109,7 @@ TEST_F(ExplodeTest, SingleNull)
   constexpr auto null = 0;
 
   auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -141,8 +140,8 @@ TEST_F(ExplodeTest, Nulls)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   auto always_valid =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -176,8 +175,8 @@ TEST_F(ExplodeTest, NullsInList)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a{
     LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
@@ -236,8 +235,8 @@ TEST_F(ExplodeTest, NestedNulls)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   auto always_valid =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -270,8 +269,8 @@ TEST_F(ExplodeTest, NullsInNested)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -305,8 +304,8 @@ TEST_F(ExplodeTest, NullsInNestedDoubleExplode)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a{LCW{LCW({1, null}, valids), LCW{}, LCW{7, 6, 5}},
         LCW{LCW{5, 6}},
@@ -340,21 +339,21 @@ TEST_F(ExplodeTest, NestedStructs)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
          LCW{LCW{0, 3}, LCW{5}, LCW({2, null}, valids)}});
   FCW b1({100, 200, 300});
-  strings_column_wrapper b2{"100", "200", "300"};
-  structs_column_wrapper b({b1, b2});
+  cudf::test::strings_column_wrapper b2{"100", "200", "300"};
+  cudf::test::structs_column_wrapper b({b1, b2});
 
   LCW expected_a{
     LCW({1, null}, valids), LCW{7, 6, 5}, LCW{5, 6}, LCW{0, 3}, LCW{5}, LCW({2, null}, valids)};
   FCW expected_b1{100, 100, 200, 300, 300, 300};
-  strings_column_wrapper expected_b2{"100", "100", "200", "300", "300", "300"};
-  structs_column_wrapper expected_b({expected_b1, expected_b2});
+  cudf::test::strings_column_wrapper expected_b2{"100", "100", "200", "300", "300", "300"};
+  cudf::test::structs_column_wrapper expected_b({expected_b1, expected_b2});
 
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
@@ -435,15 +434,16 @@ TEST_F(ExplodeTest, ListOfStructsWithEmpties)
   // concatenated
   auto final_col =
     cudf::concatenate(std::vector<cudf::column_view>({*row0, *row1, *row2, *row3, *row4}));
-  auto s = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+  auto s = cudf::test::strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
 
   cudf::table_view t({final_col->view(), s->view()});
 
-  auto ret                  = cudf::explode(t, 0);
-  auto expected_numeric_col = fixed_width_column_wrapper<int32_t>{{1, null, null}, {1, 0, 0}};
+  auto ret = cudf::explode(t, 0);
+  auto expected_numeric_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, null, null}, {1, 0, 0}};
 
-  auto expected_a = structs_column_wrapper{{expected_numeric_col}, {1, 1, 0}}.release();
-  auto expected_b = strings_column_wrapper({"a", "b", "c"}).release();
+  auto expected_a = cudf::test::structs_column_wrapper{{expected_numeric_col}, {1, 1, 0}}.release();
+  auto expected_b = cudf::test::strings_column_wrapper({"a", "b", "c"}).release();
 
   cudf::table_view expected({expected_a->view(), expected_b->view()});
 
@@ -464,10 +464,11 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   //  [{25, "25"}, {30, "30"}] 400
   //  [{15, "15"}, {20, "20"}] 500
 
-  auto numeric_col =
-    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
-  strings_column_wrapper string_col{"70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
-  auto struct_col = structs_column_wrapper{{numeric_col, string_col}}.release();
+  auto numeric_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  cudf::test::strings_column_wrapper string_col{
+    "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
+  auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
   auto a          = cudf::make_lists_column(
     5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
 
@@ -476,12 +477,13 @@ TYPED_TEST(ExplodeTypedTest, ListOfStructs)
   cudf::table_view t({a->view(), b});
   auto ret = cudf::explode(t, 0);
 
-  auto expected_numeric_col =
-    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
-  strings_column_wrapper expected_string_col{
+  auto expected_numeric_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  cudf::test::strings_column_wrapper expected_string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
 
-  auto expected_a = structs_column_wrapper{{expected_numeric_col, expected_string_col}}.release();
+  auto expected_a =
+    cudf::test::structs_column_wrapper{{expected_numeric_col, expected_string_col}}.release();
   FCW expected_b{100, 100, 200, 200, 300, 300, 400, 400, 500, 500};
 
   cudf::table_view expected({expected_a->view(), expected_b});
@@ -508,8 +510,8 @@ TEST_F(ExplodeTest, SlicedList)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, 2}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -570,11 +572,11 @@ TEST_F(ExplodeOuterTest, Basics)
 
   FCW a{100, 200, 300};
   LCW b{LCW{1, 2, 7}, LCW{5, 6}, LCW{0, 3}};
-  strings_column_wrapper c{"string0", "string1", "string2"};
+  cudf::test::strings_column_wrapper c{"string0", "string1", "string2"};
 
   FCW expected_a{100, 100, 100, 200, 200, 300, 300};
   FCW expected_b{1, 2, 7, 5, 6, 0, 3};
-  strings_column_wrapper expected_c{
+  cudf::test::strings_column_wrapper expected_c{
     "string0", "string0", "string0", "string1", "string1", "string2", "string2"};
 
   cudf::table_view t({a, b, c});
@@ -601,7 +603,7 @@ TEST_F(ExplodeOuterTest, SingleNull)
   constexpr auto null = 0;
 
   auto first_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
 
   LCW a({LCW{null}, LCW{5, 6}, LCW{}, LCW{0, 3}}, first_invalid);
   FCW b({100, 200, 300, 400});
@@ -630,8 +632,8 @@ TEST_F(ExplodeOuterTest, Nulls)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{1, 2, 7}, LCW{null}, LCW{0, 3}}, valids);
   FCW b({100, null, 300}, valids);
@@ -694,7 +696,7 @@ TEST_F(ExplodeOuterTest, SequentialNulls)
   constexpr auto null = 0;
 
   auto third_invalid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 2 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
 
   LCW a{LCW({1, 2, null}, third_invalid), LCW{3, 4}, LCW{}, LCW{}, LCW{5, 6, 7}};
   FCW b{100, 200, 300, 400, 500};
@@ -787,8 +789,7 @@ TEST_F(ExplodeOuterTest, LeadingNulls)
 
   constexpr auto null = 0;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 4 ? true : false; });
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 4; });
 
   LCW a({LCW{null}, LCW{null}, LCW{null}, LCW{null}, LCW{1, 2}}, valids);
   FCW b{100, 200, 300, 400, 500};
@@ -819,8 +820,8 @@ TEST_F(ExplodeOuterTest, NullsInList)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a{
     LCW({1, null, 7}, valids), LCW({5, null, 0, null}, valids), LCW{}, LCW({0, null, 8}, valids)};
@@ -880,14 +881,14 @@ TEST_F(ExplodeOuterTest, NestedNulls)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW{1, 2}, LCW{7, 6, 5}}, LCW{LCW{null}}, LCW{LCW{0, 3}, LCW{5}, LCW{2, 1}}}, valids);
   FCW b({100, 200, 300});
 
   auto expected_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 2 ? false : true; });
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; });
   LCW expected_a({LCW{1, 2}, LCW{7, 6, 5}, LCW{null}, LCW{0, 3}, LCW{5}, LCW{2, 1}},
                  expected_valids);
   FCW expected_b({100, 100, 200, 300, 300, 300});
@@ -913,8 +914,8 @@ TEST_F(ExplodeOuterTest, NullsInNested)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
@@ -948,8 +949,8 @@ TEST_F(ExplodeOuterTest, NullsInNestedDoubleExplode)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a{LCW{LCW({1, null}, valids), LCW{}, LCW{7, 6, 5}},
         LCW{LCW{5, 6}},
@@ -985,21 +986,21 @@ TEST_F(ExplodeOuterTest, NestedStructs)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},
          LCW{LCW{0, 3}, LCW{5}, LCW({2, null}, valids)}});
   FCW b1({100, 200, 300});
-  strings_column_wrapper b2{"100", "200", "300"};
-  structs_column_wrapper b({b1, b2});
+  cudf::test::strings_column_wrapper b2{"100", "200", "300"};
+  cudf::test::structs_column_wrapper b({b1, b2});
 
   LCW expected_a{
     LCW({1, null}, valids), LCW{7, 6, 5}, LCW{5, 6}, LCW{0, 3}, LCW{5}, LCW({2, null}, valids)};
   FCW expected_b1{100, 100, 200, 300, 300, 300};
-  strings_column_wrapper expected_b2{"100", "100", "200", "300", "300", "300"};
-  structs_column_wrapper expected_b({expected_b1, expected_b2});
+  cudf::test::strings_column_wrapper expected_b2{"100", "100", "200", "300", "300", "300"};
+  cudf::test::structs_column_wrapper expected_b({expected_b1, expected_b2});
 
   cudf::table_view t({a, b});
   cudf::table_view expected({expected_a, expected_b});
@@ -1080,17 +1081,18 @@ TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
   // concatenated
   auto final_col =
     cudf::concatenate(std::vector<cudf::column_view>({*row0, *row1, *row2, *row3, *row4}));
-  auto s = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+  auto s = cudf::test::strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
 
   cudf::table_view t({final_col->view(), s->view()});
 
   auto ret = cudf::explode_outer(t, 0);
 
   auto expected_numeric_col =
-    fixed_width_column_wrapper<int32_t>{{1, null, null, null, null}, {1, 0, 0, 0, 0}};
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, null, null, null, null}, {1, 0, 0, 0, 0}};
 
-  auto expected_a = structs_column_wrapper{{expected_numeric_col}, {1, 1, 0, 0, 0}}.release();
-  auto expected_b = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+  auto expected_a =
+    cudf::test::structs_column_wrapper{{expected_numeric_col}, {1, 1, 0, 0, 0}}.release();
+  auto expected_b = cudf::test::strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
 
   cudf::table_view expected({expected_a->view(), expected_b->view()});
 
@@ -1111,10 +1113,11 @@ TYPED_TEST(ExplodeOuterTypedTest, ListOfStructs)
   //  [{25, "25"}, {30, "30"}] 400
   //  [{15, "15"}, {20, "20"}] 500
 
-  auto numeric_col =
-    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
-  strings_column_wrapper string_col{"70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
-  auto struct_col = structs_column_wrapper{{numeric_col, string_col}}.release();
+  auto numeric_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  cudf::test::strings_column_wrapper string_col{
+    "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
+  auto struct_col = cudf::test::structs_column_wrapper{{numeric_col, string_col}}.release();
   auto a          = cudf::make_lists_column(
     5, FCW{0, 2, 4, 6, 8, 10}.release(), std::move(struct_col), cudf::UNKNOWN_NULL_COUNT, {});
 
@@ -1123,12 +1126,13 @@ TYPED_TEST(ExplodeOuterTypedTest, ListOfStructs)
   cudf::table_view t({a->view(), b});
   auto ret = cudf::explode_outer(t, 0);
 
-  auto expected_numeric_col =
-    fixed_width_column_wrapper<TypeParam, int32_t>{{70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
-  strings_column_wrapper expected_string_col{
+  auto expected_numeric_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
+    {70, 75, 50, 55, 35, 45, 25, 30, 15, 20}};
+  cudf::test::strings_column_wrapper expected_string_col{
     "70", "75", "50", "55", "35", "45", "25", "30", "15", "20"};
 
-  auto expected_a = structs_column_wrapper{{expected_numeric_col, expected_string_col}}.release();
+  auto expected_a =
+    cudf::test::structs_column_wrapper{{expected_numeric_col, expected_string_col}}.release();
   FCW expected_b{100, 100, 200, 200, 300, 300, 400, 400, 500, 500};
 
   cudf::table_view expected({expected_a->view(), expected_b});
@@ -1155,8 +1159,8 @@ TEST_F(ExplodeOuterTest, SlicedList)
 
   constexpr auto null = 0;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   LCW a({LCW{LCW({1, null}, valids), LCW{7, 6, 5}},
          LCW{LCW{5, 6}},

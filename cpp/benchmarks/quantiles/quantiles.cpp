@@ -50,7 +50,7 @@ static void BM_quantiles(benchmark::State& state, bool nulls)
     thrust::seq, q.begin(), q.end(), [n_quantiles](auto i) { return i * (1.0f / n_quantiles); });
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
 
     auto result = cudf::quantiles(input, q);
     // auto result = (stable) ? cudf::stable_sorted_order(input) : cudf::sorted_order(input);

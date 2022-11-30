@@ -3,6 +3,7 @@
 import hashlib
 import operator
 import re
+from collections import OrderedDict, defaultdict
 from string import ascii_letters, digits
 
 import cupy as cp
@@ -395,7 +396,7 @@ def test_series_describe_numeric(dtype):
     actual = gs.describe()
     expected = ps.describe()
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_dtype=True)
 
 
 @pytest.mark.parametrize("dtype", ["datetime64[ns]"])
@@ -1614,6 +1615,47 @@ def test_axes(data):
         assert_eq(e, a)
 
 
+def test_series_truncate():
+    csr = cudf.Series([1, 2, 3, 4])
+    psr = csr.to_pandas()
+
+    assert_eq(csr.truncate(), psr.truncate())
+    assert_eq(csr.truncate(1, 2), psr.truncate(1, 2))
+    assert_eq(csr.truncate(before=1, after=2), psr.truncate(before=1, after=2))
+
+
+def test_series_truncate_errors():
+    csr = cudf.Series([1, 2, 3, 4])
+    with pytest.raises(ValueError):
+        csr.truncate(axis=1)
+    with pytest.raises(ValueError):
+        csr.truncate(copy=False)
+
+    csr.index = [3, 2, 1, 6]
+    psr = csr.to_pandas()
+    assert_exceptions_equal(
+        lfunc=csr.truncate,
+        rfunc=psr.truncate,
+    )
+
+
+def test_series_truncate_datetimeindex():
+    dates = cudf.date_range(
+        "2021-01-01 23:45:00", "2021-01-02 23:46:00", freq="s"
+    )
+    csr = cudf.Series(range(len(dates)), index=dates)
+    psr = csr.to_pandas()
+
+    assert_eq(
+        csr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+        psr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1650,7 +1692,7 @@ def test_isin_numeric(data, values):
     assert_eq(got, expected)
 
 
-@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.xfail(raises=TypeError)
 def test_fill_new_category():
     gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
     gs[0:1] = "d"
@@ -1937,3 +1979,57 @@ def test_series_ordered_dedup():
     expect = pd.Series(sr.to_pandas().unique())
     got = cudf.Series(sr._column.unique(preserve_order=True))
     assert_eq(expect.values, got.values)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "float64"])
+@pytest.mark.parametrize("bool_scalar", [True, False])
+def test_set_bool_error(dtype, bool_scalar):
+    sr = cudf.Series([1, 2, 3], dtype=dtype)
+    psr = sr.to_pandas(nullable=True)
+
+    assert_exceptions_equal(
+        lfunc=sr.__setitem__,
+        rfunc=psr.__setitem__,
+        lfunc_args_and_kwargs=([bool_scalar],),
+        rfunc_args_and_kwargs=([bool_scalar],),
+    )
+
+
+def test_int64_equality():
+    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
+    assert (s != np.int64(2**63 - 1)).all()
+    assert (s != cudf.Scalar(2**63 - 1, dtype=np.int64)).all()
+
+
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_series_to_dict(into):
+    gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
+    ps = gs.to_pandas()
+
+    actual = gs.to_dict(into=into)
+    expected = ps.to_dict(into=into)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+        [],
+    ],
+)
+def test_series_hasnans(data):
+    gs = cudf.Series(data, nan_as_null=False)
+    ps = gs.to_pandas(nullable=True)
+
+    assert_eq(gs.hasnans, ps.hasnans)

@@ -10,7 +10,7 @@ from numba.np.numpy_support import from_dtype
 
 from cudf import NA
 from cudf.core.udf.api import Masked
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.masked_typing import MaskedType
 from cudf.testing._utils import parametrize_numeric_dtypes_pairwise
 
 arith_ops = (

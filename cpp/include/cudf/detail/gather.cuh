@@ -128,7 +128,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy(stream),
+    thrust::gather_if(rmm::exec_policy_nosync(stream),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -137,7 +137,7 @@ void gather_helper(InputItr source_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
     thrust::gather(
-      rmm::exec_policy(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
+      rmm::exec_policy_nosync(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
   }
 }
 
@@ -652,7 +652,7 @@ std::unique_ptr<table> gather(
   MapIterator gather_map_begin,
   MapIterator gather_map_end,
   out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<std::unique_ptr<column>> destination_columns;
