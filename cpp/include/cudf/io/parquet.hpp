@@ -778,7 +778,7 @@ class parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
     _row_group_size_rows = size_rows;
   }
 
@@ -800,7 +800,7 @@ class parquet_writer_options {
    */
   void set_max_page_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
     _max_page_size_rows = size_rows;
   }
 
@@ -834,7 +834,10 @@ class parquet_writer_options {
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows) { _max_page_fragment_size = size_rows; }
+  void set_max_page_fragment_size(size_type size_rows) {
+    CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+    _max_page_fragment_size = size_rows;
+  }
 };
 
 /**
@@ -1412,7 +1415,10 @@ class chunked_parquet_writer_options {
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows) { _max_page_fragment_size = size_rows; }
+  void set_max_page_fragment_size(size_type size_rows) {
+    CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+    _max_page_fragment_size = size_rows;
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
