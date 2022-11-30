@@ -630,6 +630,14 @@ class BaseIndex(Serializable):
         """
         Convert to a Pandas Index.
 
+        Parameters
+        ----------
+        nullable : Boolean, Default False
+            If ``nullable`` is ``True``, the resulting series will be
+            having a corresponding nullable Pandas dtype. If ``nullable``
+            is ``False``, the resulting series will either convert null
+            values to ``np.nan`` or ``None`` depending on the dtype.
+
         Examples
         --------
         >>> import cudf
