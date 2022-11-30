@@ -907,7 +907,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             isinstance(dtype, pd.CategoricalDtype)
             and dtype.categories is not None
         ):
-            labels = self._label_encoding(cats=dtype.categories)
+            labels = self._label_encoding(cats=dtype.categories._column)
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -998,7 +998,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def argsort(
         self, ascending: bool = True, na_position: str = "last"
-    ) -> ColumnBase:
+    ) -> "cudf.core.column.NumericalColumn":
 
         return self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1215,7 +1215,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         return self
 
-    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+    def _label_encoding(
+        self, cats: ColumnBase, dtype: Dtype = None, na_sentinel=-1
+    ):
         from cudf._lib.join import join as cpp_join
 
         def _return_sentinel_column():
@@ -1226,7 +1228,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if dtype is None:
             dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
 
-        cats = as_column(cats)
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
 
