@@ -140,7 +140,6 @@ rmm::device_uvector<cudf::type_id> type_infer_column_tree(
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  // TODO transform, then sort, and then reduce.
   CUDF_FUNC_RANGE();
   auto parse_opts = parsing_options(options);  // holds device_uvector<trie>.
 
@@ -159,104 +158,63 @@ rmm::device_uvector<cudf::type_id> type_infer_column_tree(
         // TODO use sentinel? or how about inferring struct/list type too? is it useful?
       }
     });
-  auto hist_it    = thrust::make_transform_iterator(
+  auto hist_it = thrust::make_transform_iterator(
     column_strings_begin,
     cudf::io::detail::convert_to_histograms<json_inference_options_view>{parse_opts.json_view(),
                                                                          input});
 
   rmm::device_uvector<cudf::io::column_type_bool_any16_t> column_type_histogram_bools(
     tree.node_categories.size(), stream);
-  
+
   thrust::copy(rmm::exec_policy(stream),
                hist_it,
                hist_it + tree.node_categories.size(),
-              //  thrust::make_permutation_iterator(column_type_histogram_bools.begin(), sorted_node_ids.begin()));
                column_type_histogram_bools.begin());
 
-  rmm::device_uvector<cudf::io::column_type_bool_any16_t> column_type_histogram_counts(num_columns,
-                                                                                       stream);
+  rmm::device_uvector<cudf::type_id> inferred_types(num_columns, stream);
   {
     CUDF_SCOPED_RANGE("histogram");
+    rmm::device_uvector<cudf::io::column_type_bool_any16_t> column_type_histogram_counts(
+      num_columns, stream);
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           sorted_col_ids.begin(),
                           sorted_col_ids.end(),
-                          // column_type_histogram_bools.begin(),
-                          thrust::make_permutation_iterator(column_type_histogram_bools.begin(), sorted_node_ids.begin()),
+                          thrust::make_permutation_iterator(column_type_histogram_bools.begin(),
+                                                            sorted_node_ids.begin()),
                           thrust::make_discard_iterator(),
                           column_type_histogram_counts.begin(),
                           thrust::equal_to{},
                           cudf::io::detail::custom_sum{});
-  }
-  rmm::device_uvector<cudf::type_id> inferred_types(num_columns, stream);
-  // rmm::device_uvector<size_type> column_id_size(num_columns, stream);
-  // {
-  //   CUDF_SCOPED_RANGE("column_id_size");
-  // thrust::reduce_by_key(rmm::exec_policy(stream),
-  //                       sorted_col_ids.begin(),
-  //                       sorted_col_ids.end(),
-  //                       thrust::constant_iterator<size_type>(1),
-  //                       thrust::make_discard_iterator(),
-  //                       column_id_size.begin());
-  // }
-  // FIXME: only reason we need another transform because of col_id_size in full null column
-  // creation.
 
-  auto get_type_id = [] __device__(auto const& cinfo) {
-    auto int_count_total =
-      cinfo.big_int_count() or cinfo.negative_small_int_count() or cinfo.positive_small_int_count();
-    if (cinfo.valid_count() == false) {
-      // Entire column is NULL; allocate the smallest amount of memory
-      return type_id::INT8;
-    } else if (cinfo.string_count()) {
-      return type_id::STRING;
-    } else if (cinfo.datetime_count()) {
-      // CUDF_FAIL("Date time is inferred as string.\n");
+    auto get_type_id = [] __device__(auto const& cinfo) {
+      auto int_count_total = cinfo.big_int_count() or cinfo.negative_small_int_count() or
+                             cinfo.positive_small_int_count();
+      if (cinfo.valid_count() == false) {
+        // Entire column is NULL; allocate the smallest amount of memory
+        return type_id::INT8;
+      } else if (cinfo.string_count()) {
+        return type_id::STRING;
+      } else if (cinfo.datetime_count()) {
+        // CUDF_FAIL("Date time is inferred as string.\n");
+        return type_id::EMPTY;
+      } else if (cinfo.float_count() || (int_count_total and cinfo.null_count())) {
+        return type_id::FLOAT64;
+      } else if (cinfo.big_int_count() == false && int_count_total) {
+        return type_id::INT64;
+      } else if (cinfo.big_int_count() && cinfo.negative_small_int_count()) {
+        return type_id::STRING;
+      } else if (cinfo.big_int_count()) {
+        return type_id::UINT64;
+      } else if (cinfo.bool_count()) {
+        return type_id::BOOL8;
+      }
+      // CUDF_FAIL("Data type inference failed.\n");
       return type_id::EMPTY;
-    } else if (cinfo.float_count() || (int_count_total and cinfo.null_count())) {
-      return type_id::FLOAT64;
-    } else if (cinfo.big_int_count() == false && int_count_total) {
-      return type_id::INT64;
-    } else if (cinfo.big_int_count() && cinfo.negative_small_int_count()) {
-      return type_id::STRING;
-    } else if (cinfo.big_int_count()) {
-      return type_id::UINT64;
-    } else if (cinfo.bool_count()) {
-      return type_id::BOOL8;
-    }
-    // CUDF_FAIL("Data type inference failed.\n");
-    return type_id::EMPTY;
-  };
-  // auto get_type_id = [] __device__(auto const& cinfo, auto col_id_size) {
-  //   auto int_count_total =
-  //     cinfo.big_int_count + cinfo.negative_small_int_count + cinfo.positive_small_int_count;
-  //   if (cinfo.null_count == col_id_size) {
-  //     // Entire column is NULL; allocate the smallest amount of memory
-  //     return type_id::INT8;
-  //   } else if (cinfo.string_count > 0) {
-  //     return type_id::STRING;
-  //   } else if (cinfo.datetime_count > 0) {
-  //     // CUDF_FAIL("Date time is inferred as string.\n");
-  //     return type_id::EMPTY;
-  //   } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
-  //     return type_id::FLOAT64;
-  //   } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
-  //     return type_id::INT64;
-  //   } else if (cinfo.big_int_count != 0 && cinfo.negative_small_int_count != 0) {
-  //     return type_id::STRING;
-  //   } else if (cinfo.big_int_count != 0) {
-  //     return type_id::UINT64;
-  //   } else if (cinfo.bool_count > 0) {
-  //     return type_id::BOOL8;
-  //   }
-  //   // CUDF_FAIL("Data type inference failed.\n");
-  //   return type_id::EMPTY;
-  // };
-  {
+    };
     CUDF_SCOPED_RANGE("get_type_id");
     thrust::transform(rmm::exec_policy(stream),
                       column_type_histogram_counts.begin(),
                       column_type_histogram_counts.end(),
-                      // column_id_size.begin(),
                       inferred_types.begin(),
                       get_type_id);
   }
