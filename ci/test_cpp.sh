@@ -19,7 +19,7 @@ conda activate test
 set -u
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 SUITEERROR=0
 
