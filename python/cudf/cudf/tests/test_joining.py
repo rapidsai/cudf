@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
+from itertools import combinations, product, repeat
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -2104,6 +2106,28 @@ def test_string_join_values_nulls():
     got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
 
     assert_join_results_equal(expect, got, how="left")
+
+
+@pytest.mark.parametrize(
+    "left_on,right_on",
+    [
+        *product(["a", "b", "c"], ["a", "b"]),
+        *zip(combinations(["a", "b", "c"], 2), repeat(["a", "b"])),
+    ],
+)
+def test_merge_mixed_index_columns(left_on, right_on):
+    left = pd.DataFrame({"a": [1, 2, 1, 2], "b": [2, 3, 3, 4]}).set_index("a")
+    right = pd.DataFrame({"a": [1, 2, 1, 3], "b": [2, 30, 3, 4]}).set_index(
+        "a"
+    )
+
+    left["c"] = 10
+
+    expect = left.merge(right, left_on=left_on, right_on=right_on, how="outer")
+    cleft = cudf.from_pandas(left)
+    cright = cudf.from_pandas(right)
+    got = cleft.merge(cright, left_on=left_on, right_on=right_on, how="outer")
+    assert_join_results_equal(expect, got, how="outer")
 
 
 def test_merge_multiindex_columns():
