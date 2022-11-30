@@ -1218,6 +1218,35 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _label_encoding(
         self, cats: ColumnBase, dtype: Dtype = None, na_sentinel=-1
     ):
+        """
+        Convert each value in `self` into an integer code, with `cats`
+        providing the mapping between codes and values.
+
+        Examples
+        --------
+        >>> from cudf.core.column import as_column
+        >>> col = as_column(['foo', 'bar', 'foo', 'baz'])
+        >>> cats = as_column(['foo', 'bar', 'baz'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bf3155c0>
+        [
+          0,
+          1,
+          0,
+          2
+        ]
+        dtype: int8
+        >>> cats = as_column(['foo', 'bar'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bfde0e40>
+        [
+          0,
+          1,
+          0,
+          -1
+        ]
+        dtype: int8
+        """
         from cudf._lib.join import join as cpp_join
 
         def _return_sentinel_column():
