@@ -26,12 +26,11 @@ rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
-TESTRESULTS_DIR="${PWD}/test-results"
-mkdir -p "${TESTRESULTS_DIR}"
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
+mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 SUITEERROR=0
 
-RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
-mkdir -p "${RAPIDS_COVERAGE_DIR}"
 
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \

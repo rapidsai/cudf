@@ -18,7 +18,7 @@ rapids-logger "pytest dask_cudf"
 pushd python/dask_cudf
 pytest \
   --cache-clear \
-  --junitxml="${TESTRESULTS_DIR}/junit-dask-cudf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   --cov-config=.coveragerc \
@@ -38,7 +38,7 @@ rapids-logger "pytest custreamz"
 pushd python/custreamz
 pytest \
   --cache-clear \
-  --junitxml="${TESTRESULTS_DIR}/junit-custreamz.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   --cov-config=.coveragerc \
@@ -65,7 +65,7 @@ rapids-logger "pytest strings_udf"
 pushd python/strings_udf/strings_udf
 pytest \
   --cache-clear \
-  --junitxml="${TESTRESULTS_DIR}/junit-strings-udf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-strings-udf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   --cov-config=.coveragerc \
@@ -86,7 +86,7 @@ pushd python/cudf/cudf
 pytest \
   --cache-clear \
   --ignore="benchmarks" \
-  --junitxml="${TESTRESULTS_DIR}/junit-cudf-strings-udf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-strings-udf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   --cov-config=../.coveragerc \

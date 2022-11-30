@@ -41,8 +41,8 @@ set +e
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 rapids-logger "Run gtests"
-TESTRESULTS_DIR=test-results/
-mkdir -p ${TESTRESULTS_DIR}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+mkdir -p "${RAPIDS_TESTS_DIR}"
 SUITEERROR=0
 
 # TODO: exit code handling is too verbose. Find a cleaner solution.
@@ -50,16 +50,16 @@ SUITEERROR=0
 for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     test_name=$(basename ${gt})
     echo "Running gtest $test_name"
-    ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
+    ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     # TODO: Disabling stream identification for now.
     #if [[ ${test_name} == "SPAN_TEST" ]]; then
     #    # This one test is specifically designed to test using a thrust device
     #    # vector, so we expect and allow it to include default stream usage.
     #    gtest_filter="SpanTest.CanConstructFromDeviceContainers"
-    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="-${gtest_filter}" && \
-    #        ${gt} --gtest_output=xml:${TESTRESULTS_DIR} --gtest_filter="${gtest_filter}"
+    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR} --gtest_filter="-${gtest_filter}" && \
+    #        ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR} --gtest_filter="${gtest_filter}"
     #else
-    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
+    #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     #fi
 
     exitcode=$?
@@ -74,7 +74,7 @@ rapids-logger "Run gtests with kvikio"
 for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
     gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
     echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${TESTRESULTS_DIR}
+    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     exitcode=$?
     if (( ${exitcode} != 0 )); then
         SUITEERROR=${exitcode}
@@ -92,7 +92,7 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
             continue
         fi
         echo "Running gtest $test_name"
-        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${TESTRESULTS_DIR}${test_name}.cs.log"
+        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${RAPIDS_TESTS_DIR}${test_name}.cs.log"
     done
     unset GTEST_CUDF_RMM_MODE
     # TODO: test-results/*.cs.log are processed in gpuci

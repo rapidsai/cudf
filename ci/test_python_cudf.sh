@@ -16,7 +16,7 @@ pushd python/cudf/cudf
 pytest \
   --cache-clear \
   --ignore="benchmarks" \
-  --junitxml="${TESTRESULTS_DIR}/junit-cudf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   --cov-config=../.coveragerc \
