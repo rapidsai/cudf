@@ -626,7 +626,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas Index.
 
