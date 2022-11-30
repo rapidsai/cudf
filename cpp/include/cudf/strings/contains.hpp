@@ -238,6 +238,44 @@ std::unique_ptr<column> like(
   string_scalar const& escape_character = string_scalar(""),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Returns a boolean column identifying rows which
+ * match the given like patterns
+ *
+ * The like pattern expects only 2 wildcard special characters:
+ * - `%` any number of any character (including no characters)
+ * - `_` any single character
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["azaa", "ababaabba", "aaxa"]
+ * p = ["%a", "b%", "__x_"]
+ * r = like(s, p)
+ * r is now [1, 0, 1]
+ * @endcode
+ *
+ * Specify an escape character to include either `%` or `_` in the search.
+ * The `escape_character` is expected to be either 0 or 1 characters.
+ * If more than one character is specified only the first character is used.
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * @throw cudf::logic_error if `patterns` contains nulls or `escape_character` is invalid
+ * @throw cudf::logic_error if `patterns.size() != input.size()`
+ *
+ * @param input Strings instance for this operation
+ * @param patterns Like patterns to match within each corresponding string
+ * @param escape_character Optional character specifies the escape prefix;
+ *                         default is no escape character
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New boolean column
+ */
+std::unique_ptr<column> like(
+  strings_column_view const& input,
+  strings_column_view const& patterns,
+  string_scalar const& escape_character = string_scalar(""),
+  rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

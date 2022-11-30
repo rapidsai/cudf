@@ -21,8 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-struct StringsLikeTests : public cudf::test::BaseFixture {
-};
+struct StringsLikeTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsLikeTests, Basic)
 {
@@ -89,9 +88,12 @@ TEST_F(StringsLikeTests, Trailing)
 TEST_F(StringsLikeTests, Multiple)
 {
   cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
-  auto const sv      = cudf::strings_column_view(input);
-  auto const results = cudf::strings::like(sv, std::string("a%b%c"));
-  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, false, false, false});
+  cudf::test::strings_column_wrapper patterns({"a%b%c", "a%c", "a__b", "b__c", "", "áéêú"});
+
+  auto const sv_input    = cudf::strings_column_view(input);
+  auto const sv_patterns = cudf::strings_column_view(patterns);
+  auto const results     = cudf::strings::like(sv_input, sv_patterns);
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
@@ -189,10 +191,15 @@ TEST_F(StringsLikeTests, Empty)
 
 TEST_F(StringsLikeTests, Errors)
 {
-  cudf::test::strings_column_wrapper input({"3", "33"});
+  auto const input       = cudf::test::strings_column_wrapper({"3", "33"});
   auto const sv          = cudf::strings_column_view(input);
   auto const invalid_str = cudf::string_scalar("", false);
 
   EXPECT_THROW(cudf::strings::like(sv, invalid_str), cudf::logic_error);
   EXPECT_THROW(cudf::strings::like(sv, std::string("3"), invalid_str), cudf::logic_error);
+
+  auto patterns          = cudf::test::strings_column_wrapper({"3", ""}, {1, 0});
+  auto const sv_patterns = cudf::strings_column_view(patterns);
+  EXPECT_THROW(cudf::strings::like(sv, sv_patterns), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::like(sv, sv, invalid_str), cudf::logic_error);
 }

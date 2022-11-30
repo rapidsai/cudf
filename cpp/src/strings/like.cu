@@ -25,6 +25,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -36,15 +38,22 @@ namespace {
 constexpr char multi_wildcard  = '%';
 constexpr char single_wildcard = '_';
 
+template <typename PatternIterator>
 struct like_fn {
   column_device_view const d_strings;
-  string_view const d_pattern;
+  PatternIterator const patterns_itr;
   string_view const d_escape;
+
+  like_fn(column_device_view d_strings, PatternIterator patterns_itr, string_view d_escape)
+    : d_strings{d_strings}, patterns_itr{patterns_itr}, d_escape{d_escape}
+  {
+  }
 
   __device__ bool operator()(size_type const idx)
   {
     if (d_strings.is_null(idx)) return false;
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str     = d_strings.element<string_view>(idx);
+    auto const d_pattern = patterns_itr[idx];
 
     // using only iterators to better handle UTF-8 characters
     auto target_itr  = d_str.begin();
@@ -123,13 +132,50 @@ std::unique_ptr<column> like(strings_column_view const& input,
   auto const d_pattern = pattern.value(stream);
   auto const d_escape  = escape_character.value(stream);
 
-  auto d_results = results->mutable_view().data<bool>();
+  auto d_results    = results->mutable_view().data<bool>();
+  auto patterns_itr = thrust::make_constant_iterator(d_pattern);
 
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
                     results->mutable_view().data<bool>(),
-                    like_fn{*d_strings, d_pattern, d_escape});
+                    like_fn{*d_strings, patterns_itr, d_escape});
+
+  results->set_null_count(input.null_count());
+
+  return results;
+}
+
+std::unique_ptr<column> like(strings_column_view const& input,
+                             strings_column_view const& patterns,
+                             string_scalar const& escape_character,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  if (input.is_empty()) { return results; }
+
+  CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns much match the input size");
+  CUDF_EXPECTS(patterns.has_nulls() == false, "Parameter patterns must not contain nulls");
+  CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
+
+  auto const d_strings  = column_device_view::create(input.parent(), stream);
+  auto const d_escape   = escape_character.value(stream);
+  auto const d_patterns = column_device_view::create(patterns.parent(), stream);
+
+  auto d_results    = results->mutable_view().data<bool>();
+  auto patterns_itr = d_patterns->begin<string_view>();
+
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    like_fn{*d_strings, patterns_itr, d_escape});
 
   results->set_null_count(input.null_count());
 
@@ -147,6 +193,15 @@ std::unique_ptr<column> like(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::like(input, pattern, escape_character, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> like(strings_column_view const& input,
+                             strings_column_view const& patterns,
+                             string_scalar const& escape_character,
+                             rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::like(input, patterns, escape_character, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
