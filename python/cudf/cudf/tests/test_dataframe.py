@@ -252,14 +252,18 @@ def test_append_index(a, b):
     gdf["b"] = b
 
     # Check the default index after appending two columns(Series)
-    expected = df.a.append(df.b)
-    actual = gdf.a.append(gdf.b)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = df.a.append(df.b)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.a.append(gdf.b)
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
 
-    expected = df.a.append(df.b, ignore_index=True)
-    actual = gdf.a.append(gdf.b, ignore_index=True)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = df.a.append(df.b, ignore_index=True)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.a.append(gdf.b, ignore_index=True)
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
@@ -7149,8 +7153,10 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
     gdf = cudf.from_pandas(df)
     other_gd = cudf.from_pandas(other)
 
-    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
@@ -7209,8 +7215,10 @@ def test_dataframe_append_series_dict(df, other, sort):
     else:
         other_gd = other
 
-    expected = pdf.append(other_pd, ignore_index=True, sort=sort)
-    actual = gdf.append(other_gd, ignore_index=True, sort=sort)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = pdf.append(other_pd, ignore_index=True, sort=sort)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.append(other_gd, ignore_index=True, sort=sort)
 
     if expected.shape != df.shape:
         # Ignore the column type comparison because pandas incorrectly
@@ -7239,7 +7247,8 @@ def test_dataframe_append_series_mixed_index():
             "to same dtypes."
         ),
     ):
-        df.append(sr, ignore_index=True)
+        with pytest.warns(FutureWarning, match="append method is deprecated"):
+            df.append(sr, ignore_index=True)
 
 
 @pytest_unmark_spilling
@@ -7374,8 +7383,10 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
         for o in other
     ]
 
-    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
@@ -7465,8 +7476,10 @@ def test_dataframe_append_lists(df, other, sort, ignore_index):
         for o in other
     ]
 
-    expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
+        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
 
     if expected.shape != df.shape:
         assert_eq(
@@ -7488,7 +7501,8 @@ def test_dataframe_append_error():
         match="Can only append a Series if ignore_index=True "
         "or if the Series has a name",
     ):
-        df.append(ps)
+        with pytest.warns(FutureWarning, match="append method is deprecated"):
+            df.append(ps)
 
 
 def test_cudf_arrow_array_error():
