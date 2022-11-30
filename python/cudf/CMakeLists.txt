@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(cudf_version 22.12.00)
+set(cudf_version 23.02.00)
 
 include(../../fetch_rapids.cmake)
 
@@ -71,7 +71,7 @@ include(rapids-cython)
 
 if(NOT cudf_FOUND)
   # TODO: This will not be necessary once we upgrade to CMake 3.22, which will pull in the required
-  # languages for the C++ project even if this project does not require those languges.
+  # languages for the C++ project even if this project does not require those languages.
   include(rapids-cuda)
   rapids_cuda_init_architectures(cudf-python)
   enable_language(CUDA)

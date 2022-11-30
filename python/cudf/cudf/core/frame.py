@@ -1214,7 +1214,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns
@@ -1293,7 +1293,7 @@ class Frame(BinaryOperand, Scannable):
         * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``inf`` incase of float are not
+        ``inf`` in case of float are not
         considered ``<NA>`` values.
 
         Returns

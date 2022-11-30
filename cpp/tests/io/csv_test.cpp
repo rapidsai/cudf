@@ -364,8 +364,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   std::vector<std::string> reference_strings = {
     "1.23", "-8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"};
 
-  auto validity = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -411,8 +411,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   std::vector<std::string> reference_strings = {
     "123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"};
 
-  auto validity = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -1276,7 +1276,7 @@ TEST_F(CsvReaderTest, nullHandling)
     const auto view   = result.tbl->view();
     auto expect =
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
-    expect_columns_equal(expect, view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
 
   // Test enabling na_filter
@@ -1292,7 +1292,7 @@ TEST_F(CsvReaderTest, nullHandling)
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
                                          {false, false, false, false, true, false, false});
 
-    expect_columns_equal(expect, view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
 
   // Setting na_values with default values
@@ -1309,7 +1309,7 @@ TEST_F(CsvReaderTest, nullHandling)
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
                                          {false, false, false, false, false, false, false});
 
-    expect_columns_equal(expect, view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
 
   // Setting na_values without default values
@@ -1327,7 +1327,7 @@ TEST_F(CsvReaderTest, nullHandling)
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
                                          {true, true, true, true, false, true, true, true});
 
-    expect_columns_equal(expect, view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, view.column(0));
   }
 }
 

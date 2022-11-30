@@ -1101,7 +1101,7 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.unary.is_null(self)
 
         if self.categories.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = libcudf.unary.is_nan(self.categories)
             if categories.any():
@@ -1117,7 +1117,7 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.unary.is_valid(self)
 
         if self.categories.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = libcudf.unary.is_nan(self.categories)
             if categories.any():

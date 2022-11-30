@@ -212,11 +212,11 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value,
                    rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
+  CUDF_EXPECTS(cudf::is_fixed_width(destination.type()),
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) && (end <= destination.size()) && (begin <= end),
                "Range is out of bounds.");
-  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid(stream) == true),
+  CUDF_EXPECTS(destination.nullable() || value.is_valid(stream),
                "destination should be nullable or value should be non-null.");
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
