@@ -907,7 +907,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             isinstance(dtype, pd.CategoricalDtype)
             and dtype.categories is not None
         ):
-            labels = self._label_encoding(cats=dtype.categories._column)
+            labels = self._label_encoding(cats=as_column(dtype.categories))
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
