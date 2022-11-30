@@ -20,8 +20,6 @@ set +u
 conda activate test
 set -u
 
-rapids-print-env
-
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
@@ -31,6 +29,7 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 SUITEERROR=0
 
+rapids-print-env
 
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \

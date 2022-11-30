@@ -18,9 +18,12 @@ set +u
 conda activate test
 set -u
 
-rapids-print-env
-
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
+mkdir -p "${RAPIDS_TESTS_DIR}"
+SUITEERROR=0
+
+rapids-print-env
 
 rapids-mamba-retry install \
   -c "${CPP_CHANNEL}" \
@@ -41,9 +44,6 @@ set +e
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
 rapids-logger "Run gtests"
-RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
-mkdir -p "${RAPIDS_TESTS_DIR}"
-SUITEERROR=0
 
 # TODO: exit code handling is too verbose. Find a cleaner solution.
 
