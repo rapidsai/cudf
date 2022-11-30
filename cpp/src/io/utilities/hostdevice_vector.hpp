@@ -58,19 +58,19 @@ class hostdevice_vector {
 
     auto const use_pageable_buffer =
       cudf::io::detail::getenv_or("LIBCUDF_PREFER_PAGEABLE_MEMORY", 0);
-    auto const allocate_data = [&](auto& h_data) {
-      h_data.reserve(max_size);
-      h_data.resize(initial_size);
-      host_data = h_data.data();
-    };
-
     if (use_pageable_buffer) {
       h_data_owner = thrust::host_vector<T>();
-      allocate_data(std::get<0>(h_data_owner));
     } else {
       h_data_owner = thrust::host_vector<T, cudf::detail::pinned_allocator<T>>();
-      allocate_data(std::get<1>(h_data_owner));
     }
+
+    std::visit(
+      [&](auto&& v) {
+        v.reserve(max_size);
+        v.resize(initial_size);
+        host_data = v.data();
+      },
+      h_data_owner);
 
     current_size = initial_size;
     d_data.resize(max_size, stream);
