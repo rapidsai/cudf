@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -29,6 +30,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <limits>
 #include <thrust/iterator/constant_iterator.h>
 
 #include <arrow/io/api.h>
@@ -1449,6 +1451,116 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
                                  float_wrapper{{0.0, 123.0}, {false, true}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
                                  int_wrapper{{1, 1, 2}, {true, true, true}});
+}
+
+TEST_P(JsonReaderParamTest, JsonDtypeParsing)
+{
+  auto const test_opt          = GetParam();
+  bool const test_experimental = (test_opt == json_test_t::json_experimental_record_orient);
+  // All corner cases of dtype parsing
+  //  0, "0", " 0", 1, "1", " 1", "a", "z", null, true, false,  "null", "true", "false", nan, "nan"
+  // Test for dtypes: bool, int, float, str, duration, timestamp
+  std::string row_orient =
+    "[0]\n[\"0\"]\n[\" 0\"]\n[1]\n[\"1\"]\n[\" 1\"]\n[\"a\"]\n[\"z\"]\n"
+    "[null]\n[true]\n[false]\n[\"null\"]\n[\"true\"]\n[\"false\"]\n[nan]\n[\"nan\"]\n";
+  std::string record_orient = to_records_orient({{{"0", "0"}},
+                                                 {{"0", "\"0\""}},
+                                                 {{"0", "\" 0\""}},
+                                                 {{"0", "1"}},
+                                                 {{"0", "\"1\""}},
+                                                 {{"0", "\" 1\""}},
+                                                 {{"0", "\"a\""}},
+                                                 {{"0", "\"z\""}},
+                                                 {{"0", "null"}},
+                                                 {{"0", "true"}},
+                                                 {{"0", "false"}},
+                                                 {{"0", "\"null\""}},
+                                                 {{"0", "\"true\""}},
+                                                 {{"0", "\"false\""}},
+                                                 {{"0", "nan"}},
+                                                 {{"0", "\"nan\""}}},
+                                                "\n");
+
+  std::string data = (test_opt == json_test_t::json_lines_row_orient) ? row_orient : record_orient;
+
+  auto make_validity = [](std::vector<int> const& validity) {
+    return cudf::detail::make_counting_transform_iterator(
+      0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
+  };
+
+  constexpr int int_NA       = 0;
+  constexpr double double_NA = std::numeric_limits<double>::quiet_NaN();
+  constexpr bool bool_NA     = false;
+
+  std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
+
+  auto int_col = int_wrapper{
+    {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
+    cudf::test::iterators::nulls_at(std::vector<int>{8})};
+  auto float_col = float_wrapper{{0.0,
+                                  0.0,
+                                  double_NA,
+                                  1.0,
+                                  1.0,
+                                  double_NA,
+                                  double_NA,
+                                  double_NA,
+                                  double_NA,
+                                  1.0,
+                                  0.0,
+                                  double_NA,
+                                  1.0,
+                                  0.0,
+                                  double_NA,
+                                  double_NA},
+                                 make_validity(validity)};
+  auto str_col =
+    cudf::test::strings_column_wrapper{// clang-format off
+    {"0", "0", " 0", "1", "1", " 1", "a", "z", "", "true", "false", "null", "true", "false", "nan", "nan"},
+     cudf::test::iterators::nulls_at(std::vector<int>{8})};
+  // clang-format on
+  auto bool_col = bool_wrapper{{false,
+                                false,
+                                bool_NA,
+                                true,
+                                true,
+                                bool_NA,
+                                bool_NA,
+                                bool_NA,
+                                bool_NA,
+                                true,
+                                false,
+                                bool_NA,
+                                true,
+                                false,
+                                bool_NA,
+                                bool_NA},
+                               cudf::test::iterators::nulls_at(std::vector<int>{8})};
+
+  // Types to test
+  const std::vector<data_type> dtypes = {
+    dtype<int32_t>(), dtype<float>(), dtype<cudf::string_view>(), dtype<bool>()};
+  const std::vector<cudf::column_view> cols{cudf::column_view(int_col),
+                                            cudf::column_view(float_col),
+                                            cudf::column_view(str_col),
+                                            cudf::column_view(bool_col)};
+  for (size_t col_type = 0; col_type < cols.size(); col_type++) {
+    std::map<std::string, cudf::io::schema_element> dtype_schema{{"0", {dtypes[col_type]}}};
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+        .dtypes(dtype_schema)
+        .lines(true)
+        .experimental(test_experimental);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+    EXPECT_EQ(result.tbl->num_columns(), 1);
+    EXPECT_EQ(result.tbl->num_rows(), 16);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), dtypes[col_type].id());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), cols[col_type]);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

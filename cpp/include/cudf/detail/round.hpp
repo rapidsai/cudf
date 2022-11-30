@@ -35,7 +35,7 @@ std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places,
   rounding_method method,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

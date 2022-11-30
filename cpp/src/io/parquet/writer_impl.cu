@@ -19,10 +19,11 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "writer_impl.hpp"
-
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "parquet_common.hpp"
+#include "parquet_gpu.cuh"
+#include "writer_impl.hpp"
 
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
@@ -374,44 +375,53 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.type                                = Type::INT32;
+    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
+    col_schema.ts_scale                            = 24 * 60 * 60 * 1000;
+    col_schema.logical_type.isset.TIME             = true;
+    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.ts_scale       = 1000;
+    col_schema.type                                = Type::INT32;
+    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
+    col_schema.ts_scale                            = 1000;
+    col_schema.logical_type.isset.TIME             = true;
+    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.type                                = Type::INT32;
+    col_schema.converted_type                      = ConvertedType::TIME_MILLIS;
+    col_schema.stats_dtype                         = statistics_dtype::dtype_int32;
+    col_schema.logical_type.isset.TIME             = true;
+    col_schema.logical_type.TIME.unit.isset.MILLIS = true;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+    col_schema.type                                = Type::INT64;
+    col_schema.converted_type                      = ConvertedType::TIME_MICROS;
+    col_schema.stats_dtype                         = statistics_dtype::dtype_int64;
+    col_schema.logical_type.isset.TIME             = true;
+    col_schema.logical_type.TIME.unit.isset.MICROS = true;
   }
 
   //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.ts_scale       = -1000;  // negative value indicates division by absolute value
+    col_schema.type                               = Type::INT64;
+    col_schema.stats_dtype                        = statistics_dtype::dtype_int64;
+    col_schema.logical_type.isset.TIME            = true;
+    col_schema.logical_type.TIME.unit.isset.NANOS = true;
   }
 
   template <typename T>
@@ -420,16 +430,16 @@ struct leaf_schema_fn {
     if (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type              = Type::INT32;
       col_schema.stats_dtype       = statistics_dtype::dtype_int32;
-      col_schema.decimal_precision = 9;
+      col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type              = Type::INT64;
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
-      col_schema.decimal_precision = 18;
+      col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal128>) {
       col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
       col_schema.type_length       = sizeof(__int128_t);
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
-      col_schema.decimal_precision = 38;
+      col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -917,7 +927,7 @@ auto to_nvcomp_compression_type(Compression codec)
 auto page_alignment(Compression codec)
 {
   if (codec == Compression::UNCOMPRESSED or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(codec))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(codec))) {
     return 1u;
   }
 
@@ -1162,19 +1172,22 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   gpu::EncodePages(batch_pages, comp_in, comp_out, comp_res, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::SNAPPY)) {
+      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
+        gpu_snap(comp_in, comp_out, comp_res, stream);
+      } else {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      } else {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
       }
       break;
-    case parquet::Compression::ZSTD:
-      if (nvcomp::is_compression_enabled(nvcomp::compression_type::ZSTD)) {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+    case parquet::Compression::ZSTD: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
       }
+      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+
       break;
+    }
     case parquet::Compression::UNCOMPRESSED: break;
     default: CUDF_FAIL("invalid compression type");
   }
@@ -1236,9 +1249,9 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
   if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
 
   auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
-                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
-                              : std::nullopt;
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
   return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
 }
@@ -1759,7 +1772,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                         cudaMemcpyDeviceToHost,
                                         stream.value()));
 
-          // calculate offsets while the column index is transfering
+          // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;

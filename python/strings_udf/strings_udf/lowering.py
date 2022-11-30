@@ -5,6 +5,7 @@ from functools import partial
 
 from numba import cuda, types
 from numba.core import cgutils
+from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
@@ -12,23 +13,32 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 
-from strings_udf._lib.tables import get_character_flags_table_ptr
-from strings_udf._typing import size_type, string_view
+from strings_udf._lib.tables import (
+    get_character_cases_table_ptr,
+    get_character_flags_table_ptr,
+    get_special_case_mapping_table_ptr,
+)
+from strings_udf._typing import size_type, string_view, udf_string
 
 character_flags_table_ptr = get_character_flags_table_ptr()
-
-
-# read-only functions
-# We will provide only one overload for this set of functions, which will
-# expect a string_view. When a literal is encountered, numba will promote it to
-# a string_view whereas when a dstring is encountered, numba will convert it to
-# a view via its native view() method.
+character_cases_table_ptr = get_character_cases_table_ptr()
+special_case_mapping_table_ptr = get_special_case_mapping_table_ptr()
 
 _STR_VIEW_PTR = types.CPointer(string_view)
+_UDF_STRING_PTR = types.CPointer(udf_string)
 
 
 # CUDA function declarations
+# read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
+_concat_string_view = cuda.declare_device(
+    "concat", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
+
+_string_view_replace = cuda.declare_device(
+    "replace",
+    types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+)
 
 
 def _declare_binary_func(lhs, rhs, out, name):
@@ -36,6 +46,12 @@ def _declare_binary_func(lhs, rhs, out, name):
     return cuda.declare_device(
         name,
         out(lhs, rhs),
+    )
+
+
+def _declare_strip_func(name):
+    return cuda.declare_device(
+        name, size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
     )
 
 
@@ -60,12 +76,28 @@ _string_view_endswith = _declare_bool_str_str_func("endswith")
 _string_view_find = _declare_size_type_str_str_func("find")
 _string_view_rfind = _declare_size_type_str_str_func("rfind")
 _string_view_contains = _declare_bool_str_str_func("contains")
+_string_view_strip = _declare_strip_func("strip")
+_string_view_lstrip = _declare_strip_func("lstrip")
+_string_view_rstrip = _declare_strip_func("rstrip")
 
 
 # A binary function of the form f(string, int) -> bool
 _declare_bool_str_int_func = partial(
     _declare_binary_func, _STR_VIEW_PTR, types.int64, types.boolean
 )
+
+
+def _declare_upper_or_lower(func):
+    return cuda.declare_device(
+        func,
+        types.void(
+            _UDF_STRING_PTR,
+            _STR_VIEW_PTR,
+            types.uintp,
+            types.uintp,
+            types.uintp,
+        ),
+    )
 
 
 _string_view_isdigit = _declare_bool_str_int_func("pyisdigit")
@@ -77,6 +109,8 @@ _string_view_isspace = _declare_bool_str_int_func("pyisspace")
 _string_view_isupper = _declare_bool_str_int_func("pyisupper")
 _string_view_islower = _declare_bool_str_int_func("pyislower")
 _string_view_istitle = _declare_bool_str_int_func("pyistitle")
+_string_view_upper = _declare_upper_or_lower("upper")
+_string_view_lower = _declare_upper_or_lower("lower")
 
 
 _string_view_count = cuda.declare_device(
@@ -107,6 +141,35 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     return sv._getvalue()
 
 
+@cuda_lowering_registry.lower_cast(string_view, udf_string)
+def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
+    sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
+    builder.store(val, sv_ptr)
+    _ = context.compile_internal(
+        builder,
+        call_create_udf_string_from_string_view,
+        nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
+        (sv_ptr, udf_str_ptr),
+    )
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+
+    return result._getvalue()
+
+
+# utilities
+_create_udf_string_from_string_view = cuda.declare_device(
+    "udf_string_from_string_view",
+    types.void(types.CPointer(string_view), types.CPointer(udf_string)),
+)
+
+
+def call_create_udf_string_from_string_view(sv, udf_str):
+    _create_udf_string_from_string_view(sv, udf_str)
+
+
 # String function implementations
 def call_len_string_view(st):
     return _string_view_len(st)
@@ -126,6 +189,62 @@ def len_impl(context, builder, sig, args):
     return result
 
 
+def call_concat_string_view(result, lhs, rhs):
+    return _concat_string_view(result, lhs, rhs)
+
+
+@cuda_lower(operator.add, string_view, string_view)
+def concat_impl(context, builder, sig, args):
+    lhs_ptr = builder.alloca(args[0].type)
+    rhs_ptr = builder.alloca(args[1].type)
+    builder.store(args[0], lhs_ptr)
+    builder.store(args[1], rhs_ptr)
+
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+    _ = context.compile_internal(
+        builder,
+        call_concat_string_view,
+        types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+        (udf_str_ptr, lhs_ptr, rhs_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
+
+
+def call_string_view_replace(result, src, to_replace, replacement):
+    return _string_view_replace(result, src, to_replace, replacement)
+
+
+@cuda_lower("StringView.replace", string_view, string_view, string_view)
+def replace_impl(context, builder, sig, args):
+    src_ptr = builder.alloca(args[0].type)
+    to_replace_ptr = builder.alloca(args[1].type)
+    replacement_ptr = builder.alloca(args[2].type)
+
+    builder.store(args[0], src_ptr)
+    builder.store(args[1], to_replace_ptr),
+    builder.store(args[2], replacement_ptr)
+
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+
+    _ = context.compile_internal(
+        builder,
+        call_string_view_replace,
+        types.void(
+            _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+        ),
+        (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
+
+
 def create_binary_string_func(binary_func, retty):
     """
     Provide a wrapper around numba's low-level extension API which
@@ -138,17 +257,43 @@ def create_binary_string_func(binary_func, retty):
         def binary_func_impl(context, builder, sig, args):
             lhs_ptr = builder.alloca(args[0].type)
             rhs_ptr = builder.alloca(args[1].type)
-
             builder.store(args[0], lhs_ptr)
             builder.store(args[1], rhs_ptr)
-            result = context.compile_internal(
-                builder,
-                cuda_func,
-                nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
-                (lhs_ptr, rhs_ptr),
-            )
 
-            return result
+            # these conditional statements should compile out
+            if retty != udf_string:
+                # binary function of two strings yielding a fixed-width type
+                # example: str.startswith(other) -> bool
+                # shim functions can return the value through nb_retval
+                result = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    nb_signature(retty, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (lhs_ptr, rhs_ptr),
+                )
+                return result
+            else:
+                # binary function of two strings yielding a new string
+                # example: str.strip(other) -> str
+                # shim functions can not return a struct due to C linkage
+                # so we create a new udf_string and pass a pointer to it
+                # for the shim function to write the output to. The return
+                # value of compile_internal is therefore discarded (although
+                # this may change in the future if we need to return error
+                # codes, for instance).
+                udf_str_ptr = builder.alloca(
+                    default_manager[udf_string].get_value_type()
+                )
+                _ = context.compile_internal(
+                    builder,
+                    cuda_func,
+                    size_type(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+                    (udf_str_ptr, lhs_ptr, rhs_ptr),
+                )
+                result = cgutils.create_struct_proxy(udf_string)(
+                    context, builder, value=builder.load(udf_str_ptr)
+                )
+                return result._getvalue()
 
         return binary_func_impl
 
@@ -188,6 +333,21 @@ def gt_impl(st, rhs):
 @create_binary_string_func(operator.lt, types.boolean)
 def lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
+
+
+@create_binary_string_func("StringView.strip", udf_string)
+def strip_impl(result, to_strip, strip_char):
+    return _string_view_strip(result, to_strip, strip_char)
+
+
+@create_binary_string_func("StringView.lstrip", udf_string)
+def lstrip_impl(result, to_strip, strip_char):
+    return _string_view_lstrip(result, to_strip, strip_char)
+
+
+@create_binary_string_func("StringView.rstrip", udf_string)
+def rstrip_impl(result, to_strip, strip_char):
+    return _string_view_rstrip(result, to_strip, strip_char)
 
 
 @create_binary_string_func("StringView.startswith", types.boolean)
@@ -232,12 +392,12 @@ def create_unary_identifier_func(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             tbl_ptr = context.get_constant(
-                types.int64, character_flags_table_ptr
+                types.uintp, character_flags_table_ptr
             )
             result = context.compile_internal(
                 builder,
                 cuda_func,
-                nb_signature(types.boolean, _STR_VIEW_PTR, types.int64),
+                nb_signature(types.boolean, _STR_VIEW_PTR, types.uintp),
                 (str_ptr, tbl_ptr),
             )
 
@@ -246,6 +406,74 @@ def create_unary_identifier_func(id_func):
         return id_func_impl
 
     return deco
+
+
+def create_upper_or_lower(id_func):
+    """
+    Provide a wrapper around numba's low-level extension API which
+    produces the boilerplate needed to implement either the upper
+    or lower attrs of a string view.
+    """
+
+    def deco(cuda_func):
+        @cuda_lower(id_func, string_view)
+        def id_func_impl(context, builder, sig, args):
+            str_ptr = builder.alloca(args[0].type)
+            builder.store(args[0], str_ptr)
+
+            # Lookup table required for conversion functions
+            # must be resolved at runtime after context initialization,
+            # therefore cannot be a global variable
+            flags_tbl_ptr = context.get_constant(
+                types.uintp, character_flags_table_ptr
+            )
+            cases_tbl_ptr = context.get_constant(
+                types.uintp, character_cases_table_ptr
+            )
+            special_tbl_ptr = context.get_constant(
+                types.uintp, special_case_mapping_table_ptr
+            )
+            udf_str_ptr = builder.alloca(
+                default_manager[udf_string].get_value_type()
+            )
+
+            _ = context.compile_internal(
+                builder,
+                cuda_func,
+                types.void(
+                    _UDF_STRING_PTR,
+                    _STR_VIEW_PTR,
+                    types.uintp,
+                    types.uintp,
+                    types.uintp,
+                ),
+                (
+                    udf_str_ptr,
+                    str_ptr,
+                    flags_tbl_ptr,
+                    cases_tbl_ptr,
+                    special_tbl_ptr,
+                ),
+            )
+
+            result = cgutils.create_struct_proxy(udf_string)(
+                context, builder, value=builder.load(udf_str_ptr)
+            )
+            return result._getvalue()
+
+        return id_func_impl
+
+    return deco
+
+
+@create_upper_or_lower("StringView.upper")
+def upper_impl(result, st, flags, cases, special):
+    return _string_view_upper(result, st, flags, cases, special)
+
+
+@create_upper_or_lower("StringView.lower")
+def lower_impl(result, st, flags, cases, special):
+    return _string_view_lower(result, st, flags, cases, special)
 
 
 @create_unary_identifier_func("StringView.isdigit")

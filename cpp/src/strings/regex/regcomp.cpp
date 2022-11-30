@@ -39,7 +39,7 @@ namespace {
 enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
-  CAT          = 0205,  // Concatentation, implicit operator
+  CAT          = 0205,  // Concatenation, implicit operator
   STAR         = 0206,  // Closure, *
   STAR_LAZY    = 0207,
   PLUS         = 0210,  // a+ == aa*
@@ -123,7 +123,7 @@ int32_t reprog::add_class(reclass const& cls)
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
 
-reclass& reprog::class_at(int32_t id) { return _classes[id]; }
+reclass const& reprog::class_at(int32_t id) const { return _classes[id]; }
 
 void reprog::set_start_inst(int32_t id) { _startinst_id = id; }
 

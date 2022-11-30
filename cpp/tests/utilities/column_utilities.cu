@@ -495,7 +495,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
   // move the differences to the host.
-  auto h_differences = cudf::detail::make_host_vector_sync(differences);
+  auto h_differences = cudf::detail::make_host_vector_sync(differences, cudf::get_default_stream());
   if (verbosity == debug_output_level::ALL_ERRORS) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
@@ -779,6 +779,7 @@ struct column_comparator {
 
 }  // namespace
 
+namespace detail {
 /**
  * @copydoc cudf::test::expect_column_properties_equal
  */
@@ -855,15 +856,6 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 }
 
 /**
- * @copydoc cudf::test::expect_column_empty
- */
-void expect_column_empty(cudf::column_view const& col)
-{
-  EXPECT_EQ(0, col.size());
-  EXPECT_EQ(0, col.null_count());
-}
-
-/**
  * @copydoc cudf::test::expect_equal_buffers
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
@@ -876,6 +868,16 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   auto typed_rhs = static_cast<char const*>(rhs);
   EXPECT_TRUE(thrust::equal(
     rmm::exec_policy(cudf::get_default_stream()), typed_lhs, typed_lhs + size_bytes, typed_rhs));
+}
+}  // namespace detail
+
+/**
+ * @copydoc cudf::test::expect_column_empty
+ */
+void expect_column_empty(cudf::column_view const& col)
+{
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
 }
 
 /**
@@ -976,7 +978,8 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
     shifted_offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
-  auto const h_shifted_offsets = cudf::detail::make_host_vector_sync(shifted_offsets);
+  auto const h_shifted_offsets =
+    cudf::detail::make_host_vector_sync(shifted_offsets, cudf::get_default_stream());
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];

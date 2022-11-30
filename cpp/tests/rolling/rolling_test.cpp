@@ -194,31 +194,31 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
     }();
 
     auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-    auto constexpr preceeding = 2;
+    auto constexpr preceding  = 2;
     auto constexpr following  = 2;
     auto constexpr min_period = 1;
 
     auto const result_min =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_min_aggregation<cudf::rolling_aggregation>());
     auto const result_max =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_max_aggregation<cudf::rolling_aggregation>());
     auto const result_count_valid =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_count_aggregation<cudf::rolling_aggregation>());
     auto const result_count_all = cudf::rolling_window(
       input,
-      preceeding,
+      preceding,
       following,
       min_period,
       *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
@@ -301,33 +301,33 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
   }();
 
   auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceeding = 2;
+  auto constexpr preceding  = 2;
   auto constexpr following  = 2;
   auto constexpr min_period = 1;
 
   auto const result_min =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_min_aggregation<cudf::rolling_aggregation>());
 
   auto const result_max =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_max_aggregation<cudf::rolling_aggregation>());
 
   auto const result_count_valid =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto const result_count_all = cudf::rolling_window(
     input,
-    preceeding,
+    preceding,
     following,
     min_period,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
@@ -375,33 +375,33 @@ TEST_F(RollingStructTest, NullParentMinMaxCount)
 
   auto const expected_count_valid = ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, no_nulls()};
   auto const expected_count_all   = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceeding       = 2;
+  auto constexpr preceding        = 2;
   auto constexpr following        = 2;
   auto constexpr min_period       = 1;
 
   auto const result_min =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_min_aggregation<cudf::rolling_aggregation>());
 
   auto const result_max =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_max_aggregation<cudf::rolling_aggregation>());
 
   auto const result_count_valid =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto const result_count_all = cudf::rolling_window(
     input,
-    preceeding,
+    preceding,
     following,
     min_period,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));

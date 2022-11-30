@@ -1,8 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pandas as pd
-
-import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -15,6 +13,7 @@ from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
 from cudf._lib.cpp.types cimport size_type
 
 
+@acquire_spill_lock()
 def rolling(Column source_column,
             Column pre_column_window,
             Column fwd_column_window,

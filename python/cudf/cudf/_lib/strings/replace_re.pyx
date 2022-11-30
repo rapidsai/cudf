@@ -1,9 +1,11 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -17,6 +19,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def replace_re(Column source_strings,
                object pattern,
                object py_repl,
@@ -48,6 +51,7 @@ def replace_re(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_with_backrefs(
         Column source_strings,
         object pattern,
@@ -73,6 +77,7 @@ def replace_with_backrefs(
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_multi_re(Column source_strings,
                      object patterns,
                      Column repl_strings):

@@ -21,9 +21,9 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -38,12 +38,11 @@ namespace cudf {
 namespace strings {
 namespace detail {
 //
-std::unique_ptr<column> all_characters_of_type(
-  strings_column_view const& strings,
-  string_character_types types,
-  string_character_types verify_types,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+                                               string_character_types types,
+                                               string_character_types verify_types,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
