@@ -390,9 +390,11 @@ struct NullEquals {
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
     output_valid = true;
-    if (!lhs_valid && !rhs_valid) return true;
-    if (lhs_valid && rhs_valid) return x == y;
-    return false;
+    if (!lhs_valid || !rhs_valid) return rhs_valid == lhs_valid;
+    if constexpr (cudf::is_floating_point<TypeLhs>() && cudf::is_floating_point<TypeRhs>()) {
+      if (isnan(x) && isnan(y)) return true;
+    }
+    return x == y;
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
