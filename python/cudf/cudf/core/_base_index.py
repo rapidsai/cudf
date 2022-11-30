@@ -633,9 +633,9 @@ class BaseIndex(Serializable):
         Parameters
         ----------
         nullable : bool, Default False
-            If ``nullable`` is ``True``, the resulting series will be
+            If ``nullable`` is ``True``, the resulting index will be
             having a corresponding nullable Pandas dtype. If ``nullable``
-            is ``False``, the resulting series will either convert null
+            is ``False``, the resulting index will either convert null
             values to ``np.nan`` or ``None`` depending on the dtype.
 
         Examples
