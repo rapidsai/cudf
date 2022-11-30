@@ -128,12 +128,12 @@ struct fatal_cuda_error : public cuda_error {
 
 #define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
 
-#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)                        \
-  do {                                                                              \
-    static_assert(std::is_base_of_v<std::exception, _exception_type>);              \
-    _condition ? static_cast<void>(0)                                         \
-                     : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/ \
-      {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason};     \
+#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)                    \
+  do {                                                                          \
+    static_assert(std::is_base_of_v<std::exception, _exception_type>);          \
+    _condition ? static_cast<void>(0)                                           \
+               : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/   \
+      {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason}; \
   } while (0)
 
 #define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, _reason, cudf::logic_error)
