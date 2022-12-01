@@ -120,7 +120,7 @@ constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_value
 }
 
 // subtract b from a, but return 0 if this would underflow
-constexpr uint32_t underflow_safe_subtract(uint32_t a, uint32_t b)
+constexpr size_t underflow_safe_subtract(size_t a, size_t b)
 {
   if (b > a) { return 0; }
   return a - b;
@@ -286,7 +286,7 @@ __global__ void __launch_bounds__(128)
     uint32_t rows_in_page        = 0;
     uint32_t values_in_page      = 0;
     uint32_t leaf_values_in_page = 0;
-    uint32_t page_size           = 0;
+    size_t page_size             = 0;
     uint32_t num_pages           = 0;
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
@@ -373,12 +373,12 @@ __global__ void __launch_bounds__(128)
       }
 
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      uint32_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                                    : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                              : 512 * 1024;
+      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                            : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
-      this_max_page_size = min(this_max_page_size, static_cast<uint32_t>(max_page_size_bytes));
+      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
       // subtract size of rep and def level vectors
       auto num_vals = values_in_page + frag_g.num_values;
@@ -394,8 +394,6 @@ __global__ void __launch_bounds__(128)
           // Additional byte to store entry bit width
           page_size = 1 + max_RLE_page_size(ck_g.dict_rle_bits, values_in_page);
         }
-        // page size must fit in 32-bit signed integer
-        if (page_size > INT32_MAX) { CUDF_UNREACHABLE("page size exceeds maximum for i32"); }
         if (!t) {
           page_g.num_fragments = fragments_in_chunk - page_start;
           page_g.chunk         = &chunks[blockIdx.y][blockIdx.x];
@@ -423,8 +421,12 @@ __global__ void __launch_bounds__(128)
           page_g.num_values         = values_in_page;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
-          page_g.max_data_size      = page_size + def_level_size + rep_level_size;
-
+          auto const max_data_size  = page_size + def_level_size + rep_level_size;
+          // page size must fit in 32-bit signed integer
+          if (max_data_size > INT32_MAX) {
+            CUDF_UNREACHABLE("page size exceeds maximum for i32");
+          }
+          page_g.max_data_size      = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset +=
@@ -438,10 +440,6 @@ __global__ void __launch_bounds__(128)
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
         __syncwarp();
-        // page size must fit in 32-bit signed integer
-        if (page_g.max_data_size > INT32_MAX) {
-          CUDF_UNREACHABLE("page size exceeds maximum for i32");
-        }
         if (t == 0) {
           if (not pages.empty()) { pages[ck_g.first_page + num_pages] = page_g; }
           if (not page_sizes.empty()) {
@@ -2094,7 +2092,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
-                      int32_t max_page_size_bytes,
+                      size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
                       statistics_merge_group* page_grstats,
