@@ -332,7 +332,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
-            if not hasattr(other, "__cuda_array_interface__"):
+            if not hasattr(
+                other, "__cuda_array_interface__"
+            ) and not isinstance(other, cudf.RangeIndex):
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.
