@@ -63,11 +63,12 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - cachetools
     - ptxcompiler >=0.7.0  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - strings_udf
+# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - strings_udf                       # [linux64]
 
 about:
   home: https://rapids.ai/
