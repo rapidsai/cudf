@@ -165,14 +165,14 @@ TEST_F(StringsExtractTests, ExtractEventTest)
 
 TEST_F(StringsExtractTests, MultiLine)
 {
-  auto input =
-    cudf::test::strings_column_wrapper({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n", "abé\nabc\n"});
   auto view = cudf::strings_column_view(input);
 
   auto pattern = std::string("(^[a-c]+$)");
   auto results = cudf::strings::extract(view, pattern, cudf::strings::regex_flags::MULTILINE);
-  cudf::test::strings_column_wrapper expected_multiline({"abc", "abc", "abc", "", "abc"},
-                                                        {1, 1, 1, 0, 1});
+  cudf::test::strings_column_wrapper expected_multiline({"abc", "abc", "abc", "", "abc", "abc"},
+                                                        {1, 1, 1, 0, 1, 1});
   auto expected = cudf::table_view{{expected_multiline}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
   auto prog = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
@@ -181,7 +181,8 @@ TEST_F(StringsExtractTests, MultiLine)
 
   pattern = std::string("^([a-c]+)$");
   results = cudf::strings::extract(view, pattern);
-  cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", ""}, {0, 0, 1, 0, 0});
+  cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", "abc", ""},
+                                                      {0, 0, 1, 0, 1, 0});
   expected = cudf::table_view{{expected_default}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
   prog    = cudf::strings::regex_program::create(pattern);

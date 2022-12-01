@@ -83,11 +83,11 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         auto const null_count = col->null_count();
 
         for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
-          cudf::structs::detail::superimpose_parent_nulls(null_mask,
-                                                          null_count,
-                                                          col->child(idx),
-                                                          cudf::get_default_stream(),
-                                                          rmm::mr::get_current_device_resource());
+          cudf::structs::detail::superimpose_nulls(null_mask,
+                                                   null_count,
+                                                   col->child(idx),
+                                                   cudf::get_default_stream(),
+                                                   rmm::mr::get_current_device_resource());
         }
       }
 

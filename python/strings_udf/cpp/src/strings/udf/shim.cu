@@ -16,6 +16,7 @@
 
 #include <cudf/strings/udf/case.cuh>
 #include <cudf/strings/udf/char_types.cuh>
+#include <cudf/strings/udf/replace.cuh>
 #include <cudf/strings/udf/search.cuh>
 #include <cudf/strings/udf/starts_with.cuh>
 #include <cudf/strings/udf/strip.cuh>
@@ -327,5 +328,18 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
   *udf_str_ptr = result;
+  return 0;
+}
+
+extern "C" __device__ int replace(
+  int* nb_retval, void* udf_str, void* const src, void* const to_replace, void* const replacement)
+{
+  auto src_ptr         = reinterpret_cast<cudf::string_view const*>(src);
+  auto to_replace_ptr  = reinterpret_cast<cudf::string_view const*>(to_replace);
+  auto replacement_ptr = reinterpret_cast<cudf::string_view const*>(replacement);
+
+  auto udf_str_ptr = new (udf_str) udf_string;
+  *udf_str_ptr     = replace(*src_ptr, *to_replace_ptr, *replacement_ptr);
+
   return 0;
 }
