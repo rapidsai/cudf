@@ -834,7 +834,8 @@ class parquet_writer_options {
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows) {
+  void set_max_page_fragment_size(size_type size_rows)
+  {
     CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
     _max_page_fragment_size = size_rows;
   }
@@ -1415,7 +1416,8 @@ class chunked_parquet_writer_options {
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows) {
+  void set_max_page_fragment_size(size_type size_rows)
+  {
     CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
     _max_page_fragment_size = size_rows;
   }
