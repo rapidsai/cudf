@@ -57,7 +57,7 @@ class hostdevice_vector {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
     auto const use_pageable_buffer =
-      cudf::io::detail::getenv_or("LIBCUDF_PREFER_PAGEABLE_MEMORY", 0);
+      cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
     if (use_pageable_buffer) {
       h_data_owner = thrust::host_vector<T>();
     } else {
