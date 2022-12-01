@@ -4675,12 +4675,6 @@ class IndexedFrame(Frame):
         same type as caller
             Return a Series or DataFrame with data ranks as values.
         """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.rank is deprecated and will be removed.",
-                FutureWarning,
-            )
-
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
