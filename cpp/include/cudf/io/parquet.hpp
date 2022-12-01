@@ -828,7 +828,10 @@ class parquet_writer_options {
    *
    * @param size_bytes Maximum dictionary size, in bytes
    */
-  void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
+  void set_max_dictionary_size(size_t size_bytes) {
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum dictionary size cannot exceed 2GB.");
+    _max_dictionary_size = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
@@ -1411,7 +1414,10 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes Maximum dictionary size, in bytes
    */
-  void set_max_dictionary_size(size_t size_bytes) { _max_dictionary_size = size_bytes; }
+  void set_max_dictionary_size(size_t size_bytes) {
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum dictionary size cannot exceed 2GB.");
+    _max_dictionary_size = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
