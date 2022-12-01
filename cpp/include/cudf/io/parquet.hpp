@@ -761,6 +761,7 @@ class parquet_writer_options {
   void set_max_page_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum page size cannot exceed 2GB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -1237,6 +1238,7 @@ class chunked_parquet_writer_options {
   void set_max_page_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum page size cannot exceed 2GB.");
     _max_page_size_bytes = size_bytes;
   }
 
