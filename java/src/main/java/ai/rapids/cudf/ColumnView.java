@@ -2453,7 +2453,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Copy the current column to a new column, each string or list of the output column will have
    * reverse order of characters or elements.
    *
-   * @return A new column with list or string having reverse order.
+   * @return A new column with lists or strings having reverse order.
    */
   public final ColumnVector reverseStringsOrLists() {
     assert type.equals(DType.STRING) || type.equals(DType.LIST) :
