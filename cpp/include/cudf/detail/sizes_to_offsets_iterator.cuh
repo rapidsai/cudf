@@ -201,11 +201,11 @@ struct sizes_to_offsets_iterator {
  *                                            result.end(),
  *                                            last.data());
  *  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, itr, int64_t{0});
- *  // last contains value of the final element in the scan result
+ *  // last contains the value of the final element in the scan result
  * @endcode
  *
  * @tparam ScanIterator Output iterator type for use in a scan operation
- * @tparam LastType Type used for accumulating the reduce operation
+ * @tparam LastType Type used for holding the final element value
  *
  * @param begin Output iterator for scan
  * @param end End of the output iterator for scan
@@ -227,7 +227,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *
  * This implementation will return the last element in `int64_t` or `uint64_t` precision
  * as appropriate regardless of the input or result types.
- * This can be used to check if the scan operation overflows when the input and result are
+ * This can be used to check if the scan operation overflowed when the input and result are
  * declared as smaller types.
  *
  * Only integral types for input and result types are supported.
@@ -244,7 +244,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *
  * @tparam SizesIterator Iterator type for input and output of the scan using addition operation
  *
- * @param begin Input iterator for scan/reduce
+ * @param begin Input iterator for scan
  * @param end End of the input iterator
  * @param result Output iterator for scan result
  * @return The last element of the scan

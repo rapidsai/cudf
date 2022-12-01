@@ -137,7 +137,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                "Size of output exceeds column size limit");
 
   // Now build the chars column
-  std::unique_ptr<column> chars = create_chars_child_column(char_bytes, stream, mr);
+  std::unique_ptr<column> chars =
+    create_chars_child_column(static_cast<size_type>(char_bytes), stream, mr);
   if (char_bytes > 0) {
     size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(

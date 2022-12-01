@@ -117,7 +117,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                "Size of output exceeds column size limit");
 
   // Now build the chars column
-  std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
+  std::unique_ptr<column> chars_column =
+    create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
 
   // Execute the function fn again to fill the chars column.
   // Note that if the output chars column has zero size, the function fn should not be called to
