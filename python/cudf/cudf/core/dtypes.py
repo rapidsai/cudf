@@ -160,7 +160,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> "cudf.core.index.GenericIndex":
         """
         An ``Index`` containing the unique categories allowed.
 
