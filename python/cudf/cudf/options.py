@@ -150,6 +150,22 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
+def _make_cow_validator(valid_options):
+    def _validator(val):
+        if get_option("spill"):
+            raise ValueError(
+                "Copy on write is not supported when spilling is enabled. "
+                "Please set `spill` to `False`"
+            )
+        if val not in valid_options:
+            raise ValueError(
+                f"{val} is not a valid option. "
+                f"Must be one of {set(valid_options)}."
+            )
+
+    return _validator
+
+
 def _integer_validator(val):
     try:
         int(val)
@@ -206,6 +222,19 @@ _register_option(
 )
 
 _register_option(
+    "spill",
+    _env_get_bool("CUDF_SPILL", False),
+    textwrap.dedent(
+        """
+        Enables spilling.
+        \tValid values are True or False. Default is False.
+        """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+
+_register_option(
     "copy_on_write",
     os.environ.get("CUDF_COPY_ON_WRITE", "0") == "1",
     textwrap.dedent(
@@ -219,20 +248,9 @@ _register_option(
         \tValid values are True or False. Default is False.
     """
     ),
-    _make_contains_validator([False, True]),
+    _make_cow_validator([False, True]),
 )
 
-_register_option(
-    "spill",
-    _env_get_bool("CUDF_SPILL", False),
-    textwrap.dedent(
-        """
-        Enables spilling.
-        \tValid values are True or False. Default is False.
-        """
-    ),
-    _make_contains_validator([False, True]),
-)
 
 _register_option(
     "spill_on_demand",
