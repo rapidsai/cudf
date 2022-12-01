@@ -104,18 +104,15 @@ def test_ufunc_index(ufunc):
 @pytest.mark.parametrize(
     "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
 )
-@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
 @pytest.mark.parametrize("reflect", [True, False])
-def test_binary_ufunc_index_array(ufunc, type_, reflect):
+def test_binary_ufunc_index_array(ufunc, reflect):
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
     args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
 
-    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
-    if type_ == "list":
-        arg1 = arg1.tolist()
+    arg1 = args[1].to_cupy()
 
     if reflect:
         got = ufunc(arg1, args[0])
@@ -126,12 +123,12 @@ def test_binary_ufunc_index_array(ufunc, type_, reflect):
 
     if ufunc.nout > 1:
         for g, e in zip(got, expect):
-            if type_ == "cupy" and reflect:
+            if reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
                 assert_eq(g, e, check_exact=False)
     else:
-        if type_ == "cupy" and reflect:
+        if reflect:
             assert (cp.asnumpy(got) == expect).all()
         else:
             assert_eq(got, expect, check_exact=False)
