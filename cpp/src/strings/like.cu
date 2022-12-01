@@ -160,7 +160,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                                      mr);
   if (input.is_empty()) { return results; }
 
-  CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns much match the input size");
+  CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns must match the input size");
   CUDF_EXPECTS(patterns.has_nulls() == false, "Parameter patterns must not contain nulls");
   CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
 

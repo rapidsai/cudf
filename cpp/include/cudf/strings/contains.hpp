@@ -240,7 +240,7 @@ std::unique_ptr<column> like(
 
 /**
  * @brief Returns a boolean column identifying rows which
- * match the given like patterns
+ * match the corresponding like pattern in the given patterns
  *
  * The like pattern expects only 2 wildcard special characters:
  * - `%` any number of any character (including no characters)
@@ -257,6 +257,7 @@ std::unique_ptr<column> like(
  * Specify an escape character to include either `%` or `_` in the search.
  * The `escape_character` is expected to be either 0 or 1 characters.
  * If more than one character is specified only the first character is used.
+ * The escape character is applied to all patterns.
  *
  * Any null string entries return corresponding null output column entries.
  *
