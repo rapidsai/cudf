@@ -1196,7 +1196,8 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
   // since this isn't coming out of a groupby, we need to sort the inputs in ascending
   // order with nulls at the end.
   table_view t({col});
-  auto sorted = cudf::detail::sort(t, {order::ASCENDING}, {null_order::AFTER}, stream);
+  auto sorted = cudf::detail::sort(
+    t, {order::ASCENDING}, {null_order::AFTER}, stream, rmm::mr::get_current_device_resource());
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(

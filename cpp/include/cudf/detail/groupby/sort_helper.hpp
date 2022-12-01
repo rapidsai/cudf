@@ -60,8 +60,8 @@ struct sort_groupby_helper {
    *                        optimizations to help skip re-sorting keys.
    */
   sort_groupby_helper(table_view const& keys,
-                      null_policy include_null_keys = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted        = sorted::NO,
+                      null_policy include_null_keys                  = null_policy::EXCLUDE,
+                      sorted keys_pre_sorted                         = sorted::NO,
                       std::vector<null_order> const& null_precedence = {});
 
   ~sort_groupby_helper()                          = default;
@@ -227,7 +227,7 @@ struct sort_groupby_helper {
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
   null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
-  std::vector<null_order> _null_precedence; ///< How to sort NULLs, default null_order::BEFORE
+  std::vector<null_order> _null_precedence;  ///< How to sort NULLs, default null_order::BEFORE
 };
 
 }  // namespace sort

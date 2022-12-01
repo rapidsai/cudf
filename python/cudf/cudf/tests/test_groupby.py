@@ -2021,7 +2021,7 @@ def test_groupby_shift_row_mixed_fill(
     gdf = cudf.from_pandas(pdf)
     n_shift = int(nelem * shift_perc) * direction
 
-    # Pandas does not support specifing different fill_value by column, so we
+    # Pandas does not support specifying different fill_value by column, so we
     # simulate it column by column
     expected = pdf.copy()
     for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):

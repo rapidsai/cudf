@@ -109,7 +109,7 @@ TEST_F(DataChunkSourceTest, DataSourceHost)
 TEST_F(DataChunkSourceTest, DataSourceFile)
 {
   std::string content = "file datasource";
-  // make it big enought to have is_device_read_preferred return true
+  // make it big enough to have is_device_read_preferred return true
   content.reserve(content.size() << 20);
   for (int i = 0; i < 20; i++) {
     content += content;

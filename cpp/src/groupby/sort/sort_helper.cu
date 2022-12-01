@@ -117,38 +117,28 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     std::vector<null_order> precedence;
     if (_null_precedence.size() == 0) {
       precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
-    }
-    else {
+    } else {
       precedence = _null_precedence;
     }
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      _keys,
-      {},
-      precedence,
-      stream,
-      rmm::mr::get_current_device_resource());
+      _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
-  
+
     auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
     std::vector<null_order> precedence;
     if (_null_precedence.size() == 0) {
       precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
       precedence.insert(precedence.begin(), null_order::AFTER);
-    }
-    else {
+    } else {
       auto precedence = _null_precedence;
       precedence.insert(precedence.begin(), null_order::AFTER);
     }
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      augmented_keys,
-      {},
-      precedence,
-      stream,
-      rmm::mr::get_current_device_resource());
+      augmented_keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }

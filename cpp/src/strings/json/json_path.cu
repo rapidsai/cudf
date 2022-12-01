@@ -559,7 +559,7 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         string_view term{"]", 1};
-        bool const is_string = *pos == '\'' ? true : false;
+        bool const is_string = *pos == '\'';
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {

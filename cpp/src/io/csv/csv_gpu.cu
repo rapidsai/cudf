@@ -349,7 +349,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end = next_delimiter;
-          if (options.keepquotes == false) {
+          if (not options.keepquotes) {
             if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
               ++field_start;
               --end;

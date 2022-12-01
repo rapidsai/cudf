@@ -193,6 +193,7 @@ class SpillableBuffer(Buffer):
             The target of the spilling.
         """
 
+        time_start = time.perf_counter()
         with self.lock:
             ptr_type = self._ptr_desc["type"]
             if ptr_type == target:
@@ -226,6 +227,14 @@ class SpillableBuffer(Buffer):
                 raise ValueError(f"Unknown target: {target}")
             self._ptr_desc["type"] = target
 
+        time_end = time.perf_counter()
+        self._manager.statistics.log_spill(
+            src=ptr_type,
+            dst=target,
+            nbytes=self.size,
+            time=time_end - time_start,
+        )
+
     @property
     def ptr(self) -> int:
         """Access the memory directly
@@ -238,6 +247,8 @@ class SpillableBuffer(Buffer):
 
         self._manager.spill_to_device_limit()
         with self.lock:
+            if not self._exposed:
+                self._manager.statistics.log_expose(self)
             self.spill(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()

@@ -24,9 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf {
-namespace structs {
-namespace detail {
+namespace cudf::structs::detail {
 
 enum class column_nullability {
   MATCH_INCOMING,  ///< generate a null column if the incoming column has nulls
@@ -152,49 +150,49 @@ flattened_table flatten_nested_columns(
   column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 /**
- * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
+ * @brief Push down nulls from a given null mask into the input column, using bitwise AND.
  *
- * This function will recurse through all struct descendants. It is expected that
- * the size of `parent_null_mask` in bits is the same as `child.size()`
+ * This function will recurse through all struct descendants. It is expected that the size of
+ * the given null mask in bits is the same as size of the input column.
  *
- * @param parent_null_mask The mask to be applied to descendants
- * @param parent_null_count Null count in the null mask
- * @param column Column to apply the null mask to.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate new device memory.
+ * @param null_mask Null mask to be applied to the input column
+ * @param null_count Null count in the given null mask
+ * @param input Column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
  */
-void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
-                              size_type parent_null_count,
-                              column& child,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+void superimpose_nulls(bitmask_type const* null_mask,
+                       size_type null_count,
+                       column& input,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Push down nulls from a parent mask into a child column, using bitwise AND.
+ * @brief Push down nulls from the given input column into its children columns, using bitwise AND.
  *
- * This function constructs a new column_view instance equivalent to the argument column_view,
- * with possibly new child column_views, all with possibly new null mask values reflecting
+ * This function constructs a new column_view instance equivalent to the input column_view,
+ * with possibly new child column_view, all with possibly new null mask reflecting
  * null rows from the parent column:
  * 1. If the specified column is not STRUCT, the column is returned unmodified, with no new
  *    supporting device_buffer instances.
  * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
  *    modified column_view is returned. This applies recursively.
  *
- * @param parent The parent (possibly STRUCT) column whose nulls need to be pushed to its members.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate new device memory.
+ * @param input The input (possibly STRUCT) column whose nulls need to be pushed to its children
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
  * @return A pair of:
  *         1. column_view with nulls pushed down to child columns, as appropriate.
  *         2. Supporting device_buffer instances, for any newly constructed null masks.
  */
-std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
-  column_view const& parent,
+std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> push_down_nulls(
+  column_view const& input,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Push down nulls from a parent mask into child columns, using bitwise AND,
- * for all columns in the specified table.
+ * @brief Push down nulls from columns of the input table into their children columns, using bitwise
+ * AND.
  *
  * This function constructs a table_view containing a new column_view instance equivalent to
  * every column_view in the specified table. Each column_view might contain possibly new
@@ -205,16 +203,16 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
  * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
  *    modified column_view is returned. This applies recursively.
  *
- * @param table The table_view of (possibly STRUCT) columns whose nulls need to be pushed to its
- * members.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate new device memory.
+ * @param input The table_view of (possibly STRUCT) columns whose nulls need to be pushed to its
+ *        members
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
  * @return A pair of:
  *         1. table_view of columns with nulls pushed down to child columns, as appropriate.
  *         2. Supporting device_buffer instances, for any newly constructed null masks.
  */
-std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
-  table_view const& table,
+std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> push_down_nulls(
+  table_view const& input,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -231,6 +229,5 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
  * struct.
  */
 bool contains_null_structs(column_view const& col);
-}  // namespace detail
-}  // namespace structs
-}  // namespace cudf
+
+}  // namespace cudf::structs::detail

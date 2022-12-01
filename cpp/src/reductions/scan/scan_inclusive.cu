@@ -265,7 +265,7 @@ std::unique_ptr<column> scan_inclusive(
   // into the children columns.
   if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
     for (size_type idx = 0; idx < output->num_children(); ++idx) {
-      structs::detail::superimpose_parent_nulls(
+      structs::detail::superimpose_nulls(
         output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
     }
   }
