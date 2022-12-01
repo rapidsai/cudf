@@ -87,6 +87,14 @@ struct index_changed_fn {
   }
 };
 
+/**
+ * @brief Convert the row indices into token offsets
+ *
+ * @param row_indices Indices where each token should land
+ * @param sorted_indices Map of row_indices sorted
+ * @param tokens_counts Token counts for each row
+ * @param stream CUDA stream used for kernel launches
+ */
 rmm::device_uvector<cudf::size_type> create_token_row_offsets(cudf::column_view row_indices,
                                                               cudf::column_view sorted_indices,
                                                               cudf::size_type tokens_counts,
