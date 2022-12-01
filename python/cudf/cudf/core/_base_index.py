@@ -1470,9 +1470,9 @@ class BaseIndex(Serializable):
         keep : {'first', 'last', False}, default 'first'
             The value or values in a set of duplicates to mark as missing.
 
-            - 'first' : Mark duplicates as ``True`` except for the first
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
               occurrence.
-            - 'last' : Mark duplicates as ``True`` except for the last
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
               occurrence.
             - ``False`` : Mark all duplicates as ``True``.
 
