@@ -45,11 +45,12 @@ requirements:
     - python-confluent-kafka >=1.7.0,<1.8.0a0
     - cudf_kafka ={{ version }}
 
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - custreamz
+# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - custreamz                         # [linux64]
 
 about:
   home: https://rapids.ai/

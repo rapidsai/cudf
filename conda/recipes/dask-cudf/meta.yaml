@@ -45,11 +45,12 @@ requirements:
     - distributed>=2022.9.2
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - dask_cudf
+# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - dask_cudf                         # [linux64]
 
 
 about:

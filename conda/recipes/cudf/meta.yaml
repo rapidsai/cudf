@@ -75,11 +75,13 @@ requirements:
     - cachetools
     - cubinlinker  # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - cudf
+
+# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - cudf                              # [linux64]
 
 about:
   home: https://rapids.ai/
