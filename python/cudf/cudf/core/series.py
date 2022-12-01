@@ -75,7 +75,6 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
     is_mixed_with_object_dtype,
-    min_scalar_type,
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -2279,49 +2278,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         mask = other.notna()
 
         self.mask(mask, other, inplace=True)
-
-    @_cudf_nvtx_annotate
-    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        # Private implementation of deprecated public label_encoding method
-        def _return_sentinel_series():
-            return Series(
-                cudf.core.column.full(
-                    size=len(self), fill_value=na_sentinel, dtype=dtype
-                ),
-                index=self.index,
-                name=None,
-            )
-
-        if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
-
-        cats = column.as_column(cats)
-        if is_mixed_with_object_dtype(self, cats):
-            return _return_sentinel_series()
-
-        try:
-            # Where there is a type-cast failure, we have
-            # to catch the exception and return encoded labels
-            # with na_sentinel values as there would be no corresponding
-            # encoded values of cats in self.
-            cats = cats.astype(self.dtype)
-        except ValueError:
-            return _return_sentinel_series()
-
-        order = column.arange(len(self))
-        codes = column.arange(len(cats), dtype=dtype)
-
-        value = cudf.DataFrame({"value": cats, "code": codes})
-        codes = cudf.DataFrame(
-            {"value": self._data.columns[0].copy(deep=False), "order": order}
-        )
-
-        codes = codes.merge(value, on="value", how="left")
-        codes = codes.sort_values("order")["code"].fillna(na_sentinel)
-
-        codes.name = None
-        codes.index = self._index
-        return codes
 
     # UDF related
     @_cudf_nvtx_annotate

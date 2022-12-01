@@ -35,6 +35,11 @@ _concat_string_view = cuda.declare_device(
     "concat", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
 )
 
+_string_view_replace = cuda.declare_device(
+    "replace",
+    types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+)
+
 
 def _declare_binary_func(lhs, rhs, out, name):
     # Declare a binary function
@@ -201,6 +206,37 @@ def concat_impl(context, builder, sig, args):
         call_concat_string_view,
         types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
         (udf_str_ptr, lhs_ptr, rhs_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
+
+
+def call_string_view_replace(result, src, to_replace, replacement):
+    return _string_view_replace(result, src, to_replace, replacement)
+
+
+@cuda_lower("StringView.replace", string_view, string_view, string_view)
+def replace_impl(context, builder, sig, args):
+    src_ptr = builder.alloca(args[0].type)
+    to_replace_ptr = builder.alloca(args[1].type)
+    replacement_ptr = builder.alloca(args[2].type)
+
+    builder.store(args[0], src_ptr)
+    builder.store(args[1], to_replace_ptr),
+    builder.store(args[2], replacement_ptr)
+
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+
+    _ = context.compile_internal(
+        builder,
+        call_string_view_replace,
+        types.void(
+            _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+        ),
+        (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
     )
 
     result = cgutils.create_struct_proxy(udf_string)(
