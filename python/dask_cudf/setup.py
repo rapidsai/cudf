@@ -1,19 +1,20 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import os
-import re
-import shutil
 
 import versioneer
 from setuptools import find_packages, setup
 
+cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
+
 install_requires = [
-    "cudf",
-    "dask==2022.11.0",
-    "distributed==2022.11.0",
+    "dask>=2022.9.2",
+    "distributed>=2022.9.2",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
+    f"cudf{cuda_suffix}",
+    "cupy-cuda11x",
 ]
 
 extras_require = {
@@ -21,58 +22,25 @@ extras_require = {
         "numpy",
         "pandas>=1.0,<1.6.0dev0",
         "pytest",
+        "pytest-xdist",
         "numba>=0.56.2",
-        "dask>=2021.09.1",
-        "distributed>=2021.09.1",
     ]
 }
 
+if "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE" in os.environ:
+    orig_get_versions = versioneer.get_versions
 
-def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
+    version_override = os.environ["RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE"]
 
-    cuda_version = None
+    def get_versions():
+        data = orig_get_versions()
+        data["version"] = version_override
+        return data
 
-    with open(os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8") as f:
-        for line in f.readlines():
-            if re.search(r"#define CUDA_VERSION ", line) is not None:
-                cuda_version = line
-                break
-
-    if cuda_version is None:
-        raise TypeError("CUDA_VERSION not found in cuda.h")
-    cuda_version = int(cuda_version.split()[2])
-    return "%d%s%d" % (
-        cuda_version // 1000,
-        delimeter,
-        (cuda_version % 1000) // 10,
-    )
-
-
-CUDA_HOME = os.environ.get("CUDA_HOME", False)
-if not CUDA_HOME:
-    path_to_cuda_gdb = shutil.which("cuda-gdb")
-    if path_to_cuda_gdb is None:
-        raise OSError(
-            "Could not locate CUDA. "
-            "Please set the environment variable "
-            "CUDA_HOME to the path to the CUDA installation "
-            "and try again."
-        )
-    CUDA_HOME = os.path.dirname(os.path.dirname(path_to_cuda_gdb))
-
-if not os.path.isdir(CUDA_HOME):
-    raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
-
-cuda_include_dir = os.path.join(CUDA_HOME, "include")
-install_requires.append(
-    "cupy-cuda"
-    + get_cuda_version_from_header(cuda_include_dir)
-    + ">=9.5.0,<12.0.0a0"
-)
-
+    versioneer.get_versions = get_versions
 
 setup(
-    name="dask-cudf",
+    name=f"dask-cudf{cuda_suffix}",
     version=versioneer.get_version(),
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",

@@ -52,7 +52,7 @@ struct column_fast_sort_fn {
   static bool is_fast_sort_supported(column_view const& col)
   {
     return !col.has_nulls() and
-           (cudf::is_integral(col.type()) ||
+           ((cudf::is_integral(col.type()) && !cudf::is_boolean(col.type())) ||
             (cudf::is_fixed_point(col.type()) and (col.type().id() != type_id::DECIMAL128)));
   }
 

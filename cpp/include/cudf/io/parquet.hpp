@@ -399,6 +399,74 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
+ * tables, chunk by chunk.
+ *
+ * This class is designed to address the reading issue when reading very large Parquet files such
+ * that the sizes of their column exceed the limit that can be stored in cudf column. By reading the
+ * file content by chunks using this class, each chunk is guaranteed to have its sizes stay within
+ * the given limit.
+ */
+class chunked_parquet_reader {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *
+   * This is added just to satisfy cython.
+   */
+  chunked_parquet_reader() = default;
+
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
+   * output table for each reading.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    parquet_reader_options const& options,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Destructor, destroying the internal reader instance.
+   *
+   * Since the declaration of the internal `reader` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_parquet_reader();
+
+  /**
+   * @brief Check if there is any data in the given file has not yet read.
+   *
+   * @return A boolean value indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @brief Read a chunk of rows in the given Parquet file.
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
+   * dataset as reading the entire given file at once.
+   *
+   * An empty table will be returned if the given file is empty, or all the data in the file has
+   * been read and returned by the previous calls.
+   *
+   * @return An output `cudf::table` along with its metadata
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
+
+ private:
+  std::unique_ptr<cudf::io::detail::parquet::chunked_reader> reader;
+};
+
 /** @} */  // end of group
 /**
  * @addtogroup io_writers
