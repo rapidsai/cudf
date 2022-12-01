@@ -42,8 +42,8 @@ constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million ro
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
 constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
-constexpr size_t default_max_dictionary_size             = 1024 * 1024;  ///< 1MB dictionary size
-constexpr size_type default_max_page_fragment_size       = 5000;  ///< 5000 rows per page fragment
+constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
+constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
 
 class parquet_reader_options_builder;
 
