@@ -2028,6 +2028,11 @@ class Frame(BinaryOperand, Scannable):
         b    34
         dtype: int64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.sum is deprecated and will be removed",
+                FutureWarning,
+            )
         return self._reduce(
             "sum",
             axis=axis,
@@ -2086,6 +2091,11 @@ class Frame(BinaryOperand, Scannable):
         b    5040
         dtype: int64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.product is deprecated and will be removed",
+                FutureWarning,
+            )
         axis = self._get_axis_from_axis_arg(axis)
         return self._reduce(
             # cuDF columns use "product" as the op name, but cupy uses "prod"
@@ -2139,6 +2149,11 @@ class Frame(BinaryOperand, Scannable):
         b    8.5
         dtype: float64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.mean is deprecated and will be removed",
+                FutureWarning,
+            )
         return self._reduce(
             "mean",
             axis=axis,
@@ -2193,7 +2208,11 @@ class Frame(BinaryOperand, Scannable):
         b    1.290994
         dtype: float64
         """
-
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.std is deprecated and will be removed",
+                FutureWarning,
+            )
         return self._reduce(
             "std",
             axis=axis,
@@ -2249,6 +2268,11 @@ class Frame(BinaryOperand, Scannable):
         b    1.666667
         dtype: float64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.var is deprecated and will be removed",
+                FutureWarning,
+            )
         return self._reduce(
             "var",
             axis=axis,
@@ -2302,6 +2326,11 @@ class Frame(BinaryOperand, Scannable):
         b   -1.2
         dtype: float64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.kurtosis is deprecated and will be removed",
+                FutureWarning,
+            )
         if axis not in (0, "index", None):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
@@ -2315,17 +2344,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     # Alias for kurtosis.
-    @copy_docstring(kurtosis)
-    def kurt(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
-        return self.kurtosis(
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
-        )
+    kurt = kurtosis
 
     @_cudf_nvtx_annotate
     def skew(
@@ -2373,6 +2392,11 @@ class Frame(BinaryOperand, Scannable):
         b   -0.37037
         dtype: float64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.skew is deprecated and will be removed",
+                FutureWarning,
+            )
         if axis not in (0, "index", None):
             raise NotImplementedError("Only axis=0 is currently supported.")
 
@@ -2463,6 +2487,10 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
+    # TODO: This is not a pandas reduction, it's something that cudf added. Do
+    # we want to continue supporting this? If so, for which types? It seems odd
+    # to include it for all types of Frames given how many other reductions we
+    # have that are not supported by pandas for Index types.
     @_cudf_nvtx_annotate
     def sum_of_squares(self, dtype=None):
         """Return the sum of squares of values.
@@ -2522,6 +2550,11 @@ class Frame(BinaryOperand, Scannable):
         >>> ser.median()
         17.0
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Support for Index.median is deprecated and will be removed",
+                FutureWarning,
+            )
         return self._reduce(
             "median",
             axis=axis,
