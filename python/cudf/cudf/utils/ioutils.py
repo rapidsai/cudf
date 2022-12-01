@@ -423,12 +423,6 @@ filters : list of tuple, list of lists of tuples default None
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
-skiprows : int, default None
-    If not None, the number of rows to skip from the start of the file.
-    This parameter is deprecated.
-num_rows : int, default None
-    If not None, the total number of rows to read.
-    This parameter is deprecated.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
 use_python_file_object : boolean, default True
