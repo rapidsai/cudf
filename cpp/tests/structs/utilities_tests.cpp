@@ -342,9 +342,9 @@ TYPED_TEST_SUITE(TypedSuperimposeTest, cudf::test::FixedWidthTypes);
 
 void test_non_struct_columns(cudf::column_view const& input)
 {
-  // superimpose_parent_nulls() on non-struct columns should return the input column, unchanged.
+  // push_down_nulls() on non-struct columns should return the input column, unchanged.
   auto [superimposed, backing_validity_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(input, cudf::get_default_stream());
+    cudf::structs::detail::push_down_nulls(input, cudf::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input, superimposed);
   EXPECT_TRUE(backing_validity_buffers.empty());
@@ -405,9 +405,9 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
     structs_view.child(1), make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
 
   auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(structs_view, cudf::get_default_stream());
+    cudf::structs::detail::push_down_nulls(structs_view, cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), the struct nulls (i.e. at index-0) should have been pushed
+  // After push_down_nulls(), the struct nulls (i.e. at index-0) should have been pushed
   // down to the children. All members should have nulls at row-index 0.
   auto expected_nums_member    = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 3, 6}));
   auto expected_lists_member   = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 4, 5}));
@@ -430,10 +430,10 @@ TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
                                                           cudf::test::iterators::no_nulls()}
                          .release();
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(
-    structs_input->view(), cudf::get_default_stream());
+  auto [output, backing_buffers] =
+    cudf::structs::detail::push_down_nulls(structs_input->view(), cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), none of the child structs should have changed,
+  // After push_down_nulls(), none of the child structs should have changed,
   // because the parent had no nulls to begin with.
   auto expected_nums_member    = make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6}));
   auto expected_lists_member   = make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5}));
@@ -465,10 +465,10 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(
-    structs_of_structs->view(), cudf::get_default_stream());
+  auto [output, backing_buffers] =
+    cudf::structs::detail::push_down_nulls(structs_of_structs->view(), cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), outer-struct column should not have pushed nulls to child
+  // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 4, 5}));
@@ -508,10 +508,10 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   cudf::detail::set_null_mask(
     structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(
-    structs_of_structs->view(), cudf::get_default_stream());
+  auto [output, backing_buffers] =
+    cudf::structs::detail::push_down_nulls(structs_of_structs->view(), cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), outer-struct column should not have pushed nulls to child
+  // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 1, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 1, 4, 5}));
@@ -537,7 +537,7 @@ void mark_row_as_null(cudf::mutable_column_view const& col, cudf::size_type row_
 TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
 {
   // Test with a sliced STRUCT column.
-  // Ensure that superimpose_parent_nulls() produces the right results, even when the input is
+  // Ensure that push_down_nulls() produces the right results, even when the input is
   // sliced.
 
   using T = TypeParam;
@@ -565,9 +565,9 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
   // lists_member: 00111
 
   auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(sliced_structs, cudf::get_default_stream());
+    cudf::structs::detail::push_down_nulls(sliced_structs, cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), the null masks should be:
+  // After push_down_nulls(), the null masks should be:
   // STRUCT:       11110
   // nums_member:  11010
   // lists_member: 00110
@@ -586,7 +586,7 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
 {
   // Test with a sliced STRUCT<STRUCT> column.
-  // Ensure that superimpose_parent_nulls() produces the right results, even when the input is
+  // Ensure that push_down_nulls() produces the right results, even when the input is
   // sliced.
 
   using T = TypeParam;
@@ -618,9 +618,9 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   // lists_member:   00110
 
   auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(sliced_structs, cudf::get_default_stream());
+    cudf::structs::detail::push_down_nulls(sliced_structs, cudf::get_default_stream());
 
-  // After superimpose_parent_nulls(), the null masks will be:
+  // After push_down_nulls(), the null masks will be:
   // STRUCT<STRUCT>: 11101
   // STRUCT:         11100
   // nums_member:    11000
