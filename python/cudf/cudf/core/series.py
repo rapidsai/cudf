@@ -2605,9 +2605,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         keep : {'first', 'last', False}, default 'first'
             Method to handle dropping duplicates:
 
-            - 'first' : Mark duplicates as ``True`` except for the first
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
               occurrence.
-            - 'last' : Mark duplicates as ``True`` except for the last
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
               occurrence.
             - ``False`` : Mark all duplicates as ``True``.
 
@@ -2619,8 +2619,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        Index.duplicated : Equivalent method on pandas.Index.
-        DataFrame.duplicated : Equivalent method on pandas.DataFrame.
+        Index.duplicated : Equivalent method on cudf.Index.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
         Series.drop_duplicates : Remove duplicate values from Series.
 
         Examples
