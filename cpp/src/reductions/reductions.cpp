@@ -70,18 +70,22 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-        auto col_ptr =
-          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream);
+        auto col_ptr = quantile(
+          col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const&>(agg);
         CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
@@ -90,7 +94,8 @@ struct reduce_dispatch_functor {
                                 quantile_agg._interpolation,
                                 valid_sorted_indices,
                                 true,
-                                stream);
+                                stream,
+                                current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::NUNIQUE: {
