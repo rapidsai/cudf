@@ -944,7 +944,7 @@ size_t max_compression_output_size(Compression codec, uint32_t compression_block
 auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      device_span<gpu::parquet_column_device_view const> col_desc,
                      uint32_t num_columns,
-                     int32_t max_page_size_bytes,
+                     size_t max_page_size_bytes,
                      size_type max_page_size_rows,
                      Compression compression_codec,
                      rmm::cuda_stream_view stream)
@@ -1244,7 +1244,7 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
-int32_t max_page_bytes(Compression compression, int32_t max_page_size_bytes)
+size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
 {
   if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
 
@@ -1256,7 +1256,7 @@ int32_t max_page_bytes(Compression compression, int32_t max_page_size_bytes)
   // page size must fit in 32-bit signed integer
   if (max_size > INT32_MAX) { return max_page_size_bytes; }
 
-  return std::min(static_cast<int32_t>(max_size), max_page_size_bytes);
+  return std::min(max_size, max_page_size_bytes);
 }
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
@@ -1391,7 +1391,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   auto max_page_fragment_size =
-    (cudf::io::parquet::gpu::max_page_fragment_size * static_cast<size_t>(max_page_size_bytes)) /
+    (cudf::io::parquet::gpu::max_page_fragment_size * max_page_size_bytes) /
     default_max_page_size_bytes;
 
   std::vector<int> num_frag_in_part;

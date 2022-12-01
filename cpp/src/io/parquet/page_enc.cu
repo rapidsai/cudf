@@ -262,7 +262,7 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
                int32_t num_columns,
-               int32_t max_page_size_bytes,
+               size_t max_page_size_bytes,
                size_type max_page_size_rows,
                uint32_t page_align)
 {
