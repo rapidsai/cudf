@@ -38,6 +38,7 @@ SKIPNBS=""
 # Set SUITEERROR to failure if any run fails
 SUITEERROR=0
 
+set +e
 for nb in $(find . -name "*.ipynb"); do
     nbBasename=$(basename ${nb})
     # Skip all notebooks that use dask (in the code or even in their name)
