@@ -3319,6 +3319,8 @@ class IndexedFrame(Frame):
     def _append(
         self, other, ignore_index=False, verify_integrity=False, sort=None
     ):
+        # Note: Do not remove this function until pandas does. This warning is
+        # to clean up cudf but to match a deprecation in pandas
         warnings.warn(
             "The append method is deprecated and will be removed in a future "
             "version. Use cudf.concat instead.",
