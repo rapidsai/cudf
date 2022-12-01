@@ -38,10 +38,10 @@ namespace cudf::io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
-constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
+constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr int32_t default_max_page_size_bytes   = 512 * 1024;  ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
 
 class parquet_reader_options_builder;
 
@@ -504,11 +504,11 @@ class parquet_writer_options {
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
   // Maximum size of each page (uncompressed)
-  size_t _max_page_size_bytes = default_max_page_size_bytes;
+  int32_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink and table.
@@ -640,7 +640,12 @@ class parquet_writer_options {
    */
   auto get_max_page_size_bytes() const
   {
-    return std::min(_max_page_size_bytes, get_row_group_size_bytes());
+    // row group size is size_t, but page size is int32_t, so need special handling
+    if (static_cast<size_t>(_max_page_size_bytes) > get_row_group_size_bytes()) {
+      // cast is safe, otherwise test above would be false
+      return static_cast<int32_t>(get_row_group_size_bytes());
+    }
+    return _max_page_size_bytes;
   }
 
   /**
@@ -737,8 +742,8 @@ class parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+      size_bytes >= 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -749,9 +754,7 @@ class parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integers.");
     _row_group_size_rows = size_rows;
   }
 
@@ -760,9 +763,9 @@ class parquet_writer_options {
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
+  void set_max_page_size_bytes(int32_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -773,9 +776,7 @@ class parquet_writer_options {
    */
   void set_max_page_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integers.");
     _max_page_size_rows = size_rows;
   }
 
@@ -784,7 +785,7 @@ class parquet_writer_options {
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
@@ -931,7 +932,7 @@ class parquet_writer_options_builder {
    * @param val maximum page size
    * @return this for chaining
    */
-  parquet_writer_options_builder& max_page_size_bytes(size_t val)
+  parquet_writer_options_builder& max_page_size_bytes(int32_t val)
   {
     options.set_max_page_size_bytes(val);
     return *this;
@@ -963,7 +964,7 @@ class parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
@@ -1053,11 +1054,11 @@ class chunked_parquet_writer_options {
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
   // Maximum size of each page (uncompressed)
-  size_t _max_page_size_bytes = default_max_page_size_bytes;
+  int32_t _max_page_size_bytes = default_max_page_size_bytes;
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
 
   /**
    * @brief Constructor from sink.
@@ -1145,7 +1146,12 @@ class chunked_parquet_writer_options {
    */
   auto get_max_page_size_bytes() const
   {
-    return std::min(_max_page_size_bytes, get_row_group_size_bytes());
+    // row group size is size_t, but page size is int32_t, so need special handling
+    if (static_cast<size_t>(_max_page_size_bytes) > get_row_group_size_bytes()) {
+      // cast is safe, otherwise test above would be false
+      return static_cast<int32_t>(get_row_group_size_bytes());
+    }
+    return _max_page_size_bytes;
   }
 
   /**
@@ -1217,8 +1223,8 @@ class chunked_parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+      size_bytes >= 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -1229,9 +1235,7 @@ class chunked_parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
     _row_group_size_rows = size_rows;
   }
 
@@ -1240,9 +1244,9 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
+  void set_max_page_size_bytes(int32_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -1253,9 +1257,7 @@ class chunked_parquet_writer_options {
    */
   void set_max_page_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integers.");
     _max_page_size_rows = size_rows;
   }
 
@@ -1264,7 +1266,7 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
@@ -1400,7 +1402,7 @@ class chunked_parquet_writer_options_builder {
    * @param val maximum page size
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& max_page_size_bytes(size_t val)
+  chunked_parquet_writer_options_builder& max_page_size_bytes(int32_t val)
   {
     options.set_max_page_size_bytes(val);
     return *this;
@@ -1432,7 +1434,7 @@ class chunked_parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  chunked_parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;

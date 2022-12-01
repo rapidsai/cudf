@@ -542,7 +542,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
-                      size_t max_page_size_bytes,
+                      int32_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       uint32_t page_align,
                       statistics_merge_group* page_grstats,
@@ -608,7 +608,7 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  */
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length,
+                         int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
 }  // namespace gpu
