@@ -731,12 +731,6 @@ class IndexedFrame(Frame):
         3    3    8  d
         4    4    9  e
         """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.replace is deprecated and will be removed.",
-                FutureWarning,
-            )
-
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
 
