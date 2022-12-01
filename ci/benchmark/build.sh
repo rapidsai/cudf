@@ -40,7 +40,7 @@ export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2022.11.0"
+export DASK_STABLE_VERSION="2022.11.1"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?

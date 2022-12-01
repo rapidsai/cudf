@@ -141,8 +141,8 @@ dependencies:
       - output_types: [conda, requirements]
         packages:
           - cachetools
-          - dask==2022.11.0
-          - distributed==2022.11.0
+          - dask==2022.11.1
+          - distributed==2022.11.1
           - fsspec>=0.6.0
           - numba>=0.56.2
           - numpy
