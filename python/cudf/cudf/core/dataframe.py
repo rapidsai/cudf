@@ -5554,35 +5554,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
     @_cudf_nvtx_annotate
-    def quantiles(self, q=0.5, interpolation="nearest"):
-        """
-        Return values at the given quantile.
-
-        This API is now deprecated. Please use ``DataFrame.quantile``
-        with ``method='table'``.
-
-        Parameters
-        ----------
-        q : float or array-like
-            0 <= q <= 1, the quantile(s) to compute
-        interpolation : {`lower`, `higher`, `nearest`}
-            This parameter specifies the interpolation method to use,
-            when the desired quantile lies between two data points i and j.
-            Default 'nearest'.
-
-        Returns
-        -------
-        DataFrame
-        """
-        warnings.warn(
-            "DataFrame.quantiles is now deprecated. "
-            "Please use DataFrame.quantile with `method='table'`.",
-            FutureWarning,
-        )
-
-        return self.quantile(q=q, interpolation=interpolation, method="table")
-
-    @_cudf_nvtx_annotate
     def isin(self, values):
         """
         Whether each element in the DataFrame is contained in values.
