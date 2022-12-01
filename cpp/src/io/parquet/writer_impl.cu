@@ -1026,8 +1026,11 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
   auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
                               ? std::nullopt
                               : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
+  auto max_size           = nvcomp_limit.value_or(max_page_size_bytes);
+  // page size must fit in 32-bit signed integer
+  if (max_size > INT32_MAX) { return max_page_size_bytes; }
 
-  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  return std::min(max_size, max_page_size_bytes);
 }
 
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,

@@ -38,10 +38,10 @@ namespace cudf::io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
-constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
+constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
 constexpr size_t default_max_dictionary_size             = 1024 * 1024;  ///< 1MB dictionary size
 constexpr size_type default_max_page_fragment_size       = 5000;  ///< 5000 rows per page fragment
 
@@ -510,7 +510,7 @@ class parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
   // Maximum size of column chunk dictionary (in bytes)
@@ -790,6 +790,7 @@ class parquet_writer_options {
   void set_max_page_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum page size cannot exceed 2GB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -809,7 +810,7 @@ class parquet_writer_options {
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
@@ -1013,7 +1014,7 @@ class parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
@@ -1161,7 +1162,7 @@ class chunked_parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
   dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
   // Maximum size of column chunk dictionary (in bytes)
@@ -1372,6 +1373,7 @@ class chunked_parquet_writer_options {
   void set_max_page_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum page size cannot exceed 2GB.");
     _max_page_size_bytes = size_bytes;
   }
 
@@ -1391,7 +1393,7 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes)
   {
     CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
     _column_index_truncate_length = size_bytes;
@@ -1584,7 +1586,7 @@ class chunked_parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  chunked_parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
