@@ -1809,6 +1809,78 @@ class IndexedFrame(Frame):
             - ``'last'`` : Mark duplicates as ``True`` except for the last
                 occurrence.
             - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series
+            Boolean series indicating duplicated rows.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on index.
+        Series.duplicated : Equivalent method on Series.
+        Series.drop_duplicates : Remove duplicate values from Series.
+        DataFrame.drop_duplicates : Remove duplicate values from DataFrame.
+
+        Examples
+        --------
+        Consider a dataset containing ramen product ratings.
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     'brand': ['Yum Yum', 'Yum Yum', 'Maggie', 'Maggie', 'Maggie'],
+        ...     'style': ['cup', 'cup', 'cup', 'pack', 'pack'],
+        ...     'rating': [4, 4, 3.5, 15, 5]
+        ... })
+        >>> df
+             brand style  rating
+        0  Yum Yum   cup     4.0
+        1  Yum Yum   cup     4.0
+        2   Maggie   cup     3.5
+        3   Maggie  pack    15.0
+        4   Maggie  pack     5.0
+
+        By default, for each set of duplicated values, the first occurrence
+        is set to False and all others to True.
+
+        >>> df.duplicated()
+        0    False
+        1     True
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set to False and all others to True.
+
+        >>> df.duplicated(keep='last')
+        0     True
+        1    False
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        By setting ``keep`` to False, all duplicates are True.
+
+        >>> df.duplicated(keep=False)
+        0     True
+        1     True
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        To find duplicates on specific column(s), use ``subset``.
+
+        >>> df.duplicated(subset=['brand'])
+        0    False
+        1     True
+        2    False
+        3     True
+        4     True
+        dtype: bool
         """
         subset = self._preprocess_subset(subset)
 
