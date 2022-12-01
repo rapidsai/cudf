@@ -239,6 +239,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
         - test -f $PREFIX/include/cudf/strings/replace.hpp
         - test -f $PREFIX/include/cudf/strings/replace_re.hpp
+        - test -f $PREFIX/include/cudf/strings/reverse.hpp
         - test -f $PREFIX/include/cudf/strings/side_type.hpp
         - test -f $PREFIX/include/cudf/strings/split/partition.hpp
         - test -f $PREFIX/include/cudf/strings/split/split.hpp
