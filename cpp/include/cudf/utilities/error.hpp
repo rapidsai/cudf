@@ -132,7 +132,7 @@ struct fatal_cuda_error : public cuda_error {
   do {                                                                          \
     static_assert(std::is_base_of_v<std::exception, _exception_type>);          \
     (_condition) ? static_cast<void>(0)                                         \
-               : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/   \
+                 : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/ \
       {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason}; \
   } while (0)
 
