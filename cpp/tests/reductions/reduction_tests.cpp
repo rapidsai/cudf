@@ -897,24 +897,20 @@ TEST_F(ReductionEmptyTest, empty_column)
   CUDF_EXPECT_NO_THROW(statement(col_nulls));
 
   auto any_agg   = cudf::make_any_aggregation<cudf::reduce_aggregation>();
+  auto all_agg   = cudf::make_all_aggregation<cudf::reduce_aggregation>();
   auto bool_type = cudf::data_type{cudf::type_id::BOOL8};
-  auto result    = cudf::reduce(col0, *any_agg, bool_type);
+
+  auto result = cudf::reduce(col0, *any_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
-  result = cudf::reduce(col_nulls,
-                        *cudf::make_any_aggregation<cudf::reduce_aggregation>(),
-                        cudf::data_type{cudf::type_id::BOOL8});
+  result = cudf::reduce(col_nulls, *any_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
 
-  result = cudf::reduce(col0,
-                        *cudf::make_all_aggregation<cudf::reduce_aggregation>(),
-                        cudf::data_type{cudf::type_id::BOOL8});
+  result = cudf::reduce(col0, *all_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
-  result = cudf::reduce(col_nulls,
-                        *cudf::make_all_aggregation<cudf::reduce_aggregation>(),
-                        cudf::data_type{cudf::type_id::BOOL8});
+  result = cudf::reduce(col_nulls, *all_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
   EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
 }
