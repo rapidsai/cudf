@@ -1922,21 +1922,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ],
         Optional[BaseIndex],
     ]:
-        # Check built-in types first for speed.
-        if isinstance(other, (list, dict, abc.Sequence, abc.Mapping)):
-            warnings.warn(
-                "Binary operations between host objects such as "
-                f"{type(other)} and cudf.DataFrame are deprecated and will be "
-                "removed in a future release. Please convert it to a cudf "
-                "object before performing the operation.",
-                FutureWarning,
-            )
-            if len(other) != self._num_columns:
-                raise ValueError(
-                    "Other is of the wrong length. Expected "
-                    f"{self._num_columns}, got {len(other)}"
-                )
-
         lhs, rhs = self._data, other
         index = self._index
         fill_requires_key = False
@@ -1944,8 +1929,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
-        elif isinstance(other, (list, abc.Sequence)):
-            rhs = {name: o for (name, o) in zip(self._data, other)}
         elif isinstance(other, Series):
             rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
@@ -1972,6 +1955,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # For DataFrame-DataFrame ops, always default to operating against
             # the fill value.
             left_default = fill_value
+        elif isinstance(other, (dict, abc.Mapping)):
+            # Need to fail early on host mapping types because we ultimately
+            # convert everything to a dict.
+            return NotImplemented, None
 
         if not isinstance(rhs, (dict, abc.Mapping)):
             return NotImplemented, None
@@ -5565,35 +5552,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         result.index = list(map(float, qs))
         return result
-
-    @_cudf_nvtx_annotate
-    def quantiles(self, q=0.5, interpolation="nearest"):
-        """
-        Return values at the given quantile.
-
-        This API is now deprecated. Please use ``DataFrame.quantile``
-        with ``method='table'``.
-
-        Parameters
-        ----------
-        q : float or array-like
-            0 <= q <= 1, the quantile(s) to compute
-        interpolation : {`lower`, `higher`, `nearest`}
-            This parameter specifies the interpolation method to use,
-            when the desired quantile lies between two data points i and j.
-            Default 'nearest'.
-
-        Returns
-        -------
-        DataFrame
-        """
-        warnings.warn(
-            "DataFrame.quantiles is now deprecated. "
-            "Please use DataFrame.quantile with `method='table'`.",
-            FutureWarning,
-        )
-
-        return self.quantile(q=q, interpolation=interpolation, method="table")
 
     @_cudf_nvtx_annotate
     def isin(self, values):
