@@ -1192,11 +1192,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             valid_count = len(result_col) - result_col.null_count
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        elif min_count < 0:
-            warnings.warn(
-                f"min_count value cannot be negative({min_count}), will "
-                f"default to 0."
-            )
         return result_col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
