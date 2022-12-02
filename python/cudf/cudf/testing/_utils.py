@@ -387,3 +387,16 @@ parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
 )
+
+
+@contextmanager
+def mask_future_warning_if(expect_warning, *args, **kwargs):
+    """Mask FutureWarning using pytest.warns if the expect_warning is True.
+
+    All arguments are forwarded to pytest.warns if expect_warning is True.
+    """
+    if expect_warning:
+        with pytest.warns(FutureWarning, *args, **kwargs):
+            yield
+    else:
+        yield
