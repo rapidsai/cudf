@@ -8,10 +8,10 @@ import textwrap
 import threading
 import traceback
 import warnings
-import weakref
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
+from weakref import WeakKeyDictionary, WeakValueDictionary
 
 import rmm.mr
 
@@ -218,7 +218,10 @@ class SpillManager:
         SpillStatistics for the different levels.
     """
 
-    _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    _buffers: WeakValueDictionary[int, SpillableBuffer]
+    _spill_handlers: WeakKeyDictionary[
+        SpillableBuffer, Tuple[Callable[..., int], Tuple, Dict]
+    ]
     statistics: SpillStatistics
 
     def __init__(
@@ -229,10 +232,11 @@ class SpillManager:
         statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
-        self._buffers = weakref.WeakValueDictionary()
+        self._buffers = WeakValueDictionary()
         self._id_counter = 0
         self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
+        self._spill_handlers = WeakKeyDictionary()
         self.statistics = SpillStatistics(statistic_level)
 
         if self._spill_on_demand:
@@ -350,8 +354,15 @@ class SpillManager:
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
-                        buf.spill(target="cpu")
-                        spilled += buf.size
+                        # Check if `buf` has a registered spill handler
+                        handler = self._spill_handlers.pop(buf, None)
+                        if handler is None:
+                            buf.spill(target="cpu")
+                            spilled += buf.size
+                        else:
+                            func, args, kwargs = handler
+                            spilled += func(*args, **kwargs)
+
                         if spilled >= nbytes:
                             break
                 finally:
@@ -384,6 +395,50 @@ class SpillManager:
             buf.size for buf in self.buffers() if not buf.is_spilled
         )
         return self.spill_device_memory(nbytes=unspilled - limit)
+
+    def register_spill_handler(
+        self,
+        buffer: SpillableBuffer,
+        func: Callable[..., int],
+        *args,
+        **kwargs,
+    ) -> None:
+        """Register a spill handler for a buffer
+
+        This enables customization of how to handle the spilling of a specific
+        buffer. When the spill manager chooses to spill the buffer, it calls
+        the provided callback function instead of spilling the buffer itself.
+
+        The callback function is called like `func(*args, **kwargs)` and must
+        return the number of bytes freed or spilled.
+
+        Warning
+        -------
+        The spill manager keeps a reference to `func`, `args`, and `kwargs`
+        thus everything they reference are also kept alive.
+
+        Parameters
+        ----------
+        buffer : SpillableBuffer
+            The buffer `func` handle.
+        func : Callable that takes `*args, **kwargs` and returns an integer
+            The spill handler
+        *args
+            Positional arguments pass to `func`
+        **kwargs
+            Keyword arguments pass to `func`
+
+        Return
+        ------
+        int
+            The number of bytes spilled or freed.
+        """
+
+        if buffer in self._spill_handlers:
+            raise RuntimeError(
+                f"Spill handler already registered for {buffer}"
+            )
+        self._spill_handlers[buffer] = (func, args, kwargs)
 
     def __repr__(self) -> str:
         spilled = sum(buf.size for buf in self.buffers() if buf.is_spilled)

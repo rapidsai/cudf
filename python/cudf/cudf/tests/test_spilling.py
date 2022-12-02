@@ -609,3 +609,24 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+def test_spilling_of_range_index(manager: SpillManager):
+    df = single_column_df(target="gpu")
+    assert isinstance(df.index, cudf.RangeIndex)
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
+
+    # materialize the index
+    df.index._values
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes * 2)
+
+    # spill the column, which has the oldest access time
+    manager.spill_device_memory(nbytes=gen_df_data_nbytes)
+    assert spilled_and_unspilled(manager) == (
+        gen_df_data_nbytes,
+        gen_df_data_nbytes,
+    )
+
+    # spill the index, which is deleted instead of spilled.
+    manager.spill_device_memory(nbytes=0)
+    assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)
