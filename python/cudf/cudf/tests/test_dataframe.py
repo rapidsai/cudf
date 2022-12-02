@@ -10,7 +10,6 @@ import string
 import textwrap
 import warnings
 from collections import OrderedDict, defaultdict
-from contextlib import contextmanager
 from copy import copy
 
 import cupy
@@ -2222,15 +2221,6 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     )
 
 
-@contextmanager
-def _hide_host_other_warning(other):
-    if isinstance(other, (dict, list)):
-        with pytest.warns(FutureWarning):
-            yield
-    else:
-        yield
-
-
 @pytest_unmark_spilling
 @pytest.mark.parametrize(
     "binop",
@@ -2253,13 +2243,6 @@ def _hide_host_other_warning(other):
     "other",
     [
         1.0,
-        [1.0],
-        [1.0, 2.0],
-        [1.0, 2.0, 3.0],
-        {"x": 1.0},
-        {"x": 1.0, "y": 2.0},
-        {"x": 1.0, "y": 2.0, "z": 3.0},
-        {"x": 1.0, "z": 3.0},
         pd.Series([1.0]),
         pd.Series([1.0, 2.0]),
         pd.Series([1.0, 2.0, 3.0]),
@@ -2282,22 +2265,18 @@ def test_binops_df(pdf, gdf, binop, other):
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
 
-        # TODO: When we remove support for binary operations with lists and
-        # dicts, those cases should all be checked in a `pytest.raises` block
         # that returns before we enter this try-except.
-        with _hide_host_other_warning(other):
-            assert_exceptions_equal(
-                lfunc=binop,
-                rfunc=binop,
-                lfunc_args_and_kwargs=([pdf, other], {}),
-                rfunc_args_and_kwargs=([gdf, other], {}),
-                compare_error_message=False,
-            )
+        assert_exceptions_equal(
+            lfunc=binop,
+            rfunc=binop,
+            lfunc_args_and_kwargs=([pdf, other], {}),
+            rfunc_args_and_kwargs=([gdf, other], {}),
+            compare_error_message=False,
+        )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
-        with _hide_host_other_warning(other):
-            g = binop(gdf, other)
+        g = binop(gdf, other)
         try:
             assert_eq(d, g)
         except AssertionError:
@@ -2306,8 +2285,11 @@ def test_binops_df(pdf, gdf, binop, other):
             # the DataFrame because pandas returns True/False values whereas we
             # return NA. However, this reindexing is deprecated in pandas so we
             # opt not to add support.
-            if w and "DataFrame vs Series comparisons is deprecated" in str(w):
-                pass
+            if w and "DataFrame vs Series comparisons is deprecated" in str(
+                w[0]
+            ):
+                return
+            raise
 
 
 def test_binops_df_invalid(gdf):
