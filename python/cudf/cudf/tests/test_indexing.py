@@ -1276,7 +1276,7 @@ def test_iloc_categorical_index(index):
         slice("2001", "2002"),
         slice("2002", "2001"),
         slice(None, "2020"),
-        slice("2020", None),
+        slice("2001", None),
     ],
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
