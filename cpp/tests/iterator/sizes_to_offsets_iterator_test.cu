@@ -39,8 +39,8 @@ TYPED_TEST_SUITE(SizesToOffsetsIteratorTestTyped, TestingTypes);
 
 TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
 {
-  using T  = TypeParam;
-  using LT = int64_t;
+  using T        = TypeParam;
+  using LastType = int64_t;
 
   auto stream = cudf::get_default_stream();
 
@@ -49,18 +49,18 @@ TYPED_TEST(SizesToOffsetsIteratorTestTyped, ExclusiveScan)
   auto d_col  = cudf::test::fixed_width_column_wrapper<T>(sizes.begin(), sizes.end());
   auto d_view = cudf::column_view(d_col);
 
-  auto last   = rmm::device_scalar<LT>(0, stream);
+  auto last   = rmm::device_scalar<LastType>(0, stream);
   auto result = rmm::device_uvector<T>(d_view.size(), stream);
   auto output_itr =
     cudf::detail::make_sizes_to_offsets_iterator(result.begin(), result.end(), last.data());
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, LT{0});
+    rmm::exec_policy(stream), d_view.begin<T>(), d_view.end<T>(), output_itr, LastType{0});
 
   auto expected_values = std::vector<T>(sizes.size());
   std::exclusive_scan(sizes.begin(), sizes.end(), expected_values.begin(), T{0});
   auto expected_reduce =
-    static_cast<LT>(std::reduce(sizes.begin(), sizes.begin() + sizes.size() - 1, T{0}));
+    static_cast<LastType>(std::reduce(sizes.begin(), sizes.begin() + sizes.size() - 1, T{0}));
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<T>(expected_values.begin(), expected_values.end());
