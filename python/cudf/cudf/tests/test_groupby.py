@@ -1596,10 +1596,11 @@ def test_groupby_list_of_structs(list_agg):
     )
     gdf = cudf.from_pandas(pdf)
 
-    with pytest.raises(
-        pd.errors.DataError if PANDAS_GE_150 else pd.core.base.DataError
-    ):
-        gdf.groupby("a").agg({"b": list_agg})
+    assert_groupby_results_equal(
+        pdf.groupby("a").agg({"b": list_agg}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=True,
+    )
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])

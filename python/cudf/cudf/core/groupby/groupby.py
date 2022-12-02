@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import itertools
 import pickle
@@ -21,6 +21,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import is_categorical_dtype
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
@@ -457,6 +458,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  3.0  3.00  1.0   1.0
         """
         column_names, columns, normalized_aggs = self._normalize_aggs(func)
+        orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
@@ -473,8 +475,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         multilevel = _is_multi_agg(func)
         data = {}
-        for col_name, aggs, cols in zip(
-            column_names, included_aggregations, result_columns
+        for col_name, aggs, cols, orig_dtype in zip(
+            column_names,
+            included_aggregations,
+            result_columns,
+            orig_dtypes,
         ):
             for agg, col in zip(aggs, cols):
                 if multilevel:
@@ -482,6 +487,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = (col_name, agg_name)
                 else:
                     key = col_name
+                if (
+                    agg in {list, "collect"}
+                    and not is_categorical_dtype(orig_dtype)
+                    and orig_dtype != col.dtype.element_type
+                ):
+                    # Structs lose their labels which we reconstruct here
+                    col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
                 data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
