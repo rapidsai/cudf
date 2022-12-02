@@ -143,5 +143,6 @@ fi
 # UPLOAD - Conda packages
 ################################################################################
 
-gpuci_logger "Upload conda pkgs"
-source ci/cpu/upload.sh
+# Uploads disabled due to new GH Actions implementation
+# gpuci_logger "Upload conda pkgs"
+# source ci/cpu/upload.sh
