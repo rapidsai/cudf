@@ -567,14 +567,18 @@ def test_kurtosis_df(data, null_flag):
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
+    with pytest.warns(FutureWarning):
+        got = data.kurtosis()
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
+    with pytest.warns(FutureWarning):
+        expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt()
+    with pytest.warns(FutureWarning):
+        got = data.kurt()
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
+    with pytest.warns(FutureWarning):
+        expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt(numeric_only=True)
@@ -599,8 +603,10 @@ def test_skew_df(data, null_flag):
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
+    with pytest.warns(FutureWarning):
+        got = data.skew()
+    with pytest.warns(FutureWarning):
+        expected = pdata.skew()
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
