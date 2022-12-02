@@ -206,19 +206,22 @@ class device_buffer_source : public datasource {
  public:
   explicit device_buffer_source(device_buffer const& d_buffer) : _d_buffer{d_buffer} {}
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) final
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
   }
 
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) final
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
   }
 
-  [[nodiscard]] bool supports_device_read() const final { return true; }
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
-  size_t device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) final
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
   {
     CUDF_FAIL("TODO: should this be invoked?");
     // TODO: to be finished with deep copy
@@ -228,13 +231,13 @@ class device_buffer_source : public datasource {
 
   std::unique_ptr<buffer> device_read(size_t offset,
                                       size_t size,
-                                      rmm::cuda_stream_view stream) final
+                                      rmm::cuda_stream_view stream) override
   {
     return std::make_unique<non_owning_buffer>(const_cast<uint8_t*>(_d_buffer._data) + offset,
                                                size);
   }
 
-  [[nodiscard]] size_t size() const final { return _d_buffer._size; }
+  [[nodiscard]] size_t size() const override { return _d_buffer._size; }
 
  private:
   device_buffer _d_buffer;  ///< A non-owning buffer to the existing device data
