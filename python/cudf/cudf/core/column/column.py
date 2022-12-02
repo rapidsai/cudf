@@ -1188,6 +1188,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         result_col = self
 
+        # TODO: If and when pandas decides to validate that `min_count` >= 0 we
+        # should insert comparable behavior.
+        # https://github.com/pandas-dev/pandas/issues/50022
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
             if valid_count < min_count:
