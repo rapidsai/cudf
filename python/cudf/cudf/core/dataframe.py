@@ -5877,7 +5877,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 if numeric_only is None and op in numeric_ops:
                     warnings.warn(
-                        "The default value of numeric_only in DataFrame.kurt "
+                        f"The default value of numeric_only in DataFrame.{op} "
                         "is deprecated. In a future version, it will default "
                         "to False. In addition, specifying "
                         "'numeric_only=None' is deprecated. Select only valid "
