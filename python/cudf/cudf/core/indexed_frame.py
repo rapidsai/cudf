@@ -731,12 +731,6 @@ class IndexedFrame(Frame):
         3    3    8  d
         4    4    9  e
         """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.replace is deprecated and will be removed.",
-                FutureWarning,
-            )
-
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
 
@@ -3325,6 +3319,8 @@ class IndexedFrame(Frame):
     def _append(
         self, other, ignore_index=False, verify_integrity=False, sort=None
     ):
+        # Note: Do not remove this function until pandas does. This warning is
+        # to clean up cudf but to match a deprecation in pandas
         warnings.warn(
             "The append method is deprecated and will be removed in a future "
             "version. Use cudf.concat instead.",
@@ -4679,12 +4675,6 @@ class IndexedFrame(Frame):
         same type as caller
             Return a Series or DataFrame with data ranks as values.
         """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.rank is deprecated and will be removed.",
-                FutureWarning,
-            )
-
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 

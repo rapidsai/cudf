@@ -3101,12 +3101,11 @@ def test_add_series_to_dataframe():
 
 @pytest.mark.parametrize("obj_class", [cudf.Series, cudf.Index])
 @pytest.mark.parametrize("binop", _binops)
-@pytest.mark.parametrize("other_type", [np.array, cp.array, pd.Series, list])
-def test_binops_non_cudf_types(obj_class, binop, other_type):
+def test_binops_cupy_array(obj_class, binop):
     # Skip 0 to not deal with NaNs from division.
     data = range(1, 100)
     lhs = obj_class(data)
-    rhs = other_type(data)
+    rhs = cp.array(data)
     assert (binop(lhs, rhs) == binop(lhs, lhs)).all()
 
 
