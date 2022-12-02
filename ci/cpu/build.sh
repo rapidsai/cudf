@@ -26,6 +26,9 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 # until we migrate fully to GitHub Actions
 export RAPIDS_CUDA_VERSION="${CUDA}"
 
+# Make Jenkins use unique SCCACHE_S3_KEY_PREFIX compared to GH Actions
+sed -i '/SCCACHE_S3_KEY_PREFIX/ s| #|-jenkins #|g' conda/recipes/**/meta.yaml
+
 # Use Ninja to build, setup Conda Build Dir
 export CMAKE_GENERATOR="Ninja"
 export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
