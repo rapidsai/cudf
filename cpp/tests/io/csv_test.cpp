@@ -95,31 +95,31 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_SUITE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
-// Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
 template <typename DecimalType>
 struct CsvFixedPointReaderTest : public CsvReaderTest {
   void run_tests(const std::vector<std::string>& reference_strings, numeric::scale_type scale)
   {
-    cudf::test::strings_column_wrapper strings(reference_strings.begin(), reference_strings.end());
-    auto input_column = cudf::strings::to_fixed_point(cudf::strings_column_view(strings),
-                                                      data_type{type_to_id<DecimalType>(), scale});
+    cudf::test::strings_column_wrapper const strings(reference_strings.begin(),
+                                                     reference_strings.end());
+    auto const expected = cudf::strings::to_fixed_point(
+      cudf::strings_column_view(strings), data_type{type_to_id<DecimalType>(), scale});
 
-    std::string buffer = std::accumulate(reference_strings.begin(),
-                                         reference_strings.end(),
-                                         std::string{},
-                                         [](const std::string& acc, const std::string& rhs) {
-                                           return acc.empty() ? rhs : (acc + "\n" + rhs);
-                                         });
+    auto const buffer = std::accumulate(reference_strings.begin(),
+                                        reference_strings.end(),
+                                        std::string{},
+                                        [](const std::string& acc, const std::string& rhs) {
+                                          return acc.empty() ? rhs : (acc + "\n" + rhs);
+                                        });
 
-    cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options const in_opts =
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .dtypes({data_type{type_to_id<DecimalType>(), scale}})
         .header(-1);
 
-    const auto result      = cudf::io::read_csv(in_opts);
-    const auto result_view = result.tbl->view();
+    auto const result      = cudf::io::read_csv(in_opts);
+    auto const result_view = result.tbl->view();
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_column, result_view.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, result_view.column(0));
     EXPECT_EQ(result_view.num_columns(), 1);
   }
 };

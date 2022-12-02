@@ -226,7 +226,7 @@ struct group_scan_functor<K,
     // column to them.
     if (values.has_nulls()) {
       for (std::unique_ptr<column>& child : scanned_children) {
-        structs::detail::superimpose_parent_nulls(
+        structs::detail::superimpose_nulls(
           values.null_mask(), values.null_count(), *child, stream, mr);
       }
     }
