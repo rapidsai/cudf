@@ -1595,12 +1595,13 @@ def test_groupby_list_of_structs(list_agg):
         }
     )
     gdf = cudf.from_pandas(pdf)
-
+    grouped = gdf.groupby("a").agg({"b": list_agg})
     assert_groupby_results_equal(
-        pdf.groupby("a").agg({"b": list_agg}),
-        gdf.groupby("a").agg({"b": list_agg}),
+        pdf.groupby("a").agg({"b": list}),
+        grouped,
         check_dtype=True,
     )
+    assert grouped["b"].dtype.element_type == gdf["b"].dtype
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
