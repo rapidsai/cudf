@@ -41,10 +41,12 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * This function does not detect overflows in reductions.
  * Using a higher precision `data_type` may prevent overflow.
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
- * types (timestamp, string...).
+ * types (e.g. timestamp or string).
  * The null values are skipped for the operation.
- * If the column is empty, the member `is_valid()` of the output scalar
- * will contain `false`.
+ *
+ * If the column is empty or all null, the output scalar value will be `true` for
+ * reduction `any` and false for reduction type `all`. For all other
+ * reductions, the output scalar returns with `is_valid()==false`.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
@@ -53,16 +55,15 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @throw cudf::logic_error if `min` or `max` reduction is called and the
  * output type does not match the input column data type.
  * @throw cudf::logic_error if `any` or `all` reduction is called and the
- * output type is not bool8.
+ * output type is not BOOL8.
  * @throw cudf::logic_error if `mean`, `var`, or `std` reduction is called and
  * the output type is not floating point.
  *
  * If the input column has arithmetic type, output_dtype can be any arithmetic
- * type. If the input column has non-arithmetic type, e.g. timestamp or string,
+ * type. If the input column has non-arithmetic type (e.g. timestamp or string)
  * the same output type must be specified.
  *
- * If the reduction fails, the member is_valid of the output scalar
- * will contain `false`.
+ * If the reduction fails, the member the output scalar returns with `is_valid()==false`.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
@@ -77,8 +78,12 @@ std::unique_ptr<scalar> reduce(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Computes the reduction of the values in all rows of a column with an initial value. Only
- * SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregations are supported.
+ * @brief  Computes the reduction of the values in all rows of a column with an initial value
+ *
+ * Only `sum`, `product`, `min`, `max`, `any`, and `all` reductions are supported.
+ *
+ * @throw cudf::logic_error if reduction is not `sum`, `product`, `min`, `max`, `any`, or `all`
+ * and `init` is specified.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
