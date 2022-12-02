@@ -456,6 +456,7 @@
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
                                     <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
+                                    <arg value="-DCUDF_JNI_ENABLE_PROFILING=${CUDF_JNI_ENABLE_PROFILING}"/>
                                     <arg value="-DBUILD_SHARED_LIBS=ON"/>
                                 </exec>
                                 <exec dir="${native.build.path}"

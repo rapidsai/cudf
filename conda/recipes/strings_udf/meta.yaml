@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 38) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('RAPIDS_CUDA_VERSION', '11.5.2').split('.')[:2]) %}
 {% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
@@ -17,10 +17,21 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - VERSION_SUFFIX
     - PARALLEL_LEVEL
-  # libcudf's run_exports pinning is looser than we would like
+    - VERSION_SUFFIX
+    - CMAKE_GENERATOR
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - SCCACHE_S3_KEY_PREFIX=strings-udf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=strings-udf-linux64 # [linux64]
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
   ignore_run_exports:
+    # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
     - {{ compiler('cuda') }}
@@ -31,6 +42,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
+    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
@@ -50,7 +62,9 @@ requirements:
     - cudf ={{ version }}
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - cachetools
-    - ptxcompiler >=0.7.0  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
+    - ptxcompiler >=0.7.0  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
+
+# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
