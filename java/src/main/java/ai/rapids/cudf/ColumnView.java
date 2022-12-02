@@ -2457,7 +2457,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector reverseStringsOrLists() {
     assert type.equals(DType.STRING) || type.equals(DType.LIST) :
-        "A column of type string or list is required";
+        "A column of type string or list is required, actual: " + type;
     return new ColumnVector(reverseStringsOrLists(getNativeView()));
   }
 
