@@ -449,15 +449,33 @@ def test_corr1d(data1, data2, method):
     ps2 = gs2.to_pandas()
 
     got = gs1.corr(gs2, method)
+
     ps1_align, ps2_align = ps1.align(ps2, join="inner")
-    with expect_warning_if(
-        (
-            (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0)
-            or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
-        )
-        and method == "pearson",
-        RuntimeWarning,
-    ):
+
+    is_singular = (
+        len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
+    is_identical = (
+        len(ps1_align.dropna().unique()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (
+        len(ps2_align.dropna().unique()) == 1 and len(ps1_align.dropna()) > 0
+    )
+
+    # Pearson correlation leads to division by 0 when either sample size is 1.
+    # Spearman allows for size 1 samples, but will error if all data in a
+    # sample is identical since the covariance is zero and so the correlation
+    # coefficient is not defined.
+    cond = (is_singular and method == "pearson") or (
+        is_identical and not is_singular and method == "spearman"
+    )
+    if method == "spearman":
+        import scipy
+
+        expected_warning = scipy.stats._warnings_errors.ConstantInputWarning
+    elif method == "pearson":
+        expected_warning = RuntimeWarning
+
+    with expect_warning_if(cond, expected_warning):
         expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
