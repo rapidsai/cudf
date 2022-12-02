@@ -449,7 +449,16 @@ def test_corr1d(data1, data2, method):
     ps2 = gs2.to_pandas()
 
     got = gs1.corr(gs2, method)
-    expected = ps1.corr(ps2, method)
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+    with expect_warning_if(
+        (
+            (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0)
+            or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
+        )
+        and method == "pearson",
+        RuntimeWarning,
+    ):
+        expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
