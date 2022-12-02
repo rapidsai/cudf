@@ -33,9 +33,6 @@ export SCCACHE_BUCKET=rapids-sccache
 export SCCACHE_REGION=us-west-2
 export SCCACHE_IDLE_TIMEOUT=32768
 
-# Make Jenkins use unique SCCACHE_S3_KEY_PREFIX compared to GH Actions
-sed -i '/SCCACHE_S3_KEY_PREFIX/ s| #|-jenkins #|g' conda/recipes/**/meta.yaml
-
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
