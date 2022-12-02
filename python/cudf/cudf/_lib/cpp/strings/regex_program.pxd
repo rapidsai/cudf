@@ -7,6 +7,7 @@ from libcpp.string cimport string
 
 from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 
+
 cdef extern from "cudf/strings/regex/regex_program.hpp" \
         namespace "cudf::strings" nogil:
 
