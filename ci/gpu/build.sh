@@ -29,6 +29,9 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 # Workaround to keep Jenkins builds working
 # until we migrate fully to GitHub Actions
 export RAPIDS_CUDA_VERSION="${CUDA}"
+export SCCACHE_BUCKET=rapids-sccache
+export SCCACHE_REGION=us-west-2
+export SCCACHE_IDLE_TIMEOUT=32768
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
