@@ -35,6 +35,7 @@ from cudf._typing import (
     DataFrameOrSeries,
     Dtype,
     NotImplementedType,
+    size_type_dtype,
 )
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -1884,7 +1885,7 @@ class IndexedFrame(Frame):
         else:
             df = self.copy(deep=False)
         df._data["index"] = cudf.core.column.arange(
-            0, len(self), dtype="int32"
+            0, len(self), dtype=size_type_dtype
         )
 
         new_df = df.drop_duplicates(subset=subset, keep=keep)

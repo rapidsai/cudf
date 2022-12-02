@@ -20,6 +20,7 @@ else:
 # Many of these are from
 # https://github.com/pandas-dev/pandas/blob/master/pandas/_typing.py
 
+size_type_dtype = np.dtype("int32")
 Dtype = Union["ExtensionDtype", str, np.dtype]
 DtypeObj = Union["ExtensionDtype", np.dtype]
 
