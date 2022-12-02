@@ -26,6 +26,10 @@ cd "$WORKSPACE"
 export CUDA_REL=${CUDA_VERSION%.*}
 export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 
+# Workaround to keep Jenkins builds working
+# until we migrate fully to GitHub Actions
+export RAPIDS_CUDA_VERSION="${CUDA}"
+
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`

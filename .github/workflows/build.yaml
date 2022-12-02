@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    branches:
+      - "branch-*"
+    tags:
+      - v[0-9][0-9].[0-9][0-9].[0-9][0-9]
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      date:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+      build_type:
+        type: string
+        default: nightly
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpp-build:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+  python-build:
+    needs: [cpp-build]
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+  upload-conda:
+    needs: [cpp-build, python-build]
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
