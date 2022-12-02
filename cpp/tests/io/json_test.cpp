@@ -912,11 +912,8 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
-  // col_data.first contains the column data
   // ignore all data because it is all nulls.
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_P(JsonReaderParamTest, StringInference)
