@@ -1,18 +1,20 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
-#####################
-# cuDF Style Tester #
-#####################
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-# Ignore errors and set path
-set +e
-PATH=/conda/bin:$PATH
-LC_ALL=C.UTF-8
-LANG=C.UTF-8
+set -euo pipefail
 
-# Activate common conda env
+rapids-logger "Create checks conda environment"
 . /opt/conda/etc/profile.d/conda.sh
-conda activate rapids
+
+rapids-dependency-file-generator \
+  --output conda \
+  --file_key checks \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+
+rapids-mamba-retry env create --force -f env.yaml -n checks
+conda activate checks
+
+set +e
 
 FORMAT_FILE_URL=https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-23.02/cmake-format-rapids-cmake.json
 export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.json
