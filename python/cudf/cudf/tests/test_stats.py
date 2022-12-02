@@ -469,7 +469,7 @@ def test_corr1d(data1, data2, method):
         is_identical and not is_singular and method == "spearman"
     )
     if method == "spearman":
-        import scipy
+        import scipy.stats
 
         expected_warning = scipy.stats._warnings_errors.ConstantInputWarning
     elif method == "pearson":
