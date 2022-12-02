@@ -1221,8 +1221,8 @@ static int calc_fixed_width_kernel_dims(const size_type num_columns, const size_
   CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
 
   // The maximum number of blocks supported in the x dimension is 2 ^ 31 - 1
-  // but in practice haveing too many can cause some overhead that I don't totally
-  // understand. Playing around with this haveing as little as 600 blocks appears
+  // but in practice having too many can cause some overhead that I don't totally
+  // understand. Playing around with this having as little as 600 blocks appears
   // to be able to saturate memory on V100, so this is an order of magnitude higher
   // to try and future proof this a bit.
   int const num_blocks = std::clamp((num_rows + block_size - 1) / block_size, 1, 10240);

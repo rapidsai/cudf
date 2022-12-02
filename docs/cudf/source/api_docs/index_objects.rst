@@ -23,6 +23,7 @@ Properties
 
    Index.empty
    Index.has_duplicates
+   Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
@@ -270,7 +271,7 @@ Time/date components
    DatetimeIndex.weekday
    DatetimeIndex.quarter
    DatetimeIndex.is_leap_year
-   
+
    DatetimeIndex.isocalendar
 
 Time-specific operations

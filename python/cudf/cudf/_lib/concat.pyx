@@ -19,7 +19,7 @@ from cudf._lib.utils cimport (
     table_view_from_table,
 )
 
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
@@ -31,12 +31,13 @@ cpdef concat_masks(object columns):
     with nogil:
         c_result = move(libcudf_concatenate_masks(c_views))
         c_unique_result = make_unique[device_buffer](move(c_result))
-    return as_device_buffer_like(
+    return as_buffer(
         DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
     )
 
 
-cpdef concat_columns(object columns):
+@acquire_spill_lock()
+def concat_columns(object columns):
     cdef unique_ptr[column] c_result
     cdef vector[column_view] c_views = make_column_views(columns)
     with nogil:
@@ -44,7 +45,8 @@ cpdef concat_columns(object columns):
     return Column.from_unique_ptr(move(c_result))
 
 
-cpdef concat_tables(object tables, bool ignore_index=False):
+@acquire_spill_lock()
+def concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
     c_views.reserve(len(tables))

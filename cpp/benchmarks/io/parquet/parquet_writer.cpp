@@ -25,8 +25,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::io::statistics_freq,
   [](auto value) {
@@ -34,11 +32,14 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
       case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
       case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
+      case cudf::io::statistics_freq::STATISTICS_COLUMN: return "STATISTICS_COLUMN";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
@@ -201,6 +202,7 @@ using compression_list =
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
+                                           cudf::io::STATISTICS_COLUMN,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))

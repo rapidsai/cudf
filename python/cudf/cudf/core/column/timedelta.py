@@ -13,7 +13,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -40,13 +40,13 @@ class TimeDeltaColumn(ColumnBase):
     """
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
         The Timedelta values
     dtype : np.dtype
         The data type
     size : int
         Size of memory allocation.
-    mask : DeviceBufferLike; optional
+    mask : Buffer; optional
         The validity mask
     offset : int
         Data offset
@@ -78,19 +78,17 @@ class TimeDeltaColumn(ColumnBase):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: Dtype,
         size: int = None,  # TODO: make non-optional
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         offset: int = 0,
         null_count: int = None,
     ):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
             size = size - offset
@@ -183,17 +181,17 @@ class TimeDeltaColumn(ColumnBase):
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                this = self.astype(common_dtype).astype("float64")
+                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
                         other = other.value.astype(common_dtype).astype(
-                            "float64"
+                            out_dtype
                         )
                     else:
-                        other = cudf.Scalar(None, "float64")
+                        other = cudf.Scalar(None, out_dtype)
                 else:
-                    other = other.astype(common_dtype).astype("float64")
-                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                    other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
         elif other.dtype.kind in {"f", "i", "u"}:

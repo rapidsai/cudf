@@ -281,6 +281,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def hasnans(self):
+        return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
             {self.name: self._values}
@@ -1062,7 +1067,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         Returns
         -------
         out: bool
-            True if “other” is an Index and it has the same elements
+            True if "other" is an Index and it has the same elements
             as calling index; False otherwise.
         """
         if (
@@ -1290,8 +1295,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only incase of non-StringIndex types,
-                # as we want to preserve single quotes incase
+                # to happen only in case of non-StringIndex types,
+                # as we want to preserve single quotes in case
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
@@ -1391,6 +1396,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def is_interval(self):
         return False
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        return self._column.has_nulls(include_nan=True)
+
     @_cudf_nvtx_annotate
     def argsort(
         self,
@@ -1414,8 +1424,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs
             at the end.
 
         Returns
@@ -1853,7 +1863,7 @@ class DatetimeIndex(GenericIndex):
         This is not yet supported
     tz : pytz.timezone or dateutil.tz.tzfile
         This is not yet supported
-    ambiguous : ‘infer’, bool-ndarray, ‘NaT’, default ‘raise’
+    ambiguous : 'infer', bool-ndarray, 'NaT', default 'raise'
         This is not yet supported
     name : object
         Name to be stored in the index.
@@ -2072,7 +2082,10 @@ class DatetimeIndex(GenericIndex):
         """  # noqa: E501
         return as_index(
             (
-                self._values.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self._values.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self._values.get_dt_field("microsecond"),
@@ -2547,7 +2560,7 @@ class CategoricalIndex(GenericIndex):
         Whether or not this categorical is treated as an ordered categorical.
         If not given here or in dtype, the resulting categorical will be
         unordered.
-    dtype : CategoricalDtype or “category”, optional
+    dtype : CategoricalDtype or "category", optional
         If CategoricalDtype, cannot be used together with categories or
         ordered.
     copy : bool, default False
@@ -2974,7 +2987,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     Currently supported inputs are:
 
     * ``Column``
-    * ``DeviceBufferLike``
+    * ``Buffer``
     * ``Series``
     * ``Index``
     * numba device array

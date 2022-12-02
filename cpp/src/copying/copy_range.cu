@@ -172,7 +172,8 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   auto target_matched =
     cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
-  auto source_matched = cudf::dictionary::detail::set_keys(dict_source, target_view.keys(), stream);
+  auto source_matched    = cudf::dictionary::detail::set_keys(
+    dict_source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices
@@ -220,14 +221,14 @@ void copy_range_in_place(column_view const& source,
                          size_type target_begin,
                          rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
+  CUDF_EXPECTS(cudf::is_fixed_width(target.type()),
                "In-place copy_range does not support variable-sized types.");
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
-  CUDF_EXPECTS((target.nullable() == true) || (source.has_nulls() == false),
+  CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op

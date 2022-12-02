@@ -147,12 +147,14 @@ class Merge:
         self._key_columns_with_same_name = (
             set(_coerce_to_tuple(on))
             if on
-            else set()
-            if (self._using_left_index or self._using_right_index)
             else {
                 lkey.name
                 for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if lkey.name == rkey.name
+                and not (
+                    isinstance(lkey, _IndexIndexer)
+                    or isinstance(rkey, _IndexIndexer)
+                )
             }
         )
 

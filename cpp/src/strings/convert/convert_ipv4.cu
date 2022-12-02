@@ -16,11 +16,11 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -75,10 +75,9 @@ struct ipv4_to_integers_fn {
 }  // namespace
 
 // Convert strings column of IPv4 addresses to integers column
-std::unique_ptr<column> ipv4_to_integers(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{type_id::INT64}, 0);
@@ -162,10 +161,9 @@ struct integers_to_ipv4_fn {
 }  // namespace
 
 // Convert integers into IPv4 addresses
-std::unique_ptr<column> integers_to_ipv4(
-  column_view const& integers,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);

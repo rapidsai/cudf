@@ -18,8 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
@@ -99,14 +98,13 @@ namespace detail {
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
-std::unique_ptr<column> copy_range(
-  SourceValueIterator source_value_begin,
-  SourceValidityIterator source_validity_begin,
-  strings_column_view const& target,
-  size_type target_begin,
-  size_type target_end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
+                                   SourceValidityIterator source_validity_begin,
+                                   strings_column_view const& target,
+                                   size_type target_begin,
+                                   size_type target_end,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
     (target_begin >= 0) && (target_begin < target.size()) && (target_end <= target.size()),

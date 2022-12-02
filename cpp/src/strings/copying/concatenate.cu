@@ -127,10 +127,8 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead
-    auto const offset_it =
-      -1 + thrust::upper_bound(
-             thrust::seq, input_offsets, input_offsets + num_input_views, output_index);
+    auto const offset_it            = thrust::prev(thrust::upper_bound(
+      thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 
     auto const offset_index      = output_index - *offset_it;
@@ -139,7 +137,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
     auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
-      - input_data[input_view.offset()]               // subract first offset if non-zero
+      - input_data[input_view.offset()]               // subtract first offset if non-zero
       + partition_offsets[partition_index];           // add offset of source column
 
     if (Nullable) {
@@ -180,10 +178,8 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead
-    auto const offset_it =
-      -1 + thrust::upper_bound(
-             thrust::seq, partition_offsets, partition_offsets + num_input_views, output_index);
+    auto const offset_it            = thrust::prev(thrust::upper_bound(
+      thrust::seq, partition_offsets, partition_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - partition_offsets;
 
     auto const offset_index = output_index - *offset_it;

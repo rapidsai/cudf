@@ -271,19 +271,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     auto scalar_val = reinterpret_cast<cudf::scalar const *>(j_scalar);
-    if (scalar_val->type().id() == cudf::type_id::STRING) {
-      // Tests fail when using the cudf implementation, complaining no child for string column.
-      // So here take care of the String type itself.
-      // create a string column of all empty strings to fill (cheapest string column to create)
-      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
-                                               cudf::mask_state::UNALLOCATED);
-      auto data = cudf::make_empty_column(cudf::data_type{cudf::type_id::INT8});
-      auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
-      auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0,
-                                               std::move(mask_buffer));
-
-      return release_as_jlong(cudf::fill(str_col->view(), 0, row_count, *scalar_val));
-    } else if (scalar_val->type().id() == cudf::type_id::STRUCT && row_count == 0) {
+    if (scalar_val->type().id() == cudf::type_id::STRUCT && row_count == 0) {
       // Specialize the creation of empty struct column, since libcudf doesn't support it.
       auto struct_scalar = reinterpret_cast<cudf::struct_scalar const *>(j_scalar);
       auto children = cudf::empty_like(struct_scalar->view())->release();

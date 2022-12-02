@@ -70,18 +70,22 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-        auto col_ptr =
-          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream);
+        auto col_ptr = quantile(
+          col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const&>(agg);
         CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
@@ -90,7 +94,8 @@ struct reduce_dispatch_functor {
                                 quantile_agg._interpolation,
                                 valid_sorted_indices,
                                 true,
-                                stream);
+                                stream,
+                                current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::NUNIQUE: {
@@ -124,13 +129,13 @@ struct reduce_dispatch_functor {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = static_cast<tdigest_aggregation const&>(agg);
-        return detail::tdigest::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
+        return tdigest::detail::reduce_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       case aggregation::MERGE_TDIGEST: {
         CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
                      "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = static_cast<merge_tdigest_aggregation const&>(agg);
-        return detail::tdigest::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
+        return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
@@ -157,7 +162,7 @@ std::unique_ptr<scalar> reduce(
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
-      return detail::tdigest::make_empty_tdigest_scalar(stream);
+      return tdigest::detail::make_empty_tdigest_scalar(stream);
     }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
       // Under some circumstance, the output type will become the List of input type,

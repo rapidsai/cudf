@@ -8,6 +8,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_150
+from cudf.core.buffer import as_buffer
 from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (
     DataFrameObject,

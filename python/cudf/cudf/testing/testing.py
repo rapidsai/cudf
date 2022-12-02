@@ -134,7 +134,7 @@ def assert_column_equal(
         right Column to compare
     check_dtype : bool, default True
         Whether to check the Column dtype is identical.
-    check_column_type : bool or {‘equiv’}, default ‘equiv’
+    check_column_type : bool or {'equiv'}, default 'equiv'
         Whether to check the columns class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
@@ -152,7 +152,7 @@ def assert_column_equal(
         Relative tolerance. Only used when `check_exact` is False.
     atol : float, default 1e-8
         Absolute tolerance. Only used when `check_exact` is False.
-    obj : str, default ‘ColumnBase’
+    obj : str, default 'ColumnBase'
         Specify object name being compared, internally used to
         show appropriate assertion message.
     """
@@ -322,9 +322,9 @@ def assert_index_equal(
         left Index to compare
     right : Index
         right Index to compare
-    exact : bool or {‘equiv’}, default ‘equiv’
+    exact : bool or {'equiv'}, default 'equiv'
         Whether to check the Index class, dtype and inferred_type
-        are identical. If ‘equiv’, then RangeIndex can be substituted
+        are identical. If 'equiv', then RangeIndex can be substituted
         for Int8Index, Int16Index, Int32Index, Int64Index as well.
     check_names : bool, default True
         Whether to check the names attribute.
@@ -345,7 +345,7 @@ def assert_index_equal(
         Relative tolerance. Only used when `check_exact` is False.
     atol : float, default 1e-8
         Absolute tolerance. Only used when `check_exact` is False.
-    obj : str, default ‘Index’
+    obj : str, default 'Index'
         Specify object name being compared, internally used to
         show appropriate assertion message.
 
@@ -467,7 +467,7 @@ def assert_series_equal(
         right Series to compare
     check_dtype : bool, default True
         Whether to check the Series dtype is identical.
-    check_index_type : bool or {‘equiv’}, default ‘equiv’
+    check_index_type : bool or {'equiv'}, default 'equiv'
         Whether to check the Index class, dtype and inferred_type
         are identical.
     check_series_type : bool, default True
@@ -491,7 +491,7 @@ def assert_series_equal(
         Relative tolerance. Only used when `check_exact` is False.
     atol : float, default 1e-8
         Absolute tolerance. Only used when `check_exact` is False.
-    obj : str, default ‘Series’
+    obj : str, default 'Series'
         Specify object name being compared, internally used to
         show appropriate assertion message.
 
@@ -600,7 +600,7 @@ def assert_frame_equal(
         right DataFrame to compare
     check_dtype : bool, default True
         Whether to check the DataFrame dtype is identical.
-    check_index_type : bool or {‘equiv’}, default ‘equiv’
+    check_index_type : bool or {'equiv'}, default 'equiv'
         Whether to check the Index class, dtype and inferred_type
         are identical.
     check_column_type : bool, default True
@@ -630,7 +630,7 @@ def assert_frame_equal(
         Relative tolerance. Only used when `check_exact` is False.
     atol : float, default 1e-8
         Absolute tolerance. Only used when `check_exact` is False.
-    obj : str, default ‘DataFrame’
+    obj : str, default 'DataFrame'
         Specify object name being compared, internally used to
         show appropriate assertion message.
 

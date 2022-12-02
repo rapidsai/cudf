@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "parquet_gpu.hpp"
+
+#include "parquet_gpu.cuh"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -351,12 +352,18 @@ __global__ void __launch_bounds__(128)
           ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                            : 512 * 1024;
+      long this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                          : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
-      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
+      this_max_page_size = min(this_max_page_size, static_cast<long>(max_page_size_bytes));
+
+      // subtract size of rep and def level vectors
+      auto num_vals = values_in_page + frag_g.num_values;
+      // underflow is ok here, it just means the test below will always be true
+      this_max_page_size -= max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+                            max_RLE_page_size(col_g.num_rep_level_bits(), num_vals);
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
@@ -1109,15 +1116,20 @@ __global__ void __launch_bounds__(128, 8)
       if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
         switch (physical_type) {
-          case INT32:
+          case INT32: [[fallthrough]];
           case FLOAT: {
-            int32_t v;
-            if (dtype_len_in == 4)
-              v = s->col.leaf_column->element<int32_t>(val_idx);
-            else if (dtype_len_in == 2)
-              v = s->col.leaf_column->element<int16_t>(val_idx);
-            else
-              v = s->col.leaf_column->element<int8_t>(val_idx);
+            auto const v = [dtype_len = dtype_len_in,
+                            idx       = val_idx,
+                            col       = s->col.leaf_column,
+                            scale     = s->col.ts_scale == 0 ? 1 : s->col.ts_scale]() -> int32_t {
+              switch (dtype_len) {
+                case 8: return col->element<int64_t>(idx) * scale;
+                case 4: return col->element<int32_t>(idx) * scale;
+                case 2: return col->element<int16_t>(idx) * scale;
+                default: return col->element<int8_t>(idx) * scale;
+              }
+            }();
+
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
             dst[pos + 2] = v >> 16;
@@ -1426,7 +1438,7 @@ class header_encoder {
 
   inline __device__ void end(uint8_t** header_end, bool termination_flag = true)
   {
-    if (termination_flag == false) { *current_header_ptr++ = 0; }
+    if (not termination_flag) { *current_header_ptr++ = 0; }
     *header_end = current_header_ptr;
   }
 
@@ -1485,9 +1497,9 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
   // elem is one of (no 5 or 6 byte chars allowed):
   //  0b0vvvvvvv a 1 byte character
   //  0b10vvvvvv a continuation byte
-  //  0b110vvvvv start of a 2 byte characther
-  //  0b1110vvvv start of a 3 byte characther
-  //  0b11110vvv start of a 4 byte characther
+  //  0b110vvvvv start of a 2 byte character
+  //  0b1110vvvv start of a 3 byte character
+  //  0b11110vvv start of a 4 byte character
 
   // TODO(ets): starting at 4 byte and working down.  Should probably start low and work higher.
   uint8_t mask  = 0xF8;

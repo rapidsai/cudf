@@ -20,7 +20,7 @@ from numba.cuda import as_cuda_array
 import rmm
 
 import cudf
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -74,12 +74,12 @@ class _CuDFBuffer:
 
     def __init__(
         self,
-        buf: DeviceBufferLike,
+        buf: Buffer,
         dtype: np.dtype,
         allow_copy: bool = True,
     ) -> None:
         """
-        Use DeviceBufferLike object.
+        Use Buffer object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -90,7 +90,7 @@ class _CuDFBuffer:
     @property
     def bufsize(self) -> int:
         """
-        The DeviceBufferLike size in bytes.
+        The Buffer size in bytes.
         """
         return self._buf.size
 
@@ -626,7 +626,7 @@ from_dataframe : construct a cudf.DataFrame from an input data frame which
 Notes
 -----
 
-- Interpreting a raw pointer (as in ``DeviceBufferLike.ptr``) is annoying and
+- Interpreting a raw pointer (as in ``Buffer.ptr``) is annoying and
   unsafe to do in pure Python. It's more general but definitely less friendly
   than having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which
   lack ``__dlpack__`` (e.g., because the column dtype isn't supported by
@@ -746,7 +746,7 @@ def _ensure_gpu_buffer(buf, data_type, allow_copy: bool) -> _CuDFBuffer:
         else:
             dbuf = rmm.DeviceBuffer(ptr=buf.ptr, size=buf.bufsize)
             return _CuDFBuffer(
-                as_device_buffer_like(dbuf),
+                as_buffer(dbuf, exposed=True),
                 protocol_dtype_to_cupy_dtype(data_type),
                 allow_copy,
             )
@@ -862,6 +862,9 @@ def _protocol_to_cudf_column_string(
 
 
 def _protocol_buffer_to_cudf_buffer(protocol_buffer):
-    return as_device_buffer_like(
-        rmm.DeviceBuffer(ptr=protocol_buffer.ptr, size=protocol_buffer.bufsize)
+    return as_buffer(
+        rmm.DeviceBuffer(
+            ptr=protocol_buffer.ptr, size=protocol_buffer.bufsize
+        ),
+        exposed=True,
     )

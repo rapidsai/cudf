@@ -628,7 +628,7 @@ public class JCudfSerialization {
     @Override
     public void writeIntNativeOrder(int i) throws IOException {
       // TODO this only works on Little Endian Architectures, x86.  If we need
-      // to support others we need to detect the endianess and switch on the right implementation.
+      // to support others we need to detect the endianness and switch on the right implementation.
       writeInt(Integer.reverseBytes(i));
     }
 

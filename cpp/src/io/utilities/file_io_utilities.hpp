@@ -194,6 +194,7 @@ class cufile_output_impl final : public cufile_output {
 
 class cufile_input_impl final : public cufile_input {
  public:
+  cufile_input_impl(std::string const& filepath);
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
                                  uint8_t* dst,
@@ -205,6 +206,7 @@ class cufile_input_impl final : public cufile_input {
 
 class cufile_output_impl final : public cufile_output {
  public:
+  cufile_output_impl(std::string const& filepath);
   std::future<void> write_async(void const* data, size_t offset, size_t size) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");

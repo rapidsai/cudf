@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -25,6 +28,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cub/device/device_segmented_sort.cuh>
+
 namespace cudf {
 namespace detail {
 
@@ -33,6 +38,130 @@ namespace {
  * @brief The enum specifying which sorting method to use (stable or unstable).
  */
 enum class sort_method { STABLE, UNSTABLE };
+
+/**
+ * @brief Functor performs faster segmented sort on eligible columns
+ */
+struct column_fast_sort_fn {
+  /**
+   * @brief Run-time check for faster segmented sort on an eligible column
+   *
+   * Fast segmented sort can handle integral types including
+   * decimal types if dispatch_storage_type is used but it does not support int128.
+   */
+  static bool is_fast_sort_supported(column_view const& col)
+  {
+    return !col.has_nulls() and
+           (cudf::is_integral(col.type()) ||
+            (cudf::is_fixed_point(col.type()) and (col.type().id() != type_id::DECIMAL128)));
+  }
+
+  /**
+   * @brief Compile-time check for supporting fast segmented sort for a specific type
+   *
+   * The dispatch_storage_type means we can check for integral types to
+   * include fixed-point types but the CUB limitation means we need to exclude int128.
+   */
+  template <typename T>
+  static constexpr bool is_fast_sort_supported()
+  {
+    return cudf::is_integral<T>() and !std::is_same_v<__int128, T>;
+  }
+
+  template <typename T>
+  void fast_sort(column_view const& input,
+                 column_view const& segment_offsets,
+                 mutable_column_view& indices,
+                 bool ascending,
+                 rmm::cuda_stream_view stream)
+  {
+    // CUB's segmented sort functions cannot accept iterators.
+    // We create a temporary column here for it to use.
+    auto temp_col =
+      cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
+    mutable_column_view output_view = temp_col->mutable_view();
+
+    // DeviceSegmentedSort is faster then DeviceSegmentedRadixSort at this time
+    auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
+      rmm::device_buffer d_temp_storage;
+      size_t temp_storage_bytes = 0;
+      if (ascending) {
+        cub::DeviceSegmentedSort::SortPairs(
+          d_temp_storage.data(), temp_storage_bytes, std::forward<decltype(args)>(args)...);
+        d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+        cub::DeviceSegmentedSort::SortPairs(
+          d_temp_storage.data(), temp_storage_bytes, std::forward<decltype(args)>(args)...);
+      } else {
+        cub::DeviceSegmentedSort::SortPairsDescending(
+          d_temp_storage.data(), temp_storage_bytes, std::forward<decltype(args)>(args)...);
+        d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+        cub::DeviceSegmentedSort::SortPairsDescending(
+          d_temp_storage.data(), temp_storage_bytes, std::forward<decltype(args)>(args)...);
+      }
+    };
+
+    fast_sort_impl(ascending,
+                   input.begin<T>(),
+                   output_view.begin<T>(),
+                   indices.begin<size_type>(),
+                   indices.begin<size_type>(),
+                   input.size(),
+                   segment_offsets.size() - 1,
+                   segment_offsets.begin<size_type>(),
+                   segment_offsets.begin<size_type>() + 1,
+                   stream.value());
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_fast_sort_supported<T>())>
+  void operator()(column_view const& input,
+                  column_view const& segment_offsets,
+                  mutable_column_view& indices,
+                  bool ascending,
+                  rmm::cuda_stream_view stream)
+  {
+    fast_sort<T>(input, segment_offsets, indices, ascending, stream);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(!is_fast_sort_supported<T>())>
+  void operator()(
+    column_view const&, column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("Column type cannot be used with fast-sort function");
+  }
+};
+
+/**
+ * @brief Performs faster sort on eligible columns
+ *
+ * Check the `is_fast_sort_supported()==true` on the input column before using this function.
+ *
+ * @param input Column to sort
+ * @param segment_offsets Identifies segments to sort within
+ * @param column_order Sort ascending or descending
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
+                                                    column_view const& segment_offsets,
+                                                    order const& column_order,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  // Unfortunately, CUB's segmented sort functions cannot accept iterators.
+  // We have to build a pre-filled sequence of indices as input.
+  auto sorted_indices =
+    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0}, stream, mr);
+  auto indices_view = sorted_indices->mutable_view();
+
+  cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                               column_fast_sort_fn{},
+                                               input,
+                                               segment_offsets,
+                                               indices_view,
+                                               column_order == order::ASCENDING,
+                                               stream);
+  return sorted_indices;
+}
 
 /**
  * @brief Builds indices to identify segments to sort
@@ -89,8 +218,42 @@ std::unique_ptr<column> segmented_sorted_order_common(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  if (keys.num_rows() == 0 || keys.num_columns() == 0) {
+    return cudf::make_empty_column(type_to_id<size_type>());
+  }
+
   CUDF_EXPECTS(segment_offsets.type() == data_type(type_to_id<size_type>()),
                "segment offsets should be size_type");
+
+  if (not column_order.empty()) {
+    CUDF_EXPECTS(static_cast<std::size_t>(keys.num_columns()) == column_order.size(),
+                 "Mismatch between number of columns and column order.");
+  }
+
+  if (not null_precedence.empty()) {
+    CUDF_EXPECTS(static_cast<std::size_t>(keys.num_columns()) == null_precedence.size(),
+                 "Mismatch between number of columns and null_precedence size.");
+  }
+
+  // the average row size for which to prefer fast sort
+  constexpr cudf::size_type MAX_AVG_LIST_SIZE_FOR_FAST_SORT{100};
+  // the maximum row count for which to prefer fast sort
+  constexpr cudf::size_type MAX_LIST_SIZE_FOR_FAST_SORT{1 << 18};
+
+  // fast-path for single column sort:
+  // - single-column table
+  // - not stable-sort
+  // - no nulls and allowable fixed-width type
+  // - size and width are limited -- based on benchmark results
+  if (keys.num_columns() == 1 and sorting == sort_method::UNSTABLE and
+      column_fast_sort_fn::is_fast_sort_supported(keys.column(0)) and
+      (segment_offsets.size() > 0) and
+      (((keys.num_rows() / segment_offsets.size()) < MAX_AVG_LIST_SIZE_FOR_FAST_SORT) or
+       (keys.num_rows() < MAX_LIST_SIZE_FOR_FAST_SORT))) {
+    auto const col_order = column_order.empty() ? order::ASCENDING : column_order.front();
+    return fast_segmented_sorted_order(keys.column(0), segment_offsets, col_order, stream, mr);
+  }
+
   // Get segment id of each element in all segments.
   auto segment_ids = get_segment_indices(keys.num_rows(), segment_offsets, stream);
 
