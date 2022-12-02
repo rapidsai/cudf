@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ.get('RAPIDS_CUDA_VERSION', '11.5.2').split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
 {% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
 
@@ -21,9 +21,11 @@ build:
     - CMAKE_CUDA_COMPILER_LAUNCHER
     - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=libcudf-linux64 # [linux64]
-    - SCCACHE_BUCKET=rapids-sccache
-    - SCCACHE_REGION=us-west-2
-    - SCCACHE_IDLE_TIMEOUT=32768
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
 requirements:
   build:
@@ -31,10 +33,14 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
+    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - cuda-nvrtc-dev {{ cuda_version }}.*
+    - cuda-nvtx {{ cuda_version }}.*
+    - libcurand-dev
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
@@ -328,9 +334,11 @@ outputs:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
+        - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        - cuda-nvtx {{ cuda_version }}.*
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
