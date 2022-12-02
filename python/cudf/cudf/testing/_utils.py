@@ -390,13 +390,13 @@ parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
 
 
 @contextmanager
-def mask_future_warning_if(expect_warning, *args, **kwargs):
-    """Mask FutureWarning using pytest.warns if the expect_warning is True.
+def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
+    """Catch a warning using pytest.warns if the expect_warning is True.
 
     All arguments are forwarded to pytest.warns if expect_warning is True.
     """
-    if expect_warning:
-        with pytest.warns(FutureWarning, *args, **kwargs):
+    if condition:
+        with pytest.warns(warning, *args, **kwargs):
             yield
     else:
         yield

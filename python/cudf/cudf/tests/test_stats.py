@@ -13,6 +13,7 @@ from cudf.testing._utils import (
     _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
@@ -399,7 +400,13 @@ def test_cov1d(data1, data2):
     ps2 = gs2.to_pandas()
 
     got = gs1.cov(gs2)
-    expected = ps1.cov(ps2)
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+    with expect_warning_if(
+        (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0)
+        or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0),
+        RuntimeWarning,
+    ):
+        expected = ps1.cov(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
