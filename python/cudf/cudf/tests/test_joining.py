@@ -2148,11 +2148,13 @@ def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
     rhs = pd.DataFrame(index=["a", "c", "d"])
-    expect = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        expect = lhs.join(rhs, how="inner")
 
     lhs = cudf.from_pandas(lhs)
     rhs = cudf.from_pandas(rhs)
-    got = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
 
