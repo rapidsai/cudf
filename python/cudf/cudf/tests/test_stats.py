@@ -469,9 +469,11 @@ def test_corr1d(data1, data2, method):
         is_identical and not is_singular and method == "spearman"
     )
     if method == "spearman":
-        import scipy.stats
-
-        expected_warning = scipy.stats._warnings_errors.ConstantInputWarning
+        # SciPy has shuffled around the warning it throws a couple of times.
+        # It's not worth the effort of conditionally importing the appropriate
+        # warning based on the scipy version, just catching a base Warning is
+        # good enough validation.
+        expected_warning = Warning
     elif method == "pearson":
         expected_warning = RuntimeWarning
 
