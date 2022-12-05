@@ -626,9 +626,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas Index.
+
+        Parameters
+        ----------
+        nullable : bool, Default False
+            If ``nullable`` is ``True``, the resulting index will have
+            a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting index will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
 
         Examples
         --------
