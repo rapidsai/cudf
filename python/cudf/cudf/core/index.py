@@ -473,7 +473,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return begin, end
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1471,8 +1471,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self):
-        return pd.Index(self._values.to_pandas(), name=self.name)
+    def to_pandas(self, nullable=False):
+        return pd.Index(
+            self._values.to_pandas(nullable=nullable), name=self.name
+        )
 
     def append(self, other):
         if is_list_like(other):
@@ -2272,7 +2274,7 @@ class DatetimeIndex(GenericIndex):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
@@ -2478,7 +2480,7 @@ class TimedeltaIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
@@ -2943,9 +2945,11 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.Index(
-            self.to_numpy(na_value=None), name=self.name, dtype="object"
+            self.to_numpy(na_value=None),
+            name=self.name,
+            dtype=pd.StringDtype() if nullable else "object",
         )
 
     @_cudf_nvtx_annotate

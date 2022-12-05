@@ -25,6 +25,9 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 # Workaround to keep Jenkins builds working
 # until we migrate fully to GitHub Actions
 export RAPIDS_CUDA_VERSION="${CUDA}"
+export SCCACHE_BUCKET=rapids-sccache
+export SCCACHE_REGION=us-west-2
+export SCCACHE_IDLE_TIMEOUT=32768
 
 # Use Ninja to build, setup Conda Build Dir
 export CMAKE_GENERATOR="Ninja"
@@ -32,7 +35,7 @@ export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
 
 # Whether to keep `dask/label/dev` channel in the env. If INSTALL_DASK_MAIN=0,
 # `dask/label/dev` channel is removed.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 # Switch to project root; also root of repo checkout
 cd "$WORKSPACE"
