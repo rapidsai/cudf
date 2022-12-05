@@ -4962,6 +4962,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReverseString() {
+    try (ColumnVector input = ColumnVector.fromStrings("abcdef", "12345", "", "", "aébé",
+            "A é Z", "X", "é");
+         ColumnVector expected = ColumnVector.fromStrings("fedcba", "54321", "", "", "ébéa",
+            "Z é A", "X", "é");
+         ColumnVector result = input.reverseStringsOrLists()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testStringSplit() {
     String pattern = " ";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
