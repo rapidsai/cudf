@@ -320,6 +320,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         -------
         New RangeIndex instance with same range, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
 
@@ -1116,6 +1122,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         -------
         New index instance, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name

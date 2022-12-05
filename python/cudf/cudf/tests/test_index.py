@@ -311,8 +311,10 @@ def test_index_copy_range(name, dtype, deep=True):
     cidx = cudf.RangeIndex(1, 5)
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -323,8 +325,10 @@ def test_index_copy_datetime(name, dtype, deep=True):
     cidx = cudf.DatetimeIndex(["2001", "2002", "2003"])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -335,8 +339,10 @@ def test_index_copy_string(name, dtype, deep=True):
     cidx = cudf.StringIndex(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -351,8 +357,10 @@ def test_index_copy_integer(name, dtype, deep=True):
     cidx = cudf.Index([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -364,8 +372,10 @@ def test_index_copy_float(name, dtype, deep=True):
     cidx = cudf.Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -376,8 +386,10 @@ def test_index_copy_category(name, dtype, deep=True):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
