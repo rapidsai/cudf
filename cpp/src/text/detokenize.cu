@@ -95,8 +95,8 @@ struct index_changed_fn {
  * @param tokens_counts Token counts for each row
  * @param stream CUDA stream used for kernel launches
  */
-rmm::device_uvector<cudf::size_type> create_token_row_offsets(cudf::column_view row_indices,
-                                                              cudf::column_view sorted_indices,
+rmm::device_uvector<cudf::size_type> create_token_row_offsets(cudf::column_view const& row_indices,
+                                                              cudf::column_view const& sorted_indices,
                                                               cudf::size_type tokens_counts,
                                                               rmm::cuda_stream_view stream)
 {
