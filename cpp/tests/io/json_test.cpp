@@ -960,12 +960,8 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
-  // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  // ignore all data because it is all nulls.
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_P(JsonReaderParamTest, StringInference)
@@ -1536,31 +1532,45 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
       0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
   };
 
-  constexpr int int_NA       = 0;
-  constexpr double double_NA = std::numeric_limits<double>::quiet_NaN();
-  constexpr bool bool_NA     = false;
+  constexpr int int_ignore{};
+  constexpr double double_ignore{};
+  constexpr bool bool_ignore{};
 
   std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
 
-  auto int_col = int_wrapper{
-    {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
-    cudf::test::iterators::nulls_at(std::vector<int>{8})};
+  auto int_col   = int_wrapper{{0,
+                              0,
+                              int_ignore,
+                              1,
+                              1,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              int_ignore},
+                             make_validity(validity)};
   auto float_col = float_wrapper{{0.0,
                                   0.0,
-                                  double_NA,
+                                  double_ignore,
                                   1.0,
                                   1.0,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  1.0,
-                                  0.0,
-                                  double_NA,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
                                   1.0,
                                   0.0,
-                                  double_NA,
-                                  double_NA},
+                                  double_ignore,
+                                  1.0,
+                                  0.0,
+                                  double_ignore,
+                                  double_ignore},
                                  make_validity(validity)};
   auto str_col =
     cudf::test::strings_column_wrapper{// clang-format off
@@ -1569,21 +1579,21 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
   // clang-format on
   auto bool_col = bool_wrapper{{false,
                                 false,
-                                bool_NA,
+                                bool_ignore,
                                 true,
                                 true,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                true,
-                                false,
-                                bool_NA,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
                                 true,
                                 false,
-                                bool_NA,
-                                bool_NA},
-                               cudf::test::iterators::nulls_at(std::vector<int>{8})};
+                                bool_ignore,
+                                true,
+                                false,
+                                bool_ignore,
+                                bool_ignore},
+                               make_validity(validity)};
 
   // Types to test
   const std::vector<data_type> dtypes = {
