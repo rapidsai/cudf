@@ -9,7 +9,7 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
-- arrow-cpp=9
+- arrow-cpp=10.0.1
 - boto3>=1.21.21
 - botocore>=1.24.21
 - c-compiler
@@ -48,11 +48,11 @@ dependencies:
 - pandoc<=2.0.0
 - pip
 - pre-commit
-- protobuf>=3.20.1,<3.21.0a0
+- protobuf=4.21.10
 - ptxcompiler
-- pyarrow=9.0.0
+- pyarrow=10.0.1
 - pydata-sphinx-theme
-- pyorc
+# - pyorc
 - pytest
 - pytest-benchmark
 - pytest-cases
