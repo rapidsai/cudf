@@ -22,6 +22,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -168,14 +169,6 @@ std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-void expect_tables_prop_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
-{
-  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  for (cudf::size_type index = 0; index < lhs.num_columns(); index++) {
-    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs.column(index), rhs.column(index));
-  }
-}
-
 struct EmptyLikeTableTest : public cudf::test::BaseFixture {
 };
 
@@ -187,7 +180,7 @@ TEST_F(EmptyLikeTableTest, TableTest)
   auto expected          = create_table(0, cudf::mask_state::ALL_VALID);
   auto got               = cudf::empty_like(input->view());
 
-  expect_tables_prop_equal(got->view(), expected->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(got->view(), expected->view());
 }
 
 template <typename T>

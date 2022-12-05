@@ -2801,7 +2801,12 @@ def test_index_error_list_index():
     "data",
     [
         [1, 2, 3],
-        [np.nan, 10, 15, 16],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
         range(0, 10),
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],
@@ -2810,6 +2815,22 @@ def test_index_error_list_index():
 )
 def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
-    ps = gs.to_pandas()
+    ps = gs.to_pandas(nullable=True)
 
     assert_eq(gs.hasnans, ps.hasnans)
+
+
+@pytest.mark.parametrize(
+    "data,expected_dtype",
+    [
+        ([10, 11, 12], pd.Int64Dtype()),
+        ([0.1, 10.2, 12.3], pd.Float64Dtype()),
+        (["abc", None, "def"], pd.StringDtype()),
+    ],
+)
+def test_index_to_pandas_nullable(data, expected_dtype):
+    gi = cudf.Index(data)
+    pi = gi.to_pandas(nullable=True)
+    expected = pd.Index(data, dtype=expected_dtype)
+
+    assert_eq(pi, expected)

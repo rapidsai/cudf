@@ -25,6 +25,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -214,6 +215,53 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
   }
   return (result + suffix);
 }
+
+template <typename DecimalType>
+struct JsonFixedPointReaderTest : public JsonReaderTest {
+};
+
+template <typename DecimalType>
+struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalType> {
+  void run_test(std::vector<std::string> const& reference_strings,
+                numeric::scale_type scale,
+                bool use_experimental_parser)
+  {
+    cudf::test::strings_column_wrapper const strings(reference_strings.begin(),
+                                                     reference_strings.end());
+    auto const expected = cudf::strings::to_fixed_point(
+      cudf::strings_column_view(strings), data_type{type_to_id<DecimalType>(), scale});
+
+    auto const buffer =
+      std::accumulate(reference_strings.begin(),
+                      reference_strings.end(),
+                      std::string{},
+                      [](const std::string& acc, const std::string& rhs) {
+                        return acc + (acc.empty() ? "" : "\n") + "{\"col0\":" + rhs + "}";
+                      });
+    cudf::io::json_reader_options const in_opts =
+      cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+        .dtypes({data_type{type_to_id<DecimalType>(), scale}})
+        .lines(true)
+        .experimental(use_experimental_parser);
+
+    auto const result      = cudf::io::read_json(in_opts);
+    auto const result_view = result.tbl->view();
+
+    ASSERT_EQ(result_view.num_columns(), 1);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, result_view.column(0));
+  }
+
+  void run_tests(std::vector<std::string> const& reference_strings, numeric::scale_type scale)
+  {
+    // Test both parsers
+    run_test(reference_strings, scale, false);
+    run_test(reference_strings, scale, true);
+  }
+};
+
+TYPED_TEST_SUITE(JsonFixedPointReaderTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(JsonValidFixedPointReaderTest, cudf::test::FixedPointTypes);
 
 // Parametrize qualifying JSON tests for executing both experimental reader and existing JSON lines
 // reader
@@ -912,12 +960,8 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
-  // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  // ignore all data because it is all nulls.
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_P(JsonReaderParamTest, StringInference)
@@ -1488,31 +1532,45 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
       0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
   };
 
-  constexpr int int_NA       = 0;
-  constexpr double double_NA = std::numeric_limits<double>::quiet_NaN();
-  constexpr bool bool_NA     = false;
+  constexpr int int_ignore{};
+  constexpr double double_ignore{};
+  constexpr bool bool_ignore{};
 
   std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
 
-  auto int_col = int_wrapper{
-    {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
-    cudf::test::iterators::nulls_at(std::vector<int>{8})};
+  auto int_col   = int_wrapper{{0,
+                              0,
+                              int_ignore,
+                              1,
+                              1,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              int_ignore},
+                             make_validity(validity)};
   auto float_col = float_wrapper{{0.0,
                                   0.0,
-                                  double_NA,
+                                  double_ignore,
                                   1.0,
                                   1.0,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  1.0,
-                                  0.0,
-                                  double_NA,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
                                   1.0,
                                   0.0,
-                                  double_NA,
-                                  double_NA},
+                                  double_ignore,
+                                  1.0,
+                                  0.0,
+                                  double_ignore,
+                                  double_ignore},
                                  make_validity(validity)};
   auto str_col =
     cudf::test::strings_column_wrapper{// clang-format off
@@ -1521,21 +1579,21 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
   // clang-format on
   auto bool_col = bool_wrapper{{false,
                                 false,
-                                bool_NA,
+                                bool_ignore,
                                 true,
                                 true,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                true,
-                                false,
-                                bool_NA,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
                                 true,
                                 false,
-                                bool_NA,
-                                bool_NA},
-                               cudf::test::iterators::nulls_at(std::vector<int>{8})};
+                                bool_ignore,
+                                true,
+                                false,
+                                bool_ignore,
+                                bool_ignore},
+                               make_validity(validity)};
 
   // Types to test
   const std::vector<data_type> dtypes = {
@@ -1561,6 +1619,43 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
     EXPECT_EQ(result.tbl->get_column(0).type().id(), dtypes[col_type].id());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), cols[col_type]);
   }
+}
+
+TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnNegativeScale)
+{
+  this->run_tests({"1.23", "876e-2", "5.43e1", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"},
+                  numeric::scale_type{-2});
+}
+
+TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnNoScale)
+{
+  this->run_tests({"123", "-87600e-2", "54.3e1", "-12", "25", "-23", "-27", "0", "0"},
+                  numeric::scale_type{0});
+}
+
+TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnPositiveScale)
+{
+  this->run_tests(
+    {"123000", "-87600000e-2", "54300e1", "-12000", "25000", "-23000", "-27000", "0000", "0000"},
+    numeric::scale_type{3});
+}
+
+TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
+{
+  auto const buffer = std::string{"{\"col0\":}"};
+
+  cudf::io::json_reader_options const in_opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .dtypes({data_type{type_to_id<TypeParam>(), 0}})
+      .lines(true);
+
+  auto const result      = cudf::io::read_json(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result_view.num_columns(), 1);
+  EXPECT_EQ(result_view.num_rows(), 1);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+  EXPECT_EQ(result_view.column(0).null_count(), 1);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
