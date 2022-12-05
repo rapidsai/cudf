@@ -84,7 +84,11 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
 
   cudf::test::UniformRandomGenerator<T> rng;
   cudf::test::UniformRandomGenerator<bool> rbg;
-  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  if constexpr (std::is_floating_point<T>()) {
+    std::fill(host_values.begin(), host_values.end(), T{2});
+  } else {
+    std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  }
   std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
@@ -118,7 +122,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
                                it_dev_squared + d_col->size(),
                                thrust::make_pair(T_output{}, true),
                                sum_if_not_null{});
-  if (not std::is_floating_point<T>()) {
+  if constexpr (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
   } else {
     EXPECT_NEAR(expected_value.value, result.first.value, 1e-3) << "pair iterator reduction sum";
