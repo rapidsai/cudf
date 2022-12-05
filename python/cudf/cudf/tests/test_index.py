@@ -32,6 +32,7 @@ from cudf.testing._utils import (
     assert_column_memory_ne,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.utils.utils import search_range
 
@@ -1992,10 +1993,13 @@ def test_get_loc_single_unique_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2022,10 +2026,13 @@ def test_get_loc_rangeindex(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2049,10 +2056,13 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2080,10 +2090,13 @@ def test_get_loc_single_unique_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2103,10 +2116,13 @@ def test_get_loc_single_duplicate_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2137,10 +2153,13 @@ def test_get_loc_multi_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2174,10 +2193,12 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
         expected = result
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2251,10 +2272,13 @@ def test_get_loc_multi_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 

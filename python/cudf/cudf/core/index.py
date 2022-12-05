@@ -589,6 +589,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
+
         # Given an actual integer,
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
@@ -1181,9 +1191,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         >>> numeric_unique_index.get_loc(3)
         2
         """
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method not in {
             None,
