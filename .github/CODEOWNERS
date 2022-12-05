@@ -18,3 +18,4 @@ java/              @rapidsai/cudf-java-codeowners
 .github/           @rapidsai/ops-codeowners
 /ci/               @rapidsai/ops-codeowners
 conda/             @rapidsai/ops-codeowners
+dependencies.yaml  @rapidsai/ops-codeowners
