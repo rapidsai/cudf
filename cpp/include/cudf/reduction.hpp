@@ -39,14 +39,23 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @brief  Computes the reduction of the values in all rows of a column.
  *
  * This function does not detect overflows in reductions.
- * Using a higher precision `data_type` may prevent overflow.
+ * Using a higher precision for output_dtype may prevent overflow.
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (e.g. timestamp or string).
- * The null values are skipped for the operation.
  *
- * If the column is empty or all null, the output scalar value will be `true` for
- * reduction `any` and false for reduction type `all`. For all other
- * reductions, the output scalar returns with `is_valid()==false`.
+ * Any null values are skipped for the operation.
+ *
+ * If the column is empty or contains all null entries `col.size()==col.null_count()`,
+ * the output scalar value will be `true` for reduction type `any` and false
+ * for reduction type `all`. For all other reductions, the output scalar
+ * returns with `is_valid()==false`.
+ *
+ * If the input column is an arithmetic type, the output_dtype can be any arithmetic
+ * type. If the input column is a non-arithmetic type (e.g. timestamp or string)
+ * the output_dtype must match the column type. If the reduction type is `any` or
+ * `all`, the output_dtype must be type BOOL8.
+ *
+ * If the reduction fails, the output scalar returns with `is_valid()==false`.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
@@ -58,12 +67,6 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * output type is not BOOL8.
  * @throw cudf::logic_error if `mean`, `var`, or `std` reduction is called and
  * the output type is not floating point.
- *
- * If the input column has arithmetic type, output_dtype can be any arithmetic
- * type. If the input column has non-arithmetic type (e.g. timestamp or string)
- * the same output type must be specified.
- *
- * If the reduction fails, the member the output scalar returns with `is_valid()==false`.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
