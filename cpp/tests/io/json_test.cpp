@@ -811,7 +811,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
@@ -822,8 +822,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
-                                 float64_wrapper{{0., 200.}, col1_validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), int64_wrapper{{0, 200}, col1_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  float64_wrapper{{1.1, 0.}, col2_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
