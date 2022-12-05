@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import threading
+import weakref
 from contextlib import ContextDecorator
+from functools import cached_property
 from typing import Any, Dict, Optional, Tuple, Union
 
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
@@ -134,3 +136,35 @@ def get_spill_lock() -> Union[SpillLock, None]:
     _id = threading.get_ident()
     spill_lock, _ = _thread_spill_locks.get(_id, (None, 0))
     return spill_lock
+
+
+class cached_property_delete_column_when_spilled(cached_property):
+    """A version of `cached_property` that delete instead of spill the cache
+
+    This property expect a `Column` instance.
+
+    When cudf spilling is enabled, this property register a spill handler for
+    the cached column that deletes the column rather than spilling it.
+    See `SpillManager.register_spill_handler`.
+    """
+
+    def __get__(self, instance, owner=None):
+        ret = super().__get__(instance, owner)
+        manager = get_global_manager()
+        if manager is None:
+            return ret
+        nbytes = ret.memory_usage
+        assert isinstance(ret.base_data, SpillableBuffer)
+
+        # We register a callback function `f` that clears the cache and
+        # to avoid keeping `instance` alive, `f` takes a weak reference
+        # of `instance`.
+        def f(idx_ref: weakref.ReferenceType) -> int:
+            idx = idx_ref()
+            if idx is None:
+                return 0
+            idx.__dict__.pop(self.attrname, None)
+            return nbytes
+
+        manager.register_spill_handler(ret.base_data, f, weakref.ref(instance))
+        return ret

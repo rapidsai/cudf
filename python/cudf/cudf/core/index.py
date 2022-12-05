@@ -5,8 +5,6 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
-import weakref
-from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -39,8 +37,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
-from cudf.core.buffer import SpillableBuffer
-from cudf.core.buffer.spill_manager import get_global_manager
+from cudf.core.buffer.utils import cached_property_delete_column_when_spilled
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -248,33 +245,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _num_rows(self):
         return len(self)
 
-    @cached_property  # type: ignore
+    # When cudf spilling is enabled, we want to delete this cached
+    # materialization of the RangeIndex instead of spilling it.
+    @cached_property_delete_column_when_spilled
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
-            ret = column.arange(
+            return column.arange(
                 self._start, self._stop, self._step, dtype=self.dtype
             )
-            manager = get_global_manager()
-            if manager is None:
-                return ret
-            nbytes = ret.memory_usage
-            assert isinstance(ret.base_data, SpillableBuffer)
-
-            # When cudf spilling is enabled, we want to delete this cached
-            # materialization of the RangeIndex instead of spilling it to
-            # host memory. To do this, we register a callback function `f`
-            # that clears the cache and to avoid keeping `self` alive, `f`
-            # takes a weak reference of `self`.
-            def f(idx_ref: weakref.ReferenceType[RangeIndex]) -> int:
-                idx = idx_ref()
-                if idx is None:
-                    return 0
-                idx.__dict__.pop("_values", None)
-                return nbytes
-
-            manager.register_spill_handler(ret.base_data, f, weakref.ref(self))
-            return ret
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
