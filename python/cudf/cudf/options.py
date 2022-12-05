@@ -152,7 +152,7 @@ def _make_contains_validator(valid_options: Container) -> Callable:
 
 def _make_cow_validator(valid_options):
     def _validator(val):
-        if get_option("spill"):
+        if get_option("spill") and val:
             raise ValueError(
                 "Copy on write is not supported when spilling is enabled. "
                 "Please set `spill` to `False`"

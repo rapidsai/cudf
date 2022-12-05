@@ -311,15 +311,15 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def has_a_weakref(self) -> bool:
+    def _has_a_weakref(self) -> bool:
         """
         Determines if the column has a weak reference.
         """
 
         return (
-            self.base_data.has_a_weakref() or
+            self.base_data._has_a_weakref() or
             (
-                self.base_mask.has_a_weakref()
+                self.base_mask._has_a_weakref()
                 if self.base_mask
                 else False
             )
@@ -346,7 +346,7 @@ cdef class Column:
         Detaches a column from its current Buffers by making
         a true deep-copy.
         """
-        if not self._is_cai_zero_copied() and self.has_a_weakref():
+        if not self._is_cai_zero_copied() and self._has_a_weakref():
             new_col = self.force_deep_copy()
 
             self._offset = new_col.offset

@@ -294,7 +294,7 @@ class Buffer(Serializable):
             self._update_ref()
         return self._proxy_ref
 
-    def has_a_weakref(self):
+    def _has_a_weakref(self):
         """
         Checks if the Buffer has a weak-reference.
         """
@@ -345,7 +345,7 @@ class Buffer(Serializable):
                 copied_buf._weak_ref = None
                 copied_buf._zero_copied = False
 
-                if self.has_a_weakref():
+                if self._has_a_weakref():
                     # If `self` has weak-references
                     # we will then have to keep that
                     # weak-reference alive, hence
@@ -430,7 +430,7 @@ class Buffer(Serializable):
         Detaches a Buffer from it's weak-references by making
         a true deep-copy.
         """
-        if not self._zero_copied and self.has_a_weakref():
+        if not self._zero_copied and self._has_a_weakref():
             # make a deep copy of existing DeviceBuffer
             # and replace pointer to it.
             current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
