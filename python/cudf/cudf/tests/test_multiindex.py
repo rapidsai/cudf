@@ -723,10 +723,12 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    with expect_warning_if(levels is not None or codes is not None):
+        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
 
     pmi = pdf.index
-    pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    with expect_warning_if(levels is not None or codes is not None):
+        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
