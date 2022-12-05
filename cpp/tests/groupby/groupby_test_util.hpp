@@ -132,6 +132,36 @@ inline void test_single_agg(column_view const& keys,
   }
 }
 
+inline auto sum_agg() { return cudf::make_sum_aggregation<groupby_aggregation>(); }
+
+inline void test_hash_based_sum_agg(column_view const& keys,
+                                    column_view const& values,
+                                    column_view const& expect_keys,
+                                    column_view const& expect_vals)
+{
+  test_single_agg(keys,
+                  values,
+                  expect_keys,
+                  expect_vals,
+                  sum_agg(),
+                  force_use_sort_impl::NO,
+                  null_policy::INCLUDE);
+}
+
+inline void test_sort_based_sum_agg(column_view const& keys,
+                                    column_view const& values,
+                                    column_view const& expect_keys,
+                                    column_view const& expect_vals)
+{
+  test_single_agg(keys,
+                  values,
+                  expect_keys,
+                  expect_vals,
+                  sum_agg(),
+                  force_use_sort_impl::YES,
+                  null_policy::INCLUDE);
+}
+
 inline void test_single_scan(column_view const& keys,
                              column_view const& values,
                              column_view const& expect_keys,

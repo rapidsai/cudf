@@ -60,9 +60,9 @@ struct sort_groupby_helper {
    *                        optimizations to help skip re-sorting keys.
    */
   sort_groupby_helper(table_view const& keys,
-                      null_policy include_null_keys                  = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted                         = sorted::NO,
-                      std::vector<null_order> const& null_precedence = {});
+                      null_policy include_null_keys,
+                      sorted keys_pre_sorted,
+                      std::vector<null_order> const& null_precedence);
 
   ~sort_groupby_helper()                          = default;
   sort_groupby_helper(sort_groupby_helper const&) = delete;

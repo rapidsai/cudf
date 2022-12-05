@@ -103,8 +103,6 @@ std::unique_ptr<column> sorted_order(table_view input,
   }
 
   if (not null_precedence.empty()) {
-    std::cout << "Input num: " << input.num_columns() << ", null pre: " << null_precedence.size()
-              << std::endl;
     CUDF_EXPECTS(static_cast<std::size_t>(input.num_columns()) == null_precedence.size(),
                  "Mismatch between number of columns and null_precedence size.");
   }

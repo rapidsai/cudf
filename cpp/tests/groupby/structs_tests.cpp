@@ -53,7 +53,6 @@ static constexpr auto null = -1;  // Signifies null value.
 // Checking with a single aggregation, and aggregation column.
 // This test is orthogonal to the aggregation type; it focuses on testing the grouping
 // with STRUCT keys.
-auto sum_agg() { return cudf::make_sum_aggregation<groupby_aggregation>(); }
 
 // Set this to true to enable printing, for debugging.
 auto constexpr print_enabled = false;
@@ -75,34 +74,6 @@ void print_agg_results(column_view const& keys, column_view const& vals)
     std::cout << "Results: Values: " << std::endl;
     print(result.second.front().results[0]->view());
   }
-}
-
-void test_sort_based_sum_agg(column_view const& keys,
-                             column_view const& values,
-                             column_view const& expected_keys,
-                             column_view const& expected_values)
-{
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  sum_agg(),
-                  force_use_sort_impl::YES,
-                  null_policy::INCLUDE);
-}
-
-void test_hash_based_sum_agg(column_view const& keys,
-                             column_view const& values,
-                             column_view const& expected_keys,
-                             column_view const& expected_values)
-{
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  sum_agg(),
-                  force_use_sort_impl::NO,
-                  null_policy::INCLUDE);
 }
 
 void test_sum_agg(column_view const& keys,
