@@ -249,9 +249,7 @@ class ColumnAccessor(abc.MutableMapping):
             # prevents coercion of values to a different type
             # (e.g., ''->NaT)
             result = pd.MultiIndex.from_frame(
-                pd.DataFrame(
-                    self.names, columns=self.level_names, dtype="object"
-                ),
+                pd.DataFrame(self.names, columns=self.level_names)
             )
         else:
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
