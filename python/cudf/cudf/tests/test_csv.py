@@ -834,10 +834,9 @@ def test_csv_reader_bools_NA():
     expected = pd.DataFrame(
         {
             "text": ["true", "false", "foo", "bar", "qux"],
-            "int": [1, 0, 1, 0, 0],
+            "int": [1.0, 0.0, 1.0, 0.0, np.nan],
         }
     )
-    # breaking behaviour is np.nan for qux
     assert_eq(df, expected)
 
 

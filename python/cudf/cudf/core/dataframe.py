@@ -4966,7 +4966,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         nullable : Boolean, Default False
             If ``nullable`` is ``True``, the resulting columns
             in the dataframe will be having a corresponding
-            nullable Pandas dtype. If ``nullable`` is ``False``,
+            nullable Pandas dtype. If there is no corresponding
+            nullable Pandas dtype present, the resulting dtype
+            will be a regular pandas dtype.
+            If ``nullable`` is ``False``,
             the resulting columns will either convert null
             values to ``np.nan`` or ``None`` depending on the dtype.
 

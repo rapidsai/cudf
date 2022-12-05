@@ -1168,12 +1168,8 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(type_id::FLOAT32, view.column(0).type().id());
 
-  const auto col_data = cudf::test::to_host<float>(view.column(0));
-  // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  // ignore all data because it is all nulls.
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_F(CsvReaderTest, StringInference)
