@@ -684,7 +684,7 @@ TEST_F(StringsContainsTests, MultiLine)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
 }
 
-TEST_F(StringsContainsTests, BOLEOL)
+TEST_F(StringsContainsTests, EndOfString)
 {
   auto input = cudf::test::strings_column_wrapper(
     {"abé\nfff\nabé", "fff\nabé\nlll", "abé", "", "abé\n", "abe\nabé\n"});
