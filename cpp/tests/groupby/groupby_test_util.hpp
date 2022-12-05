@@ -74,18 +74,19 @@ inline void test_single_agg(column_view const& keys,
                             std::vector<null_order> const& null_precedence = {},
                             sorted reference_keys_are_sorted               = sorted::NO)
 {
-  std::unique_ptr<table> sorted_expect_keys;
-  std::unique_ptr<table> sorted_expect_vals;
-
-  if (reference_keys_are_sorted == sorted::NO) {
-    auto const sort_expect_order =
-      sorted_order(table_view{{expect_keys}}, column_order, null_precedence);
-    sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_expect_order);
-    sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_expect_order);
-  } else {
-    sorted_expect_keys = std::make_unique<table>(table_view{{expect_keys}});
-    sorted_expect_vals = std::make_unique<table>(table_view{{expect_vals}});
-  }
+  auto const [sorted_expect_keys, sorted_expect_vals] = [&]() {
+    if (reference_keys_are_sorted == sorted::NO) {
+      auto const sort_expect_order =
+        sorted_order(table_view{{expect_keys}}, column_order, null_precedence);
+      auto sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_expect_order);
+      auto sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_expect_order);
+      return std::make_pair(std::move(sorted_expect_keys), std::move(sorted_expect_vals));
+    } else {
+      auto sorted_expect_keys = std::make_unique<table>(table_view{{expect_keys}});
+      auto sorted_expect_vals = std::make_unique<table>(table_view{{expect_vals}});
+      return std::make_pair(std::move(sorted_expect_keys), std::move(sorted_expect_vals));
+    }
+  }();
 
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
@@ -149,6 +150,15 @@ inline void test_sort_based_sum_agg(column_view const& keys,
                   sum_agg(),
                   force_use_sort_impl::YES,
                   null_policy::INCLUDE);
+}
+
+inline void test_sum_agg(column_view const& keys,
+                         column_view const& values,
+                         column_view const& expected_keys,
+                         column_view const& expected_values)
+{
+  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
+  test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 inline void test_single_scan(column_view const& keys,

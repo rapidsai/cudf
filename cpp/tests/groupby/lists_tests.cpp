@@ -62,14 +62,6 @@ static constexpr auto null = -1;
 // This test is orthogonal to the aggregation type; it focuses on testing the grouping
 // with LISTS keys.
 
-void test_sum_agg(column_view const& keys,
-                  column_view const& values,
-                  column_view const& expected_keys,
-                  column_view const& expected_values)
-{
-  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
-  test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
-}
 }  // namespace
 
 TYPED_TEST(groupby_lists_test, basic)

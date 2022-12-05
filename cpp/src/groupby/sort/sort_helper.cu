@@ -114,12 +114,12 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    std::vector<null_order> precedence;
-    if (_null_precedence.size() == 0) {
-      precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
-    } else {
-      precedence = _null_precedence;
-    }
+    auto const precedence = [&_null_precedence = _null_precedence, &_keys = _keys]() {
+      if (_null_precedence.size() == 0) {
+        return std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
+      }
+      return _null_precedence;
+    }();
     _key_sorted_order = cudf::detail::stable_sorted_order(
       _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
@@ -127,15 +127,18 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
 
-    auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
-    std::vector<null_order> precedence;
-    if (_null_precedence.size() == 0) {
-      precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
-      precedence.insert(precedence.begin(), null_order::AFTER);
-    } else {
-      precedence = _null_precedence;
-      precedence.insert(precedence.begin(), null_order::AFTER);
-    }
+    auto augmented_keys   = table_view({table_view({keys_bitmask_column(stream)}), _keys});
+    auto const precedence = [&_null_precedence = _null_precedence, &_keys = _keys]() {
+      if (_null_precedence.size() == 0) {
+        auto precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
+        precedence.insert(precedence.begin(), null_order::AFTER);
+        return precedence;
+      } else {
+        auto precedence = _null_precedence;
+        precedence.insert(precedence.begin(), null_order::AFTER);
+        return precedence;
+      }
+    }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
       augmented_keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
