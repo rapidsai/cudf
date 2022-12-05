@@ -24,6 +24,7 @@ from strings_udf.lowering import (
     len_impl,
     lower_impl,
     lstrip_impl,
+    replace_impl,
     rfind_impl,
     rstrip_impl,
     startswith_impl,
@@ -46,6 +47,40 @@ def masked_len_impl(context, builder, sig, args):
     )
     ret.value = result
     ret.valid = masked_sv.valid
+
+    return ret._getvalue()
+
+
+def _masked_proxies(context, builder, maskedty, *args):
+    return tuple(
+        cgutils.create_struct_proxy(maskedty)(context, builder, value=arg)
+        for arg in args
+    )
+
+
+@cuda_lower(
+    "MaskedType.replace",
+    MaskedType(string_view),
+    MaskedType(string_view),
+    MaskedType(string_view),
+)
+def masked_string_view_replace_impl(context, builder, sig, args):
+    ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    src_masked, to_replace_masked, replacement_masked = _masked_proxies(
+        context, builder, MaskedType(string_view), *args
+    )
+    result = replace_impl(
+        context,
+        builder,
+        nb_signature(udf_string, string_view, string_view, string_view),
+        (src_masked.value, to_replace_masked.value, replacement_masked.value),
+    )
+
+    ret.value = result
+    ret.valid = builder.and_(
+        builder.and_(src_masked.valid, to_replace_masked.valid),
+        replacement_masked.valid,
+    )
 
     return ret._getvalue()
 

@@ -4,6 +4,7 @@ channels:
 - rapidsai
 - rapidsai-nightly
 - dask/label/dev
+- pytorch
 - conda-forge
 - nvidia
 dependencies:
@@ -35,7 +36,8 @@ dependencies:
 - moto>=4.0.8
 - myst-nb
 - nbsphinx
-- notebook>=0.5.0
+- ninja
+- notebook
 - numba>=0.56.2
 - numpy
 - numpydoc
@@ -50,6 +52,7 @@ dependencies:
 - ptxcompiler
 - pyarrow=9.0.0
 - pydata-sphinx-theme
+- pyorc
 - pytest
 - pytest-benchmark
 - pytest-cases
@@ -70,9 +73,9 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17
-- transformers
+- tokenizers==0.13.1
+- transformers==4.24.0
 - typing_extensions
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
-  - pyorc
 name: all_cuda-115_arch-x86_64

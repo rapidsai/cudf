@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ struct PackUnpackTest : public BaseFixture {
     // verify pack/unpack works
     auto packed   = pack(t);
     auto unpacked = unpack(packed);
-    cudf::test::expect_tables_equal(t, unpacked);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(t, unpacked);
 
     // verify pack_metadata itself works
     auto metadata = pack_metadata(

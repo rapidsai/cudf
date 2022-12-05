@@ -398,7 +398,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 {
   check_eq_compatibility(t);
 
-  auto [null_pushed_table, null_masks] = structs::detail::superimpose_parent_nulls(t, stream);
+  auto [null_pushed_table, null_masks] = structs::detail::push_down_nulls(t, stream);
   auto struct_offset_removed_table     = remove_struct_child_offsets(null_pushed_table);
   auto [verticalized_lhs, _, __, ___]  = decompose_structs(struct_offset_removed_table);
 

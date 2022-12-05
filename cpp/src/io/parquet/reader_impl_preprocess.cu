@@ -710,7 +710,7 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
                                             col_meta.codec,
                                             converted_type,
                                             schema.logical_type,
-                                            schema.decimal_scale,
+                                            schema.decimal_precision,
                                             clock_rate,
                                             i,
                                             col.schema_idx));
@@ -1409,7 +1409,7 @@ void reader::impl::preprocess_pages(size_t skip_rows,
 #endif
   }
 
-  // compute splits if necessary. otherwise retun a single split representing
+  // compute splits if necessary. otherwise return a single split representing
   // the whole file.
   _chunk_read_info = chunk_read_limit > 0
                        ? compute_splits(pages, _chunk_itm_data, num_rows, chunk_read_limit, _stream)
@@ -1428,7 +1428,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
   // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
-  // is set (if the user has specified artifical bounds).
+  // is set (if the user has specified artificial bounds).
   if (uses_custom_row_bounds) {
     gpu::ComputePageSizes(pages,
                           chunks,

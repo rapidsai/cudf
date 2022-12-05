@@ -22,6 +22,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

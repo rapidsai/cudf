@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +106,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 1 row
   //
@@ -197,8 +197,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<int>, 1 row
   //
@@ -312,8 +312,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<T>>, 1 row
   //
@@ -401,8 +401,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
   using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>, 2 rows
   //
@@ -599,8 +599,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // empty lists in lists_column_wrapper documentation
   using LCW = test::lists_column_wrapper<T, int32_t>;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 2 rows
   //
@@ -1272,8 +1272,8 @@ TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
 {
   using namespace cudf;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<bool>, 3 rows
   //
@@ -1391,8 +1391,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
@@ -1427,8 +1426,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
@@ -1467,7 +1465,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1515,7 +1513,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
     lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
 }
@@ -1580,6 +1578,5 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
       std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
       .release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column, lists_column_view(*lists_column).child());
 }
