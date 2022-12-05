@@ -415,12 +415,12 @@ class Merge:
         if (
             isinstance(lhs, cudf.DataFrame)
             and isinstance(rhs, cudf.DataFrame)
-            and lhs.columns.nlevels != rhs.columns.nlevels
+            and lhs._data.nlevels != rhs._data.nlevels
         ):
             warnings.warn(
                 "merging between different levels is deprecated and will be "
-                f"removed in a future version. ({lhs.nlevels} levels on the "
-                f"left, {rhs.nlevels} on the right)",
+                f"removed in a future version. ({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)",
                 FutureWarning,
             )
 
