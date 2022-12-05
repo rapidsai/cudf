@@ -1555,6 +1555,12 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
 
         dtype = type(self)._dtype
         if copy:
