@@ -64,6 +64,7 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
+#include <cudf/strings/reverse.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strip.hpp>
@@ -652,6 +653,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsDifferenceDistinct(J
     return release_as_jlong(cudf::lists::difference_distinct(
         cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}, cudf::null_equality::EQUAL,
         cudf::nan_equality::ALL_EQUAL));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNIEnv *env, jclass,
+                                                                             jlong input_handle) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    switch (input->type().id()) {
+      case cudf::type_id::STRING:
+        return release_as_jlong(cudf::strings::reverse(cudf::strings_column_view{*input}));
+      case cudf::type_id::LIST:
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                      "List type is not yet supported in reverse()", 0);
+      default:
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                      "A column of type string or list is required for reverse()", 0);
+    }
   }
   CATCH_STD(env, 0);
 }
