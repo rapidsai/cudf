@@ -1967,7 +1967,7 @@ def test_get_loc_single_unique_numeric(idx, key, method):
     if (
         (key not in pi and method is None)
         # `method` only applicable to monotonic index
-        or (not pi.is_monotonic and method is not None)
+        or (not pi.is_monotonic_increasing and method is not None)
         # Get key before the first element is KeyError
         or (key == 0 and method in "ffill")
         # Get key after the last element is KeyError
@@ -2055,7 +2055,7 @@ def test_get_loc_single_unique_string(idx, key, method):
     if (
         (key not in pi and method is None)
         # `method` only applicable to monotonic index
-        or (not pi.is_monotonic and method is not None)
+        or (not pi.is_monotonic_increasing and method is not None)
         # Get key before the first element is KeyError
         or (key == "a" and method == "ffill")
         # Get key after the last element is KeyError
