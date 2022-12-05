@@ -82,13 +82,17 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   std::vector<T> host_values(column_size);
   std::vector<bool> host_bools(column_size);
 
-  cudf::test::UniformRandomGenerator<T> rng;
-  cudf::test::UniformRandomGenerator<bool> rbg;
   if constexpr (std::is_floating_point<T>()) {
-    std::fill(host_values.begin(), host_values.end(), T{2});
+    cudf::test::UniformRandomGenerator<int32_t> rng;
+    std::generate(host_values.begin(), host_values.end(), [&rng]() {
+      return static_cast<T>(rng.generate() % 10);  // reduces float-op errors
+    });
   } else {
+    cudf::test::UniformRandomGenerator<T> rng;
     std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
   }
+
+  cudf::test::UniformRandomGenerator<bool> rbg;
   std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
@@ -111,8 +115,6 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   expected_value.value = std::accumulate(replaced_array.begin(), replaced_array.end(), T{0});
   expected_value.value_squared = std::accumulate(
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
-
-  // std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
