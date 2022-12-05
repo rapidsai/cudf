@@ -71,17 +71,26 @@ inline void test_single_agg(column_view const& keys,
                             null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
                             std::vector<order> const& column_order = {},
-                            std::vector<null_order> const& null_precedence = {})
+                            std::vector<null_order> const& null_precedence = {},
+                            sorted reference_keys_are_sorted               = sorted::NO)
 {
   std::cout << "Expect keys before sorting: " << std::endl;
   cudf::test::print(expect_keys, std::cout, ",\t\t");
   std::cout << "Expect vals before sorting: " << std::endl;
   cudf::test::print(expect_vals, std::cout, ",\t\t");
 
-  auto const sort_expect_order =
-    sorted_order(table_view{{expect_keys}}, column_order, null_precedence);
-  auto const sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_expect_order);
-  auto const sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_expect_order);
+  std::unique_ptr<table> sorted_expect_keys;
+  std::unique_ptr<table> sorted_expect_vals;
+
+  if (reference_keys_are_sorted == sorted::NO) {
+    auto const sort_expect_order =
+      sorted_order(table_view{{expect_keys}}, column_order, null_precedence);
+    sorted_expect_keys = gather(table_view{{expect_keys}}, *sort_expect_order);
+    sorted_expect_vals = gather(table_view{{expect_vals}}, *sort_expect_order);
+  } else {
+    sorted_expect_keys = std::make_unique<table>(table_view{{expect_keys}});
+    sorted_expect_vals = std::make_unique<table>(table_view{{expect_vals}});
+  }
 
   std::cout << "Expect keys after sorting: " << std::endl;
   cudf::test::print(sorted_expect_keys->get_column(0), std::cout, ",\t\t");
