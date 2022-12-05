@@ -11,6 +11,15 @@ concurrency:
 
 jobs:
   pr-builder:
+    needs:
+      - checks
+      - conda-cpp-build
+      - conda-cpp-tests
+      - conda-python-build
+      - conda-python-cudf-tests
+      - conda-python-other-tests
+      - conda-java-tests
+      - conda-notebook-tests
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@main
   checks:
