@@ -30,12 +30,12 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
     Dtype,
     NotImplementedType,
-    size_type_dtype,
 )
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
