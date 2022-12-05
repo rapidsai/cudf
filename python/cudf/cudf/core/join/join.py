@@ -419,8 +419,8 @@ class Merge:
         ):
             warnings.warn(
                 "merging between different levels is deprecated and will be "
-                "removed in a future version. (2 levels on the left, 1 on the "
-                "right)",
+                f"removed in a future version. ({lhs.nlevels} levels on the "
+                f"left, {rhs.nlevels} on the right)",
                 FutureWarning,
             )
 
