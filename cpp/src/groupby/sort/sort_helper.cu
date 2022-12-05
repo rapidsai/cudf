@@ -133,7 +133,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
       precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
       precedence.insert(precedence.begin(), null_order::AFTER);
     } else {
-      auto precedence = _null_precedence;
+      precedence = _null_precedence;
       precedence.insert(precedence.begin(), null_order::AFTER);
     }
 

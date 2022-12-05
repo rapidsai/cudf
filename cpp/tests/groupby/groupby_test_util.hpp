@@ -74,11 +74,6 @@ inline void test_single_agg(column_view const& keys,
                             std::vector<null_order> const& null_precedence = {},
                             sorted reference_keys_are_sorted               = sorted::NO)
 {
-  std::cout << "Expect keys before sorting: " << std::endl;
-  cudf::test::print(expect_keys, std::cout, ",\t\t");
-  std::cout << "Expect vals before sorting: " << std::endl;
-  cudf::test::print(expect_vals, std::cout, ",\t\t");
-
   std::unique_ptr<table> sorted_expect_keys;
   std::unique_ptr<table> sorted_expect_vals;
 
@@ -91,11 +86,6 @@ inline void test_single_agg(column_view const& keys,
     sorted_expect_keys = std::make_unique<table>(table_view{{expect_keys}});
     sorted_expect_vals = std::make_unique<table>(table_view{{expect_vals}});
   }
-
-  std::cout << "Expect keys after sorting: " << std::endl;
-  cudf::test::print(sorted_expect_keys->get_column(0), std::cout, ",\t\t");
-  std::cout << "Expect vals after sorting: " << std::endl;
-  cudf::test::print(sorted_expect_vals->get_column(0), std::cout, ",\t\t");
 
   std::vector<groupby::aggregation_request> requests;
   requests.emplace_back(groupby::aggregation_request());
@@ -113,11 +103,6 @@ inline void test_single_agg(column_view const& keys,
 
   auto result = gb_obj.aggregate(requests);
 
-  std::cout << "Answer keys before sorting: " << std::endl;
-  cudf::test::print(result.first->get_column(0), std::cout, ",\t\t");
-  std::cout << "Answer vals before sorting: " << std::endl;
-  cudf::test::print(*result.second[0].results[0], std::cout, ",\t\t");
-
   if (use_sort == force_use_sort_impl::YES && keys_are_sorted == sorted::NO) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, result.first->view());
     cudf::test::detail::expect_columns_equivalent(sorted_expect_vals->get_column(0),
@@ -128,11 +113,6 @@ inline void test_single_agg(column_view const& keys,
     auto const sort_order  = sorted_order(result.first->view(), column_order, null_precedence);
     auto const sorted_keys = gather(result.first->view(), *sort_order);
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
-
-    std::cout << "Answer keys after sorting: " << std::endl;
-    cudf::test::print(sorted_keys->get_column(0), std::cout, ",\t\t");
-    std::cout << "Answer vals after sorting: " << std::endl;
-    cudf::test::print(sorted_vals->get_column(0), std::cout, ",\t\t");
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, *sorted_keys);
     cudf::test::detail::expect_columns_equivalent(sorted_expect_vals->get_column(0),
