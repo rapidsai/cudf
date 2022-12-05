@@ -308,11 +308,13 @@ def test_set_index_as_property():
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_index_copy_range(name, dtype, deep=True):
-    idx = cudf.core.index.RangeIndex(1, 5)
-    idx_copy = idx.copy(name=name, deep=deep, dtype=dtype)
+    cidx = cudf.RangeIndex(1, 5)
+    pidx = cidx.to_pandas()
 
-    idx.name = name
-    assert_eq(idx, idx_copy)
+    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
