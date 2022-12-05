@@ -881,12 +881,27 @@ def test_logical_operator_func_dataframe(func, nulls, other):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_arithmetic + _operators_comparison)
+@pytest.mark.parametrize(
+    "func",
+    [op for op in _operators_arithmetic if op not in {"rmod", "rfloordiv"}]
+    + _operators_comparison
+    + [
+        pytest.param(
+            "rmod",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12162"
+            ),
+        ),
+        pytest.param(
+            "rfloordiv",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/12162"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
-    # TODO: remove this once issue #2172 is resolved
-    if func == "rmod" or func == "rfloordiv":
-        return
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
