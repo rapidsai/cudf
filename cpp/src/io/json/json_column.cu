@@ -66,6 +66,8 @@
 #define CUDF_SCOPED_RANGE(tag) NVTX3_SCOPED_RANGE_IN(cudf::libcudf_domain, tag)
 namespace cudf::io::json {
 namespace detail {
+void fill_schema_type_for_tree(device_json_column& root_column,
+                               cudf::io::json_reader_options const& options);
 
 // DEBUG prints
 auto to_cat = [](auto v) -> std::string {
@@ -295,11 +297,11 @@ reduce_to_column_tree(device_span<SymbolT const> input,
   // node_ids is sorted by col_id.
   auto col_type_id =  // rmm::device_uvector<cudf::type_id>{0, stream};
     type_infer_column_tree(num_columns, tree, col_ids, node_ids, input, options, stream);
-    // TODO partition by category VAL, STR on col_id/sorted_col_id, then on range begin, end. 
-    // After this you don't need range_begin, range_end. So, you can use remove_if or partition.
-    // OR copy only col_id, node_id so that you can use to index range_begin, range_end.
-    // Then type infer
-    // Then parse_data (how to get string size or string column now?)
+  // TODO partition by category VAL, STR on col_id/sorted_col_id, then on range begin, end.
+  // After this you don't need range_begin, range_end. So, you can use remove_if or partition.
+  // OR copy only col_id, node_id so that you can use to index range_begin, range_end.
+  // Then type infer
+  // Then parse_data (how to get string size or string column now?)
 
   // 4. unique_copy parent_node_ids, ranges
   rmm::device_uvector<TreeDepthT> column_levels(0, stream);  // not required
@@ -449,6 +451,8 @@ struct json_column_data {
   row_offset_t* string_lengths;
   row_offset_t* child_offsets;
   bitmask_type* validity;
+  data_type cudf_type;
+  void* d_fixed_width_data;
 };
 
 /**
@@ -509,11 +513,23 @@ void make_device_json_column(device_span<SymbolT const> input,
     if (column_categories[i] == NC_ERR || column_categories[i] == NC_FN) {
       return;
     } else if (column_categories[i] == NC_VAL || column_categories[i] == NC_STR) {
-      if (not column_type_id.empty()) col.cudf_type = column_type_id.at(i);
-      col.string_offsets.resize(max_row_offsets[i] + 1, stream);
-      col.string_lengths.resize(max_row_offsets[i] + 1, stream);
-      init_to_zero(col.string_offsets);
-      init_to_zero(col.string_lengths);
+      if (not column_type_id.empty()) col.cudf_type = data_type{column_type_id.at(i)};
+      // TODO add unique_ptr column for fixed_width types
+      if (col.cudf_type.id() != cudf::type_id::STRING) {
+        col.fixed_width_column = make_fixed_width_column(
+          col.cudf_type, max_row_offsets[i] + 1, mask_state::UNALLOCATED, stream, mr);
+        col.d_fixed_width_data = col.fixed_width_column->mutable_view().template data<char>();
+        // TODO, can strings be created here itself, if we know the size?
+      } else {
+        // FIXME remove this, or replace this with string column creation.
+        // col.fixed_width_column = make_fixed_width_column(data_type{type_id::INT8}, 1,
+        // mask_state::UNALLOCATED, stream, mr);
+        col.d_fixed_width_data = nullptr;
+        col.string_offsets.resize(max_row_offsets[i] + 1, stream);
+        col.string_lengths.resize(max_row_offsets[i] + 1, stream);
+        init_to_zero(col.string_offsets);
+        init_to_zero(col.string_lengths);
+      }
     } else if (column_categories[i] == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       init_to_zero(col.child_offsets);
@@ -600,6 +616,8 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
     return thrust::get<1>(a) < thrust::get<1>(b);
   });
+
+  fill_schema_type_for_tree(root, options);
   // move columns data to device.
   std::vector<json_column_data> columns_data(num_columns);
   for (auto& [col_id, col_ref] : columns) {
@@ -608,17 +626,25 @@ void make_device_json_column(device_span<SymbolT const> input,
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
-                                            col.validity.data()};
+                                            col.validity.data(),
+                                            col.cudf_type,
+                                            col.d_fixed_width_data};
+    // TODO cudf_type might be user input, TODO so, populate early.
   }
 
   // 3. scatter string offsets to respective columns, set validity bits
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
+
+  auto parse_opts = parsing_options(options);  // holds device_uvector<trie>.
+
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
     col_ids.size(),
-    [node_categories = tree.node_categories.begin(),
+    [input,
+     options         = parse_opts.view(),
+     node_categories = tree.node_categories.begin(),
      col_ids         = col_ids.begin(),
      row_offsets     = row_offsets.begin(),
      range_begin     = tree.node_range_begin.begin(),
@@ -631,9 +657,35 @@ void make_device_json_column(device_span<SymbolT const> input,
         case NC_VAL:
         case NC_STR:
           if (d_ignore_vals[col_ids[i]]) break;
+          // trie_na and break;
+          if (serialized_trie_contains(options.trie_na,
+                                       {input.data() + range_begin[i],
+                                        static_cast<size_t>(range_end[i] - range_begin[i])}))
+            break;
+          // if col_type == string, copy this. else ConvertFunctor{}
+          if (d_columns_data[col_ids[i]].cudf_type.id() == type_id::STRING) {
+            // TODO: do the null mask and size only here
+            d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
+            d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] =
+              range_end[i] - range_begin[i];
+          } else {
+            // If this is a string value, remove quotes
+            auto [in_begin, in_end] = trim_quotes(
+              input.data() + range_begin[i], input.data() + range_end[i], options.quotechar);
+
+            auto const is_parsed =
+              cudf::type_dispatcher(d_columns_data[col_ids[i]].cudf_type,
+                                    ConvertFunctor{},
+                                    in_begin,
+                                    in_end,
+                                    d_columns_data[col_ids[i]].d_fixed_width_data,
+                                    row_offsets[i],
+                                    data_type{d_columns_data[col_ids[i]].cudf_type},
+                                    options,
+                                    false);
+            if (not is_parsed) break;
+          }
           set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
-          d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;
         default: break;
       }
@@ -706,6 +758,124 @@ void make_device_json_column(device_span<SymbolT const> input,
                              col.child_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
     }
+  }
+  // n spans. (span size.) lamda = sum.
+  // exclusive_scan_by_key.
+  // larger the lamda slower it gets.
+  // inline the iterator too.
+}
+
+void fill_schema_type(device_json_column& json_col, std::optional<schema_element> schema)
+{
+  auto get_child_schema = [schema](auto child_name) -> std::optional<schema_element> {
+    if (schema.has_value()) {
+      auto const result = schema.value().child_types.find(child_name);
+      if (result != std::end(schema.value().child_types)) { return result->second; }
+    }
+    return {};
+  };
+  switch (json_col.type) {
+    case json_col_t::StringColumn: {
+      if (schema.has_value()) {
+#ifdef NJP_DEBUG_PRINT
+        std::cout << "-> explicit type: "
+                  << (schema.has_value() ? std::to_string(static_cast<int>(schema->type.id()))
+                                         : "n/a");
+#endif
+        json_col.cudf_type = schema.value().type;
+        // FIXME: this is a hack. need to fix this.
+        json_col.fixed_width_column =
+          make_fixed_width_column(json_col.cudf_type, json_col.num_rows, mask_state::UNALLOCATED);
+        json_col.d_fixed_width_data =
+          json_col.fixed_width_column->mutable_view().template data<char>();
+      }
+      // Infer column type, if we don't have an explicit type for it
+      else {
+        // json_col.cudf_type =
+        // cudf::io::detail::infer_data_type(
+        //   parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+      }
+    } break;
+    case json_col_t::StructColumn: {
+      for (auto const& col_name : json_col.column_order) {
+        auto const& col = json_col.child_columns.find(col_name);
+        if (col == json_col.child_columns.end()) { CUDF_FAIL("Column not found"); }
+        auto& child_col = col->second;
+        fill_schema_type(child_col, get_child_schema(col_name));
+      }
+    } break;
+    case json_col_t::ListColumn: {
+      if (!json_col.child_columns.empty())
+        fill_schema_type(json_col.child_columns.begin()->second,
+                         get_child_schema(json_col.child_columns.begin()->first));
+    } break;
+    default: CUDF_FAIL("Unsupported column type"); break;
+  }
+}
+
+void fill_schema_type_for_tree(device_json_column& root_column,
+                               cudf::io::json_reader_options const& options)
+{
+  // TODO populate column metadata here?
+  // TODO Move column ownership to tree creation itself.??? will it be better?
+
+  // data_root refers to the root column of the data represented by the given JSON string
+  auto& data_root =
+    options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
+  if (data_root.child_columns.empty()) return;
+
+  // Slice off the root list column, which has only a single row that contains all the structs
+  auto& root_struct_col = data_root.child_columns.begin()->second;
+
+  // Iterate over the struct's child columns and convert to cudf column
+  size_type column_index = 0;
+  for (auto const& col_name : root_struct_col.column_order) {
+    auto& json_col = root_struct_col.child_columns.find(col_name)->second;
+
+    std::optional<schema_element> child_schema_element = std::visit(
+      cudf::detail::visitor_overload{
+        [column_index](const std::vector<data_type>& user_dtypes) -> std::optional<schema_element> {
+          return (static_cast<std::size_t>(column_index) < user_dtypes.size())
+                   ? std::optional<schema_element>{{user_dtypes[column_index]}}
+                   : std::optional<schema_element>{};
+        },
+        [col_name](
+          std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
+          return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                   ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
+                   : std::optional<schema_element>{};
+        },
+        [col_name](std::map<std::string, schema_element> const& user_dtypes)
+          -> std::optional<schema_element> {
+          return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                   ? user_dtypes.find(col_name)->second
+                   : std::optional<schema_element>{};
+        }},
+      options.get_dtypes());
+#ifdef NJP_DEBUG_PRINT
+    auto debug_schema_print = [](auto ret) {
+      std::cout << ", type id: "
+                << (ret.has_value() ? std::to_string(static_cast<int>(ret->type.id())) : "n/a")
+                << ", with " << (ret.has_value() ? ret->child_types.size() : 0) << " children"
+                << "\n";
+    };
+    std::visit(
+      cudf::detail::visitor_overload{[column_index](const std::vector<data_type>&) {
+                                       std::cout << "Column by index: #" << column_index;
+                                     },
+                                     [col_name](std::map<std::string, data_type> const&) {
+                                       std::cout << "Column by flat name: '" << col_name;
+                                     },
+                                     [col_name](std::map<std::string, schema_element> const&) {
+                                       std::cout << "Column by nested name: #" << col_name;
+                                     }},
+      options.get_dtypes());
+    debug_schema_print(child_schema_element);
+#endif
+
+    // Get this JSON column's cudf column and schema info, (modifies json_col)
+    fill_schema_type(json_col, child_schema_element);
+    column_index++;
   }
 }
 
@@ -780,13 +950,20 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         //   parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
       }
       // Convert strings to the inferred data type
-      auto col = experimental::detail::parse_data(string_spans_it,
-                                                  col_size,
-                                                  target_type,
-                                                  make_validity(json_col).first,
-                                                  parsing_options(options).view(),
-                                                  stream,
-                                                  mr);
+      auto col = [&]() {
+        if (target_type != cudf::data_type{type_id::STRING}) {
+          auto [new_null_mask, null_count] = make_validity(json_col);
+          json_col.fixed_width_column->set_null_mask(std::move(new_null_mask), null_count);
+          return std::move(json_col.fixed_width_column);
+        }
+        return experimental::detail::parse_data(string_spans_it,
+                                                col_size,
+                                                target_type,
+                                                make_validity(json_col).first,
+                                                parsing_options(options).view(),
+                                                stream,
+                                                mr);
+      }();
 
       // Reset nullable if we do not have nulls
       // This is to match the existing JSON reader's behaviour:
