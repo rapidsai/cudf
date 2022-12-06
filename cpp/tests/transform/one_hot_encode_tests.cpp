@@ -28,7 +28,8 @@ template <typename T>
 struct OneHotEncodingTestTyped : public cudf::test::BaseFixture {
 };
 
-struct OneHotEncodingTest : public cudf::test::BaseFixture {};
+struct OneHotEncodingTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_SUITE(OneHotEncodingTestTyped, cudf::test::NumericTypes);
 

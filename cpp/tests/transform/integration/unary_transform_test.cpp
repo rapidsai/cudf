@@ -26,7 +26,8 @@
 #include <cudf/transform.hpp>
 
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
+};
 
 template <class dtype, class Op, class Data>
 void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
