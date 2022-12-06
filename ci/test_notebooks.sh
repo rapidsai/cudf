@@ -25,6 +25,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
 rapids-mamba-retry install \
+  -c "${CPP_CHANNEL}" \
   -c "${PYTHON_CHANNEL}" \
   cudf
 
