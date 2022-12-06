@@ -735,7 +735,10 @@ def test_groupby_unsupported_columns():
     )
     pdf["b"] = pd_cat
     gdf = cudf.from_pandas(pdf)
-    pdg = pdf.groupby("x").sum()
+    with pytest.warns(FutureWarning):
+        pdg = pdf.groupby("x").sum()
+    # cudf does not yet support numeric_only, so our default is False (unlike
+    # pandas, which defaults to inferring and throws a warning about it).
     gdg = gdf.groupby("x").sum()
     assert_groupby_results_equal(pdg, gdg)
 
@@ -1632,12 +1635,21 @@ def test_groupby_list_columns_excluded():
     )
     gdf = cudf.from_pandas(pdf)
 
+    # cudf does not yet support numeric_only, so our default is False, but
+    # pandas defaults to inferring and throws a warning about it, so we need to
+    # catch that. pandas future behavior will match ours by default (at which
+    # point supporting numeric_only=True will be the open feature request).
+    with pytest.warns(FutureWarning):
+        pandas_result = pdf.groupby("a").mean()
+    with pytest.warns(FutureWarning):
+        pandas_agg_result = pdf.groupby("a").agg("mean")
+
     assert_groupby_results_equal(
-        pdf.groupby("a").mean(), gdf.groupby("a").mean(), check_dtype=False
+        pandas_result, gdf.groupby("a").mean(), check_dtype=False
     )
 
     assert_groupby_results_equal(
-        pdf.groupby("a").agg("mean"),
+        pandas_agg_result,
         gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
