@@ -9523,8 +9523,12 @@ def test_mean_timeseries():
 
     assert_eq(expected, actual)
 
-    with pytest.raises(TypeError):
-        gdf.mean()
+    with pytest.warns(FutureWarning):
+        expected = pdf.mean()
+    with pytest.warns(FutureWarning):
+        actual = gdf.mean()
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -9546,8 +9550,12 @@ def test_std_different_dtypes(data):
 
     assert_eq(expected, actual)
 
-    with pytest.raises(TypeError):
-        gdf.std()
+    with pytest.warns(FutureWarning):
+        expected = pdf.std()
+    with pytest.warns(FutureWarning):
+        actual = gdf.std()
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
