@@ -1293,11 +1293,15 @@ def test_grouping(grouper):
     )
     gdf = cudf.from_pandas(pdf)
 
-    for pdf_group, gdf_group in zip(
-        pdf.groupby(grouper), gdf.groupby(grouper)
-    ):
-        assert pdf_group[0] == gdf_group[0]
-        assert_eq(pdf_group[1], gdf_group[1])
+    # There's no easy way to validate that the same warning is thrown by both
+    # cudf and pandas here because it's only thrown upon iteration, so we
+    # settle for catching warnings on the whole block.
+    with expect_warning_if(isinstance(grouper, list) and len(grouper) == 1):
+        for pdf_group, gdf_group in zip(
+            pdf.groupby(grouper), gdf.groupby(grouper)
+        ):
+            assert pdf_group[0] == gdf_group[0]
+            assert_eq(pdf_group[1], gdf_group[1])
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
