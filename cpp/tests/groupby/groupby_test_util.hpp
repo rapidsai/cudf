@@ -101,7 +101,7 @@ inline void test_single_agg(column_view const& keys,
 
   // since the default behavior of groupby(...) for an empty null_precedence vector is
   // null_order::AFTER whereas for sorted_order(...) it's null_order::BEFORE
-  auto const& precedence =
+  auto const precedence =
     null_precedence.empty() ? std::vector<null_order>(1, null_order::BEFORE) : null_precedence;
 
   groupby::groupby gb_obj(
