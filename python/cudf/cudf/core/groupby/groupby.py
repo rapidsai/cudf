@@ -1703,6 +1703,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "'bfill', or 'backfill'."
             )
 
+        if fill_method in ("pad", "backfill"):
+            alternative = "ffill" if fill_method == "pad" else "bfill"
+            warnings.warn(
+                f"{fill_method} is deprecated and will be removed in a future "
+                f"version. Use f{alternative} instead.",
+                FutureWarning,
+            )
+
         filled = self.fillna(method=fill_method, limit=limit)
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)

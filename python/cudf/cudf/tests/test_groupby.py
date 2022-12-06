@@ -26,6 +26,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -2649,12 +2650,14 @@ def test_groupby_pct_change(data, gkey, periods, fill_method):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    actual = gdf.groupby(gkey).pct_change(
-        periods=periods, fill_method=fill_method
-    )
-    expected = pdf.groupby(gkey).pct_change(
-        periods=periods, fill_method=fill_method
-    )
+    with expect_warning_if(fill_method in ("pad", "backfill")):
+        actual = gdf.groupby(gkey).pct_change(
+            periods=periods, fill_method=fill_method
+        )
+    with expect_warning_if(fill_method in ("pad", "backfill")):
+        expected = pdf.groupby(gkey).pct_change(
+            periods=periods, fill_method=fill_method
+        )
 
     assert_eq(expected, actual)
 
