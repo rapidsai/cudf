@@ -127,43 +127,22 @@ inline void test_single_agg(column_view const& keys,
   }
 }
 
-inline auto sum_agg() { return cudf::make_sum_aggregation<groupby_aggregation>(); }
-
-inline void test_hash_based_sum_agg(column_view const& keys,
-                                    column_view const& values,
-                                    column_view const& expect_keys,
-                                    column_view const& expect_vals)
-{
-  test_single_agg(keys,
-                  values,
-                  expect_keys,
-                  expect_vals,
-                  sum_agg(),
-                  force_use_sort_impl::NO,
-                  null_policy::INCLUDE);
-}
-
-inline void test_sort_based_sum_agg(column_view const& keys,
-                                    column_view const& values,
-                                    column_view const& expect_keys,
-                                    column_view const& expect_vals)
-{
-  test_single_agg(keys,
-                  values,
-                  expect_keys,
-                  expect_vals,
-                  sum_agg(),
-                  force_use_sort_impl::YES,
-                  null_policy::INCLUDE);
-}
-
 inline void test_sum_agg(column_view const& keys,
                          column_view const& values,
                          column_view const& expected_keys,
                          column_view const& expected_values)
 {
-  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
-  test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
+  auto const do_test = [&](auto const use_sort_option) {
+    test_single_agg(keys,
+                    values,
+                    expected_keys,
+                    expected_values,
+                    cudf::make_sum_aggregation<groupby_aggregation>(),
+                    use_sort_option,
+                    null_policy::INCLUDE);
+  };
+  do_test(force_use_sort_impl::YES);
+  do_test(force_use_sort_impl::NO);
 }
 
 inline void test_single_scan(column_view const& keys,

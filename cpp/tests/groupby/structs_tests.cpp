@@ -63,7 +63,7 @@ void print_agg_results(column_view const& keys, column_view const& vals)
     auto requests = std::vector<groupby::aggregation_request>{};
     requests.push_back(groupby::aggregation_request{});
     requests.back().values = vals;
-    requests.back().aggregations.push_back(sum_agg());
+    requests.back().aggregations.push_back(cudf::make_sum_aggregation<groupby_aggregation>());
     requests.back().aggregations.push_back(
       cudf::make_nth_element_aggregation<groupby_aggregation>(0));
 
@@ -288,8 +288,7 @@ TYPED_TEST(groupby_structs_test, lists_are_unsupported)
   // clang-format on
   auto keys = structs{{member_0, member_1}};
 
-  EXPECT_THROW(test_sort_based_sum_agg(keys, values, keys, values), cudf::logic_error);
-  EXPECT_THROW(test_hash_based_sum_agg(keys, values, keys, values), cudf::logic_error);
+  EXPECT_THROW(test_sum_agg(keys, values, keys, values), cudf::logic_error);
 }
 
 }  // namespace test
