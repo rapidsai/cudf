@@ -126,8 +126,6 @@ std::unique_ptr<column> like(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto d_results = results->mutable_view().data<bool>();
-
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(input.size()),
