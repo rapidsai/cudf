@@ -24,6 +24,7 @@
 
 #include <tests/io/fst/common.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
@@ -56,7 +57,8 @@ auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
   auto generated_json    = std::string(d_input);
   generated_json.front() = '[';
   generated_json.back()  = ']';
-  return generated_json;
+  return cudf::detail::make_device_uvector_sync(
+    cudf::host_span<char const>{generated_json.c_str(), generated_json.size()}, stream);
 }
 }  // namespace
 
