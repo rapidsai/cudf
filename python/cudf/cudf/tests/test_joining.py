@@ -14,6 +14,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
@@ -1123,11 +1124,21 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
     lhs = cudf.DataFrame({"a": [1, 2, 3, 4, 5]}, dtype=dtype_l)
     rhs = cudf.DataFrame({"a": [1, 2, 3, 4, dtype_l_max + 1]}, dtype=dtype_r)
 
-    with pytest.warns(
+    p_lhs = lhs.to_pandas()
+    p_rhs = rhs.to_pandas()
+
+    with expect_warning_if(
+        (dtype_l.kind == "f" and dtype_r.kind in {"i", "u"})
+        or (dtype_l.kind in {"i", "u"} and dtype_r.kind == "f"),
         UserWarning,
-        match=(f"Can't safely cast column" f" from {dtype_r} to {dtype_l}"),
     ):
-        merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
+        expect = p_lhs.merge(p_rhs, on="a", how="left")
+    got = lhs.merge(rhs, on="a", how="left")
+
+    # The dtypes here won't match exactly because pandas does some unsafe
+    # conversions (with a warning that we are catching above) that we don't
+    # want to match.
+    assert_join_results_equal(expect, got, how="left", check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -2148,11 +2159,13 @@ def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
     rhs = pd.DataFrame(index=["a", "c", "d"])
-    expect = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        expect = lhs.join(rhs, how="inner")
 
     lhs = cudf.from_pandas(lhs)
     rhs = cudf.from_pandas(rhs)
-    got = lhs.join(rhs, how="inner")
+    with pytest.warns(FutureWarning):
+        got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
 
