@@ -114,12 +114,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    auto const precedence = [&_null_precedence = _null_precedence, &_keys = _keys]() {
-      if (_null_precedence.size() == 0) {
-        return std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
-      }
-      return _null_precedence;
-    }();
+    auto const& precedence = _null_precedence.empty() ? std::vector(_keys.num_columns(), null_order::BEFORE) : _null_precedence; 
     _key_sorted_order = cudf::detail::stable_sorted_order(
       _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
