@@ -126,10 +126,11 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
     auto augmented_keys   = table_view({table_view({keys_bitmask_column(stream)}), _keys});
     auto const precedence = [&]() {
-auto precedence = _null_precedence.empty() ?
-    std::vector<null_order>(_keys.num_columns(), null_order::AFTER) : _null_precedence;
-precedence.insert(precedence.begin(), null_order::AFTER);
-return precedence;
+      auto precedence = _null_precedence.empty()
+                          ? std::vector<null_order>(_keys.num_columns(), null_order::AFTER)
+                          : _null_precedence;
+      precedence.insert(precedence.begin(), null_order::AFTER);
+      return precedence;
     }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
