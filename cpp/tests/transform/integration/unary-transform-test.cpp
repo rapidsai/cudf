@@ -17,22 +17,16 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/transform.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include "assert-unary.h"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include "assert-unary.h"
+#include <cudf/detail/iterator.cuh>
+#include <cudf/transform.hpp>
 
-#include <cctype>
-
-namespace cudf {
-namespace test {
 namespace transformation {
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
-};
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Op, class Data>
 void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
@@ -44,7 +38,7 @@ void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, boo
     data_iter, data_iter + size, all_valid);
 
   std::unique_ptr<cudf::column> out =
-    cudf::transform(in, udf, data_type(type_to_id<dtype>()), is_ptx);
+    cudf::transform(in, udf, cudf::data_type(cudf::type_to_id<dtype>()), is_ptx);
 
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
@@ -214,17 +208,15 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
 
 )***";
 
-  using dtype = timestamp_us;
+  using dtype = cudf::timestamp_us;
   auto op     = [](dtype a) {
     using dur = cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>;
-    return static_cast<timestamp_us>(a + dur{1});
+    return static_cast<cudf::timestamp_us>(a + dur{1});
   };
-  auto random_eng = UniformRandomGenerator<timestamp_us::rep>(0, 100000000);
+  auto random_eng = cudf::test::UniformRandomGenerator<cudf::timestamp_us::rep>(0, 100000000);
   auto data_init  = [&random_eng](cudf::size_type row) { return random_eng.generate(); };
 
   test_udf<dtype>(cuda, op, data_init, 500, false);
 }
 
 }  // namespace transformation
-}  // namespace test
-}  // namespace cudf
