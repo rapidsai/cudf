@@ -48,7 +48,7 @@ namespace {
  */
 struct detokenizer_fn {
   cudf::column_device_view const d_strings;  // these are the tokens
-  int32_t const* d_row_map;                  // indices sorted by output row
+  cudf::size_type const* d_row_map;          // indices sorted by output row
   cudf::size_type const* d_token_offsets;    // to each input token array
   cudf::string_view const d_separator;       // append after each token
   cudf::size_type* d_offsets{};              // offsets to output buffer d_chars
@@ -143,7 +143,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   // the indices may not be in order so we need to build a sorted map
   auto sorted_rows = cudf::detail::stable_sorted_order(
     cudf::table_view({row_indices}), {}, {}, stream, rmm::mr::get_current_device_resource());
-  auto const d_row_map = sorted_rows->view().data<int32_t>();
+  auto const d_row_map = sorted_rows->view().data<cudf::size_type>();
 
   // create offsets for the tokens for each output string
   auto tokens_offsets =
