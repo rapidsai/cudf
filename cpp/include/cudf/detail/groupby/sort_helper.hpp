@@ -230,7 +230,7 @@ struct sort_groupby_helper {
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
   null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
-  std::vector<null_order> _null_precedence;  ///< How to sort NULLs, default null_order::BEFORE
+  std::vector<null_order> _null_precedence;  ///< How to sort NULLs
 };
 
 }  // namespace sort
