@@ -86,18 +86,6 @@ TEST_F(StringsLikeTests, Trailing)
   }
 }
 
-TEST_F(StringsLikeTests, Multiple)
-{
-  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
-  cudf::test::strings_column_wrapper patterns({"a%b%c", "a%c", "a__b", "b__c", "", "áéêú"});
-
-  auto const sv_input    = cudf::strings_column_view(input);
-  auto const sv_patterns = cudf::strings_column_view(patterns);
-  auto const results     = cudf::strings::like(sv_input, sv_patterns);
-  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, true, true, true});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
-}
-
 TEST_F(StringsLikeTests, Place)
 {
   cudf::test::strings_column_wrapper input({"a", "aa", "aaa", "bab", "ab", "aba", "", "éaé"});
@@ -173,6 +161,18 @@ TEST_F(StringsLikeTests, Escape)
       {false, false, false, true, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
+}
+
+TEST_F(StringsLikeTests, MultiplePatterns)
+{
+  cudf::test::strings_column_wrapper input({"abc", "a1a2b3b4c", "aaabbb", "bbbc", "", "áéêú"});
+  cudf::test::strings_column_wrapper patterns({"a%b%c", "a%c", "a__b", "b__c", "", "áéêú"});
+
+  auto const sv_input    = cudf::strings_column_view(input);
+  auto const sv_patterns = cudf::strings_column_view(patterns);
+  auto const results     = cudf::strings::like(sv_input, sv_patterns);
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, true, false, true, true, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsLikeTests, Empty)
