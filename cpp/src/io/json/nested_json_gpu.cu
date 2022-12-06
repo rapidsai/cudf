@@ -1121,8 +1121,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
   // may be arbitrarily deeply nested: {"":_}, where '_' is a placeholder for any JSON value,
   // possibly another such struct. That is, 6 tokens for 5 chars (plus chars and tokens of '_')
-  std::size_t const min_chars_per_struct  = 5;
-  std::size_t const max_tokens_per_struct = 6;
+  std::size_t constexpr min_chars_per_struct  = 5;
+  std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
     ((json_in.size() + min_chars_per_struct - 1) / min_chars_per_struct) * max_tokens_per_struct;
   rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
