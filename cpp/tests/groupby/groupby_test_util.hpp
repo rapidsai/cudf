@@ -99,8 +99,13 @@ inline void test_single_agg(column_view const& keys,
     requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(0));
   }
 
+  // since the default behavior of groupby(...) for an empty null_precedence vector is
+  // null_order::AFTER whereas for sorted_order(...) it's null_order::BEFORE
+  auto const& precedence =
+    null_precedence.empty() ? std::vector<null_order>(1, null_order::BEFORE) : null_precedence;
+
   groupby::groupby gb_obj(
-    table_view({keys}), include_null_keys, keys_are_sorted, column_order, null_precedence);
+    table_view({keys}), include_null_keys, keys_are_sorted, column_order, precedence);
 
   auto result = gb_obj.aggregate(requests);
 
@@ -111,7 +116,7 @@ inline void test_single_agg(column_view const& keys,
                                                   debug_output_level::ALL_ERRORS);
 
   } else {
-    auto const sort_order  = sorted_order(result.first->view(), column_order, null_precedence);
+    auto const sort_order  = sorted_order(result.first->view(), column_order, precedence);
     auto const sorted_keys = gather(result.first->view(), *sort_order);
     auto const sorted_vals = gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 

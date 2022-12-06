@@ -114,8 +114,10 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    auto const& precedence = _null_precedence.empty() ? std::vector(_keys.num_columns(), null_order::BEFORE) : _null_precedence; 
-    _key_sorted_order = cudf::detail::stable_sorted_order(
+    auto const& precedence = _null_precedence.empty()
+                               ? std::vector(_keys.num_columns(), null_order::AFTER)
+                               : _null_precedence;
+    _key_sorted_order      = cudf::detail::stable_sorted_order(
       _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
@@ -124,8 +126,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
     auto augmented_keys   = table_view({table_view({keys_bitmask_column(stream)}), _keys});
     auto const precedence = [&_null_precedence = _null_precedence, &_keys = _keys]() {
-      if (_null_precedence.size() == 0) {
-        auto precedence = std::vector<null_order>(_keys.num_columns(), null_order::BEFORE);
+      if (_null_precedence.empty()) {
+        auto precedence = std::vector<null_order>(_keys.num_columns(), null_order::AFTER);
         precedence.insert(precedence.begin(), null_order::AFTER);
         return precedence;
       } else {
