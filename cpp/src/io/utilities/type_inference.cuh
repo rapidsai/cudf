@@ -427,7 +427,7 @@ cudf::data_type infer_data_type(OptionsView const& options,
       return type_id::STRING;
     } else if (cinfo.datetime_count()) {
       CUDF_FAIL("Date time is inferred as string.\n");
-    } else if (cinfo.float_count() || (int_count_total and cinfo.null_count())) {
+    } else if (cinfo.float_count()) {
       return type_id::FLOAT64;
     } else if (cinfo.big_int_count() == false && int_count_total) {
       return type_id::INT64;

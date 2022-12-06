@@ -1,0 +1,72 @@
+name: test
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      date:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+
+jobs:
+  conda-cpp-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+  conda-python-cudf-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      test_script: "ci/test_python_cudf.sh"
+  conda-python-other-tests:
+    # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      test_script: "ci/test_python_other.sh"
+  conda-java-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-v100-495-1"
+      arch: "amd64"
+      container_image: "rapidsai/ci:latest"
+      run_script: "ci/test_java.sh"
+  conda-notebook-tests:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: nightly
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-v100-495-1"
+      arch: "amd64"
+      container_image: "rapidsai/ci:latest"
+      run_script: "ci/test_notebooks.sh"
