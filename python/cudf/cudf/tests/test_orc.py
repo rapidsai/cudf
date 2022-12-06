@@ -1834,3 +1834,22 @@ def test_reader_empty_stripe(datadir, fname):
     expected = pd.read_orc(path)
     got = cudf.read_orc(path)
     assert_eq(expected, got)
+
+
+def test_reader_unsupported_offsets():
+    # needs enough data for more than one row group
+    expected = cudf.DataFrame({"str": ["*"] * 10001}, dtype="string")
+
+    buffer = BytesIO()
+    expected.to_pandas().to_orc(buffer)
+
+    # Reading this file should not lead to data corruption, even if it fails
+    try:
+        got = cudf.read_orc(buffer)
+    except RuntimeError:
+        pytest.mark.xfail(
+            reason="Unsupported file, "
+            "see https://github.com/rapidsai/cudf/issues/11890"
+        )
+    else:
+        assert_eq(expected, got)
