@@ -2144,7 +2144,7 @@ def test_get_loc_single_duplicate_string(idx, key, method):
 @pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
 @pytest.mark.parametrize("method", [None])
 def test_get_loc_multi_numeric(idx, key, method):
-    pi = idx
+    pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
@@ -2187,14 +2187,22 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
     pi = idx
     gi = cudf.from_pandas(pi)
 
-    if key not in pi:
-        assert_exceptions_equal(
-            lfunc=pi.get_loc,
-            rfunc=gi.get_loc,
-            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
-        )
+    with expect_warning_if(
+        isinstance(key, tuple), pd.errors.PerformanceWarning
+    ):
+        key_flag = key not in pi
+
+    if key_flag:
+        with expect_warning_if(
+            isinstance(key, tuple), pd.errors.PerformanceWarning
+        ):
+            assert_exceptions_equal(
+                lfunc=pi.get_loc,
+                rfunc=gi.get_loc,
+                lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+                rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+                compare_error_message=False,
+            )
     else:
         expected = result
         with expect_warning_if(method is not None):
@@ -2263,7 +2271,7 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
 )
 @pytest.mark.parametrize("method", [None])
 def test_get_loc_multi_string(idx, key, method):
-    pi = idx
+    pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
