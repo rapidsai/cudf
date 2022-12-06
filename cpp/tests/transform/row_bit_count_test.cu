@@ -165,7 +165,8 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-struct RowBitCount : public cudf::test::BaseFixture {};
+struct RowBitCount : public cudf::test::BaseFixture {
+};
 
 TEST_F(RowBitCount, Strings)
 {

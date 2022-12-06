@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include "assert-unary.h"
+#include "assert_unary.h"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
