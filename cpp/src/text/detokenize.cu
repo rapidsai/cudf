@@ -101,19 +101,19 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
   cudf::size_type tokens_counts,
   rmm::cuda_stream_view stream)
 {
-  index_changed_fn pfn{cudf::detail::indexalator_factory::make_input_iterator(row_indices),
-                       sorted_indices.data<cudf::size_type>()};
-  auto const output_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
-                     pfn);
-  auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<cudf::size_type>(0),
-                  thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
-                  tokens_offsets.begin(),
-                  pfn);
+  auto tokens_offsets = rmm::device_uvector<cudf::size_type>(tokens_counts + 1, stream);
+
+  auto end_itr = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
+    tokens_offsets.begin(),
+    index_changed_fn{cudf::detail::indexalator_factory::make_input_iterator(row_indices),
+                     sorted_indices.data<cudf::size_type>()});
+
+  auto const output_count = std::distance(tokens_offsets.begin(), end_itr);
+  tokens_offsets.resize(output_count + 1, stream);
+
   // set the last element to the total number of tokens
   tokens_offsets.set_element(output_count, tokens_counts, stream);
   return tokens_offsets;
