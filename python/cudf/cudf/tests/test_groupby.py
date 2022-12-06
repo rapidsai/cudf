@@ -286,7 +286,9 @@ def test_groupby_apply():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
+    expect_grpby = df.to_pandas().groupby(
+        ["key1", "key2"], as_index=False, group_keys=False
+    )
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(df):
@@ -324,7 +326,9 @@ def test_groupby_apply_args(func, args):
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
+    expect_grpby = df.to_pandas().groupby(
+        ["key1", "key2"], as_index=False, group_keys=False
+    )
     got_grpby = df.groupby(["key1", "key2"])
 
     expect = expect_grpby.apply(func, *args)
@@ -341,7 +345,9 @@ def test_groupby_apply_grouped():
     df["val1"] = np.random.random(nelem)
     df["val2"] = np.random.random(nelem)
 
-    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
+    expect_grpby = df.to_pandas().groupby(
+        ["key1", "key2"], as_index=False, group_keys=False
+    )
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(key1, val1, com1, com2):
@@ -1436,7 +1442,7 @@ def test_groupby_apply_noempty_group():
     )
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("a")
+        pdf.groupby("a", group_keys=False)
         .apply(lambda x: x.iloc[[0, 1]])
         .reset_index(drop=True),
         gdf.groupby("a")
@@ -1760,7 +1766,7 @@ def test_groupby_apply_return_series_dataframe(func, args):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.groupby(["key"]).apply(func, *args)
+    expected = pdf.groupby(["key"], group_keys=False).apply(func, *args)
     actual = gdf.groupby(["key"]).apply(func, *args)
 
     assert_groupby_results_equal(expected, actual)
@@ -1787,7 +1793,7 @@ def test_groupby_no_keys(pdf):
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby([]).apply(lambda x: x.max()),
+        pdf.groupby([], group_keys=False).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
         check_index_type=False,  # Int64Index v/s Float64Index
     )
@@ -2392,7 +2398,11 @@ def test_groupby_apply_series():
 def test_groupby_apply_series_args(func, args):
 
     got = make_frame(DataFrame, 100).groupby("x").y.apply(func, *args)
-    expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(func, *args)
+    expect = (
+        make_frame(pd.DataFrame, 100)
+        .groupby("x", group_keys=False)
+        .y.apply(func, *args)
+    )
 
     assert_groupby_results_equal(expect, got)
 
