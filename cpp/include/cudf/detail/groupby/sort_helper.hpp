@@ -58,6 +58,9 @@ struct sort_groupby_helper {
    * @param include_null_keys Include rows in keys with nulls
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
+   * @param null_precedence Indicates the ordering of nulls in each column.
+   *                        Default behavior for each column is
+   *                        `null_order::AFTER`
    */
   sort_groupby_helper(table_view const& keys,
                       null_policy include_null_keys,
