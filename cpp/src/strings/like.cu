@@ -109,6 +109,35 @@ struct like_fn {
   }
 };
 
+template <typename PatternIterator>
+std::unique_ptr<column> like(strings_column_view const& input,
+                             PatternIterator const patterns_itr,
+                             string_view const& d_escape,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+{
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  if (input.is_empty()) { return results; }
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  auto d_results = results->mutable_view().data<bool>();
+
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    like_fn{*d_strings, patterns_itr, d_escape});
+
+  results->set_null_count(input.null_count());
+  return results;
+}
+
 }  // namespace
 
 std::unique_ptr<column> like(strings_column_view const& input,
@@ -117,33 +146,13 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  auto results = make_numeric_column(data_type{type_id::BOOL8},
-                                     input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                     input.null_count(),
-                                     stream,
-                                     mr);
-  if (input.is_empty()) { return results; }
-
   CUDF_EXPECTS(pattern.is_valid(stream), "Parameter pattern must be valid");
   CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
 
-  auto const d_strings = column_device_view::create(input.parent(), stream);
-  auto const d_pattern = pattern.value(stream);
-  auto const d_escape  = escape_character.value(stream);
+  auto const d_pattern    = pattern.value(stream);
+  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
 
-  auto d_results    = results->mutable_view().data<bool>();
-  auto patterns_itr = thrust::make_constant_iterator(d_pattern);
-
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    results->mutable_view().data<bool>(),
-                    like_fn{*d_strings, patterns_itr, d_escape});
-
-  results->set_null_count(input.null_count());
-
-  return results;
+  return like(input, patterns_itr, escape_character.value(stream), stream, mr);
 }
 
 std::unique_ptr<column> like(strings_column_view const& input,
@@ -152,34 +161,14 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  auto results = make_numeric_column(data_type{type_id::BOOL8},
-                                     input.size(),
-                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                     input.null_count(),
-                                     stream,
-                                     mr);
-  if (input.is_empty()) { return results; }
-
   CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns must match the input size");
   CUDF_EXPECTS(patterns.has_nulls() == false, "Parameter patterns must not contain nulls");
   CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
 
-  auto const d_strings  = column_device_view::create(input.parent(), stream);
-  auto const d_escape   = escape_character.value(stream);
-  auto const d_patterns = column_device_view::create(patterns.parent(), stream);
+  auto const d_patterns   = column_device_view::create(patterns.parent(), stream);
+  auto const patterns_itr = d_patterns->begin<string_view>();
 
-  auto d_results    = results->mutable_view().data<bool>();
-  auto patterns_itr = d_patterns->begin<string_view>();
-
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    results->mutable_view().data<bool>(),
-                    like_fn{*d_strings, patterns_itr, d_escape});
-
-  results->set_null_count(input.null_count());
-
-  return results;
+  return like(input, patterns_itr, escape_character.value(stream), stream, mr);
 }
 
 }  // namespace detail
