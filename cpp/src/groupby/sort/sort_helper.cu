@@ -125,7 +125,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     // contain a null value to the end of the sorted order.
 
     auto augmented_keys   = table_view({table_view({keys_bitmask_column(stream)}), _keys});
-    auto const precedence = [&_null_precedence = _null_precedence, &_keys = _keys]() {
+    auto const precedence = [&]() {
 auto precedence = _null_precedence.empty() ?
     std::vector<null_order>(_keys.num_columns(), null_order::AFTER) : _null_precedence;
 precedence.insert(precedence.begin(), null_order::AFTER);
