@@ -134,6 +134,7 @@ Computations / descriptive stats
    DataFrame.cumsum
    DataFrame.describe
    DataFrame.diff
+   DataFrame.eval
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
