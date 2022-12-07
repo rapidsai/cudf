@@ -23,6 +23,8 @@ namespace cudf::test::detail {
 /**
  * @brief Verifies the property equality of two tables.
  *
+ * This function should not be used directly.
+ *
  * @param lhs The first table
  * @param rhs The second table
  */
@@ -32,6 +34,8 @@ void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
  * @brief Verifies the equality of two tables.
  *
  * Treats null elements as equivalent.
+ *
+ * This function should not be used directly.
  *
  * @param lhs The first table
  * @param rhs The second table
@@ -43,6 +47,8 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * Treats null elements as equivalent.  Columns that have nullability but no nulls,
  * and columns that are not nullable are considered equivalent.
+ *
+ * This function should not be used directly.
  *
  * @param lhs The first table
  * @param rhs The second table
