@@ -58,10 +58,14 @@ struct sort_groupby_helper {
    * @param include_null_keys Include rows in keys with nulls
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
+   * @param null_precedence Indicates the ordering of nulls in each column.
+   *                        Default behavior for each column is
+   *                        `null_order::AFTER`
    */
   sort_groupby_helper(table_view const& keys,
-                      null_policy include_null_keys = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted        = sorted::NO);
+                      null_policy include_null_keys,
+                      sorted keys_pre_sorted,
+                      std::vector<null_order> const& null_precedence);
 
   ~sort_groupby_helper()                          = default;
   sort_groupby_helper(sort_groupby_helper const&) = delete;
@@ -226,6 +230,7 @@ struct sort_groupby_helper {
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
   null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
+  std::vector<null_order> _null_precedence;  ///< How to sort NULLs
 };
 
 }  // namespace sort
