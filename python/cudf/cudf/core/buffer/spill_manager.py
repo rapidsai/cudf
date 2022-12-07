@@ -154,6 +154,16 @@ class SpillStatistics:
                 stat.spilled_nbytes += spilled_nbytes
 
     def log_spill_on_demand(self, manager: SpillManager, nbytes: int):
+        """Log an spill-on-demand event
+
+        Parameters
+        ----------
+        manager : SpillManager
+            The manager evoking the event
+        nbytes : int
+            Number of bytes requested by the event
+        """
+
         if self.level < 3:
             return
 
@@ -211,6 +221,7 @@ class SpillStatistics:
             else:
                 ret += "\n    lowest utilization: "
                 ret += format_bytes(self.lowest_utilization)
+                ret += " (the closer to the RMM pool size, the better)"
             return ret
 
 
