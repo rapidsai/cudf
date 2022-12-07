@@ -20,7 +20,16 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
 
-set(targets_using_numpy io_datasource io_utils)
-foreach(target IN LISTS targets_using_numpy)
+find_package(Python 3.8 REQUIRED COMPONENTS Interpreter)
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"
+  OUTPUT_VARIABLE PYARROW_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(targets_using_numpy_and_arrow_headers io_datasource io_utils)
+foreach(target IN LISTS targets_using_numpy_and_arrow_headers)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
+  target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
