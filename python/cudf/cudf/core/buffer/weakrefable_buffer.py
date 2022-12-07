@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import weakref
-from typing import Any, Type, TypeVar
+from typing import Any, Dict, Type, TypeVar
 
 import rmm
 
@@ -14,7 +14,38 @@ from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 T = TypeVar("T", bound="RefCountableBuffer")
 
 
-class BufferWeakref(object):
+class CachedInstanceMeta(type):
+    """
+    Metaclass for BufferWeakref, which will ensure creation
+    of singleton instance.
+    """
+
+    __instances: Dict[int, int] = {}
+
+    def __call__(cls, ptr, size):
+        cache_key = (ptr, size)
+        try:
+            # try retrieving an instance from the cache:
+            return cls.__instances[cache_key]
+        except KeyError:
+            # if an instance couldn't be found in the cache,
+            # construct it and add to cache:
+            obj = super().__call__(ptr, size)
+            try:
+                cls.__instances[cache_key] = obj
+            except TypeError:
+                # couldn't hash the arguments, don't cache:
+                return obj
+            return obj
+        except TypeError:
+            # couldn't hash the arguments, don't cache:
+            return super().__call__(ptr, size)
+
+    def _clear_instance_cache(cls):
+        cls.__instances.clear()
+
+
+class BufferWeakref(object, metaclass=CachedInstanceMeta):
     """
     A proxy class to be used by ``Buffer`` for generating weakreferences.
     """
