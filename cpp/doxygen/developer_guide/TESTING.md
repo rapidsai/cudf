@@ -451,7 +451,7 @@ Verifies the bitwise equality of two device memory buffers.
 
 #### Caveats
 
-Column comparison functions in `cudf::test::detail` namespace should NOT be used directly.
+Column comparison functions in the `cudf::test::detail` namespace should **NOT** be used directly.
 
 ### Printing and accessing column data
 
