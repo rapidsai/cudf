@@ -684,6 +684,35 @@ TEST_F(StringsContainsTests, MultiLine)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
 }
 
+TEST_F(StringsContainsTests, EndOfString)
+{
+  auto input = cudf::test::strings_column_wrapper(
+    {"abé\nfff\nabé", "fff\nabé\nlll", "abé", "", "abé\n", "abe\nabé\n"});
+  auto view = cudf::strings_column_view(input);
+
+  auto pattern = std::string("\\Aabé\\Z");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto prog_ml =
+    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+
+  auto results  = cudf::strings::contains_re(view, *prog);
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results = cudf::strings::contains_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  results = cudf::strings::matches_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results = cudf::strings::matches_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  results             = cudf::strings::count_re(view, *prog);
+  auto expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+  results = cudf::strings::count_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+}
+
 TEST_F(StringsContainsTests, DotAll)
 {
   auto input = cudf::test::strings_column_wrapper({"abc\nfa\nef", "fff\nabbc\nfff", "abcdef", ""});
