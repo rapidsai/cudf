@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import weakref
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, Dict, Tuple, Type, TypeVar
 
 import rmm
 
@@ -20,7 +20,7 @@ class CachedInstanceMeta(type):
     of singleton instance.
     """
 
-    __instances: Dict[int, int] = {}
+    __instances: Dict[Tuple, BufferWeakref] = {}
 
     def __call__(cls, ptr, size):
         cache_key = (ptr, size)
