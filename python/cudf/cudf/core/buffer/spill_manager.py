@@ -57,6 +57,8 @@ class SpillStatistics:
       1+ - duration and number of bytes spilled (very low overhead).
       2+ - a traceback for each time a spillable buffer is exposed
            permanently (potential high overhead).
+      3+ - lowest utilization of device memory, which can be limited by
+           RMM fragmentation (high overhead).
 
     The statistics are printed when spilling-on-demand fails to find
     any buffer to spill. It is possible to retrieve the statistics

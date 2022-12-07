@@ -254,7 +254,8 @@ _register_option(
             0  - disabled (no overhead).
             1+ - duration and number of bytes spilled (very low overhead).
             2+ - a traceback for each time a spillable buffer is exposed
-                permanently (potential high overhead).
+                 permanently (potential high overhead).
+            3+ - lowest utilization of device memory (high overhead).
 
         Valid values are any positive integer.
         Default is 0 (disabled).

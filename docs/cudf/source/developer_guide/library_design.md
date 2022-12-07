@@ -252,6 +252,8 @@ Three levels of information gathering exist:
   0. disabled (no overhead). 
   1. gather statistics of duration and number of bytes spilled (very low overhead). 
   2. gather statistics of each time a spillable buffer is exposed permanently (potential high overhead).
+  3. gather statistics of each time spill-on-demand event (high overhead). This includes tracking of
+     the lowest utilization of device memory, which can be limited by RMM fragmentation.
 
 Statistics can be enabled in two ways (it is disabled by default):
   - setting the environment variable `CUDF_SPILL_STATS=<statistics-level>`, or
