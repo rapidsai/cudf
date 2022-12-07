@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set, TypeVar
 
@@ -197,6 +198,12 @@ class BaseIndex(Serializable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property

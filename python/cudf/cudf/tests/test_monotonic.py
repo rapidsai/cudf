@@ -30,7 +30,11 @@ def test_range_index(testrange):
     )
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -54,7 +58,11 @@ def test_generic_index(testlist):
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -74,7 +82,11 @@ def test_string_index(testlist):
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -90,7 +102,11 @@ def test_categorical_index(testlist):
     index_pd = pd.CategoricalIndex(raw_cat)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -131,7 +147,11 @@ def test_datetime_index(testlist):
     index_pd = pd.DatetimeIndex(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -154,7 +174,11 @@ def test_series(testlist):
     series_pd = pd.Series(testlist)
 
     assert series.is_unique == series_pd.is_unique
-    assert series.is_monotonic == series_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = series_pd.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = series.index.is_monotonic
+    assert got == expect
     assert series.is_monotonic_increasing == series_pd.is_monotonic_increasing
     assert series.is_monotonic_decreasing == series_pd.is_monotonic_decreasing
 
@@ -179,7 +203,11 @@ def test_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     assert pdf.index.is_unique == gdf.index.is_unique
-    assert pdf.index.is_monotonic == gdf.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = pdf.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = gdf.index.is_monotonic
+    assert got == expect
     assert (
         pdf.index.is_monotonic_increasing == gdf.index.is_monotonic_increasing
     )
@@ -214,7 +242,11 @@ def test_multiindex_tuples(testarr):
     index_pd = pd.MultiIndex.from_tuples(tuples, names=testarr[1])
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        expect = index_pd.is_monotonic
+    with pytest.warns(FutureWarning):
+        got = index.is_monotonic
+    assert got == expect
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
