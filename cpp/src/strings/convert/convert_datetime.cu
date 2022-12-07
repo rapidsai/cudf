@@ -685,9 +685,9 @@ struct time_components {
 };
 
 /**
- * @brief Base class for the `from_timestamps_size_fn` and the `date_time_formatter`
+ * @brief Functor for from_timestamps to convert a timestamp to a string
  *
- * These contain some common utility functions used by both subclasses.
+ * This is designed to be used with make_strings_children
  */
 template <typename T>
 struct datetime_formatter_fn {
@@ -761,7 +761,7 @@ struct datetime_formatter_fn {
     // This can improve performance when not using uncommon specifiers.
     thrust::optional<cuda::std::chrono::sys_days> days;
 
-    auto days_from_timestamp = [&]() {
+    auto days_from_timestamp = [tstamp]() {
       auto const count = tstamp.time_since_epoch().count();
       return cuda::std::chrono::sys_days(static_cast<cudf::timestamp_D::duration>(
         floor<cuda::std::chrono::days>(T::duration(count))));
