@@ -707,7 +707,7 @@ void make_device_json_column(device_span<SymbolT const> input,
               break;
             // if col_type == string, copy this. else ConvertFunctor{}
             if (d_columns_data[col_ids[i]].cudf_type.id() == type_id::STRING) {
-              break;
+              // break;
               // auto in_begin = input.data() + range_begin[i];
               // auto in_end   = input.data() + range_end[i];
               // auto str_process_info = experimental::detail::process_string(in_begin, in_end,
@@ -777,10 +777,12 @@ void make_device_json_column(device_span<SymbolT const> input,
                                  d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] =
                                    str_process_info.bytes;
                                } else {
+                                 // TODO optimize bit set/clear better.
+                                 clear_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
                                  break;
                                }
                              }
-                             set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+                            //  set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
                              break;
                            default: break;
                          }
