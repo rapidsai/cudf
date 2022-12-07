@@ -220,7 +220,7 @@ __global__ void __launch_bounds__(block_size)
       if (t == 0) { s->frag.fragment_data_size += len; }
       __syncthreads();
       // page fragment size must fit in a 32-bit signed integer
-      if (s->frag.fragment_data_size > INT32_MAX) {
+      if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
         CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
       }
     }
