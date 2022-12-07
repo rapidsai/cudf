@@ -523,6 +523,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         int
             Index of label.
         """
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.  Do not pass it.",
+                FutureWarning,
+            )
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
@@ -1377,6 +1383,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.  Do not pass it.",
+                FutureWarning,
+            )
         return self._values.get_slice_bound(label, side, kind)
 
     def is_numeric(self):
