@@ -12,6 +12,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import (
     Buffer,
+    RefCountableBuffer,
     SpillableBuffer,
     SpillLock,
     acquire_spill_lock,
@@ -317,11 +318,14 @@ cdef class Column:
         """
 
         return (
-            self.base_data._has_a_weakref() or
             (
+                isinstance(self.base_data, RefCountableBuffer) and
+                self.base_data._has_a_weakref()
+            )
+            or
+            (
+                isinstance(self.base_mask, RefCountableBuffer) and
                 self.base_mask._has_a_weakref()
-                if self.base_mask
-                else False
             )
         )
 
@@ -333,10 +337,12 @@ cdef class Column:
             self._zero_copied or
             (
                 self.base_data is not None and
+                isinstance(self.base_data, RefCountableBuffer) and
                 self.base_data._is_cai_zero_copied()
             ) or
             (
                 self.base_mask is not None and
+                isinstance(self.base_mask, RefCountableBuffer) and
                 self.base_mask._is_cai_zero_copied()
             )
         )

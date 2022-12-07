@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, RefCountableBuffer, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -1912,7 +1912,7 @@ def as_column(
         elif (
             fastpath
             and cudf.get_option("copy_on_write")
-            and col.base_data is not None
+            and isinstance(col.base_data, RefCountableBuffer)
         ):
             col.base_data._zero_copied = True
 
