@@ -172,7 +172,6 @@ class SpillStatistics:
         unspilled = sum(
             buf.size for buf in manager.buffers() if not buf.is_spilled
         )
-
         if self.lowest_utilization is None:
             self.lowest_utilization = unspilled + nbytes
         else:
