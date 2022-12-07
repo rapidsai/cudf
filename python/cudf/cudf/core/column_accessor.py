@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import warnings
 from collections import abc
 from functools import cached_property, reduce
 from typing import (
@@ -17,6 +18,7 @@ from typing import (
 )
 
 import pandas as pd
+from packaging.version import Version
 
 import cudf
 from cudf.core import column
@@ -248,11 +250,21 @@ class ColumnAccessor(abc.MutableMapping):
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
             # (e.g., ''->NaT)
-            result = pd.MultiIndex.from_frame(
-                pd.DataFrame(
-                    self.names, columns=self.level_names, dtype="object"
-                ),
-            )
+            with warnings.catch_warnings():
+                # Specifying `dtype="object"` here and passing that to
+                # `from_frame` is deprecated in pandas, but we cannot remove
+                # that without also losing compatibility with other current
+                # pandas behaviors like the NaT inference above. For now we
+                # must catch the warnings internally, but we will need to
+                # remove this when we implement compatibility with pandas 2.0,
+                # which will remove these compatibility layers.
+                assert Version(pd.__version__) < Version("2.0.0")
+                warnings.simplefilter("ignore")
+                result = pd.MultiIndex.from_frame(
+                    pd.DataFrame(
+                        self.names, columns=self.level_names, dtype="object"
+                    ),
+                )
         else:
             result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
