@@ -165,7 +165,9 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   CUDF_FUNC_RANGE();
   if (not should_load_whole_source(reader_opts)) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "specifying a byte range is supported only for JSON Lines");
+                 "Specifying a byte range is supported only for JSON Lines");
+    CUDF_EXPECTS(sources.size() == 1,
+                 "Specifying a byte range is supported only for a single source");
   }
 
   if (sources.size() > 1) {
