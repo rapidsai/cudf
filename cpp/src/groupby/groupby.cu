@@ -279,7 +279,7 @@ detail::sort::sort_groupby_helper& groupby::helper()
 {
   if (_helper) return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-    _keys, _include_null_keys, _keys_are_sorted);
+    _keys, _include_null_keys, _keys_are_sorted, _null_precedence);
   return *_helper;
 };
 
