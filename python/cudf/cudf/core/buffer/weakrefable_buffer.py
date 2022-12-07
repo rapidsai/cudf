@@ -283,7 +283,7 @@ class RefCountableBuffer(Buffer):
         triggering a deepcopy.
         """
         return {
-            "data": (self.ptr, False),
+            "data": (self.ptr, True),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
@@ -303,7 +303,9 @@ class RefCountableBuffer(Buffer):
         # pointing to.
         self._detach_refs(zero_copied=True)
 
-        return self._cai
+        result = self._cai
+        result["data"] = (self.ptr, False)
+        return result
 
     def _detach_refs(self, zero_copied=False):
         """

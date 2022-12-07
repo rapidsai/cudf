@@ -226,8 +226,7 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> dict:
         """
-        Internal Implementation for the CUDA Array Interface without
-        triggering a deepcopy.
+        Implementation for the CUDA Array Interface.
         """
         return {
             "data": (self.ptr, False),
@@ -239,7 +238,17 @@ class Buffer(Serializable):
 
     @property
     def _cai(self) -> dict:
-        return self.__cuda_array_interface__
+        """
+        Internal Implementation for the CUDA Array Interface which is
+        read-only.
+        """
+        return {
+            "data": (self.ptr, True),
+            "shape": (self.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
