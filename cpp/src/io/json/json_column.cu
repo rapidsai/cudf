@@ -99,7 +99,9 @@ void print_tree(host_span<SymbolT const> input,
  * @brief Reduces node tree representation to column tree representation.
  *
  * @param tree Node tree representation of JSON string
- * @param col_ids Column ids of nodes
+ * @param original_col_ids Column ids of nodes
+ * @param sorted_col_ids Sorted column ids of nodes
+ * @param ordered_node_ids Node ids of nodes sorted by column ids
  * @param row_offsets Row offsets of nodes
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A tuple of column tree representation of JSON string, column ids of columns, and
@@ -107,27 +109,26 @@ void print_tree(host_span<SymbolT const> input,
  */
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 reduce_to_column_tree(tree_meta_t& tree,
-                      device_span<NodeIndexT> col_ids,
+                      device_span<NodeIndexT> original_col_ids,
+                      device_span<NodeIndexT> sorted_col_ids,
+                      device_span<NodeIndexT> ordered_node_ids,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  //   1. sort_by_key {col_id}, {row_offset} stable
-  rmm::device_uvector<NodeIndexT> node_ids(row_offsets.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
-  thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                             col_ids.begin(),
-                             col_ids.end(),
-                             thrust::make_zip_iterator(node_ids.begin(), row_offsets.begin()));
-  auto num_columns = thrust::unique_count(rmm::exec_policy(stream), col_ids.begin(), col_ids.end());
+  // 1. column count for allocation
+  auto num_columns =
+    thrust::unique_count(rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end());
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
+  auto ordered_row_offsets =
+    thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
   thrust::reduce_by_key(rmm::exec_policy(stream),
-                        col_ids.begin(),
-                        col_ids.end(),
-                        row_offsets.begin(),
+                        sorted_col_ids.begin(),
+                        sorted_col_ids.end(),
+                        ordered_row_offsets,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
                         thrust::equal_to<size_type>(),
@@ -137,9 +138,9 @@ reduce_to_column_tree(tree_meta_t& tree,
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::reduce_by_key(
     rmm::exec_policy(stream),
-    col_ids.begin(),
-    col_ids.end(),
-    thrust::make_permutation_iterator(tree.node_categories.begin(), node_ids.begin()),
+    sorted_col_ids.begin(),
+    sorted_col_ids.end(),
+    thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
     unique_col_ids.begin(),
     column_categories.begin(),
     thrust::equal_to<size_type>(),
@@ -168,9 +169,9 @@ reduce_to_column_tree(tree_meta_t& tree,
   rmm::device_uvector<SymbolOffsetT> col_range_end(num_columns, stream);
   rmm::device_uvector<size_type> unique_node_ids(num_columns, stream);
   thrust::unique_by_key_copy(rmm::exec_policy(stream),
-                             col_ids.begin(),
-                             col_ids.end(),
-                             node_ids.begin(),
+                             sorted_col_ids.begin(),
+                             sorted_col_ids.end(),
+                             ordered_node_ids.begin(),
                              thrust::make_discard_iterator(),
                              unique_node_ids.begin());
   thrust::copy_n(
@@ -183,31 +184,16 @@ reduce_to_column_tree(tree_meta_t& tree,
     thrust::make_zip_iterator(
       parent_col_ids.begin(), col_range_begin.begin(), col_range_end.begin()));
 
-  // Restore the order
-  {
-    // use scatter to restore the order
-    rmm::device_uvector<NodeIndexT> temp_col_ids(col_ids.size(), stream);
-    rmm::device_uvector<size_type> temp_row_offsets(row_offsets.size(), stream);
-    thrust::scatter(rmm::exec_policy(stream),
-                    thrust::make_zip_iterator(col_ids.begin(), row_offsets.begin()),
-                    thrust::make_zip_iterator(col_ids.end(), row_offsets.end()),
-                    node_ids.begin(),
-                    thrust::make_zip_iterator(temp_col_ids.begin(), temp_row_offsets.begin()));
-    thrust::copy(rmm::exec_policy(stream),
-                 thrust::make_zip_iterator(temp_col_ids.begin(), temp_row_offsets.begin()),
-                 thrust::make_zip_iterator(temp_col_ids.end(), temp_row_offsets.end()),
-                 thrust::make_zip_iterator(col_ids.begin(), row_offsets.begin()));
-  }
-
   // convert parent_node_ids to parent_col_ids
-  thrust::transform(rmm::exec_policy(stream),
-                    parent_col_ids.begin(),
-                    parent_col_ids.end(),
-                    parent_col_ids.begin(),
-                    [col_ids = col_ids.begin()] __device__(auto parent_node_id) -> size_type {
-                      return parent_node_id == parent_node_sentinel ? parent_node_sentinel
-                                                                    : col_ids[parent_node_id];
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    parent_col_ids.begin(),
+    parent_col_ids.end(),
+    parent_col_ids.begin(),
+    [col_ids = original_col_ids.begin()] __device__(auto parent_node_id) -> size_type {
+      return parent_node_id == parent_node_sentinel ? parent_node_sentinel
+                                                    : col_ids[parent_node_id];
+    });
 
   // copy lists' max_row_offsets to children.
   // all structs should have same size.
@@ -333,9 +319,18 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids.size(), stream);  // make a copy
+  thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), original_col_ids.begin());
+
+  // sort_by_key {col_id}, {row_offset} stable
+  rmm::device_uvector<NodeIndexT> node_ids(row_offsets.size(), stream);
+  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
+  thrust::stable_sort_by_key(
+    rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), node_ids.begin());
+
   // 1. gather column information.
   auto [d_column_tree, d_unique_col_ids, d_max_row_offsets] =
-    reduce_to_column_tree(tree, col_ids, row_offsets, stream);
+    reduce_to_column_tree(tree, original_col_ids, col_ids, node_ids, row_offsets, stream);
   auto num_columns    = d_unique_col_ids.size();
   auto unique_col_ids = cudf::detail::make_std_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -466,45 +461,13 @@ void make_device_json_column(device_span<SymbolT const> input,
                                             col.validity.data()};
   }
 
-  // 3. scatter string offsets to respective columns, set validity bits
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<size_type>(0),
-    col_ids.size(),
-    [node_categories = tree.node_categories.begin(),
-     col_ids         = col_ids.begin(),
-     row_offsets     = row_offsets.begin(),
-     range_begin     = tree.node_range_begin.begin(),
-     range_end       = tree.node_range_end.begin(),
-     d_ignore_vals   = d_ignore_vals.begin(),
-     d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
-      switch (node_categories[i]) {
-        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_VAL:
-        case NC_STR:
-          if (d_ignore_vals[col_ids[i]]) break;
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
-          d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
-          d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
-          break;
-        default: break;
-      }
-    });
 
-  // 4. scatter List offset
+  // 3. scatter List offset
   //   sort_by_key {col_id}, {node_id}
   //   unique_copy_by_key {parent_node_id} {row_offset} to
   //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-
-  rmm::device_uvector<NodeIndexT> original_col_ids(col_ids.size(), stream);  // make a copy
-  thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), original_col_ids.begin());
-  rmm::device_uvector<size_type> node_ids(row_offsets.size(), stream);
-  thrust::sequence(rmm::exec_policy(stream), node_ids.begin(), node_ids.end());
-  thrust::stable_sort_by_key(
-    rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), node_ids.begin());
 
   auto ordered_parent_node_ids =
     thrust::make_permutation_iterator(tree.parent_node_ids.begin(), node_ids.begin());
@@ -541,9 +504,31 @@ void make_device_json_column(device_span<SymbolT const> input,
       }
     });
 
-  // restore col_ids, TODO is this required?
-  // thrust::copy(
-  //   rmm::exec_policy(stream), original_col_ids.begin(), original_col_ids.end(), col_ids.begin());
+  // 4. scatter string offsets to respective columns, set validity bits
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<size_type>(0),
+    col_ids.size(),
+    [node_categories = tree.node_categories.begin(),
+     col_ids         = original_col_ids.begin(),
+     row_offsets     = row_offsets.begin(),
+     range_begin     = tree.node_range_begin.begin(),
+     range_end       = tree.node_range_end.begin(),
+     d_ignore_vals   = d_ignore_vals.begin(),
+     d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
+      switch (node_categories[i]) {
+        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
+        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
+        case NC_VAL:
+        case NC_STR:
+          if (d_ignore_vals[col_ids[i]]) break;
+          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
+          d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
+          break;
+        default: break;
+      }
+    });
 
   // 5. scan on offsets.
   for (auto& [id, col_ref] : columns) {
