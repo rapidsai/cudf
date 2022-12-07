@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from functools import lru_cache
+
 from numba import types
 from numba.cuda.cudaimpl import lower as cuda_lower
 
@@ -21,6 +23,8 @@ _supported_masked_types = (
 )
 _STRING_UDFS_ENABLED = False
 cudf_str_dtype = dtype(str)
+
+
 try:
     import strings_udf
     from strings_udf import ptxpath
@@ -47,7 +51,18 @@ try:
         utils.JIT_SUPPORTED_TYPES |= STRING_TYPES
         _supported_masked_types |= {string_view, udf_string}
 
-        utils.launch_arg_getters[cudf_str_dtype] = column_to_string_view_array
+        @lru_cache(maxsize=None)
+        def set_initial_malloc_heap_size():
+            strings_udf.set_malloc_heap_size()
+
+        def column_to_string_view_array_init_heap(col):
+            # lazily allocate heap only when a string needs to be returned
+            set_initial_malloc_heap_size()
+            return column_to_string_view_array(col)
+
+        utils.launch_arg_getters[
+            cudf_str_dtype
+        ] = column_to_string_view_array_init_heap
         utils.output_col_getters[cudf_str_dtype] = column_from_udf_string_array
         utils.masked_array_types[cudf_str_dtype] = string_view
         row_function.itemsizes[cudf_str_dtype] = string_view.size_bytes

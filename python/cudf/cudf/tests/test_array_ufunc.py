@@ -104,18 +104,15 @@ def test_ufunc_index(ufunc):
 @pytest.mark.parametrize(
     "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
 )
-@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
 @pytest.mark.parametrize("reflect", [True, False])
-def test_binary_ufunc_index_array(ufunc, type_, reflect):
+def test_binary_ufunc_index_array(ufunc, reflect):
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
     args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
 
-    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
-    if type_ == "list":
-        arg1 = arg1.tolist()
+    arg1 = args[1].to_cupy()
 
     if reflect:
         got = ufunc(arg1, args[0])
@@ -126,12 +123,12 @@ def test_binary_ufunc_index_array(ufunc, type_, reflect):
 
     if ufunc.nout > 1:
         for g, e in zip(got, expect):
-            if type_ == "cupy" and reflect:
+            if reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
                 assert_eq(g, e, check_exact=False)
     else:
-        if type_ == "cupy" and reflect:
+        if reflect:
             assert (cp.asnumpy(got) == expect).all()
         else:
             assert_eq(got, expect, check_exact=False)
@@ -226,16 +223,15 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
 )
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
-@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
 @pytest.mark.parametrize("reflect", [True, False])
-def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
+def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, reflect):
     fname = ufunc.__name__
     if fname in ("greater", "greater_equal", "logical_and") and has_nulls:
         pytest.xfail(
             "The way cudf casts nans in arrays to nulls during binops with "
             "cudf objects is currently incompatible with pandas."
         )
-    if reflect and has_nulls and type_ == "cupy":
+    if reflect and has_nulls:
         pytest.skip(
             "When cupy is the left operand there is no way for us to avoid "
             "calling its binary operators, which cannot handle cudf objects "
@@ -264,9 +260,7 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
         args[1] = args[1].fillna(cp.nan)
         mask = args[0].isna().to_pandas()
 
-    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
-    if type_ == "list":
-        arg1 = arg1.tolist()
+    arg1 = args[1].to_cupy()
 
     if reflect:
         got = ufunc(arg1, args[0])
@@ -279,14 +273,14 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
         for g, e in zip(got, expect):
             if has_nulls:
                 e[mask] = np.nan
-            if type_ == "cupy" and reflect:
+            if reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
                 assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
             expect[mask] = np.nan
-        if type_ == "cupy" and reflect:
+        if reflect:
             assert (cp.asnumpy(got) == expect).all()
         else:
             assert_eq(got, expect, check_exact=False)

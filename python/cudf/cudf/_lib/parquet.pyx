@@ -7,6 +7,7 @@ import io
 import pyarrow as pa
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 try:
     import ujson as json
@@ -306,19 +307,22 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     return df
 
-cpdef write_parquet(
-        table,
-        object filepaths_or_buffers,
-        object index=None,
-        object compression="snappy",
-        object statistics="ROWGROUP",
-        object metadata_file_path=None,
-        object int96_timestamps=False,
-        object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
-        object row_group_size_rows=None,
-        object max_page_size_bytes=None,
-        object max_page_size_rows=None,
-        object partitions_info=None):
+
+@acquire_spill_lock()
+def write_parquet(
+    table,
+    object filepaths_or_buffers,
+    object index=None,
+    object compression="snappy",
+    object statistics="ROWGROUP",
+    object metadata_file_path=None,
+    object int96_timestamps=False,
+    object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    object row_group_size_rows=None,
+    object max_page_size_bytes=None,
+    object max_page_size_rows=None,
+    object partitions_info=None
+):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 

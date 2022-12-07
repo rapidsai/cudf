@@ -584,7 +584,7 @@ void struct_scalar::superimpose_nulls(rmm::cuda_stream_view stream,
   auto validity = cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream);
   auto iter     = thrust::make_counting_iterator(0);
   std::for_each(iter, iter + _data.num_columns(), [&](size_type i) {
-    cudf::structs::detail::superimpose_parent_nulls(
+    cudf::structs::detail::superimpose_nulls(
       static_cast<bitmask_type const*>(validity.data()), 1, _data.get_column(i), stream, mr);
   });
 }

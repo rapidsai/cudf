@@ -1995,6 +1995,12 @@ def test_set_bool_error(dtype, bool_scalar):
     )
 
 
+def test_int64_equality():
+    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
+    assert (s != np.int64(2**63 - 1)).all()
+    assert (s != cudf.Scalar(2**63 - 1, dtype=np.int64)).all()
+
+
 @pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
 def test_series_to_dict(into):
     gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
@@ -2004,3 +2010,47 @@ def test_series_to_dict(into):
     expected = ps.to_dict(into=into)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+        [],
+    ],
+)
+def test_series_hasnans(data):
+    gs = cudf.Series(data, nan_as_null=False)
+    ps = gs.to_pandas(nullable=True)
+
+    assert_eq(gs.hasnans, ps.hasnans)
+
+
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ([1, 2, 3], [10, 11, 12]),
+        ([1, 2, 3, 1, 1, 2, 3, 2], [10, 20, 23, 24, 25, 26, 27, 28]),
+        ([1, None, 2, None, 3, None, 3, 1], [5, 6, 7, 8, 9, 10, 11, 12]),
+        ([np.nan, 1.0, np.nan, 5.4, 5.4, 1.0], ["a", "b", "c", "d", "e", "f"]),
+        (
+            ["lama", "cow", "lama", None, "beetle", "lama", None, None],
+            [1, 4, 10, 11, 2, 100, 200, 400],
+        ),
+    ],
+)
+@pytest.mark.parametrize("keep", ["first", "last", False])
+def test_series_duplicated(data, index, keep):
+    gs = cudf.Series(data, index=index)
+    ps = gs.to_pandas()
+
+    assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))

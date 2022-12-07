@@ -2450,6 +2450,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Copy the current column to a new column, each string or list of the output column will have
+   * reverse order of characters or elements.
+   *
+   * @return A new column with lists or strings having reverse order.
+   */
+  public final ColumnVector reverseStringsOrLists() {
+    assert type.equals(DType.STRING) || type.equals(DType.LIST) :
+        "A column of type string or list is required, actual: " + type;
+    return new ColumnVector(reverseStringsOrLists(getNativeView()));
+  }
+
+  /**
    * Convert a string to upper case.
    */
   public final ColumnVector upper() {
@@ -2867,7 +2879,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * replacement string.
    * The replacement proceeds from the beginning of the string to the end, for example,
    * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
-   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Specifying an empty string for replace will essentially remove the target string if found in each string.
    * Null string entries will return null output string entries.
    * target Scalar should be string and should not be empty or null.
    *
@@ -4251,6 +4263,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
+
+  private static native long reverseStringsOrLists(long inputHandle);
+
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.

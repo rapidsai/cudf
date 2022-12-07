@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.cpp.types cimport size_type
 
@@ -443,7 +444,8 @@ def read_csv(
     return df
 
 
-cpdef write_csv(
+@acquire_spill_lock()
+def write_csv(
     table,
     object path_or_buf=None,
     object sep=",",

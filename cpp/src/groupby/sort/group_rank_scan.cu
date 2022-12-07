@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common_utils.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -21,7 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -38,36 +40,6 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
-
-/**
- * @brief Functor to compare two rows of a table in given permutation order
- * This is useful to identify unique elements in a sorted order table, when the permutation order is
- * the sorted order of the table.
- *
- */
-template <typename Iterator>
-struct permuted_comparator {
-  /**
-   * @brief comparator object which compares two rows of the table in given permutation order
-   *
-   * @param device_table Device table to compare
-   * @param permutation The permutation order, integer type column.
-   * @param has_nulls whether the table has nulls
-   */
-  permuted_comparator(table_device_view device_table, Iterator const permutation, bool has_nulls)
-    : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
-      permutation(permutation)
-  {
-  }
-  __device__ bool operator()(size_type index1, size_type index2) const
-  {
-    return comparator(permutation[index1], permutation[index2]);
-  };
-
- private:
-  row_equality_comparator<nullate::DYNAMIC> comparator;
-  Iterator const permutation;
-};
 
 /**
  * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
@@ -99,32 +71,29 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(flattened, stream);
-  auto sorted_index_order = value_order.begin<size_type>();
-  auto comparator         = permuted_comparator(*d_flat_order, sorted_index_order, has_nulls);
+  auto const comparator =
+    cudf::experimental::row::equality::self_comparator{table_view{{grouped_values}}, stream};
+  auto const d_equal = comparator.equal_to(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
+  auto const permuted_equal =
+    permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
 
-  auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
-                                       flattened.flattened_columns().num_rows(),
-                                       mask_state::UNALLOCATED,
-                                       stream,
-                                       mr);
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
   auto unique_identifier = [labels  = group_labels.begin(),
                             offsets = group_offsets.begin(),
-                            comparator,
+                            permuted_equal,
                             resolver] __device__(size_type row_index) {
     auto const group_start = offsets[labels[row_index]];
     if constexpr (forward) {
       // First value of equal values is 1.
-      return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
+      return resolver(row_index == group_start || !permuted_equal(row_index, row_index - 1),
                       row_index - group_start);
     } else {
       auto const group_end = offsets[labels[row_index] + 1];
       // Last value of equal values is 1.
-      return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
+      return resolver(row_index + 1 == group_end || !permuted_equal(row_index, row_index + 1),
                       row_index - group_start);
     }
   };

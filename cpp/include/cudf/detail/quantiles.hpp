@@ -29,29 +29,27 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> quantile(
-  column_view const& input,
-  std::vector<double> const& q,
-  interpolation interp                = interpolation::LINEAR,
-  column_view const& ordered_indices  = {},
-  bool exact                          = true,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> quantile(column_view const& input,
+                                 std::vector<double> const& q,
+                                 interpolation interp,
+                                 column_view const& ordered_indices,
+                                 bool exact,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::quantiles()
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> quantiles(
-  table_view const& input,
-  std::vector<double> const& q,
-  interpolation interp                           = interpolation::NEAREST,
-  cudf::sorted is_input_sorted                   = sorted::NO,
-  std::vector<order> const& column_order         = {},
-  std::vector<null_order> const& null_precedence = {},
-  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> quantiles(table_view const& input,
+                                 std::vector<double> const& q,
+                                 interpolation interp,
+                                 cudf::sorted is_input_sorted,
+                                 std::vector<order> const& column_order,
+                                 std::vector<null_order> const& null_precedence,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::percentile_approx(tdigest_column_view const&, column_view const&,
@@ -59,11 +57,10 @@ std::unique_ptr<table> quantiles(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> percentile_approx(
-  tdigest::tdigest_column_view const& input,
-  column_view const& percentiles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> percentile_approx(tdigest::tdigest_column_view const& input,
+                                          column_view const& percentiles,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

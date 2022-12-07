@@ -234,6 +234,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("All objects passed were None")
 
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
+        raise ValueError(
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
+        )
+
     # Return for single object
     if len(objs) == 1:
         obj = objs[0]
@@ -249,7 +255,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # in the data that are not in `columns`, so we have to rename
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
-            elif axis == 0:
+            else:
                 if isinstance(obj, cudf.Series):
                     result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
@@ -273,9 +279,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 if isinstance(obj, cudf.Series) and obj.name is None:
                     # If the Series has no name, pandas renames it to 0.
                     data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(data)
+                result = cudf.DataFrame._from_data(
+                    data, index=obj.index.copy(deep=True)
+                )
 
-        return result.sort_index(axis=axis) if sort else result
+        if isinstance(result, cudf.Series) and axis == 0:
+            # sort has no effect for series concatted along axis 0
+            return result
+        else:
+            return result.sort_index(axis=(1 - axis)) if sort else result
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
@@ -294,12 +306,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
-
-    axis = _AXIS_MAP.get(axis, None)
-    if axis is None:
-        raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
-        )
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:

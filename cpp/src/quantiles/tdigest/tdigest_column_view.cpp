@@ -28,7 +28,7 @@ tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(c
   CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
   CUDF_EXPECTS(col.size() > 0, "tdigest columns must have > 0 rows");
   CUDF_EXPECTS(col.offset() == 0, "Encountered a sliced tdigest column");
-  CUDF_EXPECTS(col.nullable() == false, "Encountered nullable tdigest column");
+  CUDF_EXPECTS(not col.nullable(), "Encountered nullable tdigest column");
 
   structs_column_view scv(col);
   CUDF_EXPECTS(scv.num_children() == 3, "Encountered invalid tdigest column");

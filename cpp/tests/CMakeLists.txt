@@ -86,7 +86,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
-  groupby/lists_tests.cu
+  groupby/lists_tests.cpp
   groupby/m2_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
@@ -223,8 +223,8 @@ ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
-ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
-ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp)
+ConfigureTest(JSON_TEST io/json_test.cpp io/json_chunked_reader.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
@@ -422,6 +422,7 @@ ConfigureTest(
   strings/repeat_strings_tests.cpp
   strings/replace_regex_tests.cpp
   strings/replace_tests.cpp
+  strings/reverse_tests.cpp
   strings/split_tests.cpp
   strings/strip_tests.cpp
   strings/substring_tests.cpp

@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -14,7 +16,9 @@ from cudf._lib.utils cimport table_view_from_columns
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.
 
-cpdef join(list lhs, list rhs, how=None):
+
+@acquire_spill_lock()
+def join(list lhs, list rhs, how=None):
     cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result
     cdef table_view c_lhs = table_view_from_columns(lhs)
     cdef table_view c_rhs = table_view_from_columns(rhs)
@@ -36,7 +40,8 @@ cpdef join(list lhs, list rhs, how=None):
     return left_rows, right_rows
 
 
-cpdef semi_join(list lhs, list rhs, how=None):
+@acquire_spill_lock()
+def semi_join(list lhs, list rhs, how=None):
     # left-semi and left-anti joins
     cdef cpp_join.gather_map_type c_result
     cdef table_view c_lhs = table_view_from_columns(lhs)

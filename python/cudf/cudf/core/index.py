@@ -281,6 +281,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
+    def hasnans(self):
+        return False
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
             {self.name: self._values}
@@ -337,6 +342,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
         return self
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        return cupy.zeros(len(self), dtype=bool)
 
     @_cudf_nvtx_annotate
     def __repr__(self):
@@ -468,7 +477,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return begin, end
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1290,8 +1299,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only incase of non-StringIndex types,
-                # as we want to preserve single quotes incase
+                # to happen only in case of non-StringIndex types,
+                # as we want to preserve single quotes in case
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
@@ -1391,6 +1400,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def is_interval(self):
         return False
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def hasnans(self):
+        return self._column.has_nulls(include_nan=True)
+
     @_cudf_nvtx_annotate
     def argsort(
         self,
@@ -1461,8 +1475,10 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self):
-        return pd.Index(self._values.to_pandas(), name=self.name)
+    def to_pandas(self, nullable=False):
+        return pd.Index(
+            self._values.to_pandas(nullable=nullable), name=self.name
+        )
 
     def append(self, other):
         if is_list_like(other):
@@ -2072,7 +2088,10 @@ class DatetimeIndex(GenericIndex):
         """  # noqa: E501
         return as_index(
             (
-                self._values.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self._values.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self._values.get_dt_field("microsecond"),
@@ -2259,7 +2278,7 @@ class DatetimeIndex(GenericIndex):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
@@ -2465,7 +2484,7 @@ class TimedeltaIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
@@ -2930,9 +2949,11 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.Index(
-            self.to_numpy(na_value=None), name=self.name, dtype="object"
+            self.to_numpy(na_value=None),
+            name=self.name,
+            dtype=pd.StringDtype() if nullable else "object",
         )
 
     @_cudf_nvtx_annotate

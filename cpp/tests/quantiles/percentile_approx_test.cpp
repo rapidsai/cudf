@@ -103,7 +103,7 @@ struct percentile_approx_dispatch {
     cudf::tdigest::tdigest_column_view tdv(*agg_result);
     auto result = cudf::percentile_approx(tdv, g_percentages);
 
-    cudf::test::expect_columns_equivalent(
+    cudf::test::detail::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
 
     return result;
