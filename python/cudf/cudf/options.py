@@ -166,6 +166,25 @@ def _make_cow_validator(valid_options):
     return _validator
 
 
+def _make_spill_validator(valid_options):
+    def _validator(val):
+        try:
+            if get_option("copy_on_write") and val:
+                raise ValueError(
+                    "Spilling is not supported when copy on write is enabled. "
+                    "Please set `copy_on_write` to `False`"
+                )
+        except KeyError:
+            pass
+        if val not in valid_options:
+            raise ValueError(
+                f"{val} is not a valid option. "
+                f"Must be one of {set(valid_options)}."
+            )
+
+    return _validator
+
+
 def _integer_validator(val):
     try:
         int(val)
@@ -230,7 +249,7 @@ _register_option(
         \tValid values are True or False. Default is False.
         """
     ),
-    _make_contains_validator([False, True]),
+    _make_spill_validator([False, True]),
 )
 
 

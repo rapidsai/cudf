@@ -217,7 +217,7 @@ cdef class Column:
             # be expensive.
             hasattr(value, "__cuda_array_interface__")
         ):
-            if isinstance(value, Buffer):
+            if isinstance(value, RefCountableBuffer):
                 value = SimpleNamespace(
                     __cuda_array_interface__=value._cai,
                     owner=value
