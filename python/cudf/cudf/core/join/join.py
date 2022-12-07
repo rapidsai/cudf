@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import warnings
 from typing import Any, ClassVar, List, Optional
 
 import cudf
@@ -410,6 +411,18 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
+
+        if (
+            isinstance(lhs, cudf.DataFrame)
+            and isinstance(rhs, cudf.DataFrame)
+            and lhs._data.nlevels != rhs._data.nlevels
+        ):
+            warnings.warn(
+                "merging between different levels is deprecated and will be "
+                f"removed in a future version. ({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)",
+                FutureWarning,
+            )
 
 
 class MergeSemi(Merge):

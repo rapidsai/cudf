@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
+import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -381,6 +382,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
              com2   228.91
 
         """
+
+        # TODO: Update message when set_levels is implemented.
+        # https://github.com/rapidsai/cudf/issues/12307
+        if levels is not None:
+            warnings.warn(
+                "parameter levels is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
+
+        # TODO: Update message when set_codes is implemented.
+        # https://github.com/rapidsai/cudf/issues/12308
+        if codes is not None:
+            warnings.warn(
+                "parameter codes is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
 
         dtype = object if dtype is None else dtype
         if not pd.core.dtypes.common.is_object_dtype(dtype):
