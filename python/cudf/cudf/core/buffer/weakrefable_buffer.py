@@ -45,10 +45,12 @@ class CachedInstanceMeta(type):
         cls.__instances.clear()
 
 
-class BufferWeakref(object, metaclass=CachedInstanceMeta):
+class BufferWeakref(metaclass=CachedInstanceMeta):
     """
     A proxy class to be used by ``Buffer`` for generating weakreferences.
     """
+
+    __slots__ = ("ptr", "size", "__weakref__")
 
     def __init__(self, ptr, size) -> None:
         self.ptr = ptr
@@ -142,8 +144,9 @@ class RefCountableBuffer(Buffer):
 
     _weak_ref: object
     _proxy_ref: None | BufferWeakref
+    # TODO: This is synonymous to SpillableBuffer._exposed attribute
+    # and has to be merged.
     _zero_copied: bool
-    _refs: dict = {}
 
     @classmethod
     def _from_device_memory(cls: Type[T], data: Any) -> T:
@@ -180,11 +183,9 @@ class RefCountableBuffer(Buffer):
         """
         Generate the new proxy reference.
         """
-        if (self._ptr, self._size) not in RefCountableBuffer._refs:
-            RefCountableBuffer._refs[(self._ptr, self._size)] = BufferWeakref(
-                self._ptr, self._size
-            )
-        self._proxy_ref = RefCountableBuffer._refs[(self._ptr, self._size)]
+        # TODO: See if this can be merged into spill-lock
+        # once spilling and copy on write are merged.
+        self._proxy_ref = BufferWeakref(self._ptr, self._size)
 
     def get_ref(self):
         """
