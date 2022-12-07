@@ -19,8 +19,17 @@ from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
     assert_eq,
+    expect_warning_if,
     gen_rand_series,
     supported_numpy_dtypes,
+)
+
+# Removal of these deprecated features is no longer imminent. They will not be
+# removed until a suitable alternative has been implemented. As a result, we
+# also do not want to stop testing them yet.
+# https://github.com/rapidsai/cudf/issues/11519
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:(num_rows|skiprows) is deprecated and will be removed."
 )
 
 
@@ -1787,7 +1796,12 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     )
     pyarrow.orc.write_table(pyorc_table, buffer)
 
-    assert_eq(negative_timestamp_df, cudf.read_orc(buffer, engine=engine))
+    # We warn the user that this function will fall back to the CPU for reading
+    # when the engine is pyarrow.
+    with expect_warning_if(engine == "pyarrow", UserWarning):
+        got = cudf.read_orc(buffer, engine=engine)
+
+    assert_eq(negative_timestamp_df, got)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
