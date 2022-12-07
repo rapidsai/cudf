@@ -154,7 +154,7 @@ class SpillStatistics:
                 stat.spilled_nbytes += spilled_nbytes
 
     def log_spill_on_demand(self, manager: SpillManager, nbytes: int):
-        """Log an spill-on-demand event
+        """Log an spill-on-demand event (after it has been handled)
 
         Parameters
         ----------
@@ -307,12 +307,12 @@ class SpillManager:
         In order to avoid deadlock, this function should not lock
         already locked buffers.
         """
-        self.statistics.log_spill_on_demand(manager=self, nbytes=nbytes)
 
         # Let's try to spill device memory
         spilled = self.spill_device_memory(nbytes=nbytes)
 
         if spilled > 0:
+            self.statistics.log_spill_on_demand(manager=self, nbytes=nbytes)
             return True  # Ask RMM to retry the allocation
 
         if retry_once:
