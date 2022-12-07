@@ -594,3 +594,43 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+def _statistics_rmm_fragmentation(size: int):
+    manager = get_global_manager()
+    b1 = as_buffer(data=rmm.DeviceBuffer(size=size), exposed=False)
+    b2 = as_buffer(data=rmm.DeviceBuffer(size=size), exposed=False)
+    b3 = as_buffer(data=rmm.DeviceBuffer(size=size), exposed=False)
+    assert manager.statistics.lowest_utilization is None
+
+    # Trigger spilling, no fragmentation
+    b4 = as_buffer(data=rmm.DeviceBuffer(size=size), exposed=False)
+    assert manager.statistics.lowest_utilization == size * 3
+
+    # By freeing the first and last buffer, we now have fragmentation:
+    # total free memory is `size * 2` but fragmented into two segments.
+    # The result is a "lowest utilization" of `size * 2`.
+    del b1, b4
+    as_buffer(data=rmm.DeviceBuffer(size=size * 2), exposed=False)
+    assert manager.statistics.lowest_utilization == size * 2
+    del b2, b3
+
+
+def test_statistics_rmm_fragmentation(buffer_size=2**20):
+    """Test and demonstration of RMM fragmentation"""
+    assert get_global_manager() is None
+
+    # We need to init RMM _before_ the spill manager
+    rmm.reinitialize(
+        pool_allocator=True,
+        initial_pool_size=3 * buffer_size,
+        maximum_pool_size=3 * buffer_size,
+    )
+    manager = SpillManager(spill_on_demand=True, statistic_level=3)
+    set_global_manager(manager=manager)
+    try:
+        _statistics_rmm_fragmentation(buffer_size)
+    finally:
+        # Make sure to clean up
+        set_global_manager(manager=None)
+        rmm.reinitialize()
