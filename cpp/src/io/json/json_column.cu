@@ -484,6 +484,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   // 1. gather column information.
   auto [d_column_tree, d_unique_col_ids, d_max_row_offsets, col_type_id] =
     reduce_to_column_tree(input, options, tree, col_ids, row_offsets, stream);
+  // col_ids, row_offsets, node_ids are sorted by col_ids. [useful for list_offsets]
   auto num_columns    = d_unique_col_ids.size();
   auto unique_col_ids = cudf::detail::make_std_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -517,16 +518,13 @@ void make_device_json_column(device_span<SymbolT const> input,
       return;
     } else if (column_categories[i] == NC_VAL || column_categories[i] == NC_STR) {
       if (not column_type_id.empty()) col.cudf_type = data_type{column_type_id.at(i)};
-      // TODO add unique_ptr column for fixed_width types
+      // TODO move it to tree fixed_width types
       if (col.cudf_type.id() != cudf::type_id::STRING) {
         col.fixed_width_column = make_fixed_width_column(
           col.cudf_type, max_row_offsets[i] + 1, mask_state::UNALLOCATED, stream, mr);
         col.d_fixed_width_data = col.fixed_width_column->mutable_view().template data<char>();
-        // TODO, can strings be created here itself, if we know the size?
       } else {
-        // FIXME remove this, or replace this with string column creation.
-        // col.fixed_width_column = make_fixed_width_column(data_type{type_id::INT8}, 1,
-        // mask_state::UNALLOCATED, stream, mr);
+        // FIXME remove this string_offsets
         col.d_fixed_width_data = nullptr;
         col.string_offsets.resize(max_row_offsets[i] + 1, stream);
         col.string_lengths.resize(max_row_offsets[i] + 2, stream);
@@ -641,6 +639,10 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   auto parse_opts = parsing_options(options);  // holds device_uvector<trie>.
 
+  // TODO partition by struct, list, field, AND value/str
+  // ignore fields.
+  // struct, list null mask.
+  // value, str: ConvertFunctor, process_strings
   {
     CUDF_SCOPED_RANGE("ConvertFunctor");
     thrust::for_each_n(
@@ -806,6 +808,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       });
   }
 
+  // TODO move it earlier, avoid the sorting again. (may be use scatter instead of sort)
   // 4. scatter List offset
   //   sort_by_key {col_id}, {node_id}
   //   unique_copy_by_key {parent_node_id} {row_offset} to
@@ -1035,29 +1038,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   switch (json_col.type) {
     case json_col_t::StringColumn: {
       // move string_offsets to GPU and transform to string column
-      auto const col_size = json_col.num_rows;  // string_offsets.size();
-      // using char_length_pair_t = thrust::pair<const char*, size_type>;
-      // // CUDF_EXPECTS(json_col.string_offsets.size() == json_col.string_lengths.size(),
-      // //              "string offset, string length mismatch");
-      // rmm::device_uvector<char_length_pair_t> d_string_data(col_size, stream);
-      // // TODO how about directly storing pair<char*, size_t> in json_column?
-      // auto offset_length_it =
-      //   thrust::make_zip_iterator(json_col.string_offsets.begin(),
-      //   json_col.string_lengths.begin());
-      // // Prepare iterator that returns (string_offset, string_length)-pairs needed by inference
-      // [[maybe_unused]] auto string_ranges_it =
-      //   thrust::make_transform_iterator(offset_length_it, [] __device__(auto ip) {
-      //     return thrust::pair<json_column::row_offset_t, std::size_t>{
-      //       thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-      //   });
-
-      // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
-      // auto string_spans_it = thrust::make_transform_iterator(
-      //   offset_length_it, [data = d_input.data()] __device__(auto ip) {
-      //     return thrust::pair<const char*, std::size_t>{
-      //       data + thrust::get<0>(ip), static_cast<std::size_t>(thrust::get<1>(ip))};
-      //   });
-
+      auto const col_size = json_col.num_rows;
       data_type target_type{};
 
       if (schema.has_value()) {
