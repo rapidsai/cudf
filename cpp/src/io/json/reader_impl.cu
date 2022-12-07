@@ -601,7 +601,8 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
   }
 
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
-
+  CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,
+               "Multiple compressed inputs are not supported");
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
   auto parse_opts = parse_options{',', '\n', '\"', '.'};
