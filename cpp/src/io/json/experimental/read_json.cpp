@@ -177,13 +177,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  if (sources.size() > 1) {
-    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
-                 "Multiple compressed inputs are not supported");
-    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "Multiple inputs are supported only for JSON Lines format");
-  }
-
   auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
 
   try {
