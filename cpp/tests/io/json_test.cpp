@@ -811,7 +811,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
@@ -822,8 +822,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
-                                 float64_wrapper{{0., 200.}, col1_validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), int64_wrapper{{0, 200}, col1_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  float64_wrapper{{1.1, 0.}, col2_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -960,12 +959,8 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  const auto col_data = cudf::test::to_host<float>(result.tbl->view().column(0));
-  // col_data.first contains the column data
-  for (const auto& elem : col_data.first)
-    ASSERT_TRUE(std::isnan(elem));
-  // col_data.second contains the bitmasks
-  ASSERT_EQ(0u, col_data.second[0]);
+  // ignore all data because it is all nulls.
+  ASSERT_EQ(6u, result.tbl->view().column(0).null_count());
 }
 
 TEST_P(JsonReaderParamTest, StringInference)
@@ -1558,31 +1553,45 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
       0, [=](auto i) -> bool { return static_cast<bool>(validity[i]); });
   };
 
-  constexpr int int_NA       = 0;
-  constexpr double double_NA = std::numeric_limits<double>::quiet_NaN();
-  constexpr bool bool_NA     = false;
+  constexpr int int_ignore{};
+  constexpr double double_ignore{};
+  constexpr bool bool_ignore{};
 
   std::vector<int> const validity = {1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0};
 
-  auto int_col = int_wrapper{
-    {0, 0, int_NA, 1, 1, int_NA, int_NA, int_NA, int_NA, 1, 0, int_NA, 1, 0, int_NA, int_NA},
-    cudf::test::iterators::nulls_at(std::vector<int>{8})};
+  auto int_col   = int_wrapper{{0,
+                              0,
+                              int_ignore,
+                              1,
+                              1,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              1,
+                              0,
+                              int_ignore,
+                              int_ignore},
+                             make_validity(validity)};
   auto float_col = float_wrapper{{0.0,
                                   0.0,
-                                  double_NA,
+                                  double_ignore,
                                   1.0,
                                   1.0,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  double_NA,
-                                  1.0,
-                                  0.0,
-                                  double_NA,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
+                                  double_ignore,
                                   1.0,
                                   0.0,
-                                  double_NA,
-                                  double_NA},
+                                  double_ignore,
+                                  1.0,
+                                  0.0,
+                                  double_ignore,
+                                  double_ignore},
                                  make_validity(validity)};
   auto str_col =
     cudf::test::strings_column_wrapper{// clang-format off
@@ -1591,21 +1600,21 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
   // clang-format on
   auto bool_col = bool_wrapper{{false,
                                 false,
-                                bool_NA,
+                                bool_ignore,
                                 true,
                                 true,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                bool_NA,
-                                true,
-                                false,
-                                bool_NA,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
+                                bool_ignore,
                                 true,
                                 false,
-                                bool_NA,
-                                bool_NA},
-                               cudf::test::iterators::nulls_at(std::vector<int>{8})};
+                                bool_ignore,
+                                true,
+                                false,
+                                bool_ignore,
+                                bool_ignore},
+                               make_validity(validity)};
 
   // Types to test
   const std::vector<data_type> dtypes = {
@@ -1668,6 +1677,27 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
   EXPECT_EQ(result_view.num_rows(), 1);
   EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
   EXPECT_EQ(result_view.column(0).null_count(), 1);
+}
+
+TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
+{
+  std::string const data = "{\"col\":0}";
+  auto const buffer      = cudf::io::host_buffer{data.data(), data.size()};
+  auto const src         = cudf::io::source_info{{buffer, buffer}};
+
+  cudf::io::json_reader_options const not_lines_opts =
+    cudf::io::json_reader_options::builder(src).experimental(true);
+  EXPECT_THROW(cudf::io::read_json(not_lines_opts), cudf::logic_error);
+
+  cudf::io::json_reader_options const comp_exp_opts =
+    cudf::io::json_reader_options::builder(src).experimental(true).compression(
+      cudf::io::compression_type::GZIP);
+  EXPECT_THROW(cudf::io::read_json(comp_exp_opts), cudf::logic_error);
+
+  cudf::io::json_reader_options const comp_opts =
+    cudf::io::json_reader_options::builder(src).experimental(false).compression(
+      cudf::io::compression_type::GZIP);
+  EXPECT_THROW(cudf::io::read_json(comp_opts), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

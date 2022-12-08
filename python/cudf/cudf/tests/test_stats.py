@@ -13,6 +13,7 @@ from cudf.testing._utils import (
     _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
@@ -399,7 +400,13 @@ def test_cov1d(data1, data2):
     ps2 = gs2.to_pandas()
 
     got = gs1.cov(gs2)
-    expected = ps1.cov(ps2)
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+    with expect_warning_if(
+        (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0)
+        or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0),
+        RuntimeWarning,
+    ):
+        expected = ps1.cov(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
@@ -442,7 +449,36 @@ def test_corr1d(data1, data2, method):
     ps2 = gs2.to_pandas()
 
     got = gs1.corr(gs2, method)
-    expected = ps1.corr(ps2, method)
+
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+
+    is_singular = (
+        len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
+    is_identical = (
+        len(ps1_align.dropna().unique()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (
+        len(ps2_align.dropna().unique()) == 1 and len(ps1_align.dropna()) > 0
+    )
+
+    # Pearson correlation leads to division by 0 when either sample size is 1.
+    # Spearman allows for size 1 samples, but will error if all data in a
+    # sample is identical since the covariance is zero and so the correlation
+    # coefficient is not defined.
+    cond = (is_singular and method == "pearson") or (
+        is_identical and not is_singular and method == "spearman"
+    )
+    if method == "spearman":
+        # SciPy has shuffled around the warning it throws a couple of times.
+        # It's not worth the effort of conditionally importing the appropriate
+        # warning based on the scipy version, just catching a base Warning is
+        # good enough validation.
+        expected_warning = Warning
+    elif method == "pearson":
+        expected_warning = RuntimeWarning
+
+    with expect_warning_if(cond, expected_warning):
+        expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
@@ -567,14 +603,18 @@ def test_kurtosis_df(data, null_flag):
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
+    with pytest.warns(FutureWarning):
+        got = data.kurtosis()
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
+    with pytest.warns(FutureWarning):
+        expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt()
+    with pytest.warns(FutureWarning):
+        got = data.kurt()
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
+    with pytest.warns(FutureWarning):
+        expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt(numeric_only=True)
@@ -599,8 +639,10 @@ def test_skew_df(data, null_flag):
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
+    with pytest.warns(FutureWarning):
+        got = data.skew()
+    with pytest.warns(FutureWarning):
+        expected = pdata.skew()
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
