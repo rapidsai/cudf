@@ -91,11 +91,10 @@ struct execute_wrap {
 }  // namespace
 
 template <typename device_execute_functor>
-std::unique_ptr<column> wrap(
-  strings_column_view const& strings,
-  size_type width,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> wrap(strings_column_view const& strings,
+                             size_type width,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
@@ -137,7 +136,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, cudf::default_stream_value, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

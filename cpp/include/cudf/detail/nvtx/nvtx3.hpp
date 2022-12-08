@@ -1907,7 +1907,7 @@ inline void mark(event_attributes const& attr) noexcept
 #define NVTX3_FUNC_RANGE_IN(D)                                                 \
   static ::nvtx3::registered_message<D> const nvtx3_func_name__{__func__};     \
   static ::nvtx3::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \
-  ::nvtx3::domain_thread_range<D> const nvtx3_range__{nvtx3_func_attr__};
+  [[maybe_unused]] ::nvtx3::domain_thread_range<D> const nvtx3_range__{nvtx3_func_attr__};
 
 /**
  * @brief Convenience macro for generating a range in the global domain from the

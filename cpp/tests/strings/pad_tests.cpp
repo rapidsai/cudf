@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/wrap.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -103,7 +102,7 @@ TEST_F(StringsPadTest, ZeroSizeStringsColumn)
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::pad(strings_view, 5);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {

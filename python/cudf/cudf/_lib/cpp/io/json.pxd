@@ -20,71 +20,71 @@ cdef extern from "cudf/io/json.hpp" \
         map[string, schema_element] child_types
 
     cdef cppclass json_reader_options:
-        json_reader_options() except+
-        cudf_io_types.source_info get_source() except+
-        vector[string] get_dtypes() except+
+        json_reader_options() except +
+        cudf_io_types.source_info get_source() except +
+        vector[string] get_dtypes() except +
         cudf_io_types.compression_type get_compression() except +
-        size_type get_byte_range_offset() except+
-        size_type get_byte_range_size() except+
-        bool is_enabled_lines() except+
-        bool is_enabled_dayfirst() except+
-        bool is_enabled_experimental() except+
+        size_type get_byte_range_offset() except +
+        size_type get_byte_range_size() except +
+        bool is_enabled_lines() except +
+        bool is_enabled_dayfirst() except +
+        bool is_enabled_experimental() except +
 
         # setter
-        void set_dtypes(vector[data_type] types) except+
-        void set_dtypes(map[string, schema_element] types) except+
+        void set_dtypes(vector[data_type] types) except +
+        void set_dtypes(map[string, schema_element] types) except +
         void set_compression(
             cudf_io_types.compression_type compression
-        ) except+
-        void set_byte_range_offset(size_type offset) except+
-        void set_byte_range_size(size_type size) except+
-        void enable_lines(bool val) except+
-        void enable_dayfirst(bool val) except+
-        void enable_experimental(bool val) except+
-        void enable_keep_quotes(bool val) except+
+        ) except +
+        void set_byte_range_offset(size_type offset) except +
+        void set_byte_range_size(size_type size) except +
+        void enable_lines(bool val) except +
+        void enable_dayfirst(bool val) except +
+        void enable_experimental(bool val) except +
+        void enable_keep_quotes(bool val) except +
 
         @staticmethod
         json_reader_options_builder builder(
             cudf_io_types.source_info src
-        ) except+
+        ) except +
 
     cdef cppclass json_reader_options_builder:
-        json_reader_options_builder() except+
+        json_reader_options_builder() except +
         json_reader_options_builder(
             cudf_io_types.source_info src
-        ) except+
+        ) except +
         json_reader_options_builder& dtypes(
             vector[string] types
-        ) except+
+        ) except +
         json_reader_options_builder& dtypes(
             vector[data_type] types
-        ) except+
+        ) except +
         json_reader_options_builder& dtypes(
             map[string, schema_element] types
-        ) except+
+        ) except +
         json_reader_options_builder& compression(
             cudf_io_types.compression_type compression
-        ) except+
+        ) except +
         json_reader_options_builder& byte_range_offset(
             size_type offset
-        ) except+
+        ) except +
         json_reader_options_builder& byte_range_size(
             size_type size
-        ) except+
+        ) except +
         json_reader_options_builder& lines(
             bool val
-        ) except+
+        ) except +
         json_reader_options_builder& dayfirst(
             bool val
-        ) except+
+        ) except +
         json_reader_options_builder& experimental(
             bool val
-        ) except+
+        ) except +
         json_reader_options_builder& keep_quotes(
             bool val
-        ) except+
+        ) except +
 
-        json_reader_options build() except+
+        json_reader_options build() except +
 
     cdef cudf_io_types.table_with_metadata read_json(
-        json_reader_options &options) except+
+        json_reader_options &options) except +

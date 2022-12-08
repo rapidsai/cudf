@@ -115,7 +115,7 @@ class timezone_table {
 
  public:
   // Safe to use the default stream, device_uvectors will not change after they are created empty
-  timezone_table() : ttimes{0, cudf::default_stream_value}, offsets{0, cudf::default_stream_value}
+  timezone_table() : ttimes{0, cudf::get_default_stream()}, offsets{0, cudf::get_default_stream()}
   {
   }
   timezone_table(int32_t gmt_offset,

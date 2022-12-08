@@ -68,20 +68,40 @@ def modifiedFiles():
     we can read only the staged changes.
     """
     repo = git.Repo()
-    # TARGET_BRANCH is defined in CI
+    # Use the environment variable TARGET_BRANCH (defined in CI) if possible
     target_branch = os.environ.get("TARGET_BRANCH")
     if target_branch is None:
         # Fall back to the closest branch if not on CI
         target_branch = repo.git.describe(
             all=True, tags=True, match="branch-*", abbrev=0
         ).lstrip("heads/")
-    try:
-        # Use the tracking branch of the local reference if it exists
+
+    upstream_target_branch = None
+    if target_branch in repo.heads:
+        # Use the tracking branch of the local reference if it exists. This
+        # returns None if no tracking branch is set.
         upstream_target_branch = repo.heads[target_branch].tracking_branch()
-    except IndexError:
-        # Fall back to the remote reference (this happens on CI because the
-        # only local branch reference is current-pr-branch)
-        upstream_target_branch = repo.remote().refs[target_branch]
+    if upstream_target_branch is None:
+        # Fall back to the remote with the newest target_branch. This code
+        # path is used on CI because the only local branch reference is
+        # current-pr-branch, and thus target_branch is not in repo.heads.
+        # This also happens if no tracking branch is defined for the local
+        # target_branch. We use the remote with the latest commit if
+        # multiple remotes are defined.
+        candidate_branches = [
+            remote.refs[target_branch] for remote in repo.remotes
+            if target_branch in remote.refs
+        ]
+        if len(candidate_branches) > 0:
+            upstream_target_branch = sorted(
+                candidate_branches,
+                key=lambda branch: branch.commit.committed_datetime,
+            )[-1]
+        else:
+            # If no remotes are defined, try to use the local version of the
+            # target_branch. If this fails, the repo configuration must be very
+            # strange and we can fix this script on a case-by-case basis.
+            upstream_target_branch = repo.heads[target_branch]
     merge_base = repo.merge_base("HEAD", upstream_target_branch.commit)[0]
     diff = merge_base.diff()
     changed_files = {f for f in diff if f.b_path is not None}

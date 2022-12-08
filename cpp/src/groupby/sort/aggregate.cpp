@@ -701,7 +701,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_tdigest(
+                   cudf::tdigest::detail::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -745,7 +745,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                   cudf::tdigest::detail::group_merge_tdigest(get_grouped_values(),
                                                               helper.group_offsets(stream),
                                                               helper.group_labels(stream),
                                                               helper.num_groups(stream),

@@ -307,8 +307,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
     auto columns =
         cudf::jni::native_jpointerArray<column_view>{env, column_handles}.get_dereferenced();
     auto const is_lists_column = columns[0].type().id() == cudf::type_id::LIST;
-    return release_as_jlong(is_lists_column ? cudf::lists::detail::concatenate(columns) :
-                                              cudf::concatenate(columns));
+    return release_as_jlong(
+        is_lists_column ? cudf::lists::detail::concatenate(columns, cudf::get_default_stream()) :
+                          cudf::concatenate(columns));
   }
   CATCH_STD(env, 0);
 }

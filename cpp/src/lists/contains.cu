@@ -495,7 +495,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, cudf::default_stream_value, mr);
+  return detail::contains(lists, search_key, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
@@ -503,14 +503,14 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, cudf::default_stream_value, mr);
+  return detail::contains(lists, search_keys, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_nulls(lists, cudf::default_stream_value, mr);
+  return detail::contains_nulls(lists, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -519,7 +519,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_key, find_option, cudf::default_stream_value, mr);
+  return detail::index_of(lists, search_key, find_option, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -528,7 +528,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_keys, find_option, cudf::default_stream_value, mr);
+  return detail::index_of(lists, search_keys, find_option, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf::lists

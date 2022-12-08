@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,58 +129,6 @@ inline void test_single_scan(column_view const& keys,
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
-}
-
-template <typename T>
-inline T frand()
-{
-  return static_cast<T>(rand()) / static_cast<T>(RAND_MAX);
-}
-
-template <typename T>
-inline T rand_range(T min, T max)
-{
-  return min + static_cast<T>(frand<T>() * (max - min));
-}
-
-inline std::unique_ptr<column> generate_typed_percentile_distribution(
-  std::vector<double> const& buckets,
-  std::vector<int> const& sizes,
-  data_type t,
-  bool sorted = false)
-{
-  srand(0);
-
-  std::vector<double> values;
-  size_t total_size = std::reduce(sizes.begin(), sizes.end(), 0);
-  values.reserve(total_size);
-  for (size_t idx = 0; idx < sizes.size(); idx++) {
-    double min = idx == 0 ? 0.0f : buckets[idx - 1];
-    double max = buckets[idx];
-
-    for (int v_idx = 0; v_idx < sizes[idx]; v_idx++) {
-      values.push_back(rand_range(min, max));
-    }
-  }
-
-  if (sorted) { std::sort(values.begin(), values.end()); }
-
-  cudf::test::fixed_width_column_wrapper<double> src(values.begin(), values.end());
-  return cudf::cast(src, t);
-}
-
-// "standardized" means the parameters sent into generate_typed_percentile_distribution. the intent
-// is to provide a standardized set of inputs for use with tdigest generation tests and
-// percentile_approx tests. std::vector<double>
-// buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0}; std::vector<int>
-// sizes{50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-inline std::unique_ptr<column> generate_standardized_percentile_distribution(
-  data_type t = data_type{type_id::FLOAT64}, bool sorted = false)
-{
-  std::vector<double> buckets{10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0, 90.0f, 100.0f};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  return generate_typed_percentile_distribution(buckets, b_sizes, t, sorted);
 }
 
 }  // namespace test

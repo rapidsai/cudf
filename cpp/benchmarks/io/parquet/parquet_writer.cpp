@@ -25,8 +25,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::io::statistics_freq,
   [](auto value) {
@@ -34,11 +32,14 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
       case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
       case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
+      case cudf::io::statistics_freq::STATISTICS_COLUMN: return "STATISTICS_COLUMN";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
+// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
@@ -62,7 +63,7 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   std::size_t encoded_file_size = 0;
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(sink_type);
@@ -114,7 +115,7 @@ void BM_parq_write_io_compression(
   std::size_t encoded_file_size = 0;
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(sink_type);
@@ -159,7 +160,7 @@ void BM_parq_write_varying_options(
   std::size_t encoded_file_size = 0;
 
   auto mem_stats_logger = cudf::memory_stats_logger();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::default_stream_value.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
                cuio_source_sink_pair source_sink(io_type::FILEPATH);
@@ -201,6 +202,7 @@ using compression_list =
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
+                                           cudf::io::STATISTICS_COLUMN,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))

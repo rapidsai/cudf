@@ -1,7 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -12,6 +14,7 @@ from cudf._lib.cpp.strings.convert.convert_urls cimport (
 )
 
 
+@acquire_spill_lock()
 def url_decode(Column source_strings):
     """
     Decode each string in column. No format checking is performed.
@@ -37,11 +40,12 @@ def url_decode(Column source_strings):
     )
 
 
+@acquire_spill_lock()
 def url_encode(Column source_strings):
     """
     Encode each string in column. No format checking is performed.
     All characters are encoded except for ASCII letters, digits,
-    and these characters: ‘.’,’_’,’-‘,’~’. Encoding converts to
+    and these characters: '.','_','-','~'. Encoding converts to
     hex using UTF-8 encoded bytes.
 
     Parameters
