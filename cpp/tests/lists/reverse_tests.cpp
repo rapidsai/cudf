@@ -28,10 +28,13 @@
 
 using namespace cudf::test::iterators;
 
-auto constexpr null{0};
+auto constexpr null{0};  // null at current level
+auto constexpr XXX{0};   // null pushed down from parent level
 
-using ints_lists = cudf::test::lists_column_wrapper<int32_t>;
-using ints_col   = cudf::test::fixed_width_column_wrapper<int32_t>;
+using ints_lists  = cudf::test::lists_column_wrapper<int32_t>;
+using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
+using strings_col = cudf::test::strings_column_wrapper;
+using structs_col = cudf::test::structs_column_wrapper;
 
 struct ListsReverseTest : public cudf::test::BaseFixture {
 };
@@ -299,5 +302,173 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfListsWithNulls)
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     // The result doesn't have nulls, but it is nullable.
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results);
+  }
+}
+
+TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
+{
+  using data_col = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input_original = [] {
+    auto child = [] {
+      auto grandchild1 = data_col{{
+                                    1,    XXX,  null, XXX, XXX, 2,  3,    4,   // list1
+                                    5,    6,    7,    8,   9,   10, null, 11,  // list2
+                                    null, null, 12,   13,  14,  15, 16,   17   // list3
+                                  },
+                                  nulls_at({2, 14, 16, 17})};
+      auto grandchild2 = strings_col{{
+                                       // begin list1
+                                       "Banana",
+                                       "YYY", /*NULL*/
+                                       "Apple",
+                                       "XXX", /*NULL*/
+                                       "YYY", /*NULL*/
+                                       "Banana",
+                                       "Cherry",
+                                       "Kiwi",  // end list1
+                                                // begin list2
+                                       "Bear",
+                                       "Duck",
+                                       "Cat",
+                                       "Dog",
+                                       "Panda",
+                                       "Bear",
+                                       "" /*NULL*/,
+                                       "Panda",  // end list2
+                                                 // begin list3
+                                       "ÁÁÁ",
+                                       "ÉÉÉÉÉ",
+                                       "ÍÍÍÍÍ",
+                                       "ÁBC",
+                                       "" /*NULL*/,
+                                       "ÁÁÁ",
+                                       "ÁBC",
+                                       "XYZ"  // end list3
+                                     },
+                                     nulls_at({14, 20})};
+      return structs_col{{grandchild1, grandchild2}, nulls_at({1, 3, 4})}.release();
+    }();
+    auto offsets   = ints_col{0, 0, 8, 16, 16, 16, 24}.release();
+    auto null_mask = cudf::create_null_mask(6, cudf::mask_state::ALL_VALID);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(null_mask.data()), 0, 1, false);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(null_mask.data()), 4, 5, false);
+
+    return cudf::make_lists_column(
+      6, std::move(offsets), std::move(child), 2, std::move(null_mask));
+  }();
+
+  {
+    auto const expected = [] {
+      auto child = [] {
+        auto grandchild1 = data_col{{
+                                      4,  3,    2,  null, null, null, null, 1,     // list1
+                                      11, null, 10, 9,    8,    7,    6,    5,     // list2
+                                      17, 16,   15, 14,   13,   12,   null, null,  // list3
+                                    },
+                                    nulls_at({3, 4, 5, 6, 9, 22, 23})};
+        auto grandchild2 = strings_col{{
+                                         // begin list1
+                                         "Kiwi",
+                                         "Cherry",
+                                         "Banana",
+                                         "", /*NULL*/
+                                         "", /*NULL*/
+                                         "Apple",
+                                         "",        /*NULL*/
+                                         "Banana",  // end list1
+                                                    // begin list2
+                                         "Panda",
+                                         "" /*NULL*/,
+                                         "Bear",
+                                         "Panda",
+                                         "Dog",
+                                         "Cat",
+                                         "Duck",
+                                         "Bear",  // end list2
+                                                  // begin list3
+                                         "XYZ",
+                                         "ÁBC",
+                                         "ÁÁÁ",
+                                         "" /*NULL*/,
+                                         "ÁBC",
+                                         "ÍÍÍÍÍ",
+                                         "ÉÉÉÉÉ",
+                                         "ÁÁÁ"  // end list3
+                                       },
+                                       nulls_at({3, 4, 6, 9, 19})};
+        return structs_col{{grandchild1, grandchild2}, nulls_at({3, 4, 6})}.release();
+      }();
+      auto offsets   = ints_col{0, 0, 8, 16, 16, 16, 24}.release();
+      auto null_mask = cudf::create_null_mask(6, cudf::mask_state::ALL_VALID);
+      cudf::set_null_mask(static_cast<cudf::bitmask_type*>(null_mask.data()), 0, 1, false);
+      cudf::set_null_mask(static_cast<cudf::bitmask_type*>(null_mask.data()), 4, 5, false);
+
+      return cudf::make_lists_column(
+        6, std::move(offsets), std::move(child), 2, std::move(null_mask));
+    }();
+    auto const results = cudf::lists::reverse(cudf::lists_column_view(*input_original));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
+  }
+
+  {
+    auto const input    = cudf::slice(*input_original, {1, 4})[0];
+    auto const expected = [] {
+      auto child = [] {
+        auto grandchild1 = data_col{{
+                                      4,
+                                      3,
+                                      2,
+                                      null,
+                                      null,
+                                      null,
+                                      null,
+                                      1,  // end list1
+                                      11,
+                                      null,
+                                      10,
+                                      9,
+                                      8,
+                                      7,
+                                      6,
+                                      5  // end list2
+                                    },
+                                    nulls_at({3, 4, 5, 6, 9})};
+        auto grandchild2 = strings_col{{
+                                         // begin list1
+                                         "Kiwi",
+                                         "Cherry",
+                                         "Banana",
+                                         "", /*NULL*/
+                                         "", /*NULL*/
+                                         "Apple",
+                                         "",        /*NULL*/
+                                         "Banana",  // end list1
+                                                    // begin list2
+                                         "Panda",
+                                         "" /*NULL*/,
+                                         "Bear",
+                                         "Panda",
+                                         "Dog",
+                                         "Cat",
+                                         "Duck",
+                                         "Bear"  // end list2
+                                       },
+                                       nulls_at({3, 4, 6, 9})};
+        return structs_col{{grandchild1, grandchild2}, nulls_at({3, 4, 6})}.release();
+      }();
+
+      auto offsets = ints_col{0, 8, 16, 16}.release();
+      return cudf::make_lists_column(3, std::move(offsets), std::move(child), 0, {});
+    }();
+    auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
+    // The result doesn't have nulls, but it is nullable.
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results);
+  }
+
+  {
+    auto const input   = cudf::slice(*input_original, {4, 5})[0];
+    auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, *results);
   }
 }
