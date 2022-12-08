@@ -20,10 +20,6 @@ from strings_udf._lib.tables import (
 )
 from strings_udf._typing import size_type, string_view, udf_string
 
-character_flags_table_ptr = get_character_flags_table_ptr()
-character_cases_table_ptr = get_character_cases_table_ptr()
-special_case_mapping_table_ptr = get_special_case_mapping_table_ptr()
-
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
 
@@ -356,7 +352,7 @@ def create_unary_identifier_func(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             tbl_ptr = context.get_constant(
-                types.uintp, character_flags_table_ptr
+                types.uintp, get_character_flags_table_ptr()
             )
             result = context.compile_internal(
                 builder,
@@ -389,13 +385,13 @@ def create_upper_or_lower(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             flags_tbl_ptr = context.get_constant(
-                types.uintp, character_flags_table_ptr
+                types.uintp, get_character_flags_table_ptr()
             )
             cases_tbl_ptr = context.get_constant(
-                types.uintp, character_cases_table_ptr
+                types.uintp, get_character_cases_table_ptr()
             )
             special_tbl_ptr = context.get_constant(
-                types.uintp, special_case_mapping_table_ptr
+                types.uintp, get_special_case_mapping_table_ptr()
             )
             udf_str_ptr = builder.alloca(
                 default_manager[udf_string].get_value_type()
