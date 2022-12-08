@@ -41,8 +41,14 @@ enum class binary_operator : int32_t {
   MUL,          ///< operator *
   DIV,          ///< operator / using common type of lhs and rhs
   TRUE_DIV,     ///< operator / after promoting type to floating point
-  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
-                ///< flooring the result
+  FLOOR_DIV,    ///< operator //
+                ///< integer division rounding towards negative
+                ///< infinity if both arguments are integral;
+                ///< floor division for floating types (using C++ type
+                ///< promotion for mixed integral/floating arguments)
+                ///< If different promotion semantics are required, it
+                ///< is the responsibility of the caller to promote
+                ///< manually before calling in to this function.
   MOD,          ///< operator %
   PMOD,         ///< positive modulo operator
                 ///< If remainder is negative, this returns (remainder + divisor) % divisor
