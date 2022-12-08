@@ -132,8 +132,8 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
                   "ucx-py=${UCX_PY_VERSION}"
 
     # https://docs.rapids.ai/maintainers/depmgmt/
-    # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-    # gpuci_mamba_retry install -y "your-pkg=1.0.0"
+    gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+    gpuci_mamba_retry install -y "protobuf=4.21"
 
     ################################################################################
     # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
