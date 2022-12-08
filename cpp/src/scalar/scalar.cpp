@@ -528,7 +528,7 @@ column_view list_scalar::view() const { return _data.view(); }
 struct_scalar::struct_scalar(struct_scalar const& other,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
-  : scalar{other, stream, mr}, _data{init_data(table{other._data}, true, stream, mr)}
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
 {
 }
 
