@@ -52,13 +52,12 @@ auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
   auto d_input_scalar   = cudf::make_string_scalar(input, stream);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_input_scalar);
   auto d_scalar         = cudf::strings::repeat_string(d_string_scalar, repeat_times);
-  auto& d_input         = static_cast<cudf::scalar_type_t<std::string>&>(*d_scalar);
 
-  auto generated_json    = std::string(d_input);
-  generated_json.front() = '[';
-  generated_json.back()  = ']';
-  return cudf::detail::make_device_uvector_sync(
-    cudf::host_span<char const>{generated_json.c_str(), generated_json.size()}, stream);
+  auto data = const_cast<char*>(d_scalar->data());
+  cudaMemsetAsync(data, '[', 1, stream.value());
+  cudaMemsetAsync(data + d_scalar->size() - 1, ']', 1, stream.value());
+  
+  return d_scalar;
 }
 }  // namespace
 
@@ -71,7 +70,7 @@ void BM_NESTED_JSON(nvbench::state& state)
   auto const default_options = cudf::io::json_reader_options{};
 
   auto input = make_test_json_data(string_size, cudf::get_default_stream());
-  state.add_element_count(input.size());
+  state.add_element_count(input->size());
 
   // Run algorithm
   auto const mem_stats_logger = cudf::memory_stats_logger();
@@ -79,7 +78,9 @@ void BM_NESTED_JSON(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     cudf::io::json::detail::device_parse_nested_json(
-      input, default_options, cudf::get_default_stream());
+      cudf::device_span<char const>{input->data(), static_cast<size_t>(input->size())},
+      default_options,
+      cudf::get_default_stream());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
