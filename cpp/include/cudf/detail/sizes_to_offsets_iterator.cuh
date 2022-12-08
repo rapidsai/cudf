@@ -242,17 +242,18 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *               "Size of output exceeds column size limit");
  * @endcode
  *
- * @tparam SizesIterator Iterator type for input and output of the scan using addition operation
+ * @tparam SizesIterator Iterator type for input of the scan using addition operation
+ * @tparam OffsetsIterator Iterator type for the output of the scan
  *
  * @param begin Input iterator for scan
  * @param end End of the input iterator
  * @param result Output iterator for scan result
  * @return The last element of the scan
  */
-template <typename SizesIterator>
+template <typename SizesIterator, typename OffsetsIterator>
 auto sizes_to_offsets(SizesIterator begin,
                       SizesIterator end,
-                      SizesIterator result,
+                      OffsetsIterator result,
                       rmm::cuda_stream_view stream)
 {
   using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;

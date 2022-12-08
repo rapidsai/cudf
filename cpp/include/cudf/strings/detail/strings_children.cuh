@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -52,18 +53,26 @@ std::unique_ptr<column> make_offsets_child_column(InputIterator begin,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
-  auto count = thrust::distance(begin, end);
+  auto count = static_cast<size_type>(std::distance(begin, end));
   auto offsets_column =
     make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   auto d_offsets    = offsets_view.template data<int32_t>();
-  // Using inclusive-scan to compute last entry which is the total size.
-  // Exclusive-scan is possible but will not compute that last entry.
-  // Rather than manually computing the final offset using values in device memory,
-  // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
-  // offset values to zero manually.
-  thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
-  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
+
+  // The number of offsets is count+1 so to build the offsets from the sizes
+  // using exclusive-scan technically requires count+1 input values even though
+  // the final input value is never used.
+  // The input iterator is wrapped here to allow the last value to be safely read.
+  auto map_fn = [begin, count] __device__(size_type idx) -> size_type {
+    return idx < count ? begin[idx] : 0;
+  };
+  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  auto const bytes =
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
+  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds column size limit");
+
+  offsets_column->set_null_count(0);
   return offsets_column;
 }
 
