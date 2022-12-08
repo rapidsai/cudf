@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import functools
+import sys
 import threading
 import weakref
 from contextlib import ContextDecorator
-from functools import cached_property
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
+import cudf
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
+
+T = TypeVar("T")
 
 
 def as_buffer(
@@ -138,33 +142,81 @@ def get_spill_lock() -> Union[SpillLock, None]:
     return spill_lock
 
 
-class cached_property_delete_column_when_spilled(cached_property):
+def _clear_property_cache(
+    instance_ref: weakref.ReferenceType[T], nbytes: int, attrname: str
+) -> Optional[int]:
+    """Spill handler that clears the `cached_property` of an instance
+
+    The signature of this function is compatible with SpillManager's
+    register_spill_handler.
+
+    To avoid keeping instance alive, we take a weak reference of the instance.
+
+    Parameters
+    ----------
+    instance_ref
+        Weakref of the instance
+    nbytes : int
+        Size of the cached data
+    attrname : str
+        Name of the cached attribute
+
+    Return
+    ------
+    int
+        Number of bytes cleared
+    """
+
+    instance = instance_ref()
+    if instance is None:
+        return 0
+
+    cached = instance.__dict__.get(attrname, None)
+    if cached is None:
+        return None  # The cached has been cleared
+
+    # If `cached` is known outside of the cache, we cannot free any
+    # memory by clearing the cache. We have three references through:
+    # `instance.__dict__`, `cached`, and `sys.getrefcount`.
+    if sys.getrefcount(cached) > 3:
+        return None
+
+    instance.__dict__.pop(attrname, None)  # Clear cache atomically
+    return nbytes
+
+
+class cached_property(functools.cached_property):
     """A version of `cached_property` that delete instead of spill the cache
 
-    This property expect a `Column` instance.
+    When spilling is disabled (the default case), this decorator is identical
+    to `functools.cached_property`.
 
-    When cudf spilling is enabled, this property register a spill handler for
-    the cached column that deletes the column rather than spilling it.
+    When spilling is enabled, this property register a spill handler for
+    the cached data that deletes the data rather than spilling it. For now,
+    only cached Columns are handled this way.
     See `SpillManager.register_spill_handler`.
     """
 
-    def __get__(self, instance, owner=None):
+    def __get__(self, instance: T, owner=None):
+        cache_hit = self.attrname in instance.__dict__
         ret = super().__get__(instance, owner)
+        if cache_hit or not isinstance(ret, cudf.core.column.ColumnBase):
+            return ret
+
         manager = get_global_manager()
         if manager is None:
             return ret
-        nbytes = ret.memory_usage
-        assert isinstance(ret.base_data, SpillableBuffer)
 
-        # We register a callback function `f` that clears the cache and
-        # to avoid keeping `instance` alive, `f` takes a weak reference
-        # of `instance`.
-        def f(idx_ref: weakref.ReferenceType) -> int:
-            idx = idx_ref()
-            if idx is None:
-                return 0
-            idx.__dict__.pop(self.attrname, None)
-            return nbytes
+        buf = ret.base_data
+        if buf is None or buf.nbytes == 0:
+            return ret
+        assert isinstance(buf, SpillableBuffer)
 
-        manager.register_spill_handler(ret.base_data, f, weakref.ref(instance))
+        manager.register_spill_handler(
+            buf,
+            _clear_property_cache,
+            weakref.ref(instance),
+            nbytes=ret.memory_usage,
+            attrname=self.attrname,
+        )
         return ret

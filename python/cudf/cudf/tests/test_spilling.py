@@ -18,6 +18,7 @@ import rmm
 import cudf
 import cudf.core.buffer.spill_manager
 import cudf.options
+from cudf._lib.column import Column
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -36,6 +37,8 @@ from cudf.core.buffer.spillable_buffer import (
     SpillableBufferSlice,
     SpillLock,
 )
+from cudf.core.buffer.utils import cached_property
+from cudf.core.column import column
 from cudf.testing._utils import assert_eq
 
 if get_global_manager() is not None:
@@ -609,6 +612,38 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+def test_cached_property(manager: SpillManager):
+    class ClassWithCachedColumn:
+        @cached_property
+        def cached_column(self) -> Column:
+            return column.arange(3)
+
+    # Check that a spill handler is created
+    c = ClassWithCachedColumn()
+    col = c.cached_column
+    assert len(manager.buffers()) == 1
+    assert manager.buffers()[0] is col.base_data
+    assert len(manager._spill_handlers) == 1
+
+    # Since we have a ref to `col`, the cache is spilled
+    assert manager.spill_device_memory(nbytes=0) == gen_df_data_nbytes
+    assert len(manager.buffers()) == 1
+    assert len(manager._spill_handlers) == 1
+
+    # Let's unspill and delete our ref to `col`. We still have the
+    # cached buffer and its spill handler
+    col.base_data.spill(target="gpu")
+    del col
+    assert len(manager.buffers()) == 1
+    assert len(manager._spill_handlers) == 1
+
+    # However, now that we have removed the ref to `col`, spilling the
+    # cached buffer, will clear the cache
+    assert manager.spill_device_memory(nbytes=0) == gen_df_data_nbytes
+    assert len(manager.buffers()) == 0
+    assert len(manager._spill_handlers) == 0
 
 
 def test_spilling_of_range_index(manager: SpillManager):

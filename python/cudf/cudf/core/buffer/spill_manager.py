@@ -220,7 +220,7 @@ class SpillManager:
 
     _buffers: WeakValueDictionary[int, SpillableBuffer]
     _spill_handlers: WeakKeyDictionary[
-        SpillableBuffer, Tuple[Callable[..., int], Tuple, Dict]
+        SpillableBuffer, Tuple[Callable[..., Optional[int]], Tuple, Dict]
     ]
     statistics: SpillStatistics
 
@@ -355,13 +355,19 @@ class SpillManager:
                 try:
                     if not buf.is_spilled and buf.spillable:
                         # Check if `buf` has a registered spill handler
-                        handler = self._spill_handlers.pop(buf, None)
-                        if handler is None:
+                        handler = self._spill_handlers.get(buf, None)
+                        if handler is not None:
+                            func, args, kwargs = handler
+                            s = func(*args, **kwargs)
+                            if s is None:
+                                buf.spill(target="cpu")
+                                spilled += buf.size
+                            else:
+                                spilled += s
+                                self._spill_handlers.pop(buf, None)
+                        else:
                             buf.spill(target="cpu")
                             spilled += buf.size
-                        else:
-                            func, args, kwargs = handler
-                            spilled += func(*args, **kwargs)
 
                         if spilled >= nbytes:
                             break
@@ -399,7 +405,7 @@ class SpillManager:
     def register_spill_handler(
         self,
         buffer: SpillableBuffer,
-        func: Callable[..., int],
+        func: Callable[..., Optional[int]],
         *args,
         **kwargs,
     ) -> None:
@@ -410,7 +416,8 @@ class SpillManager:
         the provided callback function instead of spilling the buffer itself.
 
         The callback function is called like `func(*args, **kwargs)` and must
-        return the number of bytes freed or spilled.
+        return the number of bytes freed or None. If None, the spill manager
+        will spill `buffer`.
 
         Warning
         -------
@@ -421,7 +428,7 @@ class SpillManager:
         ----------
         buffer : SpillableBuffer
             The buffer `func` handle.
-        func : Callable that takes `*args, **kwargs` and returns an integer
+        func : Callable[*args, **kwargs, Optional[int]]
             The spill handler
         *args
             Positional arguments pass to `func`

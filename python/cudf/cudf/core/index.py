@@ -37,7 +37,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
-from cudf.core.buffer.utils import cached_property_delete_column_when_spilled
+from cudf.core.buffer.utils import cached_property
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -247,7 +247,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     # When cudf spilling is enabled, we want to delete this cached
     # materialization of the RangeIndex instead of spilling it.
-    @cached_property_delete_column_when_spilled
+    @cached_property
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
