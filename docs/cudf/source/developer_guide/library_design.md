@@ -218,15 +218,16 @@ Setting the environment variable `CUDF_SPILL=on` enables automatic spilling (and
 device to host to enable out-of-memory computation, i.e., computing on objects that occupy more memory than is
 available on the GPU.
 
-
 Spilling can be enabled in two ways (it is disabled by default):
   - setting the environment variable `CUDF_SPILL=on`, or
   - setting the `spill` option in `cudf` by doing `cudf.set_option("spill", True)`.
 
 Additionally, parameters are:
-  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory error handler that spills buffers in order to free up memory.
-  - `CUDF_SPILL_DEVICE_LIMIT=...` / `cudf.set_option("spill_device_limit", ...)`, which sets a device memory limit in bytes.
-
+  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory
+    error handler that spills buffers in order to free up memory. If spilling is enabled, spill on demand is **enabled by default**.
+  - `CUDF_SPILL_DEVICE_LIMIT=<X>` / `cudf.set_option("spill_device_limit", <X>)`, which sets a device memory limit
+    of `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
+    *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
 
 #### Design
 
@@ -241,7 +242,40 @@ To address this, we mark the `SpillableBuffer` as unspillable, we say that the b
 
 The `SpillableBuffer.get_ptr()` returns the device pointer of the buffer memory just like `.ptr` but if given an instance of `SpillLock`, the buffer is only unspillable as long as the instance of `SpillLock` is alive.
 
-For convenience, one can use the decorator/context `with_spill_lock` to associate a `SpillLock` with a lifetime bound to the context automatically.
+For convenience, one can use the decorator/context `acquire_spill_lock` to associate a `SpillLock` with a lifetime bound to the context automatically.
+
+#### Statistics
+cuDF supports spilling statistics, which can be very useful for performance profiling and to identify code that renders buffers unspillable.
+
+Three levels of information gathering exist:
+
+  0. disabled (no overhead). 
+  1. gather statistics of duration and number of bytes spilled (very low overhead). 
+  2. gather statistics of each time a spillable buffer is exposed permanently (potential high overhead).
+
+Statistics can be enabled in two ways (it is disabled by default):
+  - setting the environment variable `CUDF_SPILL_STATS=<statistics-level>`, or
+  - setting the `spill_stats` option in `cudf` by doing `cudf.set_option("spill_stats", <statistics-level>)`.
+
+
+It is possible to access the statistics through the spill manager like:
+```python
+>>> import cudf
+>>> from cudf.core.buffer.spill_manager import get_global_manager
+>>> stats = get_global_manager().statistics
+>>> print(stats)
+    Spill Statistics (level=1):
+     Spilling (level >= 1):
+      gpu => cpu: 24B in 0.0033
+```
+
+To have each worker in dask print spill statistics, do something like:
+```python
+    def spill_info():
+        from cudf.core.buffer.spill_manager import get_global_manager
+        print(get_global_manager().statistics)
+    client.submit(spill_info)
+```
 
 ## The Cython layer
 

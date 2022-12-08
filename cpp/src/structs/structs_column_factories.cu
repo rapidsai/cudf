@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,12 +44,12 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
-      child = std::make_unique<column>(structs::detail::superimpose_parent_nulls(
-        static_cast<bitmask_type const*>(null_mask.data()),
-        null_count,
-        std::move(*child),
-        stream,
-        mr));
+      child = std::make_unique<column>(
+        structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(null_mask.data()),
+                                           null_count,
+                                           std::move(*child),
+                                           stream,
+                                           mr));
     }
   }
 

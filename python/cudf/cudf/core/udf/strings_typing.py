@@ -155,8 +155,25 @@ class MaskedStringViewCount(AbstractTemplate):
         )
 
 
+class MaskedStringViewReplace(AbstractTemplate):
+    key = "MaskedType.replace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(udf_string),
+            MaskedType(string_view),
+            MaskedType(string_view),
+            recvr=self.this,
+        )
+
+
 class MaskedStringViewAttrs(AttributeTemplate):
     key = MaskedType(string_view)
+
+    def resolve_replace(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewReplace, MaskedType(string_view)
+        )
 
     def resolve_count(self, mod):
         return types.BoundFunction(

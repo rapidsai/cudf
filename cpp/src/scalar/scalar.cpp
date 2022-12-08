@@ -593,7 +593,7 @@ table struct_scalar::superimpose_nulls(table&& data,
   // push validity mask down
   auto const validity = cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream);
   for (auto& col : data_cols) {
-    col = std::make_unique<column>(cudf::structs::detail::superimpose_parent_nulls(
+    col = std::make_unique<column>(cudf::structs::detail::superimpose_nulls(
       static_cast<bitmask_type const*>(validity.data()), 1, std::move(*col), stream, mr));
   }
 

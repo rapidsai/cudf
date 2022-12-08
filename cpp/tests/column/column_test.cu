@@ -494,7 +494,7 @@ TYPED_TEST(ListsColumnTest, ListsColumnViewConstructor)
 
   auto result = std::make_unique<cudf::column>(list);
 
-  cudf::test::expect_columns_equal(list, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(list, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
@@ -505,7 +505,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
   auto sliced = cudf::slice(list, {1, 3}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedIncludesEmpty)
@@ -516,7 +516,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedIncludesEmpty)
   auto sliced = cudf::slice(list, {1, 3}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedNonNestedEmpty)
@@ -531,7 +531,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNonNestedEmpty)
   auto sliced = cudf::slice(list, {1, 2}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
@@ -564,7 +564,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
   auto sliced = cudf::slice(list, {1, 2}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(*expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
@@ -580,7 +580,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
   auto sliced = cudf::slice(list, {0, 0}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(*expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
@@ -595,7 +595,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
   auto sliced = cudf::slice(list, {0, 0}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(*expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
@@ -618,13 +618,13 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
   auto sliced = cudf::slice(list, {1, 5}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
-  cudf::test::expect_columns_equal(expect, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, result->view());
 
   // TODO: null mask equality is being checked separately because
   // expect_columns_equal doesn't do the check for lists columns.
   // This is fixed in https://github.com/rapidsai/cudf/pull/5904,
   // so we should remove this check after that's merged:
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     cudf::mask_to_bools(result->view().null_mask(), 0, 4)->view(),
     cudf::mask_to_bools(static_cast<cudf::column_view>(expect).null_mask(), 0, 4)->view());
 }

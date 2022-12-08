@@ -272,7 +272,7 @@ std::unique_ptr<column> scan_inclusive(
     const auto current_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
     std::for_each(
       content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-        child = std::make_unique<column>(structs::detail::superimpose_parent_nulls(
+        child = std::make_unique<column>(structs::detail::superimpose_nulls(
           current_mask, cudf::UNKNOWN_NULL_COUNT, std::move(*child), stream, mr));
       });
 
