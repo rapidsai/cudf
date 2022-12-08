@@ -237,7 +237,7 @@ class Buffer(Serializable):
         }
 
     @property
-    def _cai(self) -> dict:
+    def _cuda_array_interface_readonly(self) -> dict:
         """
         Internal Implementation for the CUDA Array Interface which is
         read-only.

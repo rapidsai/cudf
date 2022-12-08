@@ -219,7 +219,9 @@ cdef class Column:
         ):
             if isinstance(value, RefCountableBuffer):
                 value = SimpleNamespace(
-                    __cuda_array_interface__=value._cai,
+                    __cuda_array_interface__=(
+                        value._cuda_array_interface_readonly
+                    ),
                     owner=value
                 )
             if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):

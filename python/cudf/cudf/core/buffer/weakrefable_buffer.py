@@ -278,7 +278,7 @@ class RefCountableBuffer(Buffer):
             )
 
     @property
-    def _cai(self) -> dict:
+    def _cuda_array_interface_readonly(self) -> dict:
         """
         Internal Implementation for the CUDA Array Interface without
         triggering a deepcopy.
@@ -304,7 +304,7 @@ class RefCountableBuffer(Buffer):
         # pointing to.
         self._detach_refs(zero_copied=True)
 
-        result = self._cai
+        result = self._cuda_array_interface_readonly
         result["data"] = (self.ptr, False)
         return result
 

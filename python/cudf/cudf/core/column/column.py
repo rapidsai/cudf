@@ -128,14 +128,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Internal implementation for viewing the data as a device array object
         without triggering a deep-copy.
         """
-        return cuda.as_cuda_array(
-            SimpleNamespace(
-                __cuda_array_interface__=self.data._cai
-                if self.data is not None
-                else None,
-                owner=self.data,
-            )
-        ).view(self.dtype)
+        arr_obj = SimpleNamespace(
+            __cuda_array_interface__=self.data._cuda_array_interface_readonly
+            if self.data is not None
+            else None,
+            owner=self.data,
+        )
+        return cuda.as_cuda_array(arr_obj).view(self.dtype)
 
     @property
     def _mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
@@ -143,14 +142,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Internal implementation for viewing the mask as a device array object
         without triggering a deep-copy.
         """
-        return cuda.as_cuda_array(
-            SimpleNamespace(
-                __cuda_array_interface__=self.mask._cai
-                if self.mask is not None
-                else None,
-                owner=self.mask,
-            )
-        ).view(mask_dtype)
+        arr_obj = SimpleNamespace(
+            __cuda_array_interface__=self.mask._cuda_array_interface_readonly
+            if self.mask is not None
+            else None,
+            owner=self.mask,
+        )
+        return cuda.as_cuda_array(arr_obj).view(mask_dtype)
 
     @property
     def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
