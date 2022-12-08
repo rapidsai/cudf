@@ -383,7 +383,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_b
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
     case ZSTD:
-      m_log2MaxRatio = 11;
+      m_log2MaxRatio = 15;
       _compression   = compression_type::ZSTD;
       break;
     default: CUDF_FAIL("Invalid compression type");
