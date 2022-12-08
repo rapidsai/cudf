@@ -867,14 +867,24 @@ class struct_scalar : public scalar {
  private:
   table _data;
 
+  /**
+   * @brief Check if all the input columns constructing this struct scalar have valid size.
+   */
   void check_size();
+
+  /**
+   * @brief Initialize the internal table data for struct scalar.
+   *
+   * @param data The existing table data to take over.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
+   * @return The table after initialization
+   */
   static table init_data(table&& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr);
-  static table superimpose_nulls(table&& data,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
 };
 
 /** @} */  // end of group

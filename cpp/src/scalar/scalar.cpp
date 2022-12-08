@@ -580,14 +580,6 @@ table struct_scalar::init_data(table&& data,
 {
   if (is_valid) { return std::move(data); }
 
-  // validity pushdown
-  return superimpose_nulls(std::move(data), stream, mr);
-}
-
-table struct_scalar::superimpose_nulls(table&& data,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
-{
   auto data_cols = data.release();
 
   // push validity mask down
