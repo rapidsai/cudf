@@ -50,7 +50,7 @@ TYPED_TEST_SUITE(ListsReverseTypedTest, TestTypes);
 
 TEST_F(ListsReverseTest, EmptyInput)
 {
-  // Empty input.
+  // Empty column.
   {
     auto const input   = ints_lists{};
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
@@ -72,7 +72,7 @@ TEST_F(ListsReverseTest, EmptyInput)
   }
 }
 
-TYPED_TEST(ListsReverseTypedTest, InputNoNulls)
+TYPED_TEST(ListsReverseTypedTest, SimpleInputNoNulls)
 {
   using lists_col           = cudf::test::lists_column_wrapper<TypeParam>;
   auto const input_original = lists_col{{}, {1, 2, 3}, {}, {4, 5}, {6, 7, 8}, {9}};
@@ -84,28 +84,28 @@ TYPED_TEST(ListsReverseTypedTest, InputNoNulls)
   }
 
   {
-    auto const input    = cudf::slice(input_original, {1, 4})[0];
     auto const expected = lists_col{{3, 2, 1}, {}, {5, 4}};
+    auto const input    = cudf::slice(input_original, {1, 4})[0];
     auto const results  = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
   {
-    auto const input    = cudf::slice(input_original, {2, 3})[0];
     auto const expected = lists_col{lists_col{}};
+    auto const input    = cudf::slice(input_original, {2, 3})[0];
     auto const results  = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
   {
-    auto const input    = cudf::slice(input_original, {2, 4})[0];
     auto const expected = lists_col{{}, {5, 4}};
+    auto const input    = cudf::slice(input_original, {2, 4})[0];
     auto const results  = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
 
-TYPED_TEST(ListsReverseTypedTest, InputWithNulls)
+TYPED_TEST(ListsReverseTypedTest, SimpleInputWithNulls)
 {
   using lists_col           = cudf::test::lists_column_wrapper<TypeParam>;
   auto const input_original = lists_col{{lists_col{},
@@ -129,24 +129,24 @@ TYPED_TEST(ListsReverseTypedTest, InputWithNulls)
   }
 
   {
-    auto const input    = cudf::slice(input_original, {1, 4})[0];
     auto const expected = lists_col{
       {lists_col{3, 2, 1}, lists_col{} /*null*/, lists_col{{null, 5, 4}, null_at(0)}}, null_at(1)};
+    auto const input   = cudf::slice(input_original, {1, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
   {
-    auto const input    = cudf::slice(input_original, {2, 3})[0];
     auto const expected = lists_col{{lists_col{} /*null*/}, null_at(0)};
+    auto const input    = cudf::slice(input_original, {2, 3})[0];
     auto const results  = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
   {
-    auto const input = cudf::slice(input_original, {2, 4})[0];
     auto const expected =
       lists_col{{lists_col{} /*null*/, lists_col{{null, 5, 4}, null_at(0)}}, null_at(0)};
+    auto const input   = cudf::slice(input_original, {2, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
@@ -183,29 +183,29 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfListsNoNulls)
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {1, 4})[0];
     auto const expected = [] {
       auto child   = lists_col{{7}, {4, 5, 6}, {1, 2, 3}, {4, 5, 6}, {}, {4, 5}}.release();
       auto offsets = ints_col{0, 3, 3, 6}.release();
       return cudf::make_lists_column(3, std::move(offsets), std::move(child), 0, {});
     }();
+    auto const input   = cudf::slice(*input_original, {1, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
   }
 
   {
-    auto const input   = cudf::slice(*input_original, {2, 3})[0];  // empty column
+    auto const input   = cudf::slice(*input_original, {2, 3})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, *results);
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {2, 4})[0];
     auto const expected = [] {
       auto child   = lists_col{{4, 5, 6}, {}, {4, 5}}.release();
       auto offsets = ints_col{0, 0, 3}.release();
       return cudf::make_lists_column(2, std::move(offsets), std::move(child), 0, {});
     }();
+    auto const input   = cudf::slice(*input_original, {2, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
   }
@@ -261,18 +261,17 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfListsWithNulls)
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {0, 1})[0];
     auto const expected = [] {
       auto child   = lists_col{{7}, {4, 5, 6}, {1, 2, 3}}.release();
       auto offsets = ints_col{0, 3}.release();
       return cudf::make_lists_column(1, std::move(offsets), std::move(child), 0, {});
     }();
+    auto const input   = cudf::slice(*input_original, {0, 1})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, *results);
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {1, 4})[0];
     auto const expected = [] {
       auto child =
         lists_col{{{7}, {4, 5, 6}, {1, 2, 3}, {4, 5, 6}, {} /*null*/, {4, 5}}, null_at(4)}
@@ -284,12 +283,12 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfListsWithNulls)
       return cudf::make_lists_column(
         3, std::move(offsets), std::move(child), 1, std::move(null_mask));
     }();
+    auto const input   = cudf::slice(*input_original, {1, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {2, 4})[0];
     auto const expected = [] {
       auto child     = lists_col{{{4, 5, 6}, {} /*null*/, {4, 5}}, null_at(1)}.release();
       auto offsets   = ints_col{0, 0, 3}.release();
@@ -299,6 +298,7 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfListsWithNulls)
       return cudf::make_lists_column(
         2, std::move(offsets), std::move(child), 1, std::move(null_mask));
     }();
+    auto const input   = cudf::slice(*input_original, {2, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     // The result doesn't have nulls, but it is nullable.
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results);
@@ -412,7 +412,6 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
   }
 
   {
-    auto const input    = cudf::slice(*input_original, {1, 4})[0];
     auto const expected = [] {
       auto child = [] {
         auto grandchild1 = data_col{{
@@ -461,6 +460,7 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
       auto offsets = ints_col{0, 8, 16, 16}.release();
       return cudf::make_lists_column(3, std::move(offsets), std::move(child), 0, {});
     }();
+    auto const input   = cudf::slice(*input_original, {1, 4})[0];
     auto const results = cudf::lists::reverse(cudf::lists_column_view(input));
     // The result doesn't have nulls, but it is nullable.
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results);
