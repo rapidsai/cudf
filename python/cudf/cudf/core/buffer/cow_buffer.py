@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import copy
-import weakref
-from typing import Any, Dict, Tuple, Type, TypeVar
+from collections import defaultdict
+from typing import Any, DefaultDict, Tuple, Type, TypeVar
+from weakref import WeakSet
 
 import rmm
 
-import cudf
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 
 T = TypeVar("T", bound="CopyOnWriteBuffer")
@@ -20,16 +20,22 @@ class CopyOnWriteBuffer(Buffer):
     Use the factory function `as_buffer` to create a Buffer instance.
     """
 
-    _weakrefs = {}
+    # This dict keeps track of all instances that have the same `ptr`
+    # and `size` attributes.  Each key of the dict is a `(ptr, size)`
+    # tuple and the corresponding value is a set of weak references to
+    # instances with that `ptr` and `size`.
+    _instances: DefaultDict[Tuple, WeakSet] = defaultdict(WeakSet)
 
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
     _zero_copied: bool
 
-    def _track_instance(self):
-        if (self.ptr, self.size) not in self.__class__._weakrefs:
-            self.__class__._weakrefs[(self.ptr, self.size)] = weakref.WeakSet()
-        self.__class__._weakrefs[(self.ptr, self.size)].add(self)
+    def _finalize_init(self):
+        # the last step in initializing a `CopyOnWriteBuffer`
+        # is to track it in `_instances`:
+        key = (self.ptr, self.size)
+        self.__class__._instances[key].add(self)
+        self._zero_copied = False
 
     @classmethod
     def _from_device_memory(cls: Type[T], data: Any) -> T:
@@ -50,12 +56,20 @@ class CopyOnWriteBuffer(Buffer):
 
         # Bypass `__init__` and initialize attributes manually
         ret = super()._from_device_memory(data)
-        ret._track_instance()
-        ret._zero_copied = False
+        ret._finalize_init()
+        return ret
+
+    @classmethod
+    def _from_host_memory(cls: Type[T], data: Any) -> T:
+        ret = super()._from_host_memory(data)
+        ret._finalize_init()
         return ret
 
     def _shallow_copied(self):
-        return len(self.__class__._weakrefs[(self.ptr, self.size)]) > 1
+        """
+        Return `True` if shallow copies of `self` exist.
+        """
+        return len(self.__class__._instances[(self.ptr, self.size)]) > 1
 
     def copy(self, deep: bool = True):
         """
@@ -77,8 +91,7 @@ class CopyOnWriteBuffer(Buffer):
             copied_buf._ptr = self._ptr
             copied_buf._size = self._size
             copied_buf._owner = self._owner
-            copied_buf._zero_copied = False
-            copied_buf._track_instance()
+            copied_buf._finalize_init()
             return copied_buf
         else:
             owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
@@ -134,5 +147,5 @@ class CopyOnWriteBuffer(Buffer):
             self._ptr = new_buf.ptr
             self._size = new_buf.size
             self._owner = new_buf
-            self._track_instance()
+            self._finalize_init()
         self._zero_copied = zero_copied
