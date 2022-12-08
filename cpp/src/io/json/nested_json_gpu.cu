@@ -1124,7 +1124,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr min_chars_per_struct  = 5;
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
-    ((json_in.size() + min_chars_per_struct - 1) / min_chars_per_struct) * max_tokens_per_struct;
+    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
   rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
   rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
   rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
