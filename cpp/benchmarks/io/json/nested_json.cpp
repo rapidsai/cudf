@@ -56,7 +56,7 @@ auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
   auto data = const_cast<char*>(d_scalar->data());
   cudaMemsetAsync(data, '[', 1, stream.value());
   cudaMemsetAsync(data + d_scalar->size() - 1, ']', 1, stream.value());
-  
+
   return d_scalar;
 }
 }  // namespace
