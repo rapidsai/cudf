@@ -7,4 +7,4 @@ from cudf.core.buffer.utils import (
     as_buffer,
     get_spill_lock,
 )
-from cudf.core.buffer.weakrefable_buffer import RefCountableBuffer
+from cudf.core.buffer.weakrefable_buffer import CopyOnWriteBuffer

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
-from cudf.core.buffer.weakrefable_buffer import RefCountableBuffer
+from cudf.core.buffer.weakrefable_buffer import CopyOnWriteBuffer
 from cudf.options import get_option
 
 
@@ -74,11 +74,11 @@ def as_buffer(
         )
 
     if get_option("copy_on_write"):
-        if isinstance(data, (Buffer, RefCountableBuffer)) or hasattr(
+        if isinstance(data, (Buffer, CopyOnWriteBuffer)) or hasattr(
             data, "__cuda_array_interface__"
         ):
-            return RefCountableBuffer._from_device_memory(data)
-        return RefCountableBuffer._from_host_memory(data)
+            return CopyOnWriteBuffer._from_device_memory(data)
+        return CopyOnWriteBuffer._from_host_memory(data)
     if get_global_manager() is not None:
         if hasattr(data, "__cuda_array_interface__"):
             return SpillableBuffer._from_device_memory(data, exposed=exposed)

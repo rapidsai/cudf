@@ -11,43 +11,33 @@ import rmm
 import cudf
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 
-T = TypeVar("T", bound="RefCountableBuffer")
+T = TypeVar("T", bound="CopyOnWriteBuffer")
 
 
-class CachedInstanceMeta(type):
+class _InstanceCountableMeta(type):
     """
-    Metaclass for BufferWeakref, which will ensure creation
-    of singleton instance.
+    Metaclass that allows counting the number of instances that are
+    constructed with the same `ptr` and `size`.
     """
 
-    __instances: Dict[Tuple, BufferWeakref] = {}
+    __weakrefs: Dict[Tuple, Any] = {}
 
     def __call__(cls, ptr, size):
-        cache_key = (ptr, size)
-        try:
-            # try retrieving an instance from the cache:
-            return cls.__instances[cache_key]
-        except KeyError:
-            # if an instance couldn't be found in the cache,
-            # construct it and add to cache:
-            obj = super().__call__(ptr, size)
-            try:
-                cls.__instances[cache_key] = obj
-            except TypeError:
-                # couldn't hash the arguments, don't cache:
-                return obj
-            return obj
-        except TypeError:
-            # couldn't hash the arguments, don't cache:
-            return super().__call__(ptr, size)
+        obj = super().__call__(ptr, size)
+        key = (ptr, size)
+        if key not in cls.__weakrefs:
+            cls.__weakrefs[key] = weakref.WeakSet()
+        cls.__weakrefs[key].add(obj)
+        return obj
 
-    def _clear_instance_cache(cls):
-        cls.__instances.clear()
+    def _instance_count(cls, ptr, size):
+        return len(cls.__weakrefs[(ptr, size)])
 
 
-class BufferWeakref(metaclass=CachedInstanceMeta):
+class _BufferInstanceProxy(metaclass=_InstanceCountableMeta):
     """
-    A proxy class to be used by ``Buffer`` for generating weakreferences.
+    A proxy class used to count the number of instances of a `Buffer`
+    constructed with the same `ptr` and `size`.
     """
 
     __slots__ = ("ptr", "size", "__weakref__")
@@ -55,6 +45,9 @@ class BufferWeakref(metaclass=CachedInstanceMeta):
     def __init__(self, ptr, size) -> None:
         self.ptr = ptr
         self.size = size
+
+    def instance_count(self):
+        return self.__class__._instance_count(self.ptr, self.size)
 
 
 def custom_weakref_callback(ref):
@@ -136,14 +129,13 @@ def custom_weakref_callback(ref):
     pass
 
 
-class RefCountableBuffer(Buffer):
+class CopyOnWriteBuffer(Buffer):
     """A Buffer represents device memory.
 
     Use the factory function `as_buffer` to create a Buffer instance.
     """
 
-    _weak_ref: object
-    _proxy_ref: None | BufferWeakref
+    _proxy_ref: _BufferInstanceProxy
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
     _zero_copied: bool
@@ -167,56 +159,12 @@ class RefCountableBuffer(Buffer):
 
         # Bypass `__init__` and initialize attributes manually
         ret = super()._from_device_memory(data)
-        ret._weak_ref = None
-        ret._proxy_ref = None
+        ret._proxy_ref = _BufferInstanceProxy(ret._ptr, ret._size)
         ret._zero_copied = False
-        ret._update_ref()
         return ret
 
-    def _is_cai_zero_copied(self):
-        """
-        Returns a flag, that indicates if the Buffer has been zero-copied.
-        """
-        return self._zero_copied
-
-    def _update_ref(self):
-        """
-        Generate the new proxy reference.
-        """
-        # TODO: See if this can be merged into spill-lock
-        # once spilling and copy on write are merged.
-        self._proxy_ref = BufferWeakref(self._ptr, self._size)
-
-    def get_ref(self):
-        """
-        Returns the proxy reference.
-        """
-        if self._proxy_ref is None:
-            self._update_ref()
-        return self._proxy_ref
-
-    def _has_a_weakref(self):
-        """
-        Checks if the Buffer has a weak-reference.
-        """
-        weakref_count = weakref.getweakrefcount(self.get_ref())
-
-        if weakref_count == 1:
-            # When the weakref_count is 1, it could be a possibility
-            # that a copied Buffer got destroyed and hence this
-            # method should return False in that case as there is only
-            # one Buffer pointing to the device memory.
-            return (
-                weakref.getweakrefs(self.get_ref())[0]() is not self.get_ref()
-            )
-        else:
-            return weakref_count > 0
-
-    def _get_weakref(self):
-        """
-        Returns a weak-reference for the Buffer.
-        """
-        return weakref.ref(self.get_ref(), custom_weakref_callback)
+    def _shallow_copied(self):
+        return self._proxy_ref.instance_count() > 1
 
     def copy(self, deep: bool = True):
         """
@@ -234,38 +182,24 @@ class RefCountableBuffer(Buffer):
         Buffer
         """
         if not deep:
-            if (
-                cudf.get_option("copy_on_write")
-                and not self._is_cai_zero_copied()
-            ):
-                copied_buf = RefCountableBuffer.__new__(RefCountableBuffer)
+            if cudf.get_option("copy_on_write") and not self._zero_copied:
+                copied_buf = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
                 copied_buf._ptr = self._ptr
                 copied_buf._size = self._size
                 copied_buf._owner = self._owner
-                copied_buf._proxy_ref = None
-                copied_buf._weak_ref = None
                 copied_buf._zero_copied = False
-
-                if self._has_a_weakref():
-                    # If `self` has weak-references
-                    # we will then have to keep that
-                    # weak-reference alive, hence
-                    # pass it onto `copied_buf`
-                    copied_buf._weak_ref = self._weak_ref
-                else:
-                    # If `self` has no weak-references,
-                    # we will have to generate a new weak-reference
-                    # and assign it to `copied_buf`
-                    copied_buf._weak_ref = self._get_weakref()
-
-                self._weak_ref = copied_buf._get_weakref()
-
+                # make the `_proxy_ref` of the copy a new instance:
+                copied_buf._proxy_ref = _BufferInstanceProxy(
+                    self._ptr, self._size
+                )
                 return copied_buf
             else:
-                shallow_copy = RefCountableBuffer.__new__(RefCountableBuffer)
+                shallow_copy = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
                 shallow_copy._ptr = self._ptr
                 shallow_copy._size = self._size
                 shallow_copy._owner = self._owner
+                # when shallow copying, don't make a new instance:
+                shallow_copy._proxy_ref = self._proxy_ref
                 return shallow_copy
         else:
             owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
@@ -313,12 +247,13 @@ class RefCountableBuffer(Buffer):
         Detaches a Buffer from it's weak-references by making
         a true deep-copy.
         """
-        if not self._zero_copied and self._has_a_weakref():
+        if not self._zero_copied and self._shallow_copied():
             # make a deep copy of existing DeviceBuffer
             # and replace pointer to it.
             current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
             new_buf = current_buf.copy()
             self._ptr = new_buf.ptr
             self._size = new_buf.size
+            self._proxy_ref = _BufferInstanceProxy(self._ptr, self._size)
             self._owner = new_buf
         self._zero_copied = zero_copied
