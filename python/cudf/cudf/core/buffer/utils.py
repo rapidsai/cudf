@@ -7,9 +7,9 @@ from contextlib import ContextDecorator
 from typing import Any, Dict, Optional, Tuple, Union
 
 from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.cow_buffer import CopyOnWriteBuffer
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
-from cudf.core.buffer.weakrefable_buffer import CopyOnWriteBuffer
 from cudf.options import get_option
 
 

@@ -36,8 +36,8 @@ class _InstanceCountableMeta(type):
 
 class _BufferInstanceProxy(metaclass=_InstanceCountableMeta):
     """
-    A proxy class used to count the number of instances of a `Buffer`
-    constructed with the same `ptr` and `size`.
+    A proxy class used to count the number of instances of a
+    `CopyOnWriteBuffer` constructed with the same `ptr` and `size`.
     """
 
     __slots__ = ("ptr", "size", "__weakref__")
