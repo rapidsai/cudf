@@ -70,12 +70,12 @@ TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
   auto structs_col  = cudf::test::structs_column_wrapper{{nums_member, lists_member}};
   auto nums_col     = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
 
-  EXPECT_THROW(
-    cudf::structs::detail::flatten_nested_columns(cudf::table_view{{nums_col, structs_col}},
-                                                  {},
-                                                  {},
-                                                  cudf::structs::detail::column_nullability::FORCE),
-    cudf::logic_error);
+  EXPECT_THROW((void)cudf::structs::detail::flatten_nested_columns(
+                 cudf::table_view{{nums_col, structs_col}},
+                 {},
+                 {},
+                 cudf::structs::detail::column_nullability::FORCE),
+               cudf::logic_error);
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
@@ -323,12 +323,12 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
 
   auto structs_with_lists_col = cudf::test::structs_column_wrapper{lists_member, ints_member};
 
-  EXPECT_THROW(
-    cudf::structs::detail::flatten_nested_columns(cudf::table_view{{structs_with_lists_col}},
-                                                  {},
-                                                  {},
-                                                  cudf::structs::detail::column_nullability::FORCE),
-    cudf::logic_error);
+  EXPECT_THROW((void)cudf::structs::detail::flatten_nested_columns(
+                 cudf::table_view{{structs_with_lists_col}},
+                 {},
+                 {},
+                 cudf::structs::detail::column_nullability::FORCE),
+               cudf::logic_error);
 }
 
 struct SuperimposeTest : StructUtilitiesTest {
