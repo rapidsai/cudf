@@ -28,9 +28,9 @@ namespace cudf::lists {
  */
 
 /**
- * @brief Reverses the elements within each list.
+ * @brief Reverse the element order within each list of the input column.
  *
- * Any null input row returns corresponding null row in the output column.
+ * Any null input row will result in a corresponding null row in the output column.
  *
  * @code{.pseudo}
  * Example:

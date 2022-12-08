@@ -23,7 +23,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/reverse.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -39,42 +38,45 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return empty_like(input.parent()); }
+  if (input.is_empty()) { return cudf::empty_like(input.parent()); }
 
   auto const child = input.get_sliced_child(stream);
 
-  // The labels are also zero-based list indices.
+  // The labels are also a map from each list element to its corresponding zero-based list index.
   auto const labels = generate_labels(input, child.size(), stream);
 
-  // Build a gather map to copy the output list elements.
+  // The offsets of the output lists column.
+  auto out_offsets = get_normalized_offsets(input, stream, mr);
+
+  // Build a gather map to copy the output list elements from the input list elements.
   auto gather_map = rmm::device_uvector<size_type>(child.size(), stream);
+
+  // Build a segmented reversed order for the child column.
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::counting_iterator<size_type>(0),
                      child.size(),
-                     [d_offsets           = input.offsets_begin(),
-                      list_indices        = labels->view().begin<size_type>(),
-                      new_element_indices = gather_map.begin()] __device__(auto const idx) {
-                       // The first offset value, used for zero-normalizing offsets.
-                       auto const first_offset  = *d_offsets;
-                       auto const list_idx      = list_indices[idx];
-                       auto const begin_offset  = d_offsets[list_idx] - first_offset;
-                       auto const end_offset    = d_offsets[list_idx + 1] - first_offset;
-                       new_element_indices[idx] = begin_offset + (end_offset - idx - 1);
+                     [list_offsets = out_offsets->view().begin<offset_type>(),
+                      list_indices = labels->view().begin<size_type>(),
+                      gather_map   = gather_map.begin()] __device__(auto const idx) {
+                       auto const list_idx     = list_indices[idx];
+                       auto const begin_offset = list_offsets[list_idx];
+                       auto const end_offset   = list_offsets[list_idx + 1];
+
+                       // Reverse the order of elements within each list.
+                       gather_map[idx] = begin_offset + (end_offset - idx - 1);
                      });
 
-  auto reversed_child_table =
+  auto child_segmented_reversed =
     cudf::detail::gather(table_view{{child}},
                          device_span<size_type const>{gather_map.data(), gather_map.size()},
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,
                          mr);
-  auto out_child   = std::move(reversed_child_table->release().front());
-  auto out_offsets = get_normalized_offsets(input, stream, mr);
 
   return cudf::make_lists_column(input.size(),
                                  std::move(out_offsets),
-                                 std::move(out_child),
+                                 std::move(child_segmented_reversed->release().front()),
                                  input.null_count(),
                                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                  stream,
