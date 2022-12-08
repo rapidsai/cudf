@@ -295,17 +295,18 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 # * iterator tests --------------------------------------------------------------------------------
 ConfigureTest(
   ITERATOR_TEST
+  iterator/indexalator_test.cu
+  iterator/optional_iterator_test_chrono.cu
+  iterator/optional_iterator_test_numeric.cu
+  iterator/pair_iterator_test_chrono.cu
+  iterator/pair_iterator_test_numeric.cu
+  iterator/scalar_iterator_test.cu
+  iterator/sizes_to_offsets_iterator_test.cu
   iterator/value_iterator.cpp
   iterator/value_iterator_test_chrono.cu
   iterator/value_iterator_test_numeric.cu
   iterator/value_iterator_test_strings.cu
   iterator/value_iterator_test_transform.cu
-  iterator/pair_iterator_test_chrono.cu
-  iterator/pair_iterator_test_numeric.cu
-  iterator/scalar_iterator_test.cu
-  iterator/optional_iterator_test_chrono.cu
-  iterator/optional_iterator_test_numeric.cu
-  iterator/indexalator_test.cu
 )
 
 # ##################################################################################################
