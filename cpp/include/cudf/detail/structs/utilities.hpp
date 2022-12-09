@@ -46,13 +46,6 @@ struct temporary_nullable_data {
    * @brief Store the newly generated columns with new null masks (if any).
    */
   std::vector<std::unique_ptr<column>> new_columns;
-
-  /**
-   * @brief Take over the content of another instance and append it into the internal data.
-   *
-   * @param other The other instance to take over its content
-   */
-  void emplace_back(temporary_nullable_data&& other);
 };
 
 /**
