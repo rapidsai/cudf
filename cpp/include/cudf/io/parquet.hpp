@@ -831,7 +831,8 @@ class parquet_writer_options {
    */
   void set_max_dictionary_size(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum dictionary size cannot exceed 2GB.");
+    CUDF_EXPECTS(size_bytes <= std::numeric_limits<int32_t>::max(),
+                 "The maximum dictionary size cannot exceed 2GB.");
     _max_dictionary_size = size_bytes;
   }
 
@@ -1419,7 +1420,8 @@ class chunked_parquet_writer_options {
    */
   void set_max_dictionary_size(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes <= INT32_MAX, "The maximum dictionary size cannot exceed 2GB.");
+    CUDF_EXPECTS(size_bytes <= std::numeric_limits<int32_t>::max(),
+                 "The maximum dictionary size cannot exceed 2GB.");
     _max_dictionary_size = size_bytes;
   }
 
