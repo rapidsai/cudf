@@ -359,7 +359,7 @@ class SpillManager:
         return spilled
 
     def spill_to_device_limit(self, device_limit: int = None) -> int:
-        """Spill until device limit
+        """Try to spill device memory until device limit
 
         Notice, by default this is a no-op.
 
@@ -380,18 +380,10 @@ class SpillManager:
         )
         if limit is None:
             return 0
-        ret = 0
-        while True:
-            unspilled = sum(
-                buf.size for buf in self.buffers() if not buf.is_spilled
-            )
-            if unspilled < limit:
-                break
-            nbytes = self.spill_device_memory(nbytes=limit - unspilled)
-            if nbytes == 0:
-                break  # No more to spill
-            ret += nbytes
-        return ret
+        unspilled = sum(
+            buf.size for buf in self.buffers() if not buf.is_spilled
+        )
+        return self.spill_device_memory(nbytes=unspilled - limit)
 
     def __repr__(self) -> str:
         spilled = sum(buf.size for buf in self.buffers() if buf.is_spilled)

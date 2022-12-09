@@ -153,20 +153,6 @@ def register_stringview_binaryop(op, retty):
     cuda_decl_registry.register_global(op)(StringViewBinaryOp)
 
 
-register_stringview_binaryop(operator.eq, types.boolean)
-register_stringview_binaryop(operator.ne, types.boolean)
-register_stringview_binaryop(operator.lt, types.boolean)
-register_stringview_binaryop(operator.gt, types.boolean)
-register_stringview_binaryop(operator.le, types.boolean)
-register_stringview_binaryop(operator.ge, types.boolean)
-
-# st in other
-register_stringview_binaryop(operator.contains, types.boolean)
-
-# st + other
-register_stringview_binaryop(operator.add, udf_string)
-
-
 def create_binary_attr(attrname, retty):
     """
     Helper function wrapping numba's low level extension API. Provides
@@ -212,12 +198,24 @@ class StringViewCount(AbstractTemplate):
         return nb_signature(size_type, string_view, recvr=self.this)
 
 
+class StringViewReplace(AbstractTemplate):
+    key = "StringView.replace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            udf_string, string_view, string_view, recvr=self.this
+        )
+
+
 @cuda_decl_registry.register_attr
 class StringViewAttrs(AttributeTemplate):
     key = string_view
 
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
+
+    def resolve_replace(self, mod):
+        return types.BoundFunction(StringViewReplace, string_view)
 
 
 # Build attributes for `MaskedType(string_view)`
@@ -272,3 +270,16 @@ for func in string_unary_funcs:
     )
 
 cuda_decl_registry.register_attr(StringViewAttrs)
+
+register_stringview_binaryop(operator.eq, types.boolean)
+register_stringview_binaryop(operator.ne, types.boolean)
+register_stringview_binaryop(operator.lt, types.boolean)
+register_stringview_binaryop(operator.gt, types.boolean)
+register_stringview_binaryop(operator.le, types.boolean)
+register_stringview_binaryop(operator.ge, types.boolean)
+
+# st in other
+register_stringview_binaryop(operator.contains, types.boolean)
+
+# st + other
+register_stringview_binaryop(operator.add, udf_string)

@@ -779,6 +779,7 @@ struct column_comparator {
 
 }  // namespace
 
+namespace detail {
 /**
  * @copydoc cudf::test::expect_column_properties_equal
  */
@@ -855,15 +856,6 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 }
 
 /**
- * @copydoc cudf::test::expect_column_empty
- */
-void expect_column_empty(cudf::column_view const& col)
-{
-  EXPECT_EQ(0, col.size());
-  EXPECT_EQ(0, col.null_count());
-}
-
-/**
  * @copydoc cudf::test::expect_equal_buffers
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
@@ -876,6 +868,16 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   auto typed_rhs = static_cast<char const*>(rhs);
   EXPECT_TRUE(thrust::equal(
     rmm::exec_policy(cudf::get_default_stream()), typed_lhs, typed_lhs + size_bytes, typed_rhs));
+}
+}  // namespace detail
+
+/**
+ * @copydoc cudf::test::expect_column_empty
+ */
+void expect_column_empty(cudf::column_view const& col)
+{
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
 }
 
 /**

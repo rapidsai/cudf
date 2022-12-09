@@ -27,6 +27,11 @@
           "file" : "${current_json_dir}/thrust_faster_scan_compile_times.diff",
           "issue" : "Improve Thrust scan compile times by reducing the number of kernels generated [https://github.com/rapidsai/cudf/pull/8183]",
           "fixed_in" : ""
+        },
+        {
+          "file" : "${current_json_dir}/cub_segmented_sort_with_bool_key.diff",
+          "issue" : "Fix an error in CUB DeviceSegmentedSort when the keys are bool type [https://github.com/NVIDIA/cub/issues/594]",
+          "fixed_in" : "2.1"
         }
       ]
     }

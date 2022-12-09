@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import warnings
 from typing import Any, ClassVar, List, Optional
 
 import cudf
@@ -147,12 +148,14 @@ class Merge:
         self._key_columns_with_same_name = (
             set(_coerce_to_tuple(on))
             if on
-            else set()
-            if (self._using_left_index or self._using_right_index)
             else {
                 lkey.name
                 for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if lkey.name == rkey.name
+                and not (
+                    isinstance(lkey, _IndexIndexer)
+                    or isinstance(rkey, _IndexIndexer)
+                )
             }
         )
 
@@ -408,6 +411,18 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
+
+        if (
+            isinstance(lhs, cudf.DataFrame)
+            and isinstance(rhs, cudf.DataFrame)
+            and lhs._data.nlevels != rhs._data.nlevels
+        ):
+            warnings.warn(
+                "merging between different levels is deprecated and will be "
+                f"removed in a future version. ({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)",
+                FutureWarning,
+            )
 
 
 class MergeSemi(Merge):

@@ -352,12 +352,18 @@ __global__ void __launch_bounds__(128)
           ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                            : 512 * 1024;
+      long this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                          : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
-      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
+      this_max_page_size = min(this_max_page_size, static_cast<long>(max_page_size_bytes));
+
+      // subtract size of rep and def level vectors
+      auto num_vals = values_in_page + frag_g.num_values;
+      // underflow is ok here, it just means the test below will always be true
+      this_max_page_size -= max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+                            max_RLE_page_size(col_g.num_rep_level_bits(), num_vals);
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
