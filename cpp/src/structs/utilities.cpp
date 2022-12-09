@@ -227,11 +227,11 @@ auto is_string_or_list(type_id id) { return id == type_id::STRING || id == type_
  *
  * @param col The input column to check
  */
-auto need_sanitize(column_view const& col)
+auto may_need_sanitize(column_view const& col)
 {
   return (col.nullable() && is_string_or_list(col.type().id())) ||
          std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
-           return need_sanitize(child);
+           return may_need_sanitize(child);
          });
 }
 
@@ -395,7 +395,7 @@ column superimpose_nulls(bitmask_type const* null_mask,
   auto output =
     superimpose_nulls_no_sanitize(null_mask, null_count, std::forward<column>(input), stream, mr);
 
-  if (auto const output_view = output.view(); need_sanitize(output_view)) {
+  if (auto const output_view = output.view(); may_need_sanitize(output_view)) {
     return std::move(*cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
   }
 
@@ -408,7 +408,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first; need_sanitize(output_view)) {
+  if (auto const output_view = output.first; may_need_sanitize(output_view)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();
