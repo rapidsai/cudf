@@ -58,7 +58,7 @@ std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return std::make_unique<column>(input.offsets()); }
+  if (input.is_empty()) { return std::make_unique<column>(input.offsets(), stream, mr); }
 
   auto out_offsets = make_numeric_column(data_type(type_to_id<offset_type>()),
                                          input.size() + 1,
