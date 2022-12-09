@@ -264,8 +264,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             warnings.warn(
                 "In a future version of cudf, a length 1 tuple will be "
                 "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. Don't supply a list with a single "
-                "grouper to avoid this warning.",
+                "to a list of length 1. To avoid this warning, do not supply "
+                "a list with a single grouper.",
                 FutureWarning,
             )
         group_names, offsets, _, grouped_values = self._grouped()
