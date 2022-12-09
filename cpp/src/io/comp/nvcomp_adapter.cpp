@@ -343,7 +343,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
       // 96 works for one test.
       auto const temp_size =
         batched_compress_temp_size(compression, num_chunks + 96, max_uncomp_chunk_size);
-      //printf("attempt alloc %lu\n", temp_size);
+      // printf("attempt alloc %lu\n", temp_size);
       rmm::device_buffer buf(temp_size, stream);
       return std::pair(std::move(buf), num_chunks);
     } catch (rmm::bad_alloc& ba) {
@@ -360,7 +360,7 @@ void batched_compress(compression_type compression,
                       rmm::cuda_stream_view stream)
 {
   constexpr bool debug_ = false;
-  auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
+  auto nvcomp_args      = create_batched_nvcomp_args(inputs, outputs, stream);
 
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
@@ -368,17 +368,19 @@ void batched_compress(compression_type compression,
   auto [scratch, num_chunks] =
     compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
-  if constexpr (debug_) {
-    printf("scratch %p %ld\n", scratch.data(), scratch.size());
-  }
+  if constexpr (debug_) { printf("scratch %p %ld\n", scratch.data(), scratch.size()); }
   rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
   size_t chunks_processed = 0;
   while (chunks_processed < inputs.size()) {
     auto num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
-    
+
     if constexpr (debug_) {
-      printf("batch %ld at %ld of %ld max %ld\n", num_this_pass, chunks_processed, inputs.size(), max_uncomp_chunk_size);
+      printf("batch %ld at %ld of %ld max %ld\n",
+             num_this_pass,
+             chunks_processed,
+             inputs.size(),
+             max_uncomp_chunk_size);
       printf("inp data %p\n", nvcomp_args.input_data_ptrs.data() + chunks_processed);
       printf("inp size %p\n", nvcomp_args.input_data_sizes.data() + chunks_processed);
       printf("out data %p\n", nvcomp_args.output_data_ptrs.data() + chunks_processed);
