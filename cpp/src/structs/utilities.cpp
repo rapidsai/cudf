@@ -210,44 +210,23 @@ flattened_table flatten_nested_columns(table_view const& input,
   return table_flattener{input, column_order, null_precedence, nullability}();
 }
 
-namespace {
-/**
- * @brief Check if the input type_id is STRING or LIST.
- *
- * @param id The input type_id value
- */
-auto is_string_or_list(type_id id) { return id == type_id::STRING || id == type_id::LIST; }
-
-/**
- * @brief Check if the input column needs to be sanitized (i.e., if it may contain non-empty nulls).
- *
- * For performance reason, no non-empty null will actually be checked. Instead, this function
- * performs conservative checking to see if the input column contains any lists or strings column
- * that is nulllable. As such, it may return false positive answer.
- *
- * @param col The input column to check
- */
-auto may_need_sanitize(column_view const& col)
+void temporary_nullable_data::emplace_back(temporary_nullable_data&& other)
 {
-  return (col.nullable() && is_string_or_list(col.type().id())) ||
-         std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
-           return may_need_sanitize(child);
-         });
+  auto const append_fn = [](auto& dst, auto& src) {
+    dst.insert(dst.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+  };
+  append_fn(new_null_masks, other.new_null_masks);
+  append_fn(new_columns, other.new_columns);
 }
 
-/**
- * @brief Superimpose the given null_mask into the input column, without any sanitization for
- * non-empty nulls.
- *
- * @copydoc cudf::structs::detail::superimpose_nulls
- */
-column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
-                                     size_type null_count,
-                                     column&& input,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+column superimpose_nulls(bitmask_type const* null_mask,
+                         size_type null_count,
+                         column&& input,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
 {
-  if (input.type().id() == cudf::type_id::EMPTY) {
+  auto const input_type_id = input.type().id();
+  if (input_type_id == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
     return std::move(input);
@@ -272,8 +251,14 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
     input.set_null_count(null_count);
   }
 
+  // Purge non-empty nulls if the input column is strings or lists column.
+  if (input.nullable() && (input_type_id == type_id::STRING || input_type_id == type_id::LIST)) {
+    return std::move(*cudf::detail::purge_nonempty_nulls(
+      input.view(), stream, rmm::mr::get_current_device_resource()));
+  }
+
   // If the input is not a structs column, just let it pass through.
-  if (input.type().id() != cudf::type_id::STRUCT) { return std::move(input); }
+  if (input_type_id != cudf::type_id::STRUCT) { return std::move(input); }
 
   // If the input is a structs column, recursively superimpose null mask for all grandchildren.
   auto const num_rows           = input.size();
@@ -285,8 +270,8 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
   const auto current_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
   std::for_each(
     content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-      child = std::make_unique<column>(superimpose_nulls_no_sanitize(
-        current_mask, UNKNOWN_NULL_COUNT, std::move(*child), stream, mr));
+      child = std::make_unique<column>(
+        superimpose_nulls(current_mask, UNKNOWN_NULL_COUNT, std::move(*child), stream, mr));
     });
 
   // Return a new structs column with newly rebuilt children.
@@ -298,14 +283,9 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
                                               mr));
 }
 
-/**
- * @brief Push down nulls from the given input column into its children columns, without any
- * sanitization for non-empty nulls.
- *
- * @copydoc cudf::structs::detail::push_down_nulls
- */
-std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::mr::device_memory_resource* mr)
 {
   auto ret_temp_data = temporary_nullable_data{};
   if (input.type().id() != type_id::STRUCT) {
@@ -316,20 +296,20 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   auto const structs_view = structs_column_view{input};
 
   // Function to rewrite child null mask.
-  auto const child_with_new_mask = [&](auto const& child_idx) {
+  auto const rewrite_child_mask = [&](auto const& child_idx) {
     auto child = structs_view.get_sliced_child(child_idx);
 
     // If struct is not nullable, child null mask is retained. NOOP.
     if (not structs_view.nullable()) { return child; }
 
-    auto parent_child_null_masks =
-      std::vector<cudf::bitmask_type const*>{structs_view.null_mask(), child.null_mask()};
-
-    auto [new_child_mask, null_count] = [&] {
+    auto [new_child_mask, null_count, new_child_mask_buff] = [&] {
       if (not child.nullable()) {
         // Adopt parent STRUCT's null mask.
-        return std::pair(structs_view.null_mask(), 0);
+        return std::tuple(structs_view.null_mask(), 0, rmm::device_buffer{});
       }
+
+      auto const parent_child_null_masks =
+        std::vector<cudf::bitmask_type const*>{structs_view.null_mask(), child.null_mask()};
 
       // Both STRUCT and child are nullable. AND() for the child's new null mask.
       //
@@ -338,88 +318,58 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
       // and the _null_mask(). It would be better to AND the bits from the beginning, and apply
       // offset() uniformly.
       // Alternatively, one could construct a big enough buffer, and use inplace_bitwise_and.
-      auto [new_mask, null_count] = cudf::detail::bitmask_and(parent_child_null_masks,
-                                                              std::vector<size_type>{0, 0},
-                                                              child.offset() + child.size(),
-                                                              stream,
-                                                              mr);
-      ret_temp_data.new_null_masks.push_back(std::move(new_mask));
-      return std::pair(
-        reinterpret_cast<bitmask_type const*>(ret_temp_data.new_null_masks.back().data()),
-        null_count);
+      auto [new_mask_buff, null_count] = cudf::detail::bitmask_and(parent_child_null_masks,
+                                                                   std::vector<size_type>{0, 0},
+                                                                   child.offset() + child.size(),
+                                                                   stream,
+                                                                   mr);
+
+      auto const new_mask = reinterpret_cast<bitmask_type const*>(new_mask_buff.data());
+      return std::tuple(new_mask, null_count, std::move(new_mask_buff));
     }();
 
-    return column_view(child.type(),
-                       child.size(),
-                       child.head(),
-                       new_child_mask,
-                       null_count,
-                       child.offset(),
-                       std::vector<column_view>{child.child_begin(), child.child_end()});
+    auto new_child = column_view(child.type(),
+                                 child.size(),
+                                 child.head(),
+                                 new_child_mask,
+                                 null_count,
+                                 child.offset(),
+                                 std::vector<column_view>{child.child_begin(), child.child_end()});
+
+    if (null_count == 0 ||
+        (child.type().id() != type_id::STRING && child.type().id() != type_id::LIST)) {
+      if (null_count > 0) {
+        ret_temp_data.new_null_masks.push_back(std::move(new_child_mask_buff));
+      }
+      return new_child;
+    }
+
+    // If the child column has null and it is a strings/lists column,
+    // we need to remove non-empty nulls.
+    ret_temp_data.new_columns.emplace_back(
+      cudf::detail::purge_nonempty_nulls(new_child, stream, mr));
+    return ret_temp_data.new_columns.back()->view();
   };
 
   auto const child_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator(0), child_with_new_mask);
+    thrust::make_transform_iterator(thrust::make_counting_iterator(0), rewrite_child_mask);
   auto const child_end = child_begin + structs_view.num_children();
 
   auto ret_children = std::vector<column_view>{};
   std::for_each(child_begin, child_end, [&](auto const& child) {
-    auto [processed_child, child_nullable_data] = push_down_nulls_no_sanitize(child, stream, mr);
+    auto [processed_child, child_nullable_data] = push_down_nulls(child, stream, mr);
     ret_children.emplace_back(std::move(processed_child));
-    ret_temp_data.new_null_masks.insert(
-      ret_temp_data.new_null_masks.end(),
-      std::make_move_iterator(child_nullable_data.new_null_masks.begin()),
-      std::make_move_iterator(child_nullable_data.new_null_masks.end()));
+    ret_temp_data.emplace_back(std::move(child_nullable_data));
   });
 
-  // Make column view out of newly constructed column_views, and all the validity buffers.
-
-  return std::pair(column_view(input.type(),
-                               input.size(),
-                               nullptr,
-                               input.null_mask(),
-                               input.null_count(),  // Alternatively, postpone.
-                               input.offset(),
-                               ret_children),
-                   std::move(ret_temp_data));
-}
-
-}  // namespace
-
-column superimpose_nulls(bitmask_type const* null_mask,
-                         size_type null_count,
-                         column&& input,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
-{
-  auto output =
-    superimpose_nulls_no_sanitize(null_mask, null_count, std::forward<column>(input), stream, mr);
-
-  if (auto const output_view = output.view(); may_need_sanitize(output_view)) {
-    return std::move(*cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
-  }
-
-  return output;
-}
-
-std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
-                                                                rmm::cuda_stream_view stream,
-                                                                rmm::mr::device_memory_resource* mr)
-{
-  auto output = push_down_nulls_no_sanitize(input, stream, mr);
-
-  if (auto const output_view = output.first; may_need_sanitize(output_view)) {
-    output.second.new_columns.emplace_back(
-      cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
-    output.first = output.second.new_columns.back()->view();
-
-    // Don't need the temp null mask anymore, as we will create a new column.
-    // Note: The new null masks are still needed for `purge_nonempty_nulls` thus this must be called
-    // after it.
-    output.second.new_null_masks.clear();
-  }
-
-  return output;
+  return {column_view(input.type(),
+                      input.size(),
+                      nullptr,
+                      input.null_mask(),
+                      input.null_count(),  // Alternatively, postpone.
+                      input.offset(),
+                      ret_children),
+          std::move(ret_temp_data)};
 }
 
 std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const& table,
@@ -429,15 +379,9 @@ std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const&
   auto superimposed_columns = std::vector<column_view>{};
   auto nullable_data        = temporary_nullable_data{};
   for (auto const& col : table) {
-    auto [superimposed_col, col_nulable_data] = push_down_nulls_no_sanitize(col, stream, mr);
+    auto [superimposed_col, col_nulable_data] = push_down_nulls(col, stream, mr);
     superimposed_columns.emplace_back(std::move(superimposed_col));
-    nullable_data.new_null_masks.insert(
-      nullable_data.new_null_masks.end(),
-      std::make_move_iterator(col_nulable_data.new_null_masks.begin()),
-      std::make_move_iterator(col_nulable_data.new_null_masks.end()));
-    nullable_data.new_columns.insert(nullable_data.new_columns.end(),
-                                     std::make_move_iterator(col_nulable_data.new_columns.begin()),
-                                     std::make_move_iterator(col_nulable_data.new_columns.end()));
+    nullable_data.emplace_back(std::move(col_nulable_data));
   }
   return {table_view{superimposed_columns}, std::move(nullable_data)};
 }
