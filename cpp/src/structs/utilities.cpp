@@ -399,6 +399,11 @@ column superimpose_nulls(bitmask_type const* null_mask,
     superimpose_nulls_no_sanitize(null_mask, null_count, std::forward<column>(input), stream, mr);
 
   if (auto const output_view = output.view(); may_need_sanitize(output_view)) {
+    // We can't call `purge_nonempty_nulls` for individual child column(s) that needs to be
+    // sanitized. Instead, we have to call it on the top level column.
+    // This is to make sure all the columns (top level + all children) have consistent offsets.
+    // Otherwise, the sanitized children may have offsets that are different from the others and
+    // also different from the parent column, causing data corruption.
     return std::move(*cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
   }
 
