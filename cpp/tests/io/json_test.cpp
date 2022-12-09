@@ -1301,6 +1301,28 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
 }
 
+TEST_F(JsonReaderTest, TokenAllocation)
+{
+  std::array<std::string const, 3> const json_inputs{
+    R"({"":1})",
+    "{}\n{}\n{}",
+    R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":1}}}}}}}}}}}})",
+  };
+
+  for (auto const& json_string : json_inputs) {
+    std::cout << json_string << "\n";
+    // Initialize parsing options (reading json lines)
+    cudf::io::json_reader_options json_lines_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .lines(true);
+
+    // Read test data via new, nested JSON reader
+    json_lines_options.enable_experimental(true);
+    EXPECT_NO_THROW(cudf::io::read_json(json_lines_options));
+  }
+}
+
 TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
 {
   std::array<std::string const, 4> const json_inputs
