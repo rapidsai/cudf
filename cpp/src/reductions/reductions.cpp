@@ -159,7 +159,7 @@ std::unique_ptr<scalar> reduce(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
   }
 
-  // Returns default scalar if input column is empty or all non-valid
+  // Returns default scalar if input column is empty or all null
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
       return tdigest::detail::make_empty_tdigest_scalar(stream);
