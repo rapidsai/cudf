@@ -66,7 +66,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-495-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci:cuda11.5.1-ubuntu20.04-py3.9"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: conda-python-build
@@ -76,5 +76,5 @@ jobs:
       build_type: pull-request
       node_type: "gpu-v100-495-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci:cuda11.5.1-ubuntu20.04-py3.9"
       run_script: "ci/test_notebooks.sh"
