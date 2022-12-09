@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
+from packaging.version import Version
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
@@ -1162,7 +1163,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                # An explicit dtype is needed to avoid pandas warnings from
+                # empty sets of columns. This shouldn't be needed in pandas
+                # 2.0, we don't need to specify a dtype when we know we're not
+                # trying to match any columns so the default is fine.
+                dtype = None
+                if len(mask) == 0:
+                    assert Version(pd.__version__) < Version("2.0.0")
+                    dtype = "float64"
+                mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
