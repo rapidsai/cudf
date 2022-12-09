@@ -180,6 +180,7 @@ class flattened_table {
  * @param input Column to apply the null mask to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate new device memory
+ * @return A new column with potentially new null mask
  */
 [[nodiscard]] column superimpose_nulls(bitmask_type const* null_mask,
                                        size_type null_count,

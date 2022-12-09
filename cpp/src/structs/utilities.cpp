@@ -212,14 +212,20 @@ flattened_table flatten_nested_columns(table_view const& input,
 
 namespace {
 /**
- * @brief is_string_or_list
- * @param id
+ * @brief Check if the input type_id is STRING or LIST.
+ *
+ * @param id The input type_id value
  */
 auto is_string_or_list(type_id id) { return id == type_id::STRING || id == type_id::LIST; }
 
 /**
- * @brief need_sanitize
- * @param col
+ * @brief Check if the input column needs to be sanitized (i.e., if it may contain non-empty nulls).
+ *
+ * For performance reason, no non-empty null will actually be checked. Instead, this function
+ * performs conservative checking to see if the input column contains any lists or strings column
+ * that is nulllable. As such, it may return false positive answer.
+ *
+ * @param col The input column to check
  */
 auto need_sanitize(column_view const& col)
 {
@@ -229,6 +235,12 @@ auto need_sanitize(column_view const& col)
          });
 }
 
+/**
+ * @brief Superimpose the given null_mask into the input column, without any sanitization for
+ * non-empty nulls.
+ *
+ * @copydoc cudf::structs::detail::superimpose_nulls
+ */
 column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
                                      size_type null_count,
                                      column&& input,
@@ -260,7 +272,7 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
     input.set_null_count(null_count);
   }
 
-  // If the input is not a strings/lists column, just let it pass through.
+  // If the input is not a structs column, just let it pass through.
   if (input.type().id() != cudf::type_id::STRUCT) { return std::move(input); }
 
   // If the input is a structs column, recursively superimpose null mask for all grandchildren.
@@ -286,6 +298,12 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
                                               mr));
 }
 
+/**
+ * @brief Push down nulls from the given input column into its children columns, without any
+ * sanitization for non-empty nulls.
+ *
+ * @copydoc cudf::structs::detail::push_down_nulls
+ */
 std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
