@@ -220,7 +220,7 @@ __global__ void __launch_bounds__(block_size)
       if (t == 0) { s->frag.fragment_data_size += len; }
       __syncthreads();
       // page fragment size must fit in a 32-bit signed integer
-      if (s->frag.fragment_data_size > INT32_MAX) {
+      if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
         CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
       }
     }
@@ -368,7 +368,7 @@ __global__ void __launch_bounds__(128)
           : frag_g.fragment_data_size;
 
       // page fragment size must fit in a 32-bit signed integer
-      if (fragment_data_size > INT32_MAX) {
+      if (fragment_data_size > std::numeric_limits<int32_t>::max()) {
         CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
       }
 
@@ -423,7 +423,9 @@ __global__ void __launch_bounds__(128)
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
           auto const max_data_size  = page_size + def_level_size + rep_level_size;
           // page size must fit in 32-bit signed integer
-          if (max_data_size > INT32_MAX) { CUDF_UNREACHABLE("page size exceeds maximum for i32"); }
+          if (max_data_size > std::numeric_limits<int32_t>::max()) {
+            CUDF_UNREACHABLE("page size exceeds maximum for i32");
+          }
           page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;

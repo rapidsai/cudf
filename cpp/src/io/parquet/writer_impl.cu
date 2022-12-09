@@ -1029,7 +1029,7 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
 
   auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
   // page size must fit in a 32-bit signed integer
-  return std::min(max_size, static_cast<size_t>(INT32_MAX));
+  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
 
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
