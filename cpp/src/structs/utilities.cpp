@@ -211,12 +211,6 @@ flattened_table flatten_nested_columns(table_view const& input,
 }
 
 namespace {
-/**
- * @brief Check if the input type_id is STRING or LIST.
- *
- * @param id The input type_id value
- */
-auto is_string_or_list(type_id id) { return id == type_id::STRING || id == type_id::LIST; }
 
 /**
  * @brief Check if the input column needs to be sanitized (i.e., if it may contain non-empty nulls).
@@ -229,7 +223,10 @@ auto is_string_or_list(type_id id) { return id == type_id::STRING || id == type_
  */
 auto may_need_sanitize(column_view const& col)
 {
-  return (col.nullable() && is_string_or_list(col.type().id())) ||
+  auto const string_or_list_type = [](type_id id) {
+    return id == type_id::STRING || id == type_id::LIST;
+  };
+  return (col.nullable() && string_or_list_type(col.type().id())) ||
          std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
            return may_need_sanitize(child);
          });
@@ -361,15 +358,12 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   auto const child_begin =
     thrust::make_transform_iterator(thrust::make_counting_iterator(0), child_with_new_mask);
   auto const child_end = child_begin + structs_view.num_children();
+  auto ret_children    = std::vector<column_view>{};
 
-  auto ret_children = std::vector<column_view>{};
   std::for_each(child_begin, child_end, [&](auto const& child) {
     auto [processed_child, child_nullable_data] = push_down_nulls_no_sanitize(child, stream, mr);
     ret_children.emplace_back(std::move(processed_child));
-    ret_temp_data.new_null_masks.insert(
-      ret_temp_data.new_null_masks.end(),
-      std::make_move_iterator(child_nullable_data.new_null_masks.begin()),
-      std::make_move_iterator(child_nullable_data.new_null_masks.end()));
+    ret_temp_data.emplace_back(std::move(child_nullable_data));
   });
 
   // Make column view out of newly constructed column_views, and all the validity buffers.
@@ -385,6 +379,15 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
 }
 
 }  // namespace
+
+void temporary_nullable_data::emplace_back(temporary_nullable_data&& other)
+{
+  auto const append_fn = [](auto& dst, auto& src) {
+    dst.insert(dst.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+  };
+  append_fn(new_null_masks, other.new_null_masks);
+  append_fn(new_columns, other.new_columns);
+}
 
 column superimpose_nulls(bitmask_type const* null_mask,
                          size_type null_count,
@@ -429,15 +432,9 @@ std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const&
   auto superimposed_columns = std::vector<column_view>{};
   auto nullable_data        = temporary_nullable_data{};
   for (auto const& col : table) {
-    auto [superimposed_col, col_nulable_data] = push_down_nulls_no_sanitize(col, stream, mr);
+    auto [superimposed_col, col_nullable_data] = push_down_nulls_no_sanitize(col, stream, mr);
     superimposed_columns.emplace_back(std::move(superimposed_col));
-    nullable_data.new_null_masks.insert(
-      nullable_data.new_null_masks.end(),
-      std::make_move_iterator(col_nulable_data.new_null_masks.begin()),
-      std::make_move_iterator(col_nulable_data.new_null_masks.end()));
-    nullable_data.new_columns.insert(nullable_data.new_columns.end(),
-                                     std::make_move_iterator(col_nulable_data.new_columns.begin()),
-                                     std::make_move_iterator(col_nulable_data.new_columns.end()));
+    nullable_data.emplace_back(std::move(col_nullable_data));
   }
   return {table_view{superimposed_columns}, std::move(nullable_data)};
 }
