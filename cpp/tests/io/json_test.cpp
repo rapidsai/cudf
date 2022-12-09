@@ -811,7 +811,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
@@ -822,8 +822,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
-                                 float64_wrapper{{0., 200.}, col1_validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), int64_wrapper{{0, 200}, col1_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  float64_wrapper{{1.1, 0.}, col2_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -1656,6 +1655,27 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
   EXPECT_EQ(result_view.num_rows(), 1);
   EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
   EXPECT_EQ(result_view.column(0).null_count(), 1);
+}
+
+TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
+{
+  std::string const data = "{\"col\":0}";
+  auto const buffer      = cudf::io::host_buffer{data.data(), data.size()};
+  auto const src         = cudf::io::source_info{{buffer, buffer}};
+
+  cudf::io::json_reader_options const not_lines_opts =
+    cudf::io::json_reader_options::builder(src).experimental(true);
+  EXPECT_THROW(cudf::io::read_json(not_lines_opts), cudf::logic_error);
+
+  cudf::io::json_reader_options const comp_exp_opts =
+    cudf::io::json_reader_options::builder(src).experimental(true).compression(
+      cudf::io::compression_type::GZIP);
+  EXPECT_THROW(cudf::io::read_json(comp_exp_opts), cudf::logic_error);
+
+  cudf::io::json_reader_options const comp_opts =
+    cudf::io::json_reader_options::builder(src).experimental(false).compression(
+      cudf::io::compression_type::GZIP);
+  EXPECT_THROW(cudf::io::read_json(comp_opts), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
