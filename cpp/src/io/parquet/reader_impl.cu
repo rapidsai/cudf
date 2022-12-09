@@ -1841,25 +1841,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
     };
 
-    constexpr auto num_streams = 2;
-
-    auto stream_pool = rmm::cuda_stream_pool(num_streams);
-    auto streams     = get_streams(num_streams, stream_pool);
-
-    fork_stream(streams, _stream);
+    constexpr bool multi_threaded = true;
 
     std::mutex queue_mutex;
     std::deque<rowgroup_data> reads;
 
-    constexpr bool multi_threaded = false;
-
-    auto spawn_reads = [&]() {
+    auto spawn_reads = [&](std::vector<rmm::cuda_stream_view> const& streams) {
       CUDF_FUNC_RANGE();
       for (uint i = 0; i < selected_row_groups.size(); ++i) {
         auto& rgi             = selected_row_groups[i];
         const auto& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
         auto read_data        = read_row_group(
-          selected_row_groups[i], row_group, remaining_rows, streams[i % num_streams]);
+          selected_row_groups[i], row_group, remaining_rows, streams[i % streams.size()]);
         {
           const std::scoped_lock lock(queue_mutex);
           reads.push_back(std::move(read_data));
@@ -1872,14 +1865,19 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     };
 
     if (multi_threaded) {
+      constexpr auto num_streams = 2;
+
+      auto stream_pool = rmm::cuda_stream_pool(num_streams);
+      auto streams     = get_streams(num_streams, stream_pool);
+
       // spawn a thread to burn through queuing all the reads
-      auto read_task = std::async(std::launch::async, spawn_reads);
+      auto read_task = std::async(std::launch::async, spawn_reads, streams);
 
       while (read_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
              !reads.empty()) {
         // attempt to grab from queue and process
         if (!reads.empty()) {
-          auto read_data = [&]() -> std::optional<cudf::io::detail::parquet::rowgroup_data> {
+          auto read_data = [&]() -> std::optional<rowgroup_data> {
             {
               const std::scoped_lock lock(queue_mutex);
               if (!reads.empty()) {
@@ -1897,24 +1895,66 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
         std::this_thread::yield();
       }
+
+      join_stream(streams, _stream);
+
     } else {
       // spawn all reads
-      spawn_reads();
+      spawn_reads({_stream});
 
       // wait for all the reads
       for (auto& read : reads) {
         read.task.wait();
       }
 
-      // process reads
-      while (!reads.empty()) {
-        auto read_data = std::move(reads.front());
-        reads.pop_front();
-        process(read_data);
+      // merge read data into a single blob for a single batch of kernel launches
+      {
+        size_t num_chunks =
+          std::accumulate(reads.begin(), reads.end(), 0, [](size_t count, rowgroup_data const& el) {
+            return count + el.chunks.size();
+          });
+
+        rowgroup_data globbed = [&]() -> cudf::io::detail::parquet::rowgroup_data {
+          if (reads.size() == 1) {
+            auto ret = std::move(reads.front());
+            reads.pop_front();
+            return ret;
+          } else {
+            return {{},
+                    hostdevice_vector<gpu::ColumnChunkDesc>{0, num_chunks, _stream},
+                    0,
+                    0,
+                    {},
+                    {},
+                    {},
+                    _stream};
+          }
+        }();
+
+        while (!reads.empty()) {
+          auto d = std::move(reads.front());
+          reads.pop_front();
+
+          // no way to move a host vector on to the end of another
+          std::for_each(d.chunks.begin(), d.chunks.end(), [&globbed](auto const& c) {
+            globbed.chunks.push_back(c);
+          });
+          globbed.num_rows += d.num_rows;
+          globbed.decompressed_size += d.decompressed_size;
+          globbed.chunk_source_map.insert(
+            globbed.chunk_source_map.end(), d.chunk_source_map.begin(), d.chunk_source_map.end());
+          globbed.column_chunk_offsets.insert(globbed.column_chunk_offsets.end(),
+                                              d.column_chunk_offsets.begin(),
+                                              d.column_chunk_offsets.end());
+          globbed.page_data.insert(globbed.page_data.end(),
+                                   std::make_move_iterator(d.page_data.begin()),
+                                   std::make_move_iterator(d.page_data.end()));
+        }
+
+        // process reads
+        process(globbed);
       }
     }
-
-    join_stream(streams, _stream);
 
     // create the final output cudf columns
     for (size_t i = 0; i < _output_columns.size(); ++i) {

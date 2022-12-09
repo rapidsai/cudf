@@ -133,7 +133,7 @@ using col_selections = nvbench::enum_type_list<column_selection::ALL,
 
 // TODO: row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file
 // and determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
-
+/*
 NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                     NVBENCH_TYPE_AXES(col_selections,
                                       nvbench::enum_type_list<row_selection::ALL>,
@@ -162,3 +162,4 @@ NVBENCH_BENCH_TYPES(
                         "uses_pandas_metadata",
                         "timestamp_type"})
   .set_min_samples(4);
+*/
