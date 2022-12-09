@@ -77,7 +77,8 @@ def test_ufunc_index(ufunc):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     try:
         if ufunc.nout > 1:
