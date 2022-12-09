@@ -188,6 +188,9 @@ TEST_F(StringsLikeTests, Empty)
   results             = cudf::strings::like(sv, std::string("20%"));
   auto expected_empty = cudf::make_empty_column(cudf::type_id::BOOL8);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected_empty->view());
+
+  results = cudf::strings::like(sv, sv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected_empty->view());
 }
 
 TEST_F(StringsLikeTests, Errors)
