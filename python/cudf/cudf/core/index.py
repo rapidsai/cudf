@@ -526,7 +526,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if kind is not None:
             warnings.warn(
                 "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.  Do not pass it.",
+                "removed in a future version.",
                 FutureWarning,
             )
         if side not in {"left", "right"}:
@@ -1386,7 +1386,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         if kind is not None:
             warnings.warn(
                 "'kind' argument in get_slice_bound is deprecated and will be "
-                "removed in a future version.  Do not pass it.",
+                "removed in a future version.",
                 FutureWarning,
             )
         return self._values.get_slice_bound(label, side, kind)
