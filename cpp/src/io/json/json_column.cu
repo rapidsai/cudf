@@ -666,10 +666,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {
-        make_structs_column(
-          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
-        column_names};
+      auto ret_col                      = make_structs_column(
+        num_rows, std::move(child_columns), cudf::UNKNOWN_NULL_COUNT, {}, stream, mr);
+      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size() - 1;
