@@ -326,35 +326,77 @@ bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
 
+// since some compressors have extreme temp memory requirements, scale back the number
+// of chunks to process until the request for temp memory succeeds.
+std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type compression,
+                                                           size_t num_chunks,
+                                                           size_t max_uncomp_chunk_size,
+                                                           rmm::cuda_stream_view stream)
+{
+  // TODO(ets): what's a reasonable number of iterations here?  maybe break when
+  // temp_size crosses a threshold.
+  do {
+    try {
+      // FIXME(ets): getting strange memory errors when doing multiple passes sometimes.
+      // adding a fudge factor to num_chunks because temp_size calculation is still a bit
+      // off, or there is some other memory bound overstepping happening elsewhere.
+      // 96 works for one test.
+      auto const temp_size =
+        batched_compress_temp_size(compression, num_chunks + 96, max_uncomp_chunk_size);
+      //printf("attempt alloc %lu\n", temp_size);
+      rmm::device_buffer buf(temp_size, stream);
+      return std::pair(std::move(buf), num_chunks);
+    } catch (rmm::bad_alloc& ba) {
+      num_chunks = (num_chunks + 1) / 2;
+    }
+  } while (num_chunks > 1);
+  CUDF_FAIL("Cannot allocate temp buffer for compression");
+}
+
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream)
 {
-  auto const num_chunks = inputs.size();
-
+  constexpr bool debug_ = false;
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
-  auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
-  rmm::device_buffer scratch(temp_size, stream);
+  auto [scratch, num_chunks] =
+    compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
+  if constexpr (debug_) {
+    printf("scratch %p %ld\n", scratch.data(), scratch.size());
+  }
+  rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
-  rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
+  size_t chunks_processed = 0;
+  while (chunks_processed < inputs.size()) {
+    auto num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
+    
+    if constexpr (debug_) {
+      printf("batch %ld at %ld of %ld max %ld\n", num_this_pass, chunks_processed, inputs.size(), max_uncomp_chunk_size);
+      printf("inp data %p\n", nvcomp_args.input_data_ptrs.data() + chunks_processed);
+      printf("inp size %p\n", nvcomp_args.input_data_sizes.data() + chunks_processed);
+      printf("out data %p\n", nvcomp_args.output_data_ptrs.data() + chunks_processed);
+      printf("out size %p\n", actual_compressed_data_sizes.data() + chunks_processed);
+    }
 
-  batched_compress_async(compression,
-                         nvcomp_args.input_data_ptrs.data(),
-                         nvcomp_args.input_data_sizes.data(),
-                         max_uncomp_chunk_size,
-                         num_chunks,
-                         scratch.data(),
-                         scratch.size(),
-                         nvcomp_args.output_data_ptrs.data(),
-                         actual_compressed_data_sizes.data(),
-                         stream.value());
+    batched_compress_async(compression,
+                           nvcomp_args.input_data_ptrs.data() + chunks_processed,
+                           nvcomp_args.input_data_sizes.data() + chunks_processed,
+                           max_uncomp_chunk_size,
+                           num_this_pass,
+                           scratch.data(),
+                           scratch.size(),
+                           nvcomp_args.output_data_ptrs.data() + chunks_processed,
+                           actual_compressed_data_sizes.data() + chunks_processed,
+                           stream.value());
+    chunks_processed += num_chunks;
+  }
 
   update_compression_results(actual_compressed_data_sizes, results, stream);
 }
