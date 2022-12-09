@@ -178,6 +178,7 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/dremel.hpp
         - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
         - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
+        - test -f $PREFIX/include/cudf/lists/detail/reverse.hpp
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
         - test -f $PREFIX/include/cudf/lists/detail/set_operations.hpp
         - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
