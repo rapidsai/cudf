@@ -964,12 +964,7 @@ class TestNestedJsonReaderCommon:
                 )
             )
         df = cudf.concat(chunks, ignore_index=True)
-        if tag == "missing" and chunk_size == 10:
-            with pytest.raises(AssertionError):
-                # nested JSON reader inferences integer with nulls as float64
-                assert expected.to_arrow().equals(df.to_arrow())
-        else:
-            assert expected.to_arrow().equals(df.to_arrow())
+        assert expected.to_arrow().equals(df.to_arrow())
 
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
@@ -980,6 +975,10 @@ class TestNestedJsonReaderCommon:
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation
                 # as integer
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        elif tag == "missing":
+            with pytest.raises(AssertionError):
+                # pandas inferences integer with nulls as float64
                 assert pa.Table.from_pandas(expected).equals(target.to_arrow())
         else:
             assert pa.Table.from_pandas(expected).equals(target.to_arrow())

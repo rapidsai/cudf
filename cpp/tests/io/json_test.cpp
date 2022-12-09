@@ -811,7 +811,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
 
   EXPECT_EQ(result.metadata.schema_info[0].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
@@ -822,8 +822,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsMissingData)
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
-                                 float64_wrapper{{0., 200.}, col1_validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), int64_wrapper{{0, 200}, col1_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  float64_wrapper{{1.1, 0.}, col2_validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
@@ -1300,6 +1299,28 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   // Verify that the data read via non-nested JSON lines reader matches the data read via nested
   // JSON reader
   CUDF_TEST_EXPECT_TABLES_EQUAL(current_reader_table.tbl->view(), new_reader_table.tbl->view());
+}
+
+TEST_F(JsonReaderTest, TokenAllocation)
+{
+  std::array<std::string const, 3> const json_inputs{
+    R"({"":1})",
+    "{}\n{}\n{}",
+    R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":1}}}}}}}}}}}})",
+  };
+
+  for (auto const& json_string : json_inputs) {
+    std::cout << json_string << "\n";
+    // Initialize parsing options (reading json lines)
+    cudf::io::json_reader_options json_lines_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .lines(true);
+
+    // Read test data via new, nested JSON reader
+    json_lines_options.enable_experimental(true);
+    EXPECT_NO_THROW(cudf::io::read_json(json_lines_options));
+  }
 }
 
 TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
