@@ -120,7 +120,7 @@ struct table_flattener {
   void superimpose_nulls(table_view const& input_table)
   {
     auto [table, tmp_nullable_data] = push_down_nulls(input_table, cudf::get_default_stream());
-    this->input                     = table;
+    this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
   }
 
@@ -213,7 +213,8 @@ flattened_table flatten_nested_columns(table_view const& input,
 namespace {
 
 /**
- * @brief Check if the input column needs to be sanitized (i.e., if it may contain non-empty nulls).
+ * @brief Conservatively check if the input column needs to be sanitized (i.e., if it may contain
+ * non-empty nulls).
  *
  * For performance reason, no non-empty null will actually be checked. Instead, this function
  * performs conservative checking to see if the input column contains any lists or strings column
@@ -233,25 +234,24 @@ auto may_need_sanitize(column_view const& col)
 }
 
 /**
- * @brief Superimpose the given null_mask into the input column, without any sanitization for
+ * @brief Superimpose the given null mask into the input column without any sanitization for
  * non-empty nulls.
  *
  * @copydoc cudf::structs::detail::superimpose_nulls
  */
-column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
-                                     size_type null_count,
-                                     column&& input,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+void superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
+                                   size_type null_count,
+                                   column& input,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (input.type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
-    return std::move(input);
+    return;
   }
 
   if (!input.nullable()) {
-    // Child currently has no null mask. Copy parent's null mask.
     input.set_null_mask(cudf::detail::copy_bitmask(null_mask, 0, input.size(), stream, mr));
     input.set_null_count(null_count);
   } else {
@@ -269,30 +269,16 @@ column superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
     input.set_null_count(null_count);
   }
 
-  // If the input is not a structs column, just let it pass through.
-  if (input.type().id() != cudf::type_id::STRUCT) { return std::move(input); }
-
-  // If the input is a structs column, recursively superimpose null mask for all grandchildren.
-  auto const num_rows           = input.size();
-  auto const current_null_count = input.null_count();
-  auto content                  = input.release();
-
-  // Build new children columns.
-  // If any child column is strings/lists column, its non-empty nulls will also be purged.
-  const auto current_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
-  std::for_each(
-    content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-      child = std::make_unique<column>(superimpose_nulls_no_sanitize(
-        current_mask, UNKNOWN_NULL_COUNT, std::move(*child), stream, mr));
-    });
-
-  // Return a new structs column with newly rebuilt children.
-  return std::move(*cudf::make_structs_column(num_rows,
-                                              std::move(content.children),
-                                              current_null_count,
-                                              std::move(*content.null_mask),
-                                              stream,
-                                              mr));
+  // If the input is also a struct, repeat for all its children.
+  if (input.type().id() == cudf::type_id::STRUCT) {
+    auto const current_mask = input.view().null_mask();
+    std::for_each(thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(input.num_children()),
+                  [&current_mask, &input, stream, mr](auto const child_idx) {
+                    superimpose_nulls_no_sanitize(
+                      current_mask, UNKNOWN_NULL_COUNT, input.child(child_idx), stream, mr);
+                  });
+  }
 }
 
 /**
@@ -395,19 +381,18 @@ column superimpose_nulls(bitmask_type const* null_mask,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
 {
-  auto output =
-    superimpose_nulls_no_sanitize(null_mask, null_count, std::forward<column>(input), stream, mr);
+  superimpose_nulls_no_sanitize(null_mask, null_count, input, stream, mr);
 
-  if (auto const output_view = output.view(); may_need_sanitize(output_view)) {
+  if (auto const input_view = input.view(); may_need_sanitize(input_view)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that needs to be
     // sanitized. Instead, we have to call it on the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
     // Otherwise, the sanitized children may have offsets that are different from the others and
     // also different from the parent column, causing data corruption.
-    return std::move(*cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
+    return std::move(*cudf::detail::purge_nonempty_nulls(input_view, stream, mr));
   }
 
-  return output;
+  return std::move(input);
 }
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
