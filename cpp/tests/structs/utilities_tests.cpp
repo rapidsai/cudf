@@ -343,11 +343,14 @@ TYPED_TEST_SUITE(TypedSuperimposeTest, cudf::test::FixedWidthTypes);
 void test_non_struct_columns(cudf::column_view const& input)
 {
   // push_down_nulls() on non-struct columns should return the input column, unchanged.
-  auto [superimposed, backing_validity_buffers] =
+  auto [superimposed, backing_data] =
     cudf::structs::detail::push_down_nulls(input, cudf::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, superimposed);
-  //  EXPECT_TRUE(backing_validity_buffers.empty());
+  EXPECT_TRUE(backing_data.new_null_masks.empty());
+  if (input.type().id() != cudf::type_id::STRING && input.type().id() != cudf::type_id::LIST) {
+    EXPECT_TRUE(backing_data.new_columns.empty());
+  }
 }
 
 TYPED_TEST(TypedSuperimposeTest, NoStructInput)
@@ -404,7 +407,7 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_view.child(1),
                                  make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(structs_view, cudf::get_default_stream());
 
   // After push_down_nulls(), the struct nulls (i.e. at index-0) should have been pushed
@@ -430,7 +433,7 @@ TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
                                                           cudf::test::iterators::no_nulls()}
                          .release();
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(structs_input->view(), cudf::get_default_stream());
 
   // After push_down_nulls(), none of the child structs should have changed,
@@ -465,7 +468,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(structs_of_structs->view(), cudf::get_default_stream());
 
   // After push_down_nulls(), outer-struct column should not have pushed nulls to child
@@ -508,7 +511,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   cudf::detail::set_null_mask(
     structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(structs_of_structs->view(), cudf::get_default_stream());
 
   // After push_down_nulls(), outer-struct column should not have pushed nulls to child
@@ -564,7 +567,7 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
   // nums_member:  11011
   // lists_member: 00111
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(sliced_structs, cudf::get_default_stream());
 
   // After push_down_nulls(), the null masks should be:
@@ -617,7 +620,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   // nums_member:    11010
   // lists_member:   00110
 
-  auto [output, backing_buffers] =
+  auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(sliced_structs, cudf::get_default_stream());
 
   // After push_down_nulls(), the null masks will be:
