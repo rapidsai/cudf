@@ -1519,31 +1519,23 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
 
-    # pandas warns when trying to concatenate any empty float columns with any
-    # non-empty bool columns.
-    cond = False
-    for colname, dtype in pdf1.dtypes.to_dict().items():
-        if (
-            pd.api.types.is_bool_dtype(dtype)
-            and colname in pdf2
-            and pd.api.types.is_float_dtype(pdf2[colname].dtype)
-            and pdf2[colname].count() == 0
-        ):
-            cond = True
-    for colname, dtype in pdf2.dtypes.to_dict().items():
-        if (
-            pd.api.types.is_bool_dtype(dtype)
-            and colname in pdf1
-            and pd.api.types.is_float_dtype(pdf1[colname].dtype)
-            and pdf1[colname].count() == 0
-        ):
-            cond = True
+    # pandas warns when trying to concatenate any empty float columns (or float
+    # columns with all None values) with any non-empty bool columns.
+    def is_invalid_concat(left, right):
+        return (
+            pd.api.types.is_bool_dtype(left.dtype)
+            and pd.api.types.is_float_dtype(right.dtype)
+            and right.count() == 0
+        )
+
+    cond = any(
+        is_invalid_concat(pdf1[colname], pdf2[colname])
+        or is_invalid_concat(pdf2[colname], pdf1[colname])
+        for colname in set(pdf1) & set(pdf2)
+    )
 
     with expect_warning_if(cond):
-        expect = pd.concat(
-            [pdf1, pdf2, pdf1],
-            sort=False,
-        )
+        expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
     # casts nan to 0 in non-float numerical columns
