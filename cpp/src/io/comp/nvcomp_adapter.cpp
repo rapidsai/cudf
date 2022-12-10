@@ -256,6 +256,8 @@ size_t compress_max_output_chunk_size(compression_type compression,
   return max_comp_chunk_size;
 }
 
+namespace {
+
 // Dispatcher for nvcompBatched<format>CompressAsync
 static void batched_compress_async(compression_type compression,
                                    const void* const* device_uncompressed_ptrs,
@@ -321,7 +323,7 @@ static void batched_compress_async(compression_type compression,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
 }
 
-bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
+constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 {
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
@@ -352,6 +354,8 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
   } while (num_chunks > 1);
   CUDF_FAIL("Cannot allocate temp buffer for compression");
 }
+
+} // namespace
 
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
