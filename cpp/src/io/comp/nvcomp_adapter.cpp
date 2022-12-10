@@ -356,7 +356,6 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
       num_chunks = (num_chunks + 1) / 2;
     }
   }
-  printf("num_chunks %ld\n", num_chunks);
   CUDF_FAIL("Cannot allocate temp buffer for compression");
 }
 
