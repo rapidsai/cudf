@@ -8,7 +8,6 @@ import random
 import re
 import string
 import textwrap
-import warnings
 from collections import OrderedDict, defaultdict
 from copy import copy
 
@@ -2235,12 +2234,6 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
         operator.truediv,
         operator.mod,
         operator.pow,
-        operator.eq,
-        operator.lt,
-        operator.le,
-        operator.gt,
-        operator.ge,
-        operator.ne,
     ],
 )
 @pytest.mark.parametrize(
@@ -2258,42 +2251,135 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
         pd.DataFrame({"x": [1.0], "y": [2.0], "z": [3.0]}),
     ],
 )
-def test_binops_df(pdf, gdf, binop, other):
+def test_arithmetic_binops_df(pdf, gdf, binop, other):
     # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
     pdf[pdf == 1.0] = 2
     gdf[gdf == 1.0] = 2
     try:
-        with warnings.catch_warnings(record=True) as w:
-            d = binop(pdf, other)
+        d = binop(pdf, other)
     except Exception:
         if isinstance(other, (pd.Series, pd.DataFrame)):
-            other = cudf.from_pandas(other)
+            cudf_other = cudf.from_pandas(other)
 
         # that returns before we enter this try-except.
         assert_exceptions_equal(
             lfunc=binop,
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
-            rfunc_args_and_kwargs=([gdf, other], {}),
+            rfunc_args_and_kwargs=([gdf, cudf_other], {}),
             compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
         g = binop(gdf, other)
-        try:
-            assert_eq(d, g)
-        except AssertionError:
-            # Currently we will not match pandas for equality/inequality
-            # operators when there are columns that exist in a Series but not
-            # the DataFrame because pandas returns True/False values whereas we
-            # return NA. However, this reindexing is deprecated in pandas so we
-            # opt not to add support.
-            if w and "DataFrame vs Series comparisons is deprecated" in str(
-                w[0]
-            ):
-                return
-            raise
+        assert_eq(d, g)
+
+
+@pytest_unmark_spilling
+@pytest.mark.parametrize(
+    "binop",
+    [
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        1.0,
+        pd.Series([1.0, 2.0], index=["x", "y"]),
+        pd.DataFrame({"x": [1.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0], "z": [3.0]}),
+    ],
+)
+def test_comparison_binops_df(pdf, gdf, binop, other):
+    # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
+    pdf[pdf == 1.0] = 2
+    gdf[gdf == 1.0] = 2
+    try:
+        d = binop(pdf, other)
+    except Exception:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            cudf_other = cudf.from_pandas(other)
+
+        # that returns before we enter this try-except.
+        assert_exceptions_equal(
+            lfunc=binop,
+            rfunc=binop,
+            lfunc_args_and_kwargs=([pdf, other], {}),
+            rfunc_args_and_kwargs=([gdf, cudf_other], {}),
+            compare_error_message=False,
+        )
+    else:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+        g = binop(gdf, other)
+        assert_eq(d, g)
+
+
+@pytest_unmark_spilling
+@pytest.mark.xfail(
+    reason="""
+    Currently we will not match pandas for equality/inequality operators when
+    there are columns that exist in a Series but not the DataFrame because
+    pandas returns True/False values whereas we return NA. However, this
+    reindexing is deprecated in pandas so we opt not to add support. This test
+    should start passing once pandas removes the deprecated behavior in 2.0.
+    When that happens, this test can be merged with the two tests above into a
+    single test with common parameters.
+    """
+)
+@pytest.mark.parametrize(
+    "binop",
+    [
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        pd.Series([1.0]),
+        pd.Series([1.0, 2.0]),
+        pd.Series([1.0, 2.0, 3.0]),
+        pd.Series([1.0], index=["x"]),
+        pd.Series([1.0, 2.0, 3.0], index=["x", "y", "z"]),
+    ],
+)
+def test_comparison_binops_df_reindexing(pdf, gdf, binop, other):
+    # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
+    pdf[pdf == 1.0] = 2
+    gdf[gdf == 1.0] = 2
+    try:
+        with pytest.warns(FutureWarning):
+            d = binop(pdf, other)
+    except Exception:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            cudf_other = cudf.from_pandas(other)
+
+        # that returns before we enter this try-except.
+        assert_exceptions_equal(
+            lfunc=binop,
+            rfunc=binop,
+            lfunc_args_and_kwargs=([pdf, other], {}),
+            rfunc_args_and_kwargs=([gdf, cudf_other], {}),
+            compare_error_message=False,
+        )
+    else:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+        g = binop(gdf, other)
+        assert_eq(d, g)
 
 
 def test_binops_df_invalid(gdf):
