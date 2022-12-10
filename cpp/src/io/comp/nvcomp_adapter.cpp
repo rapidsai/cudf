@@ -363,6 +363,7 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream)
 {
+  // FIXME(ets): remove before merge
   constexpr bool debug_ = false;
   auto nvcomp_args      = create_batched_nvcomp_args(inputs, outputs, stream);
 
@@ -372,6 +373,7 @@ void batched_compress(compression_type compression,
   auto [scratch, num_chunks] =
     compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
+  // FIXME(ets): remove before merge
   if constexpr (debug_) { printf("scratch %p %ld\n", scratch.data(), scratch.size()); }
   rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
@@ -379,6 +381,7 @@ void batched_compress(compression_type compression,
   while (chunks_processed < inputs.size()) {
     auto num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
 
+    // FIXME(ets): remove before merge
     if constexpr (debug_) {
       printf("batch %ld at %ld of %ld max %ld\n",
              num_this_pass,
