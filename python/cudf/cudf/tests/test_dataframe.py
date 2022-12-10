@@ -36,6 +36,7 @@ from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
     does_not_raise,
+    expect_warning_if,
     gen_rand,
 )
 
@@ -1515,10 +1516,34 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
         sort=False,
     )
 
-    expect = pd.concat(
-        [pd.DataFrame(df1_d), pd.DataFrame(df2_d), pd.DataFrame(df1_d)],
-        sort=False,
-    )
+    pdf1 = pd.DataFrame(df1_d)
+    pdf2 = pd.DataFrame(df2_d)
+
+    # pandas warns when trying to concatenate any empty float columns with any
+    # non-empty bool columns.
+    cond = False
+    for colname, dtype in pdf1.dtypes.to_dict().items():
+        if (
+            pd.api.types.is_bool_dtype(dtype)
+            and colname in pdf2
+            and pd.api.types.is_float_dtype(pdf2[colname].dtype)
+            and pdf2[colname].count() == 0
+        ):
+            cond = True
+    for colname, dtype in pdf2.dtypes.to_dict().items():
+        if (
+            pd.api.types.is_bool_dtype(dtype)
+            and colname in pdf1
+            and pd.api.types.is_float_dtype(pdf1[colname].dtype)
+            and pdf1[colname].count() == 0
+        ):
+            cond = True
+
+    with expect_warning_if(cond):
+        expect = pd.concat(
+            [pdf1, pdf2, pdf1],
+            sort=False,
+        )
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
     # casts nan to 0 in non-float numerical columns
