@@ -355,7 +355,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
   CUDF_FAIL("Cannot allocate temp buffer for compression");
 }
 
-} // namespace
+}  // namespace
 
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
