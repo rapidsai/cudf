@@ -339,7 +339,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            rmm::cuda_stream_view stream)
 {
   // give up after 4 attempts
-  for (int i=0; i < 4; i++) {
+  for (int i = 0; i < 4; i++) {
     try {
       // FIXME(ets): getting strange memory errors when doing multiple passes sometimes.
       // adding a fudge factor to num_chunks because either temp_size calculation is still
