@@ -328,6 +328,9 @@ constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
 
+// FIXME(ets): remove before merge
+constexpr bool debug_ = false;
+
 // since some compressors have extreme temp memory requirements, scale back the number
 // of chunks to process until the request for temp memory succeeds.
 std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type compression,
@@ -335,23 +338,26 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            size_t max_uncomp_chunk_size,
                                                            rmm::cuda_stream_view stream)
 {
-  // TODO(ets): what's a reasonable number of iterations here?  maybe break when
-  // temp_size crosses a threshold.
+  // minimum memory allocation. fail if we can't allocate at least this much.
+  constexpr size_t MIN_TEMP_SIZE = 512 * 1024 * 1024;
   do {
     try {
       // FIXME(ets): getting strange memory errors when doing multiple passes sometimes.
-      // adding a fudge factor to num_chunks because temp_size calculation is still a bit
-      // off, or there is some other memory bound overstepping happening elsewhere.
+      // adding a fudge factor to num_chunks because either temp_size calculation is still
+      // a bit off, or there is some other memory bound overstepping happening elsewhere.
       // 96 works for one test.
+      constexpr size_t fudge = 96;
       auto const temp_size =
-        batched_compress_temp_size(compression, num_chunks + 96, max_uncomp_chunk_size);
-      // printf("attempt alloc %lu\n", temp_size);
+        batched_compress_temp_size(compression, num_chunks + fudge, max_uncomp_chunk_size);
+      // FIXME(ets): remove before merge
+      if constexpr (debug_) { printf("attempt alloc %lu\n", temp_size); }
+      if (temp_size < MIN_TEMP_SIZE) { CUDF_FAIL("Cannot allocate temp buffer for compression"); }
       rmm::device_buffer buf(temp_size, stream);
       return std::pair(std::move(buf), num_chunks);
     } catch (rmm::bad_alloc& ba) {
       num_chunks = (num_chunks + 1) / 2;
     }
-  } while (num_chunks > 1);
+  } while (num_chunks > 0);
   CUDF_FAIL("Cannot allocate temp buffer for compression");
 }
 
@@ -363,10 +369,7 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream)
 {
-  // FIXME(ets): remove before merge
-  constexpr bool debug_ = false;
-  auto nvcomp_args      = create_batched_nvcomp_args(inputs, outputs, stream);
-
+  auto nvcomp_args                 = create_batched_nvcomp_args(inputs, outputs, stream);
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
