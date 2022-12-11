@@ -38,7 +38,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.core.window import Rolling
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
@@ -2714,6 +2714,32 @@ class Frame(BinaryOperand, Scannable):
             center=center,
             axis=axis,
             win_type=win_type,
+        )
+
+    @copy_docstring(ExponentialMovingWindow)
+    def ewm(
+        self,
+        com: Union[float, None] = None,
+        span: Union[float, None] = None,
+        halflife: Union[float, None] = None,
+        alpha: Union[float, None] = None,
+        min_periods: Union[int, None] = 0,
+        adjust: bool = True,
+        ignore_na: bool = False,
+        axis: int = 0,
+        times: Union[str, np.ndarray, None] = None,
+    ):
+        return ExponentialMovingWindow(
+            self,
+            com=com,
+            span=span,
+            halflife=halflife,
+            alpha=alpha,
+            min_periods=min_periods,
+            adjust=adjust,
+            ignore_na=ignore_na,
+            axis=axis,
+            times=times,
         )
 
     @_cudf_nvtx_annotate

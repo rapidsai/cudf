@@ -155,6 +155,7 @@ ConfigureTest(
 ConfigureTest(
   REDUCTION_TEST
   reductions/collect_ops_tests.cpp
+  reductions/ewm_tests.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp

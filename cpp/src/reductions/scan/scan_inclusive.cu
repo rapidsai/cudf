@@ -255,7 +255,9 @@ std::unique_ptr<column> scan_inclusive(
 {
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
-  if (null_handling == null_policy::EXCLUDE) {
+  if (agg.kind == aggregation::EWMA) {
+    return output;
+  } else if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
     output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);

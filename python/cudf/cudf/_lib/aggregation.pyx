@@ -784,6 +784,22 @@ cdef class ScanAggregation:
             make_max_aggregation[scan_aggregation]())
         return agg
 
+    @classmethod
+    def ewma(cls, com=1.0, adjust=True):
+        cdef libcudf_aggregation.ewm_history history
+        if adjust:
+            history = libcudf_aggregation.ewm_history.INFINITE
+        else:
+            history = libcudf_aggregation.ewm_history.FINITE
+
+        cdef ScanAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_ewma_aggregation[scan_aggregation](
+                com, history
+            )
+        )
+        return agg
+
     # scan aggregations
     # TODO: update this after adding per algorithm aggregation derived types
     # https://github.com/rapidsai/cudf/issues/7106
