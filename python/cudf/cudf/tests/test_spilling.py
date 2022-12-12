@@ -628,7 +628,7 @@ def test_cached_property(manager: SpillManager):
     assert len(manager._spill_handlers) == 1
 
     # Since we have a ref to `col`, the cache is spilled
-    assert manager.spill_device_memory(nbytes=0) == gen_df_data_nbytes
+    assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
     assert len(manager.buffers()) == 1
     assert len(manager._spill_handlers) == 1
 
@@ -641,7 +641,7 @@ def test_cached_property(manager: SpillManager):
 
     # However, now that we have removed the ref to `col`, spilling the
     # cached buffer, will clear the cache
-    assert manager.spill_device_memory(nbytes=0) == gen_df_data_nbytes
+    assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
     assert len(manager.buffers()) == 0
     assert len(manager._spill_handlers) == 0
 
@@ -656,12 +656,12 @@ def test_spilling_of_range_index(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes * 2)
 
     # spill the column, which has the oldest access time
-    manager.spill_device_memory(nbytes=gen_df_data_nbytes)
+    manager.spill_device_memory(nbytes=1)
     assert spilled_and_unspilled(manager) == (
         gen_df_data_nbytes,
         gen_df_data_nbytes,
     )
 
     # spill the index, which is deleted instead of spilled.
-    manager.spill_device_memory(nbytes=0)
+    manager.spill_device_memory(nbytes=1)
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)

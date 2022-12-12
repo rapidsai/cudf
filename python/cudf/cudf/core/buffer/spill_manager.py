@@ -351,6 +351,8 @@ class SpillManager:
         """
         spilled = 0
         for buf in self.buffers(order_by_access_time=True):
+            if spilled >= nbytes:
+                break
             if buf.lock.acquire(blocking=False):
                 try:
                     if not buf.is_spilled and buf.spillable:
@@ -359,18 +361,12 @@ class SpillManager:
                         if handler is not None:
                             func, args, kwargs = handler
                             s = func(*args, **kwargs)
-                            if s is None:
-                                buf.spill(target="cpu")
-                                spilled += buf.size
-                            else:
+                            if s is not None:
                                 spilled += s
                                 self._spill_handlers.pop(buf, None)
-                        else:
-                            buf.spill(target="cpu")
-                            spilled += buf.size
-
-                        if spilled >= nbytes:
-                            break
+                                continue
+                        buf.spill(target="cpu")
+                        spilled += buf.size
                 finally:
                     buf.lock.release()
         return spilled

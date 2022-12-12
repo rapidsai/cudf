@@ -245,8 +245,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _num_rows(self):
         return len(self)
 
-    # When cudf spilling is enabled, we want to delete this cached
-    # materialization of the RangeIndex instead of spilling it.
     @cached_property
     @_cudf_nvtx_annotate
     def _values(self):
