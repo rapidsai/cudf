@@ -226,8 +226,8 @@ struct group_scan_functor<K,
     // column to them.
     if (values.has_nulls()) {
       for (std::unique_ptr<column>& child : scanned_children) {
-        child = std::make_unique<column>(structs::detail::superimpose_nulls(
-          values.null_mask(), values.null_count(), std::move(*child), stream, mr));
+        child = structs::detail::superimpose_nulls(
+          values.null_mask(), values.null_count(), std::move(child), stream, mr);
       }
     }
 
