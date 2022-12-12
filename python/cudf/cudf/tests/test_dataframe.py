@@ -2516,16 +2516,11 @@ def test_quantile(q, numeric_only):
     assert_eq(pdf["delta"].quantile(q), gdf["delta"].quantile(q))
     assert_eq(pdf["val"].quantile(q), gdf["val"].quantile(q))
 
-    if numeric_only:
-        assert_eq(pdf.quantile(q), gdf.quantile(q))
-    else:
-        q = q if isinstance(q, list) else [q]
-        assert_eq(
-            pdf.quantile(
-                q if isinstance(q, list) else [q], numeric_only=False
-            ),
-            gdf.quantile(q, numeric_only=False),
-        )
+    q = q if isinstance(q, list) else [q]
+    assert_eq(
+        pdf.quantile(q, numeric_only=numeric_only),
+        gdf.quantile(q, numeric_only=numeric_only),
+    )
 
 
 @pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
