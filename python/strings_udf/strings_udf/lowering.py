@@ -141,19 +141,21 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     return sv._getvalue()
 
 
-@cuda_lowering_registry.lower_cast(string_view, udf_string)
+@cuda_lowering_registry.lower_cast(udf_string, string_view)
 def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
-    sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
-    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
-    builder.store(val, sv_ptr)
+    udf_str_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    sv_ptr = builder.alloca(default_manager[toty].get_value_type())
+    builder.store(val, udf_str_ptr)
+
     _ = context.compile_internal(
         builder,
-        call_create_udf_string_from_string_view,
-        nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
-        (sv_ptr, udf_str_ptr),
+        call_create_string_view_from_udf_string,
+        nb_signature(types.void, _UDF_STRING_PTR, _STR_VIEW_PTR),
+        (udf_str_ptr, sv_ptr),
     )
-    result = cgutils.create_struct_proxy(udf_string)(
-        context, builder, value=builder.load(udf_str_ptr)
+
+    result = cgutils.create_struct_proxy(string_view)(
+        context, builder, value=builder.load(sv_ptr)
     )
 
     return result._getvalue()
@@ -164,10 +166,18 @@ _create_udf_string_from_string_view = cuda.declare_device(
     "udf_string_from_string_view",
     types.void(types.CPointer(string_view), types.CPointer(udf_string)),
 )
+# utilities
+_create_string_view_from_udf_string = cuda.declare_device(
+    "string_view_from_udf_string", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR)
+)
 
 
 def call_create_udf_string_from_string_view(sv, udf_str):
     _create_udf_string_from_string_view(sv, udf_str)
+
+
+def call_create_string_view_from_udf_string(udf_str, sv):
+    _create_string_view_from_udf_string(udf_str, sv)
 
 
 # String function implementations
@@ -361,7 +371,12 @@ def endswith_impl(sv, substr):
 
 
 @create_binary_string_func("StringView.count", size_type)
-def count_impl(st, substr):
+def string_view_count_impl(st, substr):
+    return _string_view_count(st, substr)
+
+
+@create_binary_string_func("UDFString.count", size_type)
+def udf_string_count_impl(st, substr):
     return _string_view_count(st, substr)
 
 

@@ -7,6 +7,7 @@ import pytest
 from numba import cuda
 from numba.core.typing import signature as nb_signature
 from numba.types import CPointer, void
+from utils import sv_to_udf_str
 
 import cudf
 import rmm
@@ -20,7 +21,7 @@ from strings_udf._lib.cudf_jit_udf import (
 from strings_udf._typing import str_view_arg_handler, string_view, udf_string
 
 
-def get_kernel(func, dtype, size):
+def get_kernels(func, dtype, size):
     """
     Create a kernel for testing a single scalar string function
     Allocates an output vector with a dtype specified by the caller
@@ -39,14 +40,27 @@ def get_kernel(func, dtype, size):
     @cuda.jit(
         sig, link=[strings_udf.ptxpath], extensions=[str_view_arg_handler]
     )
-    def kernel(input_strings, output_col):
+    def string_view_kernel(input_strings, output_col):
+        # test the string function with a string_view as input
         id = cuda.grid(1)
         if id < size:
             st = input_strings[id]
             result = func(st)
             output_col[id] = result
 
-    return kernel
+    @cuda.jit(
+        sig, link=[strings_udf.ptxpath], extensions=[str_view_arg_handler]
+    )
+    def udf_string_kernel(input_strings, output_col):
+        # test the string function with a udf_string as input
+        id = cuda.grid(1)
+        if id < size:
+            st = input_strings[id]
+            st = sv_to_udf_str(st)
+            result = func(st)
+            output_col[id] = result
+
+    return string_view_kernel, udf_string_kernel
 
 
 def run_udf_test(data, func, dtype):
@@ -66,15 +80,22 @@ def run_udf_test(data, func, dtype):
 
     cudf_column = cudf.core.column.as_column(data)
     str_views = column_to_string_view_array(cudf_column)
+    sv_kernel, udf_str_kernel = get_kernels(func, dtype, len(data))
 
-    kernel = get_kernel(func, dtype, len(data))
-    kernel.forall(len(data))(str_views, output)
+    expect = pd.Series(data).apply(func)
 
+    sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         output = column_from_udf_string_array(output)
 
     got = cudf.Series(output, dtype=dtype)
-    expect = pd.Series(data).apply(func)
+    assert_eq(expect, got, check_dtype=False)
+
+    udf_str_kernel.forall(len(data))(str_views, output)
+    if dtype == "str":
+        output = column_from_udf_string_array(output)
+
+    got = cudf.Series(output, dtype=dtype)
     assert_eq(expect, got, check_dtype=False)
 
 

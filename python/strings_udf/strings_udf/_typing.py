@@ -39,7 +39,6 @@ class UDFString(types.Type):
 
 
 class StringView(types.Type):
-
     np_dtype = np.dtype("object")
 
     def __init__(self):
@@ -216,6 +215,21 @@ class StringViewAttrs(AttributeTemplate):
 
     def resolve_replace(self, mod):
         return types.BoundFunction(StringViewReplace, string_view)
+
+
+class UDFStringCount(AbstractTemplate):
+    key = "UDFString.count"
+
+    def generic(self, args, kws):
+        return nb_signature(size_type, string_view, recvr=self.this)
+
+
+@cuda_decl_registry.register_attr
+class UDFStringAttrs(AttributeTemplate):
+    key = udf_string
+
+    def resolve_count(self, mod):
+        return types.BoundFunction(UDFStringCount, string_view)
 
 
 # Build attributes for `MaskedType(string_view)`
