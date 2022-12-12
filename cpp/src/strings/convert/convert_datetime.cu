@@ -1028,7 +1028,7 @@ struct datetime_formatter_fn {
       if (!d_chars) { d_offsets[idx] = 0; }
       return;
     }
-    auto tstamp = d_timestamps.element<T>(idx);
+    auto const tstamp = d_timestamps.element<T>(idx);
     if (d_chars)
       timestamp_to_string(tstamp, d_chars + d_offsets[idx]);
     else
