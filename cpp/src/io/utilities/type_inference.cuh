@@ -201,19 +201,6 @@ __device__ __inline__ cudf::io::column_type_bool_any16_t packed_type_info(
   return thread_type_any;
 }
 
-template <typename OptionsView>
-struct convert_to_histograms {
-  OptionsView const options;
-  cudf::device_span<char const> data;
-  template <typename T>
-  __device__ inline cudf::io::column_type_bool_any16_t operator()(T const& offset_len)
-  {
-    auto const field_offset = thrust::get<0>(offset_len);
-    auto const field_len    = thrust::get<1>(offset_len);
-    return packed_type_info(data.data() + field_offset, field_len, options);
-  }
-};
-
 /**
  * @brief Constructs column type histogram for a given column string input `data`.
  *

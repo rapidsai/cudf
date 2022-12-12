@@ -40,9 +40,9 @@ struct column_type_histogram {
   }
 };
 
-template<typename BitType>
+template <typename BitType>
 struct column_type_bool_any_T {
-  enum class type : uint8_t{
+  enum class type : uint8_t {
     NULL_COUNT,
     FLOAT_COUNT,
     DATETIME_COUNT,
@@ -98,7 +98,7 @@ struct column_type_bool_any_T {
 // ==valid, AND=> all valid or any null.
 /// null_count == size --> all null. (any way to infer this without size?)
 /// null_count > 0  --> any null.
-using column_type_bool_any  =  column_type_bool_any_T<uint32_t>;
+using column_type_bool_any     = column_type_bool_any_T<uint32_t>;
 using column_type_bool_any16_t = column_type_bool_any_T<uint16_t>;
 
 }  // namespace io
