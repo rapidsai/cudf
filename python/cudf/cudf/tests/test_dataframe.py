@@ -3889,13 +3889,17 @@ def test_dataframe_round(decimals):
     ],
 )
 def test_all(data):
+    # Provide a dtype when data is empty to avoid future pandas changes.
+    dtype = None if data else float
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data=data).replace([None], False)
+        pdata = pd.Series(data=data, dtype=dtype).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
+        pdata = pd.DataFrame(data, columns=["a", "b"], dtype=dtype).replace(
+            [None], False
+        )
         gdata = cudf.DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -3942,8 +3946,10 @@ def test_all(data):
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
+    # Provide a dtype when data is empty to avoid future pandas changes.
+    dtype = None if data else float
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data=data)
+        pdata = pd.Series(data=data, dtype=dtype)
         gdata = cudf.Series.from_pandas(pdata)
 
         if axis == 1:
