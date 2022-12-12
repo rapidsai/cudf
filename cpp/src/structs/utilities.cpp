@@ -249,6 +249,22 @@ bool may_need_sanitize_dispatch::operator()<cudf::list_view>(column_view const& 
 }
 
 /**
+ * @brief Conservatively check if the input column needs to be sanitized (i.e., if it may contain
+ * non-empty nulls).
+ *
+ * This will just call `type_dispatcher` on the `may_need_sanitize_dispatch` functor.
+ *
+ * @param col The input column to check
+ */
+bool may_need_sanitize(column_view const& col)
+{
+  // Type EMPTY is not handled by `type_dispatcher`.
+  if (col.type().id() == type_id::EMPTY) { return false; }
+
+  return type_dispatcher(col.type(), may_need_sanitize_dispatch{}, col);
+}
+
+/**
  * @brief Superimpose the given null mask into the input column without any sanitization for
  * non-empty nulls.
  *
@@ -411,8 +427,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
-  if (auto const input_view = input->view();
-      type_dispatcher(input_view.type(), may_need_sanitize_dispatch{}, input_view)) {
+  if (auto const input_view = input->view(); may_need_sanitize(input_view)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
@@ -430,8 +445,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first;
-      type_dispatcher(output_view.type(), may_need_sanitize_dispatch{}, output_view)) {
+  if (auto const output_view = output.first; may_need_sanitize(output_view)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();
