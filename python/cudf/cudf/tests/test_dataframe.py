@@ -3973,7 +3973,7 @@ def test_any(data, axis):
 
 @pytest.mark.parametrize("axis", [0, 1])
 def test_empty_dataframe_any(axis):
-    pdf = pd.DataFrame({}, columns=["a", "b"])
+    pdf = pd.DataFrame({}, columns=["a", "b"], dtype=float)
     gdf = cudf.DataFrame.from_pandas(pdf)
     got = gdf.any(axis=axis)
     expected = pdf.any(axis=axis)
