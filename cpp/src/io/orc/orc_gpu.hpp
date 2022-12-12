@@ -300,7 +300,7 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level,
-                         unsigned long long int* error_count,
+                         size_type* error_count,
                          rmm::cuda_stream_view stream);
 
 /**

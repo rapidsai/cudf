@@ -642,7 +642,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
     update_null_mask(chunks, out_buffers, stream, _mr);
   }
 
-  rmm::device_scalar<unsigned long long int> error_count(0, stream);
+  rmm::device_scalar<size_type> error_count(0, stream);
   // Update the null map for child columns
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),

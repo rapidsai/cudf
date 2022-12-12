@@ -1379,7 +1379,7 @@ __global__ void __launch_bounds__(block_size)
                          size_t first_row,
                          uint32_t rowidx_stride,
                          size_t level,
-                         unsigned long long int* error_count)
+                         size_type* error_count)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1891,7 +1891,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
-                                  unsigned long long int* error_count,
+                                  size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
