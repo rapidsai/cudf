@@ -3276,7 +3276,7 @@ def test_to_frame(pdf, gdf):
     gdf_new_name = gdf.x.to_frame(name=name)
     pdf_new_name = pdf.x.to_frame(name=name)
     assert_eq(gdf_new_name, pdf_new_name)
-    assert gdf_new_name.columns[0] == np.bool(name)
+    assert gdf_new_name.columns[0] == name
 
 
 def test_dataframe_empty_sort_index():
