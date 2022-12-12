@@ -176,7 +176,7 @@ def _clear_property_cache(
         return None  # The cached has been cleared
 
     # If `cached` is known outside of the cache, we cannot free any
-    # memory by clearing the cache. We have three references through:
+    # memory by clearing the cache. We have three inside references:
     # `instance.__dict__`, `cached`, and `sys.getrefcount`.
     if sys.getrefcount(cached) > 3:
         return None
@@ -216,7 +216,7 @@ class cached_property(functools.cached_property):
             buf,
             _clear_property_cache,
             weakref.ref(instance),
-            nbytes=ret.memory_usage,
+            nbytes=buf.nbytes,
             attrname=self.attrname,
         )
         return ret
