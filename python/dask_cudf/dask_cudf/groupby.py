@@ -219,9 +219,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            # TODO: Change following line to `shuffle=shuffle,`
-            # when dask_cudf is pinned to dask>2022.8.0
-            **({} if shuffle is None else {"shuffle": shuffle}),
+            shuffle=shuffle,
         )
 
 
@@ -351,9 +349,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            # TODO: Change following line to `shuffle=shuffle,`
-            # when dask_cudf is pinned to dask>2022.8.0
-            **({} if shuffle is None else {"shuffle": shuffle}),
+            shuffle=shuffle,
         )
 
 
