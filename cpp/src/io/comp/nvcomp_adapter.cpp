@@ -333,7 +333,7 @@ constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 }
 
 // FIXME(ets): remove before merge
-constexpr bool debug_ = true;
+constexpr bool debug_ = false;
 
 // since some compressors have extreme temp memory requirements, scale back the number
 // of chunks to process until the request for temp memory succeeds.
