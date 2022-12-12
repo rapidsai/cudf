@@ -183,6 +183,10 @@ auto batched_compress_temp_size(compression_type compression,
                                 size_t batch_size,
                                 size_t max_uncompressed_chunk_bytes)
 {
+  // FIXME(ets): workaround bug in zstd temp size calc. Increase the requested batch size
+  // to guard against underflow. This will be fixed soon.
+  constexpr size_t fudge = 96;
+
   size_t temp_size             = 0;
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
@@ -202,7 +206,7 @@ auto batched_compress_temp_size(compression_type compression,
     case compression_type::ZSTD:
 #if NVCOMP_HAS_ZSTD_COMP(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
       nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
-        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
+        batch_size + fudge, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
       break;
 #else
       CUDF_FAIL("Compression error: " +
@@ -329,7 +333,7 @@ constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 }
 
 // FIXME(ets): remove before merge
-constexpr bool debug_ = false;
+constexpr bool debug_ = true;
 
 // since some compressors have extreme temp memory requirements, scale back the number
 // of chunks to process until the request for temp memory succeeds.
@@ -341,13 +345,8 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
   // give up after 4 attempts
   for (int i = 0; i < 4; i++) {
     try {
-      // FIXME(ets): getting strange memory errors when doing multiple passes sometimes.
-      // adding a fudge factor to num_chunks because either temp_size calculation is still
-      // a bit off, or there is some other memory bound overstepping happening elsewhere.
-      // 96 works for one test.
-      constexpr size_t fudge = 96;
       auto const temp_size =
-        batched_compress_temp_size(compression, num_chunks + fudge, max_uncomp_chunk_size);
+        batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
       // FIXME(ets): remove before merge
       if constexpr (debug_) { printf("attempt alloc %lu\n", temp_size); }
       rmm::device_buffer buf(temp_size, stream);
@@ -375,7 +374,12 @@ void batched_compress(compression_type compression,
     compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
   // FIXME(ets): remove before merge
-  if constexpr (debug_) { printf("scratch %p %ld\n", scratch.data(), scratch.size()); }
+  if constexpr (debug_) {
+    printf("scratch %ld %p %p\n",
+           scratch.size(),
+           scratch.data(),
+           ((char*)scratch.data()) + scratch.size());
+  }
   rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
   size_t chunks_processed = 0;
