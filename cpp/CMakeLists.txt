@@ -669,6 +669,25 @@ target_link_libraries(
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
+add_library(cudfcuinit_intercept SHARED src/utilities/cuinit_intercept.cpp)
+set_target_properties(
+  cudfcuinit_intercept
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
+
+if(TARGET conda_env)
+  target_link_libraries(cudfcuinit_intercept PRIVATE conda_env)
+endif()
+target_link_libraries(cudfcuinit_intercept PUBLIC CUDA::cudart cuda dl)
+
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
