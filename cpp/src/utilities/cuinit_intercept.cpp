@@ -41,7 +41,9 @@ static dlsym_t original_dlsym{nullptr};
 
 static __attribute__((constructor)) void init_cuInit_hack()
 {
-  // Hack hack hack, relies on matching the exact glibc version
+  // Hack hack hack, only for glibc, this magic number can be found in
+  // glibc's sysdeps/unix/sysv/linux/x86_64/64/libc.abilist (glibc >=
+  // 2.34) (or libdl.abilist (glibc < 2.34).
   original_dlsym = (dlsym_t)dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
   if (original_dlsym) {
     original_cuGetProcAddress = (proc_t)original_dlsym(RTLD_NEXT, "cuGetProcAddress");
