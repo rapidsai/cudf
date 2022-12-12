@@ -53,6 +53,7 @@ void column_buffer::create(size_type _size,
     _null_mask =
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
   }
+  this->mr = mr;
 }
 
 namespace {
@@ -82,14 +83,10 @@ column_buffer column_buffer::empty_like(column_buffer const& input)
   return new_buff;
 }
 
-/**
- * @copydoc cudf::io::detail::make_column
- */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream)
 {
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
@@ -101,10 +98,10 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
           schema_info->children.push_back(column_name_info{"chars"});
         }
 
-        return make_strings_column(*buffer._strings, stream, mr);
+        return make_strings_column(*buffer._strings, stream, buffer.mr);
       } else {
         // convert to binary
-        auto const string_col = make_strings_column(*buffer._strings, stream, mr);
+        auto const string_col = make_strings_column(*buffer._strings, stream, buffer.mr);
         auto const num_rows   = string_col->size();
         auto col_content      = string_col->release();
 
@@ -153,7 +150,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], child_info, child_schema, stream, mr);
+      auto child = make_column(buffer.children[0], child_info, child_schema, stream);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -163,7 +160,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                buffer._null_count,
                                std::move(buffer._null_mask),
                                stream,
-                               mr);
+                               buffer.mr);
     } break;
 
     case type_id::STRUCT: {
@@ -183,7 +180,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                     : std::nullopt;
 
         output_children.emplace_back(
-          make_column(buffer.children[i], child_info, child_schema, stream, mr));
+          make_column(buffer.children[i], child_info, child_schema, stream));
       }
 
       return make_structs_column(buffer.size,
@@ -191,7 +188,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                  buffer._null_count,
                                  std::move(buffer._null_mask),
                                  stream,
-                                 mr);
+                                 buffer.mr);
     } break;
 
     default: {

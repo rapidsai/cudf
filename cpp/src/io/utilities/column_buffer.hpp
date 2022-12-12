@@ -79,7 +79,7 @@ struct column_buffer {
                 bool _is_nullable,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
-    : type(_type), is_nullable(_is_nullable)
+    : column_buffer(_type, _is_nullable)
   {
     create(_size, stream, mr);
   }
@@ -123,6 +123,8 @@ struct column_buffer {
   std::vector<column_buffer> children;
   uint32_t user_data{0};  // arbitrary user data
   std::string name;
+
+  rmm::mr::device_memory_resource* mr;
 };
 
 /**
