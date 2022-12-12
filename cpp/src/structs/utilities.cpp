@@ -224,12 +224,11 @@ namespace {
  */
 auto may_need_sanitize(column_view const& col)
 {
-  if (!col.nullable()) { return false; }
-
   switch (col.type().id()) {
-    case type_id::STRING: return true;
+    case type_id::STRING: return col.nullable();
     case type_id::LIST:
-      return col.child(lists_column_view::child_column_index).type().id() != type_id::EMPTY;
+      return col.nullable() &&
+             col.child(lists_column_view::child_column_index).type().id() != type_id::EMPTY;
     default:
       return std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
         return may_need_sanitize(child);
