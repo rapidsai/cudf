@@ -2491,7 +2491,8 @@ def test_unary_operators(func, pdf, gdf):
 def test_is_monotonic(gdf):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 1, 2])
     gdf = cudf.DataFrame.from_pandas(pdf)
-    assert not gdf.index.is_monotonic
+    with pytest.warns(FutureWarning):
+        assert not gdf.index.is_monotonic
     assert not gdf.index.is_monotonic_increasing
     assert not gdf.index.is_monotonic_decreasing
 
