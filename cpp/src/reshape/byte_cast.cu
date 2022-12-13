@@ -75,7 +75,7 @@ struct byte_list_conversion {
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
-    auto offsets_column = cudf::strings::detail::make_offsets_child_column(
+    [[maybe_unused]] auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
       begin, begin + input_column.size(), stream, mr);
 
     rmm::device_buffer null_mask = detail::copy_bitmask(input_column, stream, mr);

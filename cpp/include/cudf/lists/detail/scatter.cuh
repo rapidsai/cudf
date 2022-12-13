@@ -117,7 +117,7 @@ std::unique_ptr<column> scatter_impl(
 
   auto list_size_begin = thrust::make_transform_iterator(
     target_vector.begin(), [] __device__(unbound_list_view l) { return l.size(); });
-  auto offsets_column = cudf::strings::detail::make_offsets_child_column(
+  [[maybe_unused]] auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr);
 
   auto child_column = build_lists_child_column_recursive(child_column_type,

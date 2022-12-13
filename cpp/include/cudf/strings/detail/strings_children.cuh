@@ -33,48 +33,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-/**
- * @brief Create an offsets column to be a child of a strings column
- *
- * This will set the offsets values by executing scan on the provided
- * Iterator.
- *
- * @tparam Iterator Used as input to scan to set the offset values.
- * @param begin The beginning of the input sequence
- * @param end The end of the input sequence
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return offsets child column for strings column
- */
-template <typename InputIterator>
-std::unique_ptr<column> make_offsets_child_column(InputIterator begin,
-                                                  InputIterator end,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(begin < end, "Invalid iterator range");
-  auto count = static_cast<size_type>(std::distance(begin, end));
-  auto offsets_column =
-    make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<int32_t>();
-
-  // The number of offsets is count+1 so to build the offsets from the sizes
-  // using exclusive-scan technically requires count+1 input values even though
-  // the final input value is never used.
-  // The input iterator is wrapped here to allow the last value to be safely read.
-  auto map_fn = [begin, count] __device__(size_type idx) -> size_type {
-    return idx < count ? begin[idx] : 0;
-  };
-  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
-  auto const bytes =
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
-
-  offsets_column->set_null_count(0);
-  return offsets_column;
-}
 
 /**
  * @brief Creates child offsets and chars columns by applying the template function that

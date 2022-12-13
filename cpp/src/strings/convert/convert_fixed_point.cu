@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -285,13 +284,11 @@ struct dispatch_from_fixed_point_fn {
     // build offsets column
     auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
       0, decimal_to_string_size_fn<DecimalType>{*d_column});
-    auto offsets_column = detail::make_offsets_child_column(
+    auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + input.size(), stream, mr);
     auto const d_offsets = offsets_column->view().template data<int32_t>();
 
     // build chars column
-    auto const bytes =
-      cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
     auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),

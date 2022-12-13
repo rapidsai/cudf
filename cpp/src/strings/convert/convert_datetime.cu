@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -1073,13 +1072,11 @@ struct dispatch_from_timestamps_fn {
     // build offsets column
     auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
       0, from_timestamps_size_fn<T>{d_timestamps, d_format_names, d_format_items});
-    auto offsets_column = make_offsets_child_column(
+    auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
     auto d_offsets = offsets_column->mutable_view().template data<offset_type>();
 
     // build chars column
-    auto const bytes =
-      cudf::detail::get_value<offset_type>(offsets_column->view(), strings_count, stream);
     auto chars_column = create_chars_child_column(bytes, stream, mr);
     auto d_chars      = chars_column->mutable_view().template data<char>();
 
