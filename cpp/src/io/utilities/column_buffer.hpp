@@ -135,7 +135,6 @@ struct column_buffer {
  * @param buffer Column buffer descriptors
  * @param schema_info Schema information for the column to write optionally.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
