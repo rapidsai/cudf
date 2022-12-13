@@ -390,7 +390,7 @@ void batched_compress(compression_type compression,
 
   size_t chunks_processed = 0;
   while (chunks_processed < inputs.size()) {
-    auto num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
+    auto const num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
     batched_compress_async(compression,
                            nvcomp_args.input_data_ptrs.data() + chunks_processed,
                            nvcomp_args.input_data_sizes.data() + chunks_processed,
