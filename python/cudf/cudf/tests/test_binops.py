@@ -1624,8 +1624,8 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     assert result.value is cudf.NA
 
     # make sure dtype is the same as had there been a valid scalar
-    valid_lhs = cudf.Scalar(0, dtype=dtype_l)
-    valid_rhs = cudf.Scalar(0, dtype=dtype_r)
+    valid_lhs = cudf.Scalar(1, dtype=dtype_l)
+    valid_rhs = cudf.Scalar(1, dtype=dtype_r)
 
     valid_result = op(valid_lhs, valid_rhs)
     assert result.dtype == valid_result.dtype
