@@ -1942,7 +1942,7 @@ def test_round(data, time_type, resolution):
     ],
 )
 def test_first(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx), dtype="int64"), index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.first(offset=offset)
@@ -2009,7 +2009,7 @@ def test_first_start_at_end_of_month(idx, offset):
     ],
 )
 def test_last(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx), dtype="int64"), index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.last(offset=offset)
