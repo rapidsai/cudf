@@ -313,20 +313,20 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def _buffers_shallow_copied(self) -> bool:
+    def _is_shared_buffers(self) -> bool:
         """
         Determines if any of the buffers underneath the column
-        have been shallow copied
+        have been shared else-where.
         """
-        data_shallow_copied = (
+        is_data_shared = (
             isinstance(self.base_data, CopyOnWriteBuffer) and
-            self.base_data._shallow_copied()
+            self.base_data._is_shared()
         )
-        mask_shallow_copied = (
+        is_mask_shared = (
             isinstance(self.base_mask, CopyOnWriteBuffer) and
-            self.base_mask._shallow_copied()
+            self.base_mask._is_shared()
         )
-        return mask_shallow_copied or data_shallow_copied
+        return is_mask_shared or is_data_shared
 
     def _buffers_zero_copied(self):
         data_zero_copied = (
@@ -339,12 +339,12 @@ cdef class Column:
         )
         return data_zero_copied or mask_zero_copied
 
-    def _detach_refs(self, zero_copied=False):
+    def _unlink_shared_buffers(self, zero_copied=False):
         """
         Detaches a column from its current Buffers by making
         a true deep-copy.
         """
-        if not self._buffers_zero_copied() and self._buffers_shallow_copied():
+        if not self._buffers_zero_copied() and self._is_shared_buffers():
             new_col = self.force_deep_copy()
             self._offset = new_col.offset
             self._size = new_col.size

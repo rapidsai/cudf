@@ -65,9 +65,9 @@ class CopyOnWriteBuffer(Buffer):
         ret._finalize_init()
         return ret
 
-    def _shallow_copied(self):
+    def _is_shared(self):
         """
-        Return `True` if shallow copies of `self` exist.
+        Return `True` if `self`'s memory is shared with other columns.
         """
         return len(self.__class__._instances[(self.ptr, self.size)]) > 1
 
@@ -128,15 +128,15 @@ class CopyOnWriteBuffer(Buffer):
         # control over knowing if a third-party library
         # has modified the data this Buffer is
         # pointing to.
-        self._detach_refs(zero_copied=True)
+        self._unlink_shared_buffers(zero_copied=True)
 
         result = self._cuda_array_interface_readonly
         result["data"] = (self.ptr, False)
         return result
 
-    def _detach_refs(self, zero_copied=False):
+    def _unlink_shared_buffers(self, zero_copied=False):
         """
-        Detaches a Buffer from it's weak-references by making
+        Unlinks a Buffer if it is shared with other buffers(i.e., weak references exist) by making
         a true deep-copy.
         """
         if not self._zero_copied and self._shallow_copied():
