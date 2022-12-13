@@ -5456,7 +5456,19 @@ def test_df_sr_binop_col_order(gsr, op):
 
     psr = gsr.to_pandas()
 
-    expect = op(pdf, psr).astype("float")
+    with expect_warning_if(
+        op
+        in {
+            operator.eq,
+            operator.lt,
+            operator.le,
+            operator.gt,
+            operator.ge,
+            operator.ne,
+        },
+        FutureWarning,
+    ):
+        expect = op(pdf, psr).astype("float")
     out = op(gdf, gsr).astype("float")
     got = out[expect.columns]
 
