@@ -362,7 +362,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
       rmm::device_buffer buf(temp_size, stream);
       return std::pair(std::move(buf), num_chunks);
     } catch (rmm::bad_alloc& ba) {
-      // don't loop forever...if num_chunks is already 1, the following divide will also 
+      // don't loop forever...if num_chunks is already 1, the following divide will also
       // yield 1
       if (num_chunks == 1) { break; }
       num_chunks = (num_chunks + 1) / 2;
