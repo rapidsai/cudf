@@ -8,6 +8,7 @@ import random
 import re
 import string
 import textwrap
+import warnings
 from collections import OrderedDict, defaultdict
 from copy import copy
 
@@ -5370,23 +5371,39 @@ def test_cov_nans():
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
-    data = dict(zip(colnames, data))
+    # Anywhere that the column names of the DataFrame don't match the index
+    # names of the Series will trigger a deprecated reindexing. Since this
+    # behavior is deprecated in pandas, this test is temporarily silencing
+    # those warnings until cudf updates to pandas 2.0 as its compatibility
+    # target, at which point a large number of the parametrizations can be
+    # removed altogether (along with this warnings filter).
+    with warnings.catch_warnings():
+        assert version.parse(pd.__version__) < version.parse("2.0.0")
+        warnings.filterwarnings(
+            action="ignore",
+            category=FutureWarning,
+            message=(
+                "Automatic reindexing on DataFrame vs Series comparisons is "
+                "deprecated"
+            ),
+        )
+        data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
+        data = dict(zip(colnames, data))
 
-    gsr = gsr.astype("float64")
+        gsr = gsr.astype("float64")
 
-    gdf = cudf.DataFrame(data)
-    pdf = gdf.to_pandas(nullable=True)
+        gdf = cudf.DataFrame(data)
+        pdf = gdf.to_pandas(nullable=True)
 
-    psr = gsr.to_pandas(nullable=True)
+        psr = gsr.to_pandas(nullable=True)
 
-    expect = op(pdf, psr)
-    got = op(gdf, gsr).to_pandas(nullable=True)
-    assert_eq(expect, got, check_dtype=False)
+        expect = op(pdf, psr)
+        got = op(gdf, gsr).to_pandas(nullable=True)
+        assert_eq(expect, got, check_dtype=False)
 
-    expect = op(psr, pdf)
-    got = op(gsr, gdf).to_pandas(nullable=True)
-    assert_eq(expect, got, check_dtype=False)
+        expect = op(psr, pdf)
+        got = op(gsr, gdf).to_pandas(nullable=True)
+        assert_eq(expect, got, check_dtype=False)
 
 
 @pytest_unmark_spilling
