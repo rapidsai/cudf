@@ -4,6 +4,7 @@
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
+{% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
 
 package:
   name: libcudf-split
@@ -59,7 +60,7 @@ outputs:
       build:
         - cmake {{ cmake_version }}
       run:
-        - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+        - cudatoolkit {{ cuda_spec }}
         - librmm {{ minor_version }}.*
         - arrow-cpp {{ arrow_cpp_version }}
         - dlpack {{ dlpack_version }}
@@ -360,7 +361,7 @@ outputs:
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
-        - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+        - cudatoolkit {{ cuda_spec }}
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
     about:
