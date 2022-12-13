@@ -217,11 +217,12 @@ class StringViewAttrs(AttributeTemplate):
         return types.BoundFunction(StringViewReplace, string_view)
 
 
-class UDFStringCount(AbstractTemplate):
+class UDFStringCount(StringViewCount):
     key = "UDFString.count"
 
-    def generic(self, args, kws):
-        return nb_signature(size_type, string_view, recvr=self.this)
+
+class UDFStringReplace(StringViewReplace):
+    key = "UDFString.replace"
 
 
 @cuda_decl_registry.register_attr
@@ -230,6 +231,9 @@ class UDFStringAttrs(AttributeTemplate):
 
     def resolve_count(self, mod):
         return types.BoundFunction(UDFStringCount, string_view)
+
+    def resolve_replace(self, mod):
+        return types.BoundFunction(UDFStringReplace, string_view)
 
 
 # Build attributes for `MaskedType(string_view)`

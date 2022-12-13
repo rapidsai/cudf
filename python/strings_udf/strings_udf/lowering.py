@@ -228,6 +228,7 @@ def call_string_view_replace(result, src, to_replace, replacement):
     return _string_view_replace(result, src, to_replace, replacement)
 
 
+@cuda_lower("UDFString.replace", string_view, string_view, string_view)
 @cuda_lower("StringView.replace", string_view, string_view, string_view)
 def replace_impl(context, builder, sig, args):
     src_ptr = builder.alloca(args[0].type)
