@@ -273,6 +273,7 @@ dependencies:
           - hypothesis
           - mimesis>=4.1.0
           - moto>=4.0.8
+          - pyarrow=9.0.0
           - pyorc
           - pytest
           - pytest-benchmark
