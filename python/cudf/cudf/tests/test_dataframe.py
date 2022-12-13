@@ -5179,7 +5179,13 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
     pdf = gdf.to_pandas()
 
-    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    # TODO: This behavior seems erroneous in pandas. Why is the min/max over
+    # a mix of datetime and numeric dtypes not just throwing an error?
+    with expect_warning_if(
+        not all(cudf.api.types.is_datetime_dtype(dt) for dt in gdf.dtypes),
+        UserWarning,
+    ):
+        got = getattr(gdf, op)(axis=1, skipna=skipna)
     expected = getattr(pdf, op)(axis=1, skipna=skipna)
 
     assert_eq(got, expected)
