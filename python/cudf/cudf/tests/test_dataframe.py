@@ -4892,12 +4892,32 @@ def test_rowwise_ops(data, op, skipna):
     gdf = data
     pdf = gdf.to_pandas()
 
+    kwargs = {"axis": 1, "skipna": skipna}
     if op in ("var", "std"):
-        expected = getattr(pdf, op)(axis=1, ddof=0, skipna=skipna)
-        got = getattr(gdf, op)(axis=1, ddof=0, skipna=skipna)
-    else:
-        expected = getattr(pdf, op)(axis=1, skipna=skipna)
-        got = getattr(gdf, op)(axis=1, skipna=skipna)
+        kwargs["ddof"] = 0
+
+    with expect_warning_if(
+        not all(
+            (
+                (pdf[column].count() == 0)
+                if skipna
+                else (pdf[column].notna().count() == 0)
+            )
+            or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
+            or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+            for column in pdf
+        )
+    ):
+        expected = getattr(pdf, op)(**kwargs)
+    with expect_warning_if(
+        not all(
+            cudf.api.types.is_numeric_dtype(gdf[column].dtype)
+            or cudf.api.types.is_bool_dtype(gdf[column].dtype)
+            for column in gdf
+        ),
+        UserWarning,
+    ):
+        got = getattr(gdf, op)(**kwargs)
 
     assert_eq(expected, got, check_exact=False)
 
