@@ -5486,7 +5486,8 @@ def test_memory_usage(deep, index, set_index):
     if index and set_index is None:
 
         # Special Case: Assume RangeIndex size == 0
-        assert gdf.index.memory_usage(deep=deep) == 0
+        with expect_warning_if(deep, UserWarning):
+            assert gdf.index.memory_usage(deep=deep) == 0
 
     else:
 
