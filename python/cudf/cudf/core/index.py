@@ -2302,7 +2302,7 @@ class DatetimeIndex(GenericIndex):
         Int8Index([2, 4], dtype='int8')
         """
         res = extract_quarter(self._values)
-        return Int8Index(res, dtype="int8")
+        return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
     def isocalendar(self):
