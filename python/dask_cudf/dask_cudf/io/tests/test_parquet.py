@@ -46,10 +46,6 @@ def _divisions(setting):
     return {"gather_statistics": setting}
 
 
-@pytest.mark.skipif(
-    not dask_cudf.core.DASK_BACKEND_SUPPORT,
-    reason="No backend-dispatch support",
-)
 def test_roundtrip_backend_dispatch(tmpdir):
     # Test ddf.read_parquet cudf-backend dispatch
     tmpdir = str(tmpdir)

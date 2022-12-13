@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -11,6 +12,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.extract cimport extract as cpp_extract
 from cudf._lib.cpp.strings.regex_flags cimport regex_flags
+from cudf._lib.cpp.strings.regex_program cimport regex_program
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -28,12 +30,13 @@ def extract(Column source_strings, object pattern, uint32_t flags):
 
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = <regex_flags>flags
+    cdef unique_ptr[regex_program] c_prog = \
+        regex_program.create(pattern_string, c_flags)
 
     with nogil:
         c_result = move(cpp_extract(
             source_view,
-            pattern_string,
-            c_flags
+            dereference(c_prog)
         ))
 
     return data_from_unique_ptr(

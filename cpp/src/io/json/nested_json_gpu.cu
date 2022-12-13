@@ -1117,9 +1117,18 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                        stream};
 
   // Perform a PDA-transducer pass
+  // Compute the maximum amount of tokens that can possibly be emitted for a given input size
+  // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
+  // may be arbitrarily deeply nested: {"":_}, where '_' is a placeholder for any JSON value,
+  // possibly another such struct. That is, 6 tokens for 5 chars (plus chars and tokens of '_')
+  std::size_t constexpr min_chars_per_struct  = 5;
+  std::size_t constexpr max_tokens_per_struct = 6;
+  auto const max_token_out_count =
+    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
   rmm::device_scalar<SymbolOffsetT> num_written_tokens{stream};
-  rmm::device_uvector<PdaTokenT> tokens{json_in.size(), stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{json_in.size(), stream, mr};
+  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{max_token_out_count, stream, mr};
+
   json_to_tokens_fst.Transduce(pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data(),
@@ -1131,6 +1140,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const num_total_tokens = num_written_tokens.value(stream);
   tokens.resize(num_total_tokens, stream);
   tokens_indices.resize(num_total_tokens, stream);
+
+  CUDF_EXPECTS(num_total_tokens <= max_token_out_count,
+               "Generated token count exceeds the expected token count");
 
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }
