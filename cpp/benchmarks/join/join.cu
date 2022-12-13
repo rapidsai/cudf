@@ -17,22 +17,6 @@
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/join/join_common.hpp>
 
-void skip_helper(nvbench::state& state)
-{
-  auto const build_table_size = state.get_int64("Build Table Size");
-  auto const probe_table_size = state.get_int64("Probe Table Size");
-
-  if (build_table_size > probe_table_size) {
-    state.skip("Large build tables are skipped.");
-    return;
-  }
-
-  if (build_table_size * 100 <= probe_table_size) {
-    state.skip("Large probe tables are skipped.");
-    return;
-  }
-}
-
 template <typename key_type, typename payload_type, bool Nullable>
 void nvbench_inner_join(nvbench::state& state,
                         nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
