@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-namespace cudf {
-namespace test {
 namespace transformation {
 template <typename TypeOut, typename TypeIn, typename TypeOpe>
-void ASSERT_UNARY(column_view const& out, column_view const& in, TypeOpe&& ope)
+void ASSERT_UNARY(cudf::column_view const& out, cudf::column_view const& in, TypeOpe&& ope)
 {
   auto in_h     = cudf::test::to_host<TypeIn>(in);
   auto in_data  = in_h.first;
@@ -51,5 +49,3 @@ void ASSERT_UNARY(column_view const& out, column_view const& in, TypeOpe&& ope)
 }
 
 }  // namespace transformation
-}  // namespace test
-}  // namespace cudf

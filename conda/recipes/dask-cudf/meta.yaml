@@ -35,14 +35,14 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask==2022.11.1
-    - distributed==2022.11.1
+    - dask>=2022.12.0
+    - distributed>=2022.12.0
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask==2022.11.1
-    - distributed==2022.11.1
+    - dask>=2022.12.0
+    - distributed>=2022.12.0
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 # TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins

@@ -1743,7 +1743,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method is not None:
             raise NotImplementedError(

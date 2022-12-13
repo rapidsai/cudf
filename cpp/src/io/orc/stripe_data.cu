@@ -1378,7 +1378,8 @@ __global__ void __launch_bounds__(block_size)
                          device_2dspan<RowGroup> row_groups,
                          size_t first_row,
                          uint32_t rowidx_stride,
-                         size_t level)
+                         size_t level,
+                         size_type* error_count)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1410,6 +1411,12 @@ __global__ void __launch_bounds__(block_size)
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
+      if (s->top.data.index.strm_offset[0] > s->chunk.strm_len[CI_DATA]) {
+        atomicAdd(error_count, 1);
+      }
+      if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
+        atomicAdd(error_count, 1);
+      }
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
       uint32_t rowgroup_rowofs =
@@ -1884,6 +1891,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
+                                  size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
@@ -1891,7 +1899,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level);
+    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 
 }  // namespace gpu

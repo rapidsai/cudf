@@ -202,7 +202,7 @@ ConfigureTest(
 # * unary transform tests -------------------------------------------------------------------------
 ConfigureTest(
   TRANSFORM_TEST
-  transform/integration/unary-transform-test.cpp
+  transform/integration/unary_transform_test.cpp
   transform/nans_to_null_test.cpp
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
@@ -295,17 +295,18 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 # * iterator tests --------------------------------------------------------------------------------
 ConfigureTest(
   ITERATOR_TEST
+  iterator/indexalator_test.cu
+  iterator/optional_iterator_test_chrono.cu
+  iterator/optional_iterator_test_numeric.cu
+  iterator/pair_iterator_test_chrono.cu
+  iterator/pair_iterator_test_numeric.cu
+  iterator/scalar_iterator_test.cu
+  iterator/sizes_to_offsets_iterator_test.cu
   iterator/value_iterator.cpp
   iterator/value_iterator_test_chrono.cu
   iterator/value_iterator_test_numeric.cu
   iterator/value_iterator_test_strings.cu
   iterator/value_iterator_test_transform.cu
-  iterator/pair_iterator_test_chrono.cu
-  iterator/pair_iterator_test_numeric.cu
-  iterator/scalar_iterator_test.cu
-  iterator/optional_iterator_test_chrono.cu
-  iterator/optional_iterator_test_numeric.cu
-  iterator/indexalator_test.cu
 )
 
 # ##################################################################################################
@@ -491,6 +492,7 @@ ConfigureTest(
   lists/count_elements_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/reverse_tests.cpp
   lists/sequences_tests.cpp
   lists/set_operations/difference_distinct_tests.cpp
   lists/set_operations/have_overlap_tests.cpp
