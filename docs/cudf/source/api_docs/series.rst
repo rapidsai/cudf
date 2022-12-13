@@ -166,6 +166,7 @@ Reindexing / selection / label manipulation
    Series.add_suffix
    Series.drop
    Series.drop_duplicates
+   Series.duplicated
    Series.equals
    Series.first
    Series.head
