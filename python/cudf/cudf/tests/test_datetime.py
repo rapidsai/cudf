@@ -20,6 +20,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -1221,7 +1222,10 @@ def test_datetime_reductions(data, op, dtype):
     psr = sr.to_pandas()
 
     actual = getattr(sr, op)()
-    expected = getattr(psr, op)()
+    with expect_warning_if(
+        psr.size > 0 and psr.isnull().all() and op == "median", RuntimeWarning
+    ):
+        expected = getattr(psr, op)()
 
     if (
         expected is pd.NaT
