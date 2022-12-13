@@ -411,6 +411,7 @@ add_library(
   src/lists/interleave_columns.cu
   src/lists/lists_column_factories.cu
   src/lists/lists_column_view.cu
+  src/lists/reverse.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
