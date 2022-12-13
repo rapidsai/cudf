@@ -355,14 +355,16 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            size_t max_uncomp_chunk_size,
                                                            rmm::cuda_stream_view stream)
 {
-  // give up after 4 attempts
-  for (int i = 0; i < 4; i++) {
+  while (num_chunks > 0) {
     try {
       auto const temp_size =
         batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
       rmm::device_buffer buf(temp_size, stream);
       return std::pair(std::move(buf), num_chunks);
     } catch (rmm::bad_alloc& ba) {
+      // don't loop forever...if num_chunks is already 1, the following divide will also 
+      // yield 1
+      if (num_chunks == 1) { break; }
       num_chunks = (num_chunks + 1) / 2;
     }
   }
