@@ -178,24 +178,6 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
-// FIXME(ets): workaround bug in zstd temp size calc. remove once it's fixed.
-size_t zstdTempSize(size_t batchsz, size_t max_uncomp)
-{
-  int device;
-  int num_smp;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_smp, cudaDevAttrMultiProcessorCount, device));
-
-  size_t lchunksz = std::min(0x10000UL, max_uncomp);
-  size_t nPass    = (max_uncomp + 0xffffUL) >> 0x10;
-  if (nPass == 0) { nPass = 1; }
-
-  auto t1 = lchunksz * batchsz * nPass * 4;
-  auto t2 = lchunksz * nPass * 12 * static_cast<size_t>(num_smp);
-
-  return t1 + t2;
-}
-
 // Dispatcher for nvcompBatched<format>CompressGetTempSize
 auto batched_compress_temp_size(compression_type compression,
                                 size_t batch_size,
@@ -221,8 +203,6 @@ auto batched_compress_temp_size(compression_type compression,
 #if NVCOMP_HAS_ZSTD_COMP(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
       nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
         batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
-      // FIXME(ets): remove once nvcomp is fixed
-      temp_size = zstdTempSize(batch_size, max_uncompressed_chunk_bytes);
       break;
 #else
       CUDF_FAIL("Compression error: " +
