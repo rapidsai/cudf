@@ -29,11 +29,90 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
-#include <cstdlib>
+#include <string>
+#include <vector>
 
-namespace cudf {
 namespace {
-auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
+
+// List of List nested.
+std::string generate_list_of_lists(int32_t max_depth, int32_t max_rows, std::string elem)
+{
+  std::string json = "[";
+  for (int32_t depth = 1; depth < max_depth; ++depth) {
+    json += "[";
+  }
+  for (int32_t row = 0; row < max_rows; ++row) {
+    json += elem;
+    if (row < max_rows - 1) { json += ", "; }
+  }
+  for (int32_t depth = 1; depth < max_depth; ++depth) {
+    json += "]";
+  }
+  json += "]";
+  return json;
+}
+
+// Struct of Struct nested.
+std::string generate_struct_of_structs(int32_t max_depth, int32_t max_rows, std::string elem)
+{
+  if (max_depth == 0) return "{}";
+  std::string json;
+  for (int32_t depth = 0; depth < max_depth / 2; ++depth) {
+    json += R"({"a)" + std::to_string(depth) + R"(": )";
+  }
+  if (max_rows == 0) json += "{}";
+
+  for (int32_t row = 0; row < max_rows; ++row) {
+    json += elem;
+    if (row < max_rows - 1) {
+      json += R"(, "a)" + std::to_string(max_depth / 2 - 1) + "_" + std::to_string(row) + R"(": )";
+    }
+  }
+  for (int32_t depth = 0; depth < max_depth / 2; ++depth) {
+    json += "}";
+  }
+  return json;
+}
+
+std::string generate_row(
+  int num_columns, int max_depth, int max_list_size, int max_struct_size, size_t max_bytes)
+{
+  std::string s = "{";
+  std::vector<std::string> elems{
+    R"(1)", R"(-2)", R"(3.4)", R"("5")", R"("abcdefghij")", R"(true)", R"(null)"};
+  for (int i = 0; i < num_columns; i++) {
+    s += R"("col)" + std::to_string(i) + R"(": )";
+    if (i % 2 == 0) {
+      s += generate_struct_of_structs(max_depth - 2, (max_struct_size), elems[i % elems.size()]);
+    } else {
+      s += generate_list_of_lists(max_depth - 2, (max_struct_size), elems[i % elems.size()]);
+    }
+    if (s.length() > max_bytes) break;
+    if (i < num_columns - 1) s += ", ";
+  }
+  s += "}";
+  return s;
+}
+
+std::string generate_json(int num_rows,
+                          int num_columns,
+                          int max_depth,
+                          int max_list_size,
+                          int max_struct_size,
+                          size_t max_json_bytes)
+{
+  std::string s = "[\n";
+  for (int i = 0; i < num_rows; i++) {
+    s += generate_row(
+      num_columns, max_depth - 2, max_list_size, max_struct_size, max_json_bytes - s.length());
+    if (s.length() > max_json_bytes) break;
+    if (i != num_rows - 1) s += ",\n";
+  }
+  s += "\n]";
+  return s;
+}
+
+auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stream)
 {
   // Test input
   std::string input = R"(
@@ -47,7 +126,7 @@ auto make_test_json_data(size_type string_size, rmm::cuda_stream_view stream)
                       {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
                       {"a": 1, "b": 8.0, "d": { "author": "Jean-Jacques Rousseau"}},)";
 
-  const size_type repeat_times = string_size / input.size();
+  const cudf::size_type repeat_times = string_size / input.size();
 
   auto d_input_scalar   = cudf::make_string_scalar(input, stream);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_input_scalar);
@@ -66,7 +145,7 @@ void BM_NESTED_JSON(nvbench::state& state)
   // TODO: to be replaced by nvbench fixture once it's ready
   cudf::rmm_pool_raii rmm_pool;
 
-  auto const string_size{size_type(state.get_int64("string_size"))};
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   auto const default_options = cudf::io::json_reader_options{};
 
   auto input = make_test_json_data(string_size, cudf::get_default_stream());
@@ -93,4 +172,37 @@ NVBENCH_BENCH(BM_NESTED_JSON)
   .set_name("nested_json_gpu_parser")
   .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 1));
 
-}  // namespace cudf
+void BM_NESTED_JSON_DEPTH(nvbench::state& state)
+{
+  // TODO: to be replaced by nvbench fixture once it's ready
+  cudf::rmm_pool_raii rmm_pool;
+
+  auto const string_size{cudf::size_type(state.get_int64("string_size"))};
+  auto const depth{cudf::size_type(state.get_int64("depth"))};
+
+  auto d_scalar = cudf::string_scalar(
+    generate_json(100'000'000, 10, depth, 10, 10, string_size), true, cudf::get_default_stream());
+  auto input = cudf::device_span<const char>(d_scalar.data(), d_scalar.size());
+
+  state.add_element_count(input.size());
+  auto const default_options = cudf::io::json_reader_options{};
+
+  // Run algorithm
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    // Allocate device-side temporary storage & run algorithm
+    cudf::io::json::detail::device_parse_nested_json(
+      input, default_options, cudf::get_default_stream());
+  });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(string_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+}
+
+NVBENCH_BENCH(BM_NESTED_JSON_DEPTH)
+  .set_name("nested_json_gpu_parser_depth")
+  .add_int64_power_of_two_axis("depth", nvbench::range(1, 6, 1))
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 2));
