@@ -52,7 +52,7 @@ dependencies:
 - ptxcompiler
 - pyarrow=10.0.1
 - pydata-sphinx-theme
-# - pyorc
+- pyorc
 - pytest
 - pytest-benchmark
 - pytest-cases
