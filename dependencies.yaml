@@ -57,7 +57,7 @@ dependencies:
           - cython>=0.29,<0.30
           - dlpack>=0.5,<0.6.0a0
           - ninja
-          - pyarrow=9.0.0
+          - &pyarrow_ver pyarrow=9.0.0
           - rmm=23.02.*
           - scikit-build>=0.13.1
       - output_types: conda
@@ -273,7 +273,14 @@ dependencies:
           - hypothesis
           - mimesis>=4.1.0
           - moto>=4.0.8
-          - pyarrow=9.0.0
+          # We need to pin arrow 9 in the test environment until we upgrade
+          # cudf to use arrow 10. Without the pin, we end up with
+          # unsatisfiabile constraints because changes in the arrow conda
+          # packages in arrow 10 include the creation of new packages (namely
+          # arrow-cpp was renamed to libarrow) that do not have equivalents in
+          # arrow 9 and whose dependency constraints prevent the downgrade to
+          # arrow 9 when (lib)cudf attempts to install.
+          - *pyarrow_ver
           - pyorc
           - pytest
           - pytest-benchmark
