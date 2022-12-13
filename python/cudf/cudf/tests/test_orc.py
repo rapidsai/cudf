@@ -1862,3 +1862,16 @@ def test_orc_reader_zstd_max_ratio():
     else:
         got = cudf.read_orc(buff)
         assert_eq(expected, got)
+
+
+@pytest.mark.xfail(
+    reason="https://github.com/rapidsai/cudf/issues/11890", raises=RuntimeError
+)
+def test_reader_unsupported_offsets():
+    # needs enough data for more than one row group
+    expected = cudf.DataFrame({"str": ["*"] * 10001}, dtype="string")
+
+    buffer = BytesIO()
+    expected.to_pandas().to_orc(buffer)
+    got = cudf.read_orc(buffer)
+    assert_eq(expected, got)
