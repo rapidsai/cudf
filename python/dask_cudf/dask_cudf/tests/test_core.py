@@ -17,9 +17,6 @@ import cudf
 import dask_cudf as dgd
 
 
-@pytest.mark.skipif(
-    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
-)
 def test_from_dict_backend_dispatch():
     # Test ddf.from_dict cudf-backend dispatch
     np.random.seed(0)
@@ -32,6 +29,30 @@ def test_from_dict_backend_dispatch():
         ddf = dd.from_dict(data, npartitions=2)
     assert isinstance(ddf, dgd.DataFrame)
     dd.assert_eq(expect, ddf)
+
+
+def test_to_backend():
+    # Test DataFrame.to_backend
+    # Depends on https://github.com/dask/dask/pull/9758
+    if not hasattr(dd.core.DataFrame, "to_backend"):
+        pytest.skip(
+            "dd.core.DataFrame.to_backend not supported in this version of Dask."
+        )
+
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        ddf = dd.from_dict(data, npartitions=2)
+        assert isinstance(ddf._meta, pd.DataFrame)
+
+        gdf = ddf.to_backend("cudf")
+        assert isinstance(gdf, dgd.DataFrame)
+        dd.assert_eq(cudf.DataFrame(data), ddf)
+
+        assert isinstance(gdf.to_backend()._meta, pd.DataFrame)
 
 
 def test_from_cudf():

@@ -30,7 +30,7 @@ from dask.dataframe.utils import (
     make_meta_obj,
 )
 from dask.sizeof import sizeof as sizeof_dispatch
-from dask.utils import is_arraylike
+from dask.utils import is_arraylike, Dispatch
 
 import cudf
 from cudf.api.types import is_string_dtype
@@ -445,10 +445,26 @@ def _default_backend(func, *args, **kwargs):
 
 
 try:
+    from dask.dataframe.backends import DataFrameBackendEntrypoint, PandasBackendEntrypoint
+
+    if hasattr(PandasBackendEntrypoint, "to_backend_dispatch"):
+        to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
+
+        @to_pandas_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+        def to_pandas_dispatch_from_cudf(data, **kwargs):
+            return data.to_pandas(**kwargs)
+
+    to_cudf_dispatch = Dispatch("to_cudf_dispatch")
+
+    @to_cudf_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+    def to_cudf_dispatch_from_pandas(data, **kwargs):
+        return cudf.from_pandas(data, **kwargs)
+
+    @to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    def to_cudf_dispatch_from_cudf(data, **kwargs):
+        return data
 
     # Define "cudf" backend engine to be registered with Dask
-    from dask.dataframe.backends import DataFrameBackendEntrypoint
-
     class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         """Backend-entrypoint class for Dask-DataFrame
 
@@ -467,6 +483,17 @@ try:
         >>> type(ddf)
         <class 'dask_cudf.core.DataFrame'>
         """
+
+        @classmethod
+        def to_backend_dispatch(cls):
+            return to_cudf_dispatch
+
+        @classmethod
+        def to_backend(cls, data: dd.core._Frame, **kwargs):
+            if isinstance(data._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
+                # Already a cudf-backed collection
+                return data
+            return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
 
         @staticmethod
         def from_dict(

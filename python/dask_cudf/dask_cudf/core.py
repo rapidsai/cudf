@@ -30,12 +30,6 @@ from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _get_shuffle_type
 
-DASK_BACKEND_SUPPORT = parse_version(dask.__version__) >= parse_version(
-    "2022.10.0"
-)
-# TODO: Remove DASK_BACKEND_SUPPORT throughout codebase
-# when dask_cudf is pinned to dask>=2022.10.0
-
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
     """Superclass for DataFrame and Series
