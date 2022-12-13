@@ -1069,7 +1069,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
          col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
       chunk.use_dictionary = false;
     } else {
-      chunk.use_dictionary = dict_policy != dictionary_policy::NEVER;
+      chunk.use_dictionary = true;
       // cuCollections suggests using a hash map of size N * (1/0.7) = num_values * 1.43
       // https://github.com/NVIDIA/cuCollections/blob/3a49fc71/include/cuco/static_map.cuh#L190-L193
       auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.43, stream);
