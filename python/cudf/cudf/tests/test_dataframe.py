@@ -2156,7 +2156,6 @@ def gdf(pdf):
         "mean",
         "median",
         "sum",
-        "max",
         "std",
         "var",
         "kurt",
@@ -2193,11 +2192,16 @@ def test_dataframe_reductions(data, axis, func, skipna):
             with pytest.raises(expected_exception):
                 getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
         else:
-            assert_eq(
-                getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs),
-                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
-                check_dtype=False,
-            )
+            expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
+            with expect_warning_if(
+                skipna
+                and func in {"min", "max"}
+                and axis == 1
+                and any(gdf.T[col].isna().all() for col in gdf.T),
+                RuntimeWarning,
+            ):
+                got = getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs)
+            assert_eq(got, expect, check_dtype=False)
 
 
 @pytest.mark.parametrize(
