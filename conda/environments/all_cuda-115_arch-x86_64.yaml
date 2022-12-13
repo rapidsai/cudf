@@ -9,6 +9,7 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
+# - libarrow=10.0.1
 - arrow-cpp=10.0.1
 - boto3>=1.21.21
 - botocore>=1.24.21
@@ -48,7 +49,7 @@ dependencies:
 - pandoc<=2.0.0
 - pip
 - pre-commit
-- protobuf=4.21.10
+- protobuf=4.21
 - ptxcompiler
 - pyarrow=10.0.1
 - pydata-sphinx-theme
