@@ -296,7 +296,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> build_st
       return (sizeof(float) * CHAR_BIT) + 1 + (sizeof(int16_t) * CHAR_BIT) + 1 +
              ((struct_validity[i] ? static_cast<cudf::size_type>(strings[i].size()) : 0) *
               CHAR_BIT) +
-             (sizeof(offset_type) * CHAR_BIT) + 1 + 1;
+             (sizeof(cudf::offset_type) * CHAR_BIT) + 1 + 1;
     });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes(
     size_iter, size_iter + strings.size());
@@ -400,8 +400,8 @@ build_nested_and_expected_column(std::vector<bool> const& struct_validity)
   //    (1 validity bit)
   auto const struct_size_iter =
     cudf::detail::make_counting_transform_iterator(0, [&](auto const idx) {
-      return (CHAR_BIT * (sizeof(offset_type) +
-                          sizeof(size_type) * (struct_validity[idx] ? list_sizes[idx] : 0)) +
+      return (CHAR_BIT * (sizeof(cudf::offset_type) +
+                          sizeof(cudf::size_type) * (struct_validity[idx] ? list_sizes[idx] : 0)) +
               1) +
              (sizeof(float) * CHAR_BIT + 1) + (sizeof(int16_t) * CHAR_BIT + 1) + 1;
     });
@@ -415,11 +415,12 @@ build_nested_and_expected_column(std::vector<bool> const& struct_validity)
   // Each top level list has size:
   //    1 offset (4 bytes) + (list size if row is valid).
   auto const size_iter = cudf::detail::make_counting_transform_iterator(0, [&](auto const idx) {
-    return CHAR_BIT * sizeof(offset_type) +
+    return CHAR_BIT * sizeof(cudf::offset_type) +
            std::accumulate(
              struct_size_iter + outer_offsets[idx], struct_size_iter + outer_offsets[idx + 1], 0);
   });
-  cudf::test::fixed_width_column_wrapper<size_type> expected_sizes(size_iter, size_iter + size);
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes(size_iter,
+                                                                         size_iter + size);
 
   return {cudf::make_lists_column(static_cast<cudf::size_type>(size),
                                   outer_offsets_col.release(),
