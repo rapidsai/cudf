@@ -178,15 +178,38 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
+// FIXME(ets): workaround bug in zstd temp size calc. remove once it's fixed.
+size_t zstdTempSize(size_t batchsz, size_t max_uncomp)
+{
+  int device;
+  int num_smp;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_smp, cudaDevAttrMultiProcessorCount, device));
+
+  // magic numbers from decompilation :o
+  size_t l30             = static_cast<size_t>(num_smp) * 16UL;
+  size_t l34             = static_cast<size_t>(num_smp) * 16UL;
+  size_t nsmp            = static_cast<size_t>(num_smp) * 11UL;
+  size_t algn_max_uncomp = (max_uncomp + 3U) & 0xfffffffffffffffcUL;
+  size_t lchunksz        = std::min(0x10000UL, max_uncomp);
+  size_t nPass           = (algn_max_uncomp + 0xffffUL) >> 0x10;
+  if (nPass == 0) { nPass = 1; }
+  batchsz = nPass * batchsz;
+
+  auto t1 = (((lchunksz + 3UL) >> 2) * batchsz * 0xcUL + 7UL) & 0xfffffffffffffff8UL;
+  auto t2 = (lchunksz * batchsz + 7UL) & 0xfffffffffffffff8UL;
+  auto t3 = nsmp * 0x160 + 0x27UL + l30 * 0x560UL + l34 * 0x8000UL;
+  auto t4 = batchsz * 0x48UL;
+  auto t5 = ((((algn_max_uncomp + 3UL) >> 2) * l30 * 3) + 7U) & 0xfffffffffffffff8UL;
+
+  return t1 + t2 + t3 + t4 + t5;
+}
+
 // Dispatcher for nvcompBatched<format>CompressGetTempSize
 auto batched_compress_temp_size(compression_type compression,
                                 size_t batch_size,
                                 size_t max_uncompressed_chunk_bytes)
 {
-  // FIXME(ets): workaround bug in zstd temp size calc. Increase the requested batch size
-  // to guard against underflow. This will be fixed soon.
-  constexpr size_t fudge = 96;
-
   size_t temp_size             = 0;
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
@@ -206,7 +229,9 @@ auto batched_compress_temp_size(compression_type compression,
     case compression_type::ZSTD:
 #if NVCOMP_HAS_ZSTD_COMP(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
       nvcomp_status = nvcompBatchedZstdCompressGetTempSize(
-        batch_size + fudge, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
+        batch_size, max_uncompressed_chunk_bytes, nvcompBatchedZstdDefaultOpts, &temp_size);
+      // FIXME(ets): remove once nvcomp is fixed
+      temp_size = zstdTempSize(batch_size, max_uncompressed_chunk_bytes);
       break;
 #else
       CUDF_FAIL("Compression error: " +
@@ -332,9 +357,6 @@ constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
 
-// FIXME(ets): remove before merge
-constexpr bool debug_ = false;
-
 // since some compressors have extreme temp memory requirements, scale back the number
 // of chunks to process until the request for temp memory succeeds.
 std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type compression,
@@ -347,8 +369,6 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
     try {
       auto const temp_size =
         batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
-      // FIXME(ets): remove before merge
-      if constexpr (debug_) { printf("attempt alloc %lu\n", temp_size); }
       rmm::device_buffer buf(temp_size, stream);
       return std::pair(std::move(buf), num_chunks);
     } catch (rmm::bad_alloc& ba) {
@@ -373,32 +393,11 @@ void batched_compress(compression_type compression,
   auto [scratch, num_chunks] =
     compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
-  // FIXME(ets): remove before merge
-  if constexpr (debug_) {
-    printf("scratch %ld %p %p\n",
-           scratch.size(),
-           scratch.data(),
-           ((char*)scratch.data()) + scratch.size());
-  }
   rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
   size_t chunks_processed = 0;
   while (chunks_processed < inputs.size()) {
     auto num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
-
-    // FIXME(ets): remove before merge
-    if constexpr (debug_) {
-      printf("batch %ld at %ld of %ld max %ld\n",
-             num_this_pass,
-             chunks_processed,
-             inputs.size(),
-             max_uncomp_chunk_size);
-      printf("inp data %p\n", nvcomp_args.input_data_ptrs.data() + chunks_processed);
-      printf("inp size %p\n", nvcomp_args.input_data_sizes.data() + chunks_processed);
-      printf("out data %p\n", nvcomp_args.output_data_ptrs.data() + chunks_processed);
-      printf("out size %p\n", actual_compressed_data_sizes.data() + chunks_processed);
-    }
-
     batched_compress_async(compression,
                            nvcomp_args.input_data_ptrs.data() + chunks_processed,
                            nvcomp_args.input_data_sizes.data() + chunks_processed,
