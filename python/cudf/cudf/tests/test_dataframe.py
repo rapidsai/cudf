@@ -4935,7 +4935,7 @@ def test_rowwise_ops_nullable_dtypes_all_null(op):
         {
             "a": [1, 2, 3, 4],
             "b": [7, np.NaN, 9, 10],
-            "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+            "c": cudf.Series([np.NaN, np.NaN, np.NaN, np.NaN], dtype=float),
             "d": cudf.Series([None, None, None, None], dtype="int64"),
             "e": [100, None, 200, None],
             "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
