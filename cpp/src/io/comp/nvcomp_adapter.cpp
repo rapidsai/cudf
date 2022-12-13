@@ -186,23 +186,14 @@ size_t zstdTempSize(size_t batchsz, size_t max_uncomp)
   CUDF_CUDA_TRY(cudaGetDevice(&device));
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_smp, cudaDevAttrMultiProcessorCount, device));
 
-  // magic numbers from decompilation :o
-  size_t l30             = static_cast<size_t>(num_smp) * 16UL;
-  size_t l34             = static_cast<size_t>(num_smp) * 16UL;
-  size_t nsmp            = static_cast<size_t>(num_smp) * 11UL;
-  size_t algn_max_uncomp = (max_uncomp + 3U) & 0xfffffffffffffffcUL;
-  size_t lchunksz        = std::min(0x10000UL, max_uncomp);
-  size_t nPass           = (algn_max_uncomp + 0xffffUL) >> 0x10;
+  size_t lchunksz = std::min(0x10000UL, max_uncomp);
+  size_t nPass    = (max_uncomp + 0xffffUL) >> 0x10;
   if (nPass == 0) { nPass = 1; }
-  batchsz = nPass * batchsz;
 
-  auto t1 = (((lchunksz + 3UL) >> 2) * batchsz * 0xcUL + 7UL) & 0xfffffffffffffff8UL;
-  auto t2 = (lchunksz * batchsz + 7UL) & 0xfffffffffffffff8UL;
-  auto t3 = nsmp * 0x160 + 0x27UL + l30 * 0x560UL + l34 * 0x8000UL;
-  auto t4 = batchsz * 0x48UL;
-  auto t5 = ((((algn_max_uncomp + 3UL) >> 2) * l30 * 3) + 7U) & 0xfffffffffffffff8UL;
+  auto t1 = lchunksz * batchsz * nPass * 4;
+  auto t2 = lchunksz * nPass * 12 * static_cast<size_t>(num_smp);
 
-  return t1 + t2 + t3 + t4 + t5;
+  return t1 + t2;
 }
 
 // Dispatcher for nvcompBatched<format>CompressGetTempSize
