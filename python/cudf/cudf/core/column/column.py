@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, RefCountableBuffer, as_buffer
+from cudf.core.buffer import Buffer, CopyOnWriteBuffer, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -420,7 +420,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.force_deep_copy()
         else:
             if cudf.get_option("copy_on_write"):
-                if self._is_cai_zero_copied():
+                if self._buffers_zero_copied():
                     return self.force_deep_copy()
 
                 copied_col = cast(
@@ -1910,7 +1910,7 @@ def as_column(
         elif (
             fastpath
             and cudf.get_option("copy_on_write")
-            and isinstance(col.base_data, RefCountableBuffer)
+            and isinstance(col.base_data, CopyOnWriteBuffer)
         ):
             col.base_data._zero_copied = True
 

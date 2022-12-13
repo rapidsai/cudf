@@ -12,7 +12,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import (
     Buffer,
-    RefCountableBuffer,
+    CopyOnWriteBuffer,
     SpillableBuffer,
     SpillLock,
     acquire_spill_lock,
@@ -74,7 +74,6 @@ cdef class Column:
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
-        self._zero_copied = False
 
     @property
     def base_size(self):
@@ -217,7 +216,7 @@ cdef class Column:
             # be expensive.
             hasattr(value, "__cuda_array_interface__")
         ):
-            if isinstance(value, RefCountableBuffer):
+            if isinstance(value, CopyOnWriteBuffer):
                 value = SimpleNamespace(
                     __cuda_array_interface__=(
                         value._cuda_array_interface_readonly
@@ -314,49 +313,39 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def _has_a_weakref(self) -> bool:
+    def _is_shared_buffers(self) -> bool:
         """
-        Determines if the column has a weak reference.
+        Determines if any of the buffers underneath the column
+        have been shared else-where.
         """
-
-        return (
-            (
-                isinstance(self.base_data, RefCountableBuffer) and
-                self.base_data._has_a_weakref()
-            )
-            or
-            (
-                isinstance(self.base_mask, RefCountableBuffer) and
-                self.base_mask._has_a_weakref()
-            )
+        is_data_shared = (
+            isinstance(self.base_data, CopyOnWriteBuffer) and
+            self.base_data._is_shared()
         )
-
-    def _is_cai_zero_copied(self) -> bool:
-        """
-        Determines if the column is zero copied.
-        """
-        return (
-            self._zero_copied or
-            (
-                self.base_data is not None and
-                isinstance(self.base_data, RefCountableBuffer) and
-                self.base_data._is_cai_zero_copied()
-            ) or
-            (
-                self.base_mask is not None and
-                isinstance(self.base_mask, RefCountableBuffer) and
-                self.base_mask._is_cai_zero_copied()
-            )
+        is_mask_shared = (
+            isinstance(self.base_mask, CopyOnWriteBuffer) and
+            self.base_mask._is_shared()
         )
+        return is_mask_shared or is_data_shared
 
-    def _detach_refs(self, zero_copied=False):
+    def _buffers_zero_copied(self):
+        data_zero_copied = (
+            isinstance(self.base_data, CopyOnWriteBuffer) and
+            self.base_data._zero_copied
+        )
+        mask_zero_copied = (
+            isinstance(self.base_mask, CopyOnWriteBuffer) and
+            self.base_mask._zero_copied
+        )
+        return data_zero_copied or mask_zero_copied
+
+    def _unlink_shared_buffers(self, zero_copied=False):
         """
         Detaches a column from its current Buffers by making
         a true deep-copy.
         """
-        if not self._is_cai_zero_copied() and self._has_a_weakref():
+        if not self._buffers_zero_copied() and self._is_shared_buffers():
             new_col = self.force_deep_copy()
-
             self._offset = new_col.offset
             self._size = new_col.size
             self._dtype = new_col._dtype
