@@ -18,7 +18,6 @@ import rmm
 import cudf
 import cudf.core.buffer.spill_manager
 import cudf.options
-from cudf._lib.column import Column
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -37,8 +36,6 @@ from cudf.core.buffer.spillable_buffer import (
     SpillableBufferSlice,
     SpillLock,
 )
-from cudf.core.buffer.utils import cached_property
-from cudf.core.column import column
 from cudf.testing._utils import assert_eq
 
 if get_global_manager() is not None:
@@ -614,54 +611,35 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
 
 
-def test_cached_property(manager: SpillManager):
-    class ClassWithCachedColumn:
-        @cached_property
-        def cached_column(self) -> Column:
-            return column.arange(3)
+def test_spilling_of_range_index(manager: SpillManager):
+    # Create a non-materialized RangeIndex
+    idx = single_column_df(target="gpu").index
+    assert isinstance(idx, cudf.RangeIndex)
+    assert spilled_and_unspilled(manager) == (0, 0)
 
-    # Check that a spill handler is created
-    c = ClassWithCachedColumn()
-    col = c.cached_column
+    # Materialize the index
+    val = idx._values
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
     assert len(manager.buffers()) == 1
-    assert manager.buffers()[0] is col.base_data
     assert len(manager._spill_handlers) == 1
 
-    # Since we have a ref to `col`, the cache is spilled
+    # Since we have a ref to `val`, the materialized index is spilled
     assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
+    assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)
     assert len(manager.buffers()) == 1
     assert len(manager._spill_handlers) == 1
 
-    # Let's unspill and delete our ref to `col`. We still have the
-    # cached buffer and its spill handler
-    col.base_data.spill(target="gpu")
-    del col
+    # Let's unspill and delete our ref to `val`. We still have the
+    # materialized index and its spill handler
+    val.base_data.spill(target="gpu")
+    del val
+    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
     assert len(manager.buffers()) == 1
     assert len(manager._spill_handlers) == 1
 
-    # However, now that we have removed the ref to `col`, spilling the
-    # cached buffer, will clear the cache
+    # However, now that we have removed the ref to `val`, spilling the
+    # materialized index, will clear the cache.
     assert manager.spill_device_memory(nbytes=1) == gen_df_data_nbytes
+    assert spilled_and_unspilled(manager) == (0, 0)
     assert len(manager.buffers()) == 0
     assert len(manager._spill_handlers) == 0
-
-
-def test_spilling_of_range_index(manager: SpillManager):
-    df = single_column_df(target="gpu")
-    assert isinstance(df.index, cudf.RangeIndex)
-    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes)
-
-    # materialize the index
-    df.index._values
-    assert spilled_and_unspilled(manager) == (0, gen_df_data_nbytes * 2)
-
-    # spill the column, which has the oldest access time
-    manager.spill_device_memory(nbytes=1)
-    assert spilled_and_unspilled(manager) == (
-        gen_df_data_nbytes,
-        gen_df_data_nbytes,
-    )
-
-    # spill the index, which is deleted instead of spilled.
-    manager.spill_device_memory(nbytes=1)
-    assert spilled_and_unspilled(manager) == (gen_df_data_nbytes, 0)

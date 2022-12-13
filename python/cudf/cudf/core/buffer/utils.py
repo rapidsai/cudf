@@ -176,7 +176,7 @@ def _clear_property_cache(
         return None  # The cached has been cleared
 
     # If `cached` is known outside of the cache, we cannot free any
-    # memory by clearing the cache. We have three inside references:
+    # memory by clearing the cache. We know of three references:
     # `instance.__dict__`, `cached`, and `sys.getrefcount`.
     if sys.getrefcount(cached) > 3:
         return None
@@ -191,17 +191,23 @@ class cached_property(functools.cached_property):
     When spilling is disabled (the default case), this decorator is identical
     to `functools.cached_property`.
 
-    When spilling is enabled, this property register a spill handler for
-    the cached data that deletes the data rather than spilling it. For now,
-    only cached Columns are handled this way.
-    See `SpillManager.register_spill_handler`.
+    When spilling is enabled, this register a spill handler for the cached data
+    that deletes the data rather than spilling it. For now, only `RangeIndex`
+    are handled this way. See `SpillManager.register_spill_handler`.
+
+    It is always safe to use this instead of `functools.cached_property`.
     """
 
     def __get__(self, instance: T, owner=None):
         cache_hit = self.attrname in instance.__dict__
         ret = super().__get__(instance, owner)
-        if cache_hit or not isinstance(ret, cudf.core.column.ColumnBase):
+        # Make sure to only register a handler when the cache has changed.
+        # Also, for now, we only handle `RangeIndex` instances.
+        if cache_hit or not isinstance(instance, cudf.RangeIndex):
             return ret
+        # Thus, we know `ret` is a numerical column with no mask
+        assert isinstance(ret, cudf.core.column.NumericalColumn)
+        assert ret.nullable is False
 
         manager = get_global_manager()
         if manager is None:
