@@ -16,8 +16,8 @@
 #include "nvcomp_adapter.hpp"
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/error.hpp>
 #include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/snappy.h>
@@ -337,7 +337,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            rmm::cuda_stream_view stream)
 {
   auto scaled_num_chunks = num_chunks;
-  size_t scale = 1;
+  size_t scale           = 1;
   while (scaled_num_chunks > 0) {
     try {
       auto const temp_size =
