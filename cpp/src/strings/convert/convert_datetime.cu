@@ -1029,10 +1029,11 @@ struct datetime_formatter_fn {
       return;
     }
     auto const tstamp = d_timestamps.element<T>(idx);
-    if (d_chars)
+    if (d_chars) {
       timestamp_to_string(tstamp, d_chars + d_offsets[idx]);
-    else
+    } else {
       d_offsets[idx] = compute_output_size(tstamp);
+    }
   }
 };
 
