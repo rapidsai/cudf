@@ -17,6 +17,7 @@
 #include "nvcomp_adapter.cuh"
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/snappy.h>
@@ -335,17 +336,19 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            size_t max_uncomp_chunk_size,
                                                            rmm::cuda_stream_view stream)
 {
-  while (num_chunks > 0) {
+  auto scaled_num_chunks = num_chunks;
+  size_t scale = 1;
+  while (scaled_num_chunks > 0) {
     try {
       auto const temp_size =
-        batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
+        batched_compress_temp_size(compression, scaled_num_chunks, max_uncomp_chunk_size);
       rmm::device_buffer buf(temp_size, stream);
-      return std::pair(std::move(buf), num_chunks);
+      return std::pair(std::move(buf), scaled_num_chunks);
     } catch (rmm::bad_alloc& ba) {
-      // don't loop forever...if num_chunks is already 1, the following divide will also
-      // yield 1
-      if (num_chunks == 1) { break; }
-      num_chunks = (num_chunks + 1) / 2;
+      // don't loop forever...if scaled_num_chunks is already 1, the following divide will
+      // also yield 1
+      if (scaled_num_chunks == 1) { break; }
+      scaled_num_chunks = util::div_rounding_up_safe(num_chunks, ++scale);
     }
   }
   CUDF_FAIL("Cannot allocate temp buffer for compression");
