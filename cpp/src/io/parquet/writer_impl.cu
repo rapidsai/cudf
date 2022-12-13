@@ -1032,13 +1032,14 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
   return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
 
-auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                              host_span<gpu::parquet_column_device_view const> col_desc,
-                              device_2dspan<gpu::PageFragment const> frags,
-                              Compression compression,
-                              dictionary_policy dict_policy,
-                              size_t max_dict_size,
-                              rmm::cuda_stream_view stream)
+std::pair<std::vector<rmm::device_uvector<size_type>>, std::vector<rmm::device_uvector<size_type>>>
+build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                         host_span<gpu::parquet_column_device_view const> col_desc,
+                         device_2dspan<gpu::PageFragment const> frags,
+                         Compression compression,
+                         dictionary_policy dict_policy,
+                         size_t max_dict_size,
+                         rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
   // chunk that can have dictionary
@@ -1049,6 +1050,15 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_index;
 
   if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
+
+  if (dict_policy == dictionary_policy::NEVER) {
+    thrust::for_each(rmm::exec_policy(stream),
+                     h_chunks.begin(),
+                     h_chunks.end(),
+                     [] __device__(gpu::EncColumnChunk & chunk) { chunk.use_dictionary = false; });
+    chunks.host_to_device(stream);
+    return std::pair(std::move(dict_data), std::move(dict_index));
+  }
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
