@@ -33,11 +33,9 @@ def test_from_dict_backend_dispatch():
 
 def test_to_backend():
     # Test DataFrame.to_backend
-    # Depends on https://github.com/dask/dask/pull/9758
+    # Depends on: https://github.com/dask/dask/pull/9758
     if not hasattr(dd.core.DataFrame, "to_backend"):
-        pytest.skip(
-            "dd.core.DataFrame.to_backend not supported in this version of Dask."
-        )
+        pytest.skip("to_backend not supported in this version of Dask.")
 
     np.random.seed(0)
     data = {
