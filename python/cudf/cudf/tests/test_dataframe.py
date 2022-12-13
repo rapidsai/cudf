@@ -9436,7 +9436,16 @@ def test_groupby_covariance(data, gkey, min_periods, ddof):
     pdf = gdf.to_pandas()
 
     actual = gdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
-    expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+    # We observe a warning if there are too few observations to generate a
+    # non-singular covariance matrix _and_ there are enough that pandas will
+    # actually attempt to compute a value. Groups with fewer than min_periods
+    # inputs will be skipped altogether, so no warning occurs.
+    with expect_warning_if(
+        (pdf.groupby(gkey).count() < 2).all().all()
+        and (pdf.groupby(gkey).count() > min_periods).all().all(),
+        RuntimeWarning,
+    ):
+        expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
 
     assert_eq(expected, actual)
 
