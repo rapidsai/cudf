@@ -3069,7 +3069,10 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, ColumnBase):
-        return _index_from_data({kwargs.get("name", None): arbitrary})
+        res = _index_from_data({kwargs.get("name", None): arbitrary})
+        if (dtype := kwargs.get("dtype")) is not None:
+            res = res.astype(dtype)
+        return res
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):

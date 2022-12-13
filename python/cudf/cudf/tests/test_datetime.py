@@ -1350,8 +1350,7 @@ def test_quarter():
     expect2 = pIndex.quarter
     got2 = gIndex.quarter
 
-    assert isinstance(got2, cudf.Int8Index)
-    assert_eq(expect2.values, got2.values, check_dtype=False)
+    assert_eq(expect2.values, got2.values)
 
 
 @pytest.mark.parametrize(
@@ -1946,7 +1945,7 @@ def test_round(data, time_type, resolution):
     ],
 )
 def test_first(idx, offset):
-    p = pd.Series(range(len(idx), dtype="int64"), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.first(offset=offset)
@@ -2013,7 +2012,7 @@ def test_first_start_at_end_of_month(idx, offset):
     ],
 )
 def test_last(idx, offset):
-    p = pd.Series(range(len(idx), dtype="int64"), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.last(offset=offset)
