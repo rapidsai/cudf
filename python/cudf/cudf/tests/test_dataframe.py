@@ -4425,7 +4425,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = pd.Series(data=data)
+    pds = pd.Series(data=data, dtype=None if data else float)
     gds = cudf.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -4448,7 +4448,7 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    pds = pd.Series(data=data)
+    pds = pd.Series(data=data, dtype=None if data else float)
     gds = cudf.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
