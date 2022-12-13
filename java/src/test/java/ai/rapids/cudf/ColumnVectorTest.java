@@ -4964,9 +4964,26 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testReverseString() {
     try (ColumnVector input = ColumnVector.fromStrings("abcdef", "12345", "", "", "aébé",
-            "A é Z", "X", "é");
+           "A é Z", "X", "é");
          ColumnVector expected = ColumnVector.fromStrings("fedcba", "54321", "", "", "ébéa",
-            "Z é A", "X", "é");
+           "Z é A", "X", "é");
+         ColumnVector result = input.reverseStringsOrLists()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReverseList() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> emptyList = Collections.emptyList();
+    List<Integer> reversedList0 = Arrays.asList(3, 2, 1);
+    List<Integer> reversedList1 = Arrays.asList(null, 5, 4);
+
+    try (ColumnVector input = makeListsColumn(DType.INT32,
+           emptyList, list0, emptyList, null, list1);
+         ColumnVector expected = makeListsColumn(DType.INT32,
+           emptyList, reversedList0, emptyList, null, reversedList1);
          ColumnVector result = input.reverseStringsOrLists()) {
       assertColumnsAreEqual(expected, result);
     }
