@@ -9454,7 +9454,7 @@ def test_groupby_covariance_multiindex_dataframe():
     gdf = cudf.DataFrame(
         {
             "a": [1, 1, 2, 2],
-            "b": [1, 1, 2, 3],
+            "b": [1, 1, 2, 2],
             "c": [2, 3, 4, 5],
             "d": [6, 8, 9, 1],
         }
