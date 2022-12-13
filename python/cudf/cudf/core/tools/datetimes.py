@@ -894,6 +894,13 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
+    # We compute `end_estim` (the estimated upper bound of the date
+    # range) below, but don't always use it.  We do this to ensure
+    # that the appropriate OverflowError is raised by Pandas in case
+    # of overflow.
+    # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
+    # we shouldn't raise but compute the sequence as is. The trailing overflow
+    # part should get trimmed at the end.
     end_estim = (
         pd.Timestamp(start.value)
         + periods * offset._maybe_as_fast_pandas_offset()

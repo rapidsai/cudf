@@ -195,20 +195,23 @@ we will never know if the test starts to pass because the bug is
 fixed. Use of `pytest.xfail` is checked for, and forbidden, via
 a pre-commit hook.
 
-Instead, to handle this (hopefully rare) case, use the following
-pattern of expecting a test to raise an appropriate error (here as an
-example, an `AssertionError`).
+Instead, to handle this (hopefully rare) case, we can programmatically
+mark a test as expected to fail under a combination of conditions by
+applying the `pytest.mark.xfail` mark to the current test `request`.
+To achieve this, the test function should take an extra parameter
+named `request`, on which we call `applymarker`:
 
 ```python
 @pytest.mark.parametrize("v1", [1, 2, 3])
 @pytest.mark.parametrize("v2", [1, 2, 3])
-def test_sum_lt_6(v1, v2):
-    if v1 == 3 and v2 == 3:
-        with pytest.raises(AssertionError):
-           # Add comment linking to relevant issue.
-           assert v1 + v2 < 6
-    else:
-        assert v1 + v2 < 6
+def test_sum_lt_6(request, v1, v2):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(v1 == 3 and v2 == 3),
+            reason="Add comment linking to relevant issue",
+        )
+    )
+    assert v1 + v2 < 6
 ```
 
 This way, when the bug is fixed, the test suite will fail at this

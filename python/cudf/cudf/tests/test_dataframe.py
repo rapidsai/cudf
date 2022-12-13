@@ -4493,8 +4493,6 @@ def test_isin_dataframe(data, values):
         except ValueError as e:
             if str(e) == "Lengths must match." and not PANDAS_GE_110:
                 # https://github.com/pandas-dev/pandas/issues/34256
-                with pytest.raises(ValueError):
-                    raise
                 return
         except TypeError as e:
             # Can't do isin with different categories

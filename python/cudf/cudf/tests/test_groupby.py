@@ -2,7 +2,6 @@
 
 import datetime
 import itertools
-from contextlib import nullcontext
 from decimal import Decimal
 
 import numpy as np
@@ -1049,7 +1048,16 @@ def test_groupby_index_type():
     "interpolation", ["linear", "lower", "higher", "nearest", "midpoint"]
 )
 @pytest.mark.parametrize("q", [0.25, 0.4, 0.5, 0.7, 1])
-def test_groupby_quantile(interpolation, q):
+def test_groupby_quantile(request, interpolation, q):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(q == 0.5 and interpolation == "nearest"),
+            reason=(
+                "Pandas NaN Rounding will fail nearest " "interpolation at 0.5"
+            ),
+        )
+    )
+
     raw_data = {
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
         "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
@@ -1070,13 +1078,7 @@ def test_groupby_quantile(interpolation, q):
     pdresult = pdresult["y"].reset_index(drop=True)
     gdresult = gdresult["y"].reset_index(drop=True)
 
-    if q == 0.5 and interpolation == "nearest":
-        # Pandas NaN Rounding will fail nearest interpolation at 0.5
-        context = pytest.raises(AssertionError)
-    else:
-        context = nullcontext()
-    with context:
-        assert_groupby_results_equal(pdresult, gdresult)
+    assert_groupby_results_equal(pdresult, gdresult)
 
 
 def test_groupby_std():
