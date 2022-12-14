@@ -2733,9 +2733,5 @@ def test_parquet_reader_malformed_file(datadir):
     fname = datadir / "nested-unsigned-malformed.parquet"
 
     # expect a failure when reading the whole file
-    try:
+    with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
-    except RuntimeError:
-        pytest.mark.xfail(reason="Parquet file is malformed")
-    else:
-        assert 0, "Expected file read failure"

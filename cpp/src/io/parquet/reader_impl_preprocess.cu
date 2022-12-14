@@ -1309,7 +1309,8 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
                             rmm::cuda_stream_view stream)
 {
   // sum row counts for all non-dictionary, non-list columns. other columns will be indicated as 0
-  rmm::device_uvector<int> row_counts(pages.size(), stream);  // worst case:  num keys == num pages
+  rmm::device_uvector<size_type> row_counts(pages.size(),
+                                            stream);  // worst case:  num keys == num pages
   auto const size_iter = thrust::make_transform_iterator(
     page_index.begin(), flat_column_num_rows{pages.device_ptr(), chunks.device_ptr()});
   auto const row_counts_begin = row_counts.begin();
@@ -1321,11 +1322,16 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
                                                     row_counts_begin)
                                 .second;
 
-  auto const nonzero = thrust::find_if(
-    rmm::exec_policy(stream), row_counts_begin, row_counts_end, row_counts_nonzero{});
-  if (nonzero != row_counts_end) {
-    size_t const found_row_count =
-      static_cast<size_t>(row_counts.element(nonzero - row_counts_begin, stream));
+  // make sure all non-zero row counts are the same
+  rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
+  auto const compacted_row_counts_begin = compacted_row_counts.begin();
+  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
+                                                        row_counts_begin,
+                                                        row_counts_end,
+                                                        compacted_row_counts_begin,
+                                                        row_counts_nonzero{});
+  if (compacted_row_counts_end != compacted_row_counts_begin) {
+    size_t const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
@@ -1336,8 +1342,8 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
     // all non-zero row counts must be the same
     auto const chk =
       thrust::count_if(rmm::exec_policy(stream),
-                       row_counts_begin,
-                       row_counts_end,
+                       compacted_row_counts_begin,
+                       compacted_row_counts_end,
                        row_counts_different{static_cast<size_type>(found_row_count)});
     CUDF_EXPECTS(chk == 0,
                  "Encountered malformed parquet page data (row count mismatch in page data)");
