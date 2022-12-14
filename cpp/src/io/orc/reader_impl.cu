@@ -36,6 +36,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -641,6 +642,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
     update_null_mask(chunks, out_buffers, stream, _mr);
   }
 
+  rmm::device_scalar<size_type> error_count(0, stream);
   // Update the null map for child columns
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
@@ -652,8 +654,12 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            row_groups.size().first,
                            row_index_stride,
                            level,
+                           error_count.data(),
                            stream);
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host(stream);
+  // `value` synchronizes
+  auto const num_errors = error_count.value(stream);
+  CUDF_EXPECTS(num_errors == 0, "ORC data decode failed");
 
   std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
     out_buffers[col_idx].null_count() =

@@ -16,6 +16,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -375,8 +376,12 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
     assert cd_sr.cat.ordered is False
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
+    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
+    # inside as_ordered.
+    with pytest.warns(FutureWarning):
+        pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
+    with expect_warning_if(inplace, FutureWarning):
+        cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
@@ -395,8 +400,12 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
     assert cd_sr.cat.ordered is True
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
+    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
+    # inside as_unordered.
+    with pytest.warns(FutureWarning):
+        pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
+    with expect_warning_if(inplace, FutureWarning):
+        cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
