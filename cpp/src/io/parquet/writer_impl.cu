@@ -1253,7 +1253,9 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
                               ? std::nullopt
                               : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
-  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  // page size must fit in a 32-bit signed integer
+  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,

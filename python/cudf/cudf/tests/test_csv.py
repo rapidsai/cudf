@@ -834,10 +834,9 @@ def test_csv_reader_bools_NA():
     expected = pd.DataFrame(
         {
             "text": ["true", "false", "foo", "bar", "qux"],
-            "int": [1, 0, 1, 0, 0],
+            "int": [1.0, 0.0, 1.0, 0.0, np.nan],
         }
     )
-    # breaking behaviour is np.nan for qux
     assert_eq(df, expected)
 
 
@@ -1647,7 +1646,7 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1664,7 +1663,7 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)

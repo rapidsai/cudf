@@ -467,7 +467,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
         return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
         return type_id::TIMESTAMP_MILLISECONDS;
-      } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0) {
         return type_id::FLOAT64;
       } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
         return type_id::INT64;
@@ -601,7 +601,8 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
   }
 
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
-
+  CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,
+               "Multiple compressed inputs are not supported");
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
   auto parse_opts = parse_options{',', '\n', '\"', '.'};

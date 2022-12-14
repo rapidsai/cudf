@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,7 +136,17 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
 
   auto agg =
     cudf::make_quantile_aggregation<groupby_aggregation>({0.25, 0.75}, interpolation::LINEAR);
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), force_use_sort_impl::YES);
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  std::move(agg),
+                  force_use_sort_impl::YES,
+                  null_policy::EXCLUDE,
+                  sorted::NO,
+                  {},
+                  {},
+                  sorted::YES);
 }
 
 TYPED_TEST(groupby_quantile_test, interpolation_types)

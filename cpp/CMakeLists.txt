@@ -411,6 +411,7 @@ add_library(
   src/lists/interleave_columns.cu
   src/lists/lists_column_factories.cu
   src/lists/lists_column_view.cu
+  src/lists/reverse.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
@@ -524,6 +525,7 @@ add_library(
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
+  src/strings/reverse.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
