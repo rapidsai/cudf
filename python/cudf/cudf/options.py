@@ -258,9 +258,9 @@ _register_option(
     os.environ.get("CUDF_COPY_ON_WRITE", "0") == "1",
     textwrap.dedent(
         """
-        Default behavior of performing deep copies.
-        If set to `False`, each deep copy will perform a true deep copy.
-        If set to `True`, each deep copy will perform a shallow copy
+        Default behavior of performing shallow copies.
+        If set to `False`, each shallow copy will perform a true shallow copy.
+        If set to `True`, each shallow copy will perform a shallow copy
         with underlying data actually referring to the actual column, in this
         case a copy is only made when there is a write operation performed on
         the column.
