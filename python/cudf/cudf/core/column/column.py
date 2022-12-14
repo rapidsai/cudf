@@ -420,7 +420,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.force_deep_copy()
         else:
             if cudf.get_option("copy_on_write"):
-                if self._is_externally_referenced():
+                if self._is_externally_referenced:
                     return self.force_deep_copy()
 
                 copied_col = cast(

@@ -313,17 +313,23 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
+    @property
     def _is_internally_referenced(self) -> bool:
         """
         Determines if any of the buffers underneath the column
-        have been shared else-where.
+        have been shared internally(i.e., between other columns).
         """
         return any(
             isinstance(buf, CopyOnWriteBuffer) and buf._is_shared
             for buf in (self.base_data, self.base_mask)
         )
 
+    @property
     def _is_externally_referenced(self):
+        """
+        Determines if any of the buffers underneath the column
+        have been shared externally(i.e., via __cuda_array_interface__).
+        """
         return any(
             isinstance(buf, CopyOnWriteBuffer) and buf._zero_copied
             for buf in (self.base_data, self.base_mask)
@@ -334,8 +340,8 @@ cdef class Column:
         Detaches a column from its current Buffers by making
         a true deep-copy.
         """
-        if not self._is_externally_referenced() \
-                and self._is_internally_referenced():
+        if not self._is_externally_referenced \
+                and self._is_internally_referenced:
             new_col = self.force_deep_copy()
             self._offset = new_col.offset
             self._size = new_col.size
