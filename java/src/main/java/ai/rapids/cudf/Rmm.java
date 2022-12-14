@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Rmm {
   private static volatile boolean initialized = false;
+  private static volatile long poolSize = -1;
   static {
     NativeDepsLoader.loadNativeDeps();
   }
@@ -98,8 +99,6 @@ public class Rmm {
       throw new IllegalStateException("RMM is already initialized");
     }
 
-    boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
-    boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
     boolean isAsync = (allocationMode & RmmAllocationMode.CUDA_ASYNC) != 0;
     boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
 
@@ -119,6 +118,18 @@ public class Rmm {
     initializeInternal(allocationMode, loc.internalId, path, poolSize);
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
+    Rmm.poolSize = poolSize;
+  }
+
+  /**
+   * Get the most recently set pool size or -1 if RMM has not been initialized.
+   */
+  public static synchronized long getPoolSize() {
+    if (initialized) {
+      return poolSize;
+    } else {
+      return -1;
+    }
   }
 
   /**
@@ -280,6 +291,7 @@ public class Rmm {
     if (initialized) {
       shutdownInternal();
       initialized = false;
+      poolSize = -1;
     }
   }
 
