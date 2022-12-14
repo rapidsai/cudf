@@ -1,10 +1,9 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import os
 
 import cupy
 import numpy as np
 import pytest
-from transformers import BertTokenizer
 
 import cudf
 from cudf.core.subword_tokenizer import SubwordTokenizer
@@ -42,7 +41,9 @@ def test_subword_tokenize(
 
     vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
 
-    hf_tokenizer = BertTokenizer.from_pretrained(
+    transformers = pytest.importorskip("transformers")
+
+    hf_tokenizer = transformers.BertTokenizer.from_pretrained(
         vocab_dir, do_lower_case=do_lower_case
     )
 
