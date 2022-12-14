@@ -51,13 +51,12 @@ static void nvbench_structs_scan(nvbench::state& state)
 
   auto const agg         = cudf::make_min_aggregation<cudf::scan_aggregation>();
   auto const null_policy = static_cast<cudf::null_policy>(state.get_int64("null_policy"));
+  auto const stream      = cudf::get_default_stream();
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto const result = cudf::detail::scan_inclusive(*input,
-                                                     *agg,
-                                                     null_policy,
-                                                     cudf::get_default_stream(),
-                                                     rmm::mr::get_current_device_resource());
+    auto const result = cudf::detail::scan_inclusive(
+      *input, *agg, null_policy, stream, rmm::mr::get_current_device_resource());
   });
 }
 
