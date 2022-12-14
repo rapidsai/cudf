@@ -365,6 +365,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     name : str, optional
         The name to give to the Series.
 
+    copy : bool, default False
+        Copy input data. Only affects Series or 1d ndarray input. See examples.
+
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
