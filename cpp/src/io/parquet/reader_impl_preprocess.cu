@@ -1263,7 +1263,7 @@ struct flat_column_num_rows {
   gpu::PageInfo const* pages;
   gpu::ColumnChunkDesc const* chunks;
 
-  __device__ size_type operator()(size_type pindex)
+  __device__ size_type operator()(size_type pindex) const
   {
     gpu::PageInfo const& page = pages[pindex];
     // ignore dictionary pages and pages belonging to any column containing repetition (lists)
@@ -1276,12 +1276,12 @@ struct flat_column_num_rows {
 };
 
 struct row_counts_nonzero {
-  __device__ bool operator()(size_type count) { return count > 0; }
+  __device__ bool operator()(size_type count) const { return count > 0; }
 };
 
 struct row_counts_different {
   size_type const expected;
-  __device__ bool operator()(size_type count) { return (count != 0) && (count != expected); }
+  __device__ bool operator()(size_type count) const { return (count != 0) && (count != expected); }
 };
 
 /**
@@ -1310,17 +1310,18 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
 {
   // sum row counts for all non-dictionary, non-list columns. other columns will indicated as 0
   rmm::device_uvector<int> row_counts(pages.size(), stream);  // worst case:  num keys == num pages
-  auto size_iter = thrust::make_transform_iterator(
+  auto const size_iter = thrust::make_transform_iterator(
     page_index.begin(), flat_column_num_rows{pages.device_ptr(), chunks.device_ptr()});
-  auto row_counts_begin                     = row_counts.begin();
-  [[maybe_unused]] auto [_, row_counts_end] = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                                    page_keys.begin(),
-                                                                    page_keys.end(),
-                                                                    size_iter,
-                                                                    thrust::make_discard_iterator(),
-                                                                    row_counts_begin);
+  auto const row_counts_begin = row_counts.begin();
+  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
+                                                    page_keys.begin(),
+                                                    page_keys.end(),
+                                                    size_iter,
+                                                    thrust::make_discard_iterator(),
+                                                    row_counts_begin)
+                                .second;
 
-  auto nonzero = thrust::find_if(
+  auto const nonzero = thrust::find_if(
     rmm::exec_policy(stream), row_counts_begin, row_counts_end, row_counts_nonzero{});
   if (nonzero != row_counts_end) {
     size_t const found_row_count =
