@@ -12,7 +12,7 @@ from cudf.core.buffer.buffer import Buffer
 T = TypeVar("T", bound="CopyOnWriteBuffer")
 
 
-class _PtrSize:
+class _PtrAndSize:
     __slots__ = ("t", "__weakref__")
 
     def __init__(self, ptr, size):
@@ -46,13 +46,13 @@ class CopyOnWriteBuffer(Buffer):
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
     _zero_copied: bool
-    _ptrsize: _PtrSize
+    _PtrAndSize: _PtrAndSize
 
     def _finalize_init(self):
         # the last step in initializing a `CopyOnWriteBuffer`
         # is to track it in `_instances`:
-        self._ptrsize = _PtrSize(self.ptr, self.size)
-        self.__class__._instances.setdefault(self._ptrsize, WeakSet()).add(
+        self._PtrAndSize = _PtrAndSize(self.ptr, self.size)
+        self.__class__._instances.setdefault(self._PtrAndSize, WeakSet()).add(
             self
         )
         self._zero_copied = False
@@ -90,7 +90,7 @@ class CopyOnWriteBuffer(Buffer):
         """
         Return `True` if `self`'s memory is shared with other columns.
         """
-        return len(self.__class__._instances[self._ptrsize]) > 1
+        return len(self.__class__._instances[self._PtrAndSize]) > 1
 
     def copy(self, deep: bool = True):
         """
