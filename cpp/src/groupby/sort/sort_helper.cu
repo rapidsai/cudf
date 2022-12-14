@@ -53,11 +53,13 @@ namespace sort {
 
 sort_groupby_helper::sort_groupby_helper(table_view const& keys,
                                          null_policy include_null_keys,
-                                         sorted keys_pre_sorted)
+                                         sorted keys_pre_sorted,
+                                         std::vector<null_order> const& null_precedence)
   : _keys(keys),
     _num_keys(-1),
     _keys_pre_sorted(keys_pre_sorted),
-    _include_null_keys(include_null_keys)
+    _include_null_keys(include_null_keys),
+    _null_precedence(null_precedence)
 {
   using namespace cudf::structs::detail;
 
@@ -112,25 +114,27 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    _key_sorted_order = cudf::detail::stable_sorted_order(
-      _keys,
-      {},
-      std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-      stream,
-      rmm::mr::get_current_device_resource());
+    auto const precedence = _null_precedence.empty()
+                              ? std::vector(_keys.num_columns(), null_order::AFTER)
+                              : _null_precedence;
+    _key_sorted_order     = cudf::detail::stable_sorted_order(
+      _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
 
-    auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
+    auto const augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
+    auto const precedence     = [&]() {
+      auto precedence = _null_precedence.empty()
+                              ? std::vector<null_order>(_keys.num_columns(), null_order::AFTER)
+                              : _null_precedence;
+      precedence.insert(precedence.begin(), null_order::AFTER);
+      return precedence;
+    }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      augmented_keys,
-      {},
-      std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
-      stream,
-      rmm::mr::get_current_device_resource());
+      augmented_keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }

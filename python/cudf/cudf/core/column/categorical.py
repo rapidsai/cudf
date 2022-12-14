@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -181,6 +182,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_ordered(), inplace=inplace
         )
@@ -248,6 +256,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_unordered(), inplace=inplace
         )

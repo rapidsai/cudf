@@ -88,7 +88,8 @@ def test_ufunc_index(request, ufunc):
         else:
             raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     if ufunc.nout > 1:
         for g, e in zip(got, expect):
