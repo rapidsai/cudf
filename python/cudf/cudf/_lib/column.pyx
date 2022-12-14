@@ -319,7 +319,7 @@ cdef class Column:
         have been shared else-where.
         """
         return any(
-            isinstance(buf, CopyOnWriteBuffer) and buf._is_shared()
+            isinstance(buf, CopyOnWriteBuffer) and buf._is_shared
             for buf in (self.base_data, self.base_mask)
         )
 

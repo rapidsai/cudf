@@ -64,6 +64,7 @@ class CopyOnWriteBuffer(Buffer):
         ret._finalize_init()
         return ret
 
+    @property
     def _is_shared(self):
         """
         Return `True` if `self`'s memory is shared with other columns.
