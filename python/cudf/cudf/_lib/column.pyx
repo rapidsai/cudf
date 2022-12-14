@@ -318,26 +318,16 @@ cdef class Column:
         Determines if any of the buffers underneath the column
         have been shared else-where.
         """
-        is_data_shared = (
-            isinstance(self.base_data, CopyOnWriteBuffer) and
-            self.base_data._is_shared()
+        return any(
+            isinstance(buf, CopyOnWriteBuffer) and buf._is_shared()
+            for buf in (self.base_data, self.base_mask)
         )
-        is_mask_shared = (
-            isinstance(self.base_mask, CopyOnWriteBuffer) and
-            self.base_mask._is_shared()
-        )
-        return is_mask_shared or is_data_shared
 
     def _buffers_zero_copied(self):
-        data_zero_copied = (
-            isinstance(self.base_data, CopyOnWriteBuffer) and
-            self.base_data._zero_copied
+        return any(
+            isinstance(buf, CopyOnWriteBuffer) and buf._zero_copied
+            for buf in (self.base_data, self.base_mask)
         )
-        mask_zero_copied = (
-            isinstance(self.base_mask, CopyOnWriteBuffer) and
-            self.base_mask._zero_copied
-        )
-        return data_zero_copied or mask_zero_copied
 
     def _unlink_shared_buffers(self, zero_copied=False):
         """
