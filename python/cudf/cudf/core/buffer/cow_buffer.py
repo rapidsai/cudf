@@ -38,8 +38,8 @@ class CopyOnWriteBuffer(Buffer):
     """
 
     # This dict keeps track of all instances that have the same `ptr`
-    # and `size` attributes.  Each key of the dict is a `(ptr, size)`
-    # tuple and the corresponding value is a set of weak references to
+    # and `size` attributes.  Each key of the dict is a `self._PtrAndSize`
+    # object and the corresponding value is a set of weak references to
     # instances with that `ptr` and `size`.
     _instances: WeakKeyDictionary = WeakKeyDictionary()
 
@@ -120,22 +120,8 @@ class CopyOnWriteBuffer(Buffer):
             )
 
     @property
-    def _cuda_array_interface_readonly(self) -> dict:
-        """
-        Internal Implementation for the CUDA Array Interface without
-        triggering a deepcopy.
-        """
-        return {
-            "data": (self.ptr, True),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
-
-    @property
     def __cuda_array_interface__(self) -> dict:
-        # Detach if there are any weak-references.
+        # Unlink if there are any weak-references.
 
         # Mark the Buffer as ``zero_copied=True``,
         # which will prevent any copy-on-write
