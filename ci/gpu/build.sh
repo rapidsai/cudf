@@ -120,6 +120,9 @@ function install_dask {
 
 install_dask
 
+gpuci_conda_retry remove --force pyarrow arrow-cpp
+gpuci_mamba_retry install -y "pyarrow=10.0.1" "arrow-cpp=10.0.1"
+
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
     gpuci_logger "Install dependencies"
