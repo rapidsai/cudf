@@ -358,7 +358,7 @@ There is a case when copy-on-write will be inactive and return true copies even 
 Whenever a `Column`/`Buffer` are zero-copied to a third-party library via `__cuda_array_interface__`, it
 is technically not possible to know if the device data is modified without introspection. Hence whenever
 someone accesses `__cuda_array_interface__` of `Column` or a `Buffer`, we trigger
-`Column/Buffer._detach_refs` which will ensure a true copy of underlying device data is made and
+`Column/Buffer._unlink_shared_buffers` which will ensure a true copy of underlying device data is made and
 detaches itself from pointing to the original device memory. We also mark the `Column`/`Buffer` as
 `obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
 rather than a copy-on-write shallow copy with weak-references.
