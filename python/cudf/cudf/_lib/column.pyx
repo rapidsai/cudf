@@ -313,7 +313,7 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def _is_shared_buffers(self) -> bool:
+    def _is_internally_referenced(self) -> bool:
         """
         Determines if any of the buffers underneath the column
         have been shared else-where.
@@ -323,7 +323,7 @@ cdef class Column:
             for buf in (self.base_data, self.base_mask)
         )
 
-    def _buffers_zero_copied(self):
+    def _is_externally_referenced(self):
         return any(
             isinstance(buf, CopyOnWriteBuffer) and buf._zero_copied
             for buf in (self.base_data, self.base_mask)
@@ -334,7 +334,8 @@ cdef class Column:
         Detaches a column from its current Buffers by making
         a true deep-copy.
         """
-        if not self._buffers_zero_copied() and self._is_shared_buffers():
+        if not self._is_externally_referenced() \
+                and self._is_internally_referenced():
             new_col = self.force_deep_copy()
             self._offset = new_col.offset
             self._size = new_col.size
