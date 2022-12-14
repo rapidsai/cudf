@@ -1285,12 +1285,12 @@ struct row_counts_different {
 };
 
 /**
- * @brief Detects malformed parquet input data.
+ * @brief Detect malformed parquet input data.
  *
  * We have seen cases where parquet files can be oddly malformed. This function specifically
  * detects one case in particular:
  *
- * - When when you have a file containing N rows
+ * - When you have a file containing N rows
  * - For some reason, the sum total of the number of rows over all pages for a given column
  *   is != N
  *
@@ -1308,7 +1308,7 @@ void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
-  // sum row counts for all non-dictionary, non-list columns. other columns will indicated as 0
+  // sum row counts for all non-dictionary, non-list columns. other columns will be indicated as 0
   rmm::device_uvector<int> row_counts(pages.size(), stream);  // worst case:  num keys == num pages
   auto const size_iter = thrust::make_transform_iterator(
     page_index.begin(), flat_column_num_rows{pages.device_ptr(), chunks.device_ptr()});
