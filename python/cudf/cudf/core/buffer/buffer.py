@@ -192,11 +192,7 @@ class Buffer(Serializable):
         else:
             owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
             return self._from_device_memory(
-                cuda_array_interface_wrapper(
-                    ptr=owner_copy.ptr,
-                    size=owner_copy.size,
-                    owner=owner_copy,
-                )
+                rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
             )
 
     @property
