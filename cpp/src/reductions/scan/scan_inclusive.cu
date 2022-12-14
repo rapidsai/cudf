@@ -269,12 +269,13 @@ std::unique_ptr<column> scan_inclusive(
     auto content          = output->release();
 
     // Build new children columns.
-    const auto current_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
-    std::for_each(
-      content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-        child = structs::detail::superimpose_nulls(
-          current_mask, cudf::UNKNOWN_NULL_COUNT, std::move(child), stream, mr);
-      });
+    const auto null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    std::for_each(content.children.begin(),
+                  content.children.end(),
+                  [null_mask, null_count, stream, mr](auto& child) {
+                    child = structs::detail::superimpose_nulls(
+                      null_mask, null_count, std::move(child), stream, mr);
+                  });
 
     // Replace the children columns.
     output = cudf::make_structs_column(
