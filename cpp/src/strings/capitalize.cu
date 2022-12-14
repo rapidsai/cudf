@@ -108,6 +108,7 @@ struct base_fn {
   {
     if (d_column.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
 
     auto& derived     = static_cast<Derived&>(*this);
