@@ -202,12 +202,15 @@ class cached_property(functools.cached_property):
         cache_hit = self.attrname in instance.__dict__
         ret = super().__get__(instance, owner)
         # Make sure to only register a handler when the cache has changed.
-        # Also, for now, we only handle `RangeIndex` instances.
-        if cache_hit or not isinstance(instance, cudf.RangeIndex):
+        # Also, for now, we only handle `RangeIndex` instances that returns
+        # a numerical column with no mask.
+        if (
+            cache_hit
+            or not isinstance(instance, cudf.RangeIndex)
+            or not isinstance(ret, cudf.core.column.NumericalColumn)
+            or ret.nullable
+        ):
             return ret
-        # Thus, we know `ret` is a numerical column with no mask
-        assert isinstance(ret, cudf.core.column.NumericalColumn)
-        assert ret.nullable is False
 
         manager = get_global_manager()
         if manager is None:
