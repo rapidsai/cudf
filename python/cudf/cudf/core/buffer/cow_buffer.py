@@ -2,15 +2,33 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Any, DefaultDict, Tuple, Type, TypeVar
-from weakref import WeakSet
+from typing import Any, Type, TypeVar
+from weakref import WeakKeyDictionary, WeakSet
 
 import rmm
 
 from cudf.core.buffer.buffer import Buffer
 
 T = TypeVar("T", bound="CopyOnWriteBuffer")
+
+
+class _PtrSize:
+    __slots__ = ("t", "__weakref__")
+
+    def __init__(self, ptr, size):
+        self.t = (ptr, size)
+
+    def __hash__(self):
+        return hash(self.t)
+
+    def __eq__(self, o):
+        return type(o) is type(self) and o.t == self.t
+
+    def __repr__(self):
+        return f"PtrSize{self.t!r}"
+
+    def __str__(self):
+        return f"PtrSize{self.t}"
 
 
 class CopyOnWriteBuffer(Buffer):
@@ -23,17 +41,20 @@ class CopyOnWriteBuffer(Buffer):
     # and `size` attributes.  Each key of the dict is a `(ptr, size)`
     # tuple and the corresponding value is a set of weak references to
     # instances with that `ptr` and `size`.
-    _instances: DefaultDict[Tuple, WeakSet] = defaultdict(WeakSet)
+    _instances: WeakKeyDictionary = WeakKeyDictionary()
 
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
     _zero_copied: bool
+    _ptrsize: _PtrSize
 
     def _finalize_init(self):
         # the last step in initializing a `CopyOnWriteBuffer`
         # is to track it in `_instances`:
-        key = (self.ptr, self.size)
-        self.__class__._instances[key].add(self)
+        self._ptrsize = _PtrSize(self.ptr, self.size)
+        self.__class__._instances.setdefault(self._ptrsize, WeakSet()).add(
+            self
+        )
         self._zero_copied = False
 
     @classmethod
@@ -69,7 +90,7 @@ class CopyOnWriteBuffer(Buffer):
         """
         Return `True` if `self`'s memory is shared with other columns.
         """
-        return len(self.__class__._instances[(self.ptr, self.size)]) > 1
+        return len(self.__class__._instances[self._ptrsize]) > 1
 
     def copy(self, deep: bool = True):
         """
