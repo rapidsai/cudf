@@ -190,9 +190,12 @@ template <typename T>
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
     if (validity.has_value() and not validity.value()[i]) {
-      decimal_builder.AppendNull();
+      CUDF_EXPECTS(decimal_builder.AppendNull().ok(), "Failed to append");
     } else {
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i));
+      CUDF_EXPECTS(
+        decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i))
+          .ok(),
+        "Failed to append");
     }
   }
 
