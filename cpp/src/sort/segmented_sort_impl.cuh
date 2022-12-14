@@ -76,7 +76,7 @@ struct column_fast_sort_fn {
       cudf::detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream);
     mutable_column_view output_view = temp_col->mutable_view();
 
-    // DeviceSegmentedSort is faster then DeviceSegmentedRadixSort at this time
+    // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
       rmm::device_buffer d_temp_storage;
       size_t temp_storage_bytes = 0;
