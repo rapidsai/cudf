@@ -88,7 +88,7 @@ TEST_F(FromArrowTest, DateTimeTable)
   std::shared_ptr<arrow::Array> arr;
   arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(data);
+  CUDF_EXPECTS(timestamp_builder.AppendValues(data).ok(), "Failed to append values");
   CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
