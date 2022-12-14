@@ -188,11 +188,7 @@ class Buffer(Serializable):
         Buffer
         """
         if not deep:
-            shallow_copy = Buffer.__new__(Buffer)
-            shallow_copy._ptr = self._ptr
-            shallow_copy._size = self._size
-            shallow_copy._owner = self._owner
-            return shallow_copy
+            return self[:]
         else:
             owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
             return self._from_device_memory(
