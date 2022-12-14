@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import copy
 from collections import defaultdict
 from typing import Any, DefaultDict, Tuple, Type, TypeVar
 from weakref import WeakSet
 
 import rmm
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.buffer import Buffer
 
 T = TypeVar("T", bound="CopyOnWriteBuffer")
 
@@ -94,13 +93,8 @@ class CopyOnWriteBuffer(Buffer):
             copied_buf._finalize_init()
             return copied_buf
         else:
-            owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
             return self._from_device_memory(
-                cuda_array_interface_wrapper(
-                    ptr=owner_copy.ptr,
-                    size=owner_copy.size,
-                    owner=owner_copy,
-                )
+                rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
             )
 
     @property
@@ -136,8 +130,8 @@ class CopyOnWriteBuffer(Buffer):
 
     def _unlink_shared_buffers(self, zero_copied=False):
         """
-        Unlinks a Buffer if it is shared with other buffers(i.e., weak references exist) by making
-        a true deep-copy.
+        Unlinks a Buffer if it is shared with other buffers(i.e.,
+        weak references exist) by making a true deep-copy.
         """
         if not self._zero_copied and self._shallow_copied():
             # make a deep copy of existing DeviceBuffer

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import math
 import pickle
 from types import SimpleNamespace
@@ -190,7 +189,6 @@ class Buffer(Serializable):
         if not deep:
             return self[:]
         else:
-            owner_copy: rmm.DeviceBuffer = copy.copy(self._owner)
             return self._from_device_memory(
                 rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
             )
