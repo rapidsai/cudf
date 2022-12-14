@@ -243,10 +243,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto [offsets_column, bytes] =
     cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column =
-    strings::detail::create_chars_child_column(bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
+  auto chars_view   = chars_column->mutable_view();
+  auto d_chars      = chars_view.data<char>();
 
   auto const device_input = table_device_view::create(input, stream);
 
