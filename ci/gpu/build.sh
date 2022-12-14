@@ -187,6 +187,10 @@ else
     nvidia-smi
 
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
+    # Arrow 10 is pre-installed in the environment and must first be removed
+    # before installing our Arrow 9 dependent packages since there is no clear
+    # downgrade path from Arrow 10 -> Arrow 9 due to their recent upstream changes.
+    gpuci_mamba_retry remove -y arrow-cpp libarrow pyarrow || true
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
     # TODO: Move boa install to gpuci/rapidsai
