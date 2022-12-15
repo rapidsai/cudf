@@ -400,7 +400,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 
   auto [null_pushed_table, nullable_data] = structs::detail::push_down_nulls(t, stream);
   auto struct_offset_removed_table        = remove_struct_child_offsets(null_pushed_table);
-  auto [verticalized_lhs, _, __, ___]     = decompose_structs(struct_offset_removed_table);
+  auto verticalized_lhs = std::get<0>(decompose_structs(struct_offset_removed_table));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
