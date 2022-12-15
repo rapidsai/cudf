@@ -149,11 +149,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                              input_row_not_null);
                    });
 
-  [[maybe_unused]] auto [new_offsets, bytes] =
+  auto new_offsets = std::get<0>(
     cudf::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
                                             new_sizes->view().template end<size_type>(),
                                             stream,
-                                            mr);
+                                            mr));
 
   return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(std::move(new_gather_map),
                                                                           std::move(new_offsets));

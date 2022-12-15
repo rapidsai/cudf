@@ -338,8 +338,8 @@ struct list_child_constructor {
     auto begin = thrust::make_transform_iterator(
       child_list_views.begin(), [] __device__(auto const& row) { return row.size(); });
 
-    [[maybe_unused]] auto [child_offsets, bytes] =
-      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr);
+    auto child_offsets = std::get<0>(
+      cudf::detail::make_offsets_child_column(begin, begin + child_list_views.size(), stream, mr));
 
     auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
       source_lists_column_view.child().child(1).type(),

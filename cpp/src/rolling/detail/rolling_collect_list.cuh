@@ -77,9 +77,9 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                     });
 
   // Convert `sizes` to an offsets column, via inclusive_scan():
-  [[maybe_unused]] auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
-    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
-  return std::move(offsets_column);
+  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr));
+  return offsets_column;
 }
 
 /**
