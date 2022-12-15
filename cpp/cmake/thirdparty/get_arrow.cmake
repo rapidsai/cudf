@@ -126,13 +126,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
     # library.
     set(CPM_DOWNLOAD_Arrow TRUE)
-    # We don't want to explicitly force a static OpenSSL when `BUILD_STATIC` so we allow the
-    # caller to still request a shared OpenSSL, therefore we don't modify `ARROW_OPENSSL_USE_SHARED`
+    # We don't want to explicitly force a static OpenSSL when `BUILD_STATIC` so we allow the caller
+    # to still request a shared OpenSSL, therefore we don't modify `ARROW_OPENSSL_USE_SHARED`
   else()
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
-    # By default ARROW will try to search for a static version of OpenSSL which is a bad idea
-    # given that shared linking is advised for critical components like SSL
+    # By default ARROW will try to search for a static version of OpenSSL which is a bad idea given
+    # that shared linking is advised for critical components like SSL
     set(ARROW_OPENSSL_USE_SHARED ON)
   endif()
 
