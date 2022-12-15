@@ -20,6 +20,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -1223,7 +1224,10 @@ def test_datetime_reductions(data, op, dtype):
     psr = sr.to_pandas()
 
     actual = getattr(sr, op)()
-    expected = getattr(psr, op)()
+    with expect_warning_if(
+        psr.size > 0 and psr.isnull().all() and op == "median", RuntimeWarning
+    ):
+        expected = getattr(psr, op)()
 
     if (
         expected is pd.NaT
@@ -1352,8 +1356,7 @@ def test_quarter():
     expect2 = pIndex.quarter
     got2 = gIndex.quarter
 
-    assert isinstance(got2, cudf.Int8Index)
-    assert_eq(expect2.values, got2.values, check_dtype=False)
+    assert_eq(expect2.values, got2.values)
 
 
 @pytest.mark.parametrize(
@@ -1620,7 +1623,11 @@ def test_date_range_raise_overflow():
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
-        cudf.date_range(start=start, periods=periods, freq=freq)
+        # Extending beyond the max value will trigger a warning when pandas
+        # does an internal conversion to a Python built-in datetime.datetime
+        # object, which only supports down to microsecond resolution.
+        with pytest.warns(UserWarning):
+            cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 @pytest.mark.parametrize(
@@ -1962,7 +1969,7 @@ def test_round(data, time_type, resolution):
     ],
 )
 def test_first(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.first(offset=offset)
@@ -2029,7 +2036,7 @@ def test_first_start_at_end_of_month(idx, offset):
     ],
 )
 def test_last(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.last(offset=offset)

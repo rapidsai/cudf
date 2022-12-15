@@ -177,9 +177,9 @@ std::unique_ptr<scalar> reduce(
 
     auto result = make_default_constructed_scalar(output_dtype, stream, mr);
     if (agg.kind == aggregation::ANY || agg.kind == aggregation::ALL) {
-      // empty input should return true for ANY and return false for ALL
+      // empty input should return false for ANY and return true for ALL
       dynamic_cast<numeric_scalar<bool>*>(result.get())
-        ->set_value(agg.kind == aggregation::ANY, stream);
+        ->set_value(agg.kind == aggregation::ALL, stream);
     }
     return result;
   }
