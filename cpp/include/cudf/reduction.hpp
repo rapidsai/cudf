@@ -46,7 +46,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * Any null values are skipped for the operation.
  *
  * If the column is empty or contains all null entries `col.size()==col.null_count()`,
- * the output scalar value will be `true` for reduction type `any` and false
+ * the output scalar value will be `false` for reduction type `any` and `true`
  * for reduction type `all`. For all other reductions, the output scalar
  * returns with `is_valid()==false`.
  *
