@@ -123,7 +123,6 @@ void BM_parq_write_io_compression(
                timer.start();
                cudf::io::parquet_writer_options opts =
                  cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-                   .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
                    .compression(compression);
                cudf::io::write_parquet(opts);
                timer.stop();
@@ -198,9 +197,8 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
                                         cudf::io::io_type::HOST_BUFFER,
                                         cudf::io::io_type::VOID>;
 
-using compression_list = nvbench::enum_type_list<cudf::io::compression_type::SNAPPY,
-                                                 cudf::io::compression_type::ZSTD,
-                                                 cudf::io::compression_type::NONE>;
+using compression_list =
+  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
