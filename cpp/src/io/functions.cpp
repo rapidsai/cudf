@@ -671,8 +671,6 @@ parquet_writer_options_builder& parquet_writer_options_builder::partitions(
 parquet_writer_options_builder& parquet_writer_options_builder::key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
-  CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-               "Mismatch between number of sinks and number of metadata maps");
   options.set_key_value_metadata(std::move(metadata));
   return *this;
 }
