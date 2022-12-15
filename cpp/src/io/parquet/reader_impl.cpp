@@ -287,9 +287,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-      out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream, _mr));
+      out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
-      out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream, _mr));
+      out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
 

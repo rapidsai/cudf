@@ -902,17 +902,17 @@ TEST_F(ReductionEmptyTest, empty_column)
 
   auto result = cudf::reduce(col0, *any_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
-  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
   result = cudf::reduce(col_nulls, *any_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
-  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
 
   result = cudf::reduce(col0, *all_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
-  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
   result = cudf::reduce(col_nulls, *all_agg, bool_type);
   EXPECT_EQ(result->is_valid(), true);
-  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
 }
 
 // ----------------------------------------------------------------------------
