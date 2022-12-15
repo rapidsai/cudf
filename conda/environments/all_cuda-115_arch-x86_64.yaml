@@ -50,7 +50,7 @@ dependencies:
 - pre-commit
 - protobuf=4.21
 - ptxcompiler
-- pyarrow=10.0.1
+- pyarrow=10
 - pydata-sphinx-theme
 - pyorc
 - pytest
