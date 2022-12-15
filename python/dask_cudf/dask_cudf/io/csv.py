@@ -67,7 +67,7 @@ def read_csv(path, blocksize="default", **kwargs):
     if "chunksize" in kwargs:
         chunksize = kwargs.pop("chunksize", "default")
         warn(
-            "`chunksize` is deprecated and will be removed in the future. ",
+            "`chunksize` is deprecated and will be removed in the future. "
             "Please use `blocksize` instead.",
             FutureWarning,
         )
