@@ -1749,7 +1749,7 @@ def test_orc_columns_and_index_param_read_index(index_obj, index, columns):
 
 
 @pytest.mark.parametrize(
-    "index_obj,index,columns",
+    "columns,index,index_obj",
     [
         (["a", "b"], False, None),
         (["a", "b"], False, [10, 11, 12]),

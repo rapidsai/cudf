@@ -238,7 +238,8 @@ def test_arith_masked_vs_null(request, op, data):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                1 in gdf["data"] and op in {operator.pow, operator.ipow}
+                (gdf["data"] == 1).any()
+                and op in {operator.pow, operator.ipow}
             ),
             reason="https://github.com/rapidsai/cudf/issues/7478",
         )
