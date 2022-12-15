@@ -926,6 +926,3 @@ TEST_F(StructGetValueTest, multi_level_nested)
   EXPECT_TRUE(typed_s->is_valid());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(fields, typed_s->view());
 }
-
-//}  // namespace test
-//}  // namespace cudf
