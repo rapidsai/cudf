@@ -122,7 +122,7 @@ public class Rmm {
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
     Rmm.poolingEnabled = isPool || isArena || isAsync;
-    Rmm.poolSize = poolSize;
+    Rmm.poolSize = Rmm.poolingEnabled ? poolSize : -1;
   }
 
   /**
@@ -130,18 +130,14 @@ public class Rmm {
    * not enabled.
    */
   public static synchronized long getPoolSize() {
-    if (isPoolingEnabled()) {
-      return poolSize;
-    } else {
-      return -1;
-    }
+    return poolSize;
   }
 
   /**
    * Return true if rmm is initialized and pooling has been enabled, else false.
    */
   public static synchronized boolean isPoolingEnabled() {
-    return initialized && poolingEnabled;
+    return poolingEnabled;
   }
 
   /**
