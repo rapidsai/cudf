@@ -325,13 +325,13 @@ Copy on write is designed to reduce memory footprint on GPUs. With this feature,
 there is a write operation on a column.
 
 The core copy-on-write implementation relies in the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer._PtrAndSize` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`,
-this is a `WeakKeyDictionary` whose key-value pairs consist of `_PtrAndSize` & a `WeakSet` containing weakreferences to `CopyOnWriteBuffer`. This
+With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`,
+this is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
 means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr` & `.size`
 i.e., if they are all pointing to the same device memory.
 
 When the cudf option ``copy_on_write`` is ``True``, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
-mechanism to enable copy-on-write for all Buffers. When a `CopyOnWriteBuffer` is created, it's weak-reference is generated and added to the `WeakSet` which is inturn stored in the `WeakKeyDictionary`. This will later serve as an indication whether or not to make a copy when a
+mechanism to enable copy-on-write for all Buffers. When a `CopyOnWriteBuffer` is created, it's weak-reference is generated and added to the `WeakSet` which is inturn stored in the `defaultdict`. This will later serve as an indication whether or not to make a copy when a
 write operation is being performed on `Column`(more on that below).
 
 

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Type, TypeVar
-from weakref import WeakKeyDictionary, WeakSet
+import weakref
+from collections import defaultdict
+from typing import Any, DefaultDict, Tuple, Type, TypeVar
+from weakref import WeakSet
 
 import rmm
 
@@ -12,23 +14,13 @@ from cudf.core.buffer.buffer import Buffer
 T = TypeVar("T", bound="CopyOnWriteBuffer")
 
 
-class _PtrAndSize:
-    __slots__ = ("t", "__weakref__")
-
-    def __init__(self, ptr, size):
-        self.t = (ptr, size)
-
-    def __hash__(self):
-        return hash(self.t)
-
-    def __eq__(self, o):
-        return type(o) is type(self) and o.t == self.t
-
-    def __repr__(self):
-        return f"PtrSize{self.t!r}"
-
-    def __str__(self):
-        return f"PtrSize{self.t}"
+def _keys_cleanup(ptr, size):
+    weak_set_values = CopyOnWriteBuffer._instances[(ptr, size)]
+    if len(weak_set_values) == 1 and list(weak_set_values.data)[0]() is None:
+        # When the last remaining reference is being cleaned up we will still
+        # have a dead weak-reference in `weak_set_values`, if that is the case
+        # we are good to perform the key's cleanup
+        del CopyOnWriteBuffer._instances[(ptr, size)]
 
 
 class CopyOnWriteBuffer(Buffer):
@@ -38,24 +30,22 @@ class CopyOnWriteBuffer(Buffer):
     """
 
     # This dict keeps track of all instances that have the same `ptr`
-    # and `size` attributes.  Each key of the dict is a `self._PtrAndSize`
-    # object and the corresponding value is a set of weak references to
+    # and `size` attributes.  Each key of the dict is a `(ptr, size)`
+    # tuple and the corresponding value is a set of weak references to
     # instances with that `ptr` and `size`.
-    _instances: WeakKeyDictionary = WeakKeyDictionary()
+    _instances: DefaultDict[Tuple, WeakSet] = defaultdict(WeakSet)
 
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
     _zero_copied: bool
-    _PtrAndSize: _PtrAndSize
 
     def _finalize_init(self):
         # the last step in initializing a `CopyOnWriteBuffer`
         # is to track it in `_instances`:
-        self._PtrAndSize = _PtrAndSize(self.ptr, self.size)
-        self.__class__._instances.setdefault(self._PtrAndSize, WeakSet()).add(
-            self
-        )
+        key = (self.ptr, self.size)
+        self.__class__._instances[key].add(self)
         self._zero_copied = False
+        weakref.finalize(self, _keys_cleanup, self.ptr, self.size)
 
     @classmethod
     def _from_device_memory(cls: Type[T], data: Any) -> T:
@@ -90,7 +80,7 @@ class CopyOnWriteBuffer(Buffer):
         """
         Return `True` if `self`'s memory is shared with other columns.
         """
-        return len(self.__class__._instances[self._PtrAndSize]) > 1
+        return len(self.__class__._instances[(self.ptr, self.size)]) > 1
 
     def copy(self, deep: bool = True):
         """
