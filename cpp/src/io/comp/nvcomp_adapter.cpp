@@ -347,7 +347,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
     } catch (rmm::bad_alloc& ba) {
       // don't loop forever...if scaled_num_chunks is already 1, the following divide will
       // also yield 1
-      if (scaled_num_chunks == 1) { break; }
+      if (scaled_num_chunks == 1) { throw ba; }
       scaled_num_chunks = util::div_rounding_up_safe(num_chunks, ++scale);
     }
   }

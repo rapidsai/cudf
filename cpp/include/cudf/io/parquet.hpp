@@ -1718,6 +1718,7 @@ class parquet_chunked_writer {
    * size as number of sinks.
    *
    * @throws cudf::logic_error If the number of partitions is not the same as number of sinks
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
   parquet_chunked_writer& write(table_view const& table,

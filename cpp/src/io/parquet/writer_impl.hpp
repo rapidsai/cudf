@@ -102,6 +102,8 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger parquet file/table write,
    * normally used for chunked writing.
    *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
+   *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
@@ -170,7 +172,9 @@ class writer::impl {
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
   /**
-   * @brief Encode a batch pages
+   * @brief Encode a batch of pages
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param chunks column chunk array
    * @param pages encoder pages array

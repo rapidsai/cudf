@@ -134,6 +134,8 @@ void batched_decompress(compression_type compression,
 /**
  * @brief Device batch compression of given type.
  *
+ * @throws rmm::bad_alloc if temporary space for compression cannot be allocated
+ *
  * @param[in] compression Compression type
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
