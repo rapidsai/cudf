@@ -893,7 +893,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
                    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream, _mr);
+                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
                  });
 }
 
