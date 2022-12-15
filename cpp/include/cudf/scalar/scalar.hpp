@@ -870,7 +870,7 @@ class struct_scalar : public scalar {
   /**
    * @brief Check if all the input columns constructing this struct scalar have valid size.
    */
-  void check_size();
+  void assert_valid_size();
 
   /**
    * @brief Initialize the internal table data for struct scalar.

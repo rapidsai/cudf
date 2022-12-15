@@ -539,7 +539,7 @@ struct_scalar::struct_scalar(table_view const& data,
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
     _data{init_data(table{data}, is_valid, stream, mr)}
 {
-  check_size();
+  assert_valid_size();
 }
 
 struct_scalar::struct_scalar(host_span<column_view const> data,
@@ -550,7 +550,7 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
     _data{init_data(
       table{table_view{std::vector<column_view>{data.begin(), data.end()}}}, is_valid, stream, mr)}
 {
-  check_size();
+  assert_valid_size();
 }
 
 struct_scalar::struct_scalar(table&& data,
@@ -560,12 +560,12 @@ struct_scalar::struct_scalar(table&& data,
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
     _data{init_data(std::move(data), is_valid, stream, mr)}
 {
-  check_size();
+  assert_valid_size();
 }
 
 table_view struct_scalar::view() const { return _data.view(); }
 
-void struct_scalar::check_size()
+void struct_scalar::assert_valid_size()
 {
   auto const tv = _data.view();
   CUDF_EXPECTS(
