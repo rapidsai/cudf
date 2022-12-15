@@ -17,10 +17,10 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
-#include <nvbench/nvbench.cuh>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/scan.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static constexpr cudf::size_type num_struct_members = 8;
 static constexpr cudf::size_type max_int            = 100;
