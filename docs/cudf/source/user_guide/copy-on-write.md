@@ -28,7 +28,7 @@ There are no additional changes required in the code to make use of copy-on-writ
 >>> series = cudf.Series([1, 2, 3, 4])
 ```
 
-Performing a deep copy will create a new series object but pointing to the
+Performing a shallow copy will create a new series object but pointing to the
 same underlying device memory:
 
 ```python
@@ -83,9 +83,18 @@ different device objects:
 ````{Warning}
 When ``copy_on_write`` is enabled, all of the shallow copies are constructed with
 weak-references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
-or `series.data.__cuda_array_interface__` which will then take care of detaching any existing weak-references that a column contains.
+or `series.data.__cuda_array_interface__` which will then take care of unlinking any existing weak-references that a column contains.
 ````
 
+## Notes
+
+When copy-on-write is enabled, there is no concept of views. i.e., modifying any view created inside cudf will not actually not modify
+the original object it was viewing and thus a separate copy is created and then modified.
+
+## Advantages
+
+With copy-on-write enabled and by requesting `.copy(deep=False)`, the GPU memory usage can be reduced drastically if you are not performing
+write operations on all of those copies. This will also increase the speed at which objects are created for execution of your ETL workflow.
 
 ## How to disable it
 
