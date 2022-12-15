@@ -74,7 +74,7 @@ def as_buffer(
         )
 
     if get_option("copy_on_write"):
-        if isinstance(data, (Buffer, CopyOnWriteBuffer)) or hasattr(
+        if isinstance(data, Buffer) or hasattr(
             data, "__cuda_array_interface__"
         ):
             return CopyOnWriteBuffer._from_device_memory(data)
