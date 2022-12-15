@@ -928,7 +928,7 @@ def test_timedelta_index_ops_with_scalars(
                     != expected.astype("int64")
                 ).any()
             ),
-            reason="https://github.com/rapidsai/cudf/issues/12120",
+            reason="https://github.com/rapidsai/cudf/issues/12393",
         )
     )
     assert_eq(expected, actual)
@@ -1023,7 +1023,7 @@ def test_timedelta_index_ops_with_cudf_scalars(
                     != expected.astype("int64")
                 ).any()
             ),
-            reason="https://github.com/rapidsai/cudf/issues/12120",
+            reason="https://github.com/rapidsai/cudf/issues/12393",
         )
     )
     assert_eq(expected, actual)
