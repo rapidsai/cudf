@@ -352,3 +352,129 @@ types that can be mutated in-place.
 2. Deep copies of variable width data types return shallow-copies of the Columns, because these
 types don't support real in-place mutations to the data. We just mimic in such a way that it looks
 like an in-place operation.
+
+
+### Examples
+
+When copy-on-write is enabled, take a shallow copy of a `Series` or a `DataFrame` will not
+eagerly create a copy of the data. But instead, it produces a view which will be lazily
+copied when a write operation is performed on any of it's copies.
+
+Let's create a series:
+
+```python
+>>> import cudf
+>>> cudf.set_option("copy_on_write", True)
+>>> s1 = cudf.Series([1, 2, 3, 4])
+```
+
+Make a copy of `s1`:
+```python
+>>> s2 = s1.copy(deep=False)
+```
+
+Make another copy, but of `s2`:
+```python
+>>> s3 = s2.copy(deep=False)
+```
+
+Viewing the data & memory addresses show that they all point to the same device memory:
+```python
+>>> s1
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s2
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+
+>>> s1.data.ptr
+139796315897856
+>>> s2.data.ptr
+139796315897856
+>>> s3.data.ptr
+139796315897856
+```
+
+Now, when we perform a write operation on one of them, say on `s2`. A new copy is created
+for `s2` on device and then modified:
+
+```python
+>>> s2[0:2] = 10
+>>> s2
+0    10
+1    10
+2     3
+3     4
+dtype: int64
+>>> s1
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+```
+
+If we inspect the memory address of the data, `s1` & `s3` will still share the same address but `s2` will have a new one:
+
+```python
+>>> s1.data.ptr
+139796315897856
+>>> s3.data.ptr
+139796315897856
+>>> s2.data.ptr
+139796315899392
+```
+
+Now, performing write operation on `s1` will trigger a new copy on device memory as there
+is a weakreference being shared in `s3`:
+
+```python
+>>> s1[0:2] = 11
+>>> s1
+0    11
+1    11
+2     3
+3     4
+dtype: int64
+>>> s2
+0    10
+1    10
+2     3
+3     4
+dtype: int64
+>>> s3
+0    1
+1    2
+2    3
+3    4
+dtype: int64
+```
+
+If we inspect the memory address of the data, `s2` & `s3` addresses will remain un-touched, but `s1` memory address will change because of a copy operation performed during the writing:
+
+```python
+>>> s2.data.ptr
+139796315899392
+>>> s3.data.ptr
+139796315897856
+>>> s1.data.ptr
+139796315879723
+```
