@@ -87,12 +87,16 @@ def run_udf_test(data, func, dtype):
     sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = column_from_udf_string_array(output)
+    else:
+        result = output
 
     got = cudf.Series(result, dtype=dtype)
     assert_eq(expect, got, check_dtype=False)
     udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
         result = column_from_udf_string_array(output)
+    else:
+        result = output
 
     got = cudf.Series(result, dtype=dtype)
     assert_eq(expect, got, check_dtype=False)

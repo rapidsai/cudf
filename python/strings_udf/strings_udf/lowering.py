@@ -142,7 +142,7 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
 
 
 @cuda_lowering_registry.lower_cast(udf_string, string_view)
-def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
+def cast_udf_string_to_string_view(context, builder, fromty, toty, val):
     udf_str_ptr = builder.alloca(default_manager[fromty].get_value_type())
     sv_ptr = builder.alloca(default_manager[toty].get_value_type())
     builder.store(val, udf_str_ptr)
@@ -156,6 +156,24 @@ def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
 
     result = cgutils.create_struct_proxy(string_view)(
         context, builder, value=builder.load(sv_ptr)
+    )
+
+    return result._getvalue()
+
+
+@cuda_lowering_registry.lower_cast(string_view, udf_string)
+def cast_string_view_to_udf_string(context, builder, fromty, toty, val):
+    sv_ptr = builder.alloca(default_manager[fromty].get_value_type())
+    udf_str_ptr = builder.alloca(default_manager[toty].get_value_type())
+    builder.store(val, sv_ptr)
+    _ = context.compile_internal(
+        builder,
+        call_create_udf_string_from_string_view,
+        nb_signature(types.void, _STR_VIEW_PTR, types.CPointer(udf_string)),
+        (sv_ptr, udf_str_ptr),
+    )
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
     )
 
     return result._getvalue()
@@ -186,6 +204,7 @@ def call_len_string_view(st):
 
 
 @cuda_lower(len, string_view)
+@cuda_lower(len, udf_string)
 def len_impl(context, builder, sig, args):
     sv_ptr = builder.alloca(args[0].type)
     builder.store(args[0], sv_ptr)
@@ -264,7 +283,6 @@ def create_binary_string_func(binary_func, retty):
     """
 
     def deco(cuda_func):
-        @cuda_lower(binary_func, string_view, string_view)
         def binary_func_impl(context, builder, sig, args):
             lhs_ptr = builder.alloca(args[0].type)
             rhs_ptr = builder.alloca(args[1].type)
@@ -306,6 +324,19 @@ def create_binary_string_func(binary_func, retty):
                 )
                 return result._getvalue()
 
+        # binary_func can be attribute-like: str.binary_func
+        # or operator-like: binary_func(str, other)
+        if isinstance(binary_func, str):
+            binary_func_impl = cuda_lower(
+                f"StringView.{binary_func}", string_view, string_view
+            )(binary_func_impl)
+            binary_func_impl = cuda_lower(
+                f"UDFString.{binary_func}", string_view, string_view
+            )(binary_func_impl)
+        else:
+            binary_func_impl = cuda_lower(
+                binary_func, string_view, string_view
+            )(binary_func_impl)
         return binary_func_impl
 
     return deco
@@ -346,47 +377,42 @@ def lt_impl(st, rhs):
     return _string_view_lt(st, rhs)
 
 
-@create_binary_string_func("StringView.strip", udf_string)
+@create_binary_string_func("strip", udf_string)
 def strip_impl(result, to_strip, strip_char):
     return _string_view_strip(result, to_strip, strip_char)
 
 
-@create_binary_string_func("StringView.lstrip", udf_string)
+@create_binary_string_func("lstrip", udf_string)
 def lstrip_impl(result, to_strip, strip_char):
     return _string_view_lstrip(result, to_strip, strip_char)
 
 
-@create_binary_string_func("StringView.rstrip", udf_string)
+@create_binary_string_func("rstrip", udf_string)
 def rstrip_impl(result, to_strip, strip_char):
     return _string_view_rstrip(result, to_strip, strip_char)
 
 
-@create_binary_string_func("StringView.startswith", types.boolean)
+@create_binary_string_func("startswith", types.boolean)
 def startswith_impl(sv, substr):
     return _string_view_startswith(sv, substr)
 
 
-@create_binary_string_func("StringView.endswith", types.boolean)
+@create_binary_string_func("endswith", types.boolean)
 def endswith_impl(sv, substr):
     return _string_view_endswith(sv, substr)
 
 
-@create_binary_string_func("StringView.count", size_type)
+@create_binary_string_func("count", size_type)
 def string_view_count_impl(st, substr):
     return _string_view_count(st, substr)
 
 
-@create_binary_string_func("UDFString.count", size_type)
-def udf_string_count_impl(st, substr):
-    return _string_view_count(st, substr)
-
-
-@create_binary_string_func("StringView.find", size_type)
+@create_binary_string_func("find", size_type)
 def find_impl(sv, substr):
     return _string_view_find(sv, substr)
 
 
-@create_binary_string_func("StringView.rfind", size_type)
+@create_binary_string_func("rfind", size_type)
 def rfind_impl(sv, substr):
     return _string_view_rfind(sv, substr)
 
@@ -399,7 +425,8 @@ def create_unary_identifier_func(id_func):
     """
 
     def deco(cuda_func):
-        @cuda_lower(id_func, string_view)
+        @cuda_lower(f"StringView.{id_func}", string_view)
+        @cuda_lower(f"UDFString.{id_func}", string_view)
         def id_func_impl(context, builder, sig, args):
             str_ptr = builder.alloca(args[0].type)
             builder.store(args[0], str_ptr)
@@ -432,7 +459,8 @@ def create_upper_or_lower(id_func):
     """
 
     def deco(cuda_func):
-        @cuda_lower(id_func, string_view)
+        @cuda_lower(f"StringView.{id_func}", string_view)
+        @cuda_lower(f"UDFString.{id_func}", string_view)
         def id_func_impl(context, builder, sig, args):
             str_ptr = builder.alloca(args[0].type)
             builder.store(args[0], str_ptr)
@@ -482,56 +510,56 @@ def create_upper_or_lower(id_func):
     return deco
 
 
-@create_upper_or_lower("StringView.upper")
+@create_upper_or_lower("upper")
 def upper_impl(result, st, flags, cases, special):
     return _string_view_upper(result, st, flags, cases, special)
 
 
-@create_upper_or_lower("StringView.lower")
+@create_upper_or_lower("lower")
 def lower_impl(result, st, flags, cases, special):
     return _string_view_lower(result, st, flags, cases, special)
 
 
-@create_unary_identifier_func("StringView.isdigit")
+@create_unary_identifier_func("isdigit")
 def isdigit_impl(st, tbl):
     return _string_view_isdigit(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isalnum")
+@create_unary_identifier_func("isalnum")
 def isalnum_impl(st, tbl):
     return _string_view_isalnum(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isalpha")
+@create_unary_identifier_func("isalpha")
 def isalpha_impl(st, tbl):
     return _string_view_isalpha(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isnumeric")
+@create_unary_identifier_func("isnumeric")
 def isnumeric_impl(st, tbl):
     return _string_view_isnumeric(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isdecimal")
+@create_unary_identifier_func("isdecimal")
 def isdecimal_impl(st, tbl):
     return _string_view_isdecimal(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isspace")
+@create_unary_identifier_func("isspace")
 def isspace_impl(st, tbl):
     return _string_view_isspace(st, tbl)
 
 
-@create_unary_identifier_func("StringView.isupper")
+@create_unary_identifier_func("isupper")
 def isupper_impl(st, tbl):
     return _string_view_isupper(st, tbl)
 
 
-@create_unary_identifier_func("StringView.islower")
+@create_unary_identifier_func("islower")
 def islower_impl(st, tbl):
     return _string_view_islower(st, tbl)
 
 
-@create_unary_identifier_func("StringView.istitle")
+@create_unary_identifier_func("istitle")
 def istitle_impl(st, tbl):
     return _string_view_istitle(st, tbl)
