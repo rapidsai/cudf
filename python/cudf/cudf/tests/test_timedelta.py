@@ -870,7 +870,9 @@ def test_timedelta_datetime_index_ops_misc(
     ],
 )
 @pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
-def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
+def test_timedelta_index_ops_with_scalars(
+    request, data, other_scalars, dtype, op
+):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
@@ -902,35 +904,34 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         expected = other_scalars // ptdi
         actual = other_scalars // gtdi
 
-    if op == "floordiv":
-        # Hand-coding xfail behaviour for certain combinations
-        if (
-            0 in ptdi.astype("int")
-            and np.timedelta64(other_scalars).item() is not None
-        ):
-            with pytest.raises(AssertionError):
-                # Related to https://github.com/rapidsai/cudf/issues/5938
-                #
-                # Division by zero for datetime or timedelta is
-                # dubiously defined in both pandas (Any // 0 -> 0 in
-                # pandas) and cuDF (undefined behaviour)
-                assert_eq(expected, actual)
-        elif (
-            (None not in ptdi)
-            and np.nan not in expected
-            and (
-                expected.astype("float64").astype("int64")
-                != expected.astype("int64")
-            ).any()
-        ):
-            with pytest.raises(AssertionError):
-                # Incorrect implementation of floordiv in cuDF:
-                # https://github.com/rapidsai/cudf/issues/12120
-                assert_eq(expected, actual)
-        else:
-            assert_eq(expected, actual)
-    else:
-        assert_eq(expected, actual)
+    # Division by zero for datetime or timedelta is
+    # dubiously defined in both pandas (Any // 0 -> 0 in
+    # pandas) and cuDF (undefined behaviour)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                op == "floordiv"
+                and 0 in ptdi.astype("int")
+                and np.timedelta64(other_scalars).item() is not None
+            ),
+            reason="Related to https://github.com/rapidsai/cudf/issues/5938",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                op == "floordiv"
+                and (None not in ptdi)
+                and np.nan not in expected
+                and (
+                    expected.astype("float64").astype("int64")
+                    != expected.astype("int64")
+                ).any()
+            ),
+            reason="https://github.com/rapidsai/cudf/issues/12120",
+        )
+    )
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
@@ -962,7 +963,9 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         ),
     ],
 )
-def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
+def test_timedelta_index_ops_with_cudf_scalars(
+    request, data, cpu_scalar, dtype, op
+):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
@@ -996,35 +999,34 @@ def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
         expected = cpu_scalar // ptdi
         actual = gpu_scalar // gtdi
 
-    if op == "floordiv":
-        # Hand-coding xfail behaviour for certain combinations
-        if (
-            0 in ptdi.astype("int")
-            and np.timedelta64(cpu_scalar).item() is not None
-        ):
-            with pytest.raises(AssertionError):
-                # Related to https://github.com/rapidsai/cudf/issues/5938
-                #
-                # Division by zero for datetime or timedelta is
-                # dubiously defined in both pandas (Any // 0 -> 0 in
-                # pandas) and cuDF (undefined behaviour)
-                assert_eq(expected, actual)
-        elif (
-            (None not in ptdi)
-            and np.nan not in expected
-            and (
-                expected.astype("float64").astype("int64")
-                != expected.astype("int64")
-            ).any()
-        ):
-            with pytest.raises(AssertionError):
-                # Incorrect implementation of floordiv in cuDF:
-                # https://github.com/rapidsai/cudf/issues/12120
-                assert_eq(expected, actual)
-        else:
-            assert_eq(expected, actual)
-    else:
-        assert_eq(expected, actual)
+    # Division by zero for datetime or timedelta is
+    # dubiously defined in both pandas (Any // 0 -> 0 in
+    # pandas) and cuDF (undefined behaviour)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                op == "floordiv"
+                and 0 in ptdi.astype("int")
+                and np.timedelta64(cpu_scalar).item() is not None
+            ),
+            reason="https://github.com/rapidsai/cudf/issues/5938",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                op == "floordiv"
+                and (None not in ptdi)
+                and np.nan not in expected
+                and (
+                    expected.astype("float64").astype("int64")
+                    != expected.astype("int64")
+                ).any()
+            ),
+            reason="https://github.com/rapidsai/cudf/issues/12120",
+        )
+    )
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA)

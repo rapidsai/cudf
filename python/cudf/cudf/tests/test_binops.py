@@ -934,23 +934,8 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     utils.assert_eq(sr // pd_div, cr // cudf_div)
 
 
-@pytest.mark.parametrize(
-    "scalar_divisor",
-    [
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
-            ),
-        ),
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("scalar_divisor", [False, True])
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12162")
 def test_floordiv_zero_bool(scalar_divisor):
     sr = pd.Series([True, True, False], dtype=np.bool_)
     cr = cudf.from_pandas(sr)

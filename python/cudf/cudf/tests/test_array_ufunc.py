@@ -64,6 +64,12 @@ def test_ufunc_index(request, ufunc):
             reason="https://github.com/pandas-dev/pandas/issues/46769",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not hasattr(cp, fname),
+            reason=f"cupy has no support for '{fname}'",
+        )
+    )
 
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
@@ -76,17 +82,7 @@ def test_ufunc_index(request, ufunc):
         for _ in range(ufunc.nin)
     ]
 
-    try:
-        got = ufunc(*args)
-    except AttributeError as e:
-        # We check if an attribute error is raised so that if we don't
-        # have an explicit dispatch and cupy doesn't have the method
-        # so that we can easily identify these methods. As of this
-        # writing, the only missing methods are isnat and heaviside.
-        if "module 'cupy' has no attribute" in str(e):
-            return
-        else:
-            raise
+    got = ufunc(*args)
 
     with _hide_ufunc_warnings(ufunc):
         expect = ufunc(*(arg.to_pandas() for arg in pandas_args))

@@ -1063,7 +1063,7 @@ def test_groupby_quantile(request, interpolation, q):
         pytest.mark.xfail(
             condition=(q == 0.5 and interpolation == "nearest"),
             reason=(
-                "Pandas NaN Rounding will fail nearest " "interpolation at 0.5"
+                "Pandas NaN Rounding will fail nearest interpolation at 0.5"
             ),
         )
     )
