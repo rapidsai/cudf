@@ -2315,17 +2315,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     # Alias for kurtosis.
-    @copy_docstring(kurtosis)
-    def kurt(
-        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
-    ):
-        return self.kurtosis(
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
-        )
+    kurt = kurtosis
 
     @_cudf_nvtx_annotate
     def skew(
@@ -2485,6 +2475,11 @@ class Frame(BinaryOperand, Scannable):
         b    249
         dtype: int64
         """
+        warnings.warn(
+            f"Support for {self.__class__}.sum_of_squares is deprecated and "
+            "will be removed",
+            FutureWarning,
+        )
         return self._reduce("sum_of_squares", dtype=dtype)
 
     @_cudf_nvtx_annotate
