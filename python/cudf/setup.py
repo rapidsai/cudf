@@ -17,7 +17,7 @@ install_requires = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=1.0,<1.6.0dev0",
-    "protobuf=4.21",
+    "protobuf==4.21",
     "typing_extensions",
     "pyarrow==10.0.1",
     f"rmm{cuda_suffix}",
