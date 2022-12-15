@@ -62,7 +62,7 @@ dependencies:
           - scikit-build>=0.13.1
       - output_types: conda
         packages:
-          - arrow-cpp=10
+          - libarrow=10
           - c-compiler
           - cxx-compiler
           - librdkafka=1.7.0

@@ -79,7 +79,7 @@ conda config --set ssl_verify False
 # TODO: Move boa install to gpuci/rapidsai
 gpuci_mamba_retry install boa
 gpuci_conda_retry remove --force pyarrow arrow-cpp
-gpuci_mamba_retry install -y "pyarrow=10.0.1" "arrow-cpp=10.0.1"
+gpuci_mamba_retry install -y "pyarrow=10.0.1" "libarrow=10.0.1"
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
