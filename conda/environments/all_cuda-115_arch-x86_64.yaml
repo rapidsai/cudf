@@ -9,7 +9,7 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
-- libarrow=10.0.1
+- libarrow=10
 - boto3>=1.21.21
 - botocore>=1.24.21
 - c-compiler
