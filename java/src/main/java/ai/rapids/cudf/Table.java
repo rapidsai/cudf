@@ -857,6 +857,44 @@ public final class Table implements AutoCloseable {
         opts.getFalseValues()));
   }
 
+  private static native void writeCSVToFile(long table,
+                                            String[] columnNames,
+                                            boolean includeHeader,
+                                            String rowDelimiter,
+                                            byte fieldDelimiter,
+                                            String nullValue,
+                                            String outputPath) throws CudfException;
+
+  public void writeCSVToFile(CSVWriterOptions options, String outputPath)
+  {
+    writeCSVToFile(nativeHandle, 
+                   options.getColumnNames(), 
+                   options.getIncludeHeader(), 
+                   options.getRowDelimiter(), 
+                   options.getFieldDelimiter(), 
+                   options.getNullValue(), 
+                   outputPath);
+  }
+
+  private static native void writeCSVToBuffer(long table,
+                                              String[] columnNames,
+                                              boolean includeHeader,
+                                              String rowDelimiter,
+                                              byte fieldDelimiter,
+                                              String nullValue,
+                                              HostBufferConsumer buffer) throws CudfException;
+
+  public void writeCSVToBuffer(CSVWriterOptions options, HostBufferConsumer bufferConsumer)
+  {
+    writeCSVToBuffer(nativeHandle, 
+                    options.getColumnNames(), 
+                    options.getIncludeHeader(), 
+                    options.getRowDelimiter(), 
+                    options.getFieldDelimiter(), 
+                    options.getNullValue(), 
+                    bufferConsumer);
+  }
+
   /**
    * Read a JSON file using the default JSONOptions.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
