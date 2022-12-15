@@ -189,7 +189,7 @@ the pytest option
 [`xfail_strict=true`](https://docs.pytest.org/en/latest/how-to/skipping.html#strict-parameter).
 Another option is to use the programmatic `pytest.xfail` function to
 fail in the test body to `xfail` the relevant combination of
-parameters. **DO NOT USE THIS OPTION**, unlike the mark-based
+parameters. **DO NOT USE THIS OPTION**. Unlike the mark-based
 approach, `pytest.xfail` *does not* run the rest of the test body, so
 we will never know if the test starts to pass because the bug is
 fixed. Use of `pytest.xfail` is checked for, and forbidden, via
