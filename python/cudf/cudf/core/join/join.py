@@ -415,7 +415,12 @@ class Merge:
         if (
             isinstance(lhs, cudf.DataFrame)
             and isinstance(rhs, cudf.DataFrame)
-            and lhs._data.nlevels != rhs._data.nlevels
+            # An empty column is considered to have 1 level by pandas (can be
+            # seen by using lhs.columns.nlevels, but we don't want to use
+            # columns internally because it's expensive).
+            # TODO: Investigate whether ColumnAccessor.nlevels should be
+            # modified in the size 0 case.
+            and max(lhs._data.nlevels, 1) != max(rhs._data.nlevels, 1)
         ):
             warnings.warn(
                 "merging between different levels is deprecated and will be "
