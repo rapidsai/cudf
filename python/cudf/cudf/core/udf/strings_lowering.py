@@ -36,6 +36,7 @@ from cudf.core.udf.masked_typing import MaskedType
 
 
 @cuda_lower(len, MaskedType(string_view))
+@cuda_lower(len, MaskedType(udf_string))
 def masked_len_impl(context, builder, sig, args):
     ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     masked_sv_ty = sig.args[0]

@@ -15,6 +15,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     _decimal_series,
@@ -77,6 +78,38 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
     expect = pdf.apply(func, args=args, axis=1)
     obtain = gdf.apply(func, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+
+def run_masked_string_udf_test(func, data, args=(), **kwargs):
+    from strings_udf._typing import sv_to_udf_str
+
+    gdf = data
+    pdf = data.to_pandas(nullable=True)
+
+    def row_wrapper(row):
+        st = row["str_col"]
+        return func(st)
+
+    expect = pdf.apply(row_wrapper, args=args, axis=1)
+
+    func = cuda.jit(device=True)(func)
+    obtain = gdf.apply(row_wrapper, args=args, axis=1)
+    assert_eq(expect, obtain, **kwargs)
+
+    # strings that come directly from input columns are backed by
+    # MaskedType(string_view) types. But new strings that are returned
+    # from functions or operators are backed by MaskedType(udf_string)
+    # types. We need to make sure all of our methods work on both kind
+    # of MaskedType. This function promotes the former to the latter
+    # prior to running the input function
+    def udf_string_wrapper(row):
+        masked_udf_str = Masked(
+            sv_to_udf_str(row["str_col"].value), row["str_col"].valid
+        )
+        return func(masked_udf_str)
+
+    obtain = gdf.apply(udf_string_wrapper, args=args, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -740,202 +773,202 @@ def test_masked_udf_caching():
 
 @string_udf_test
 def test_string_udf_len(str_udf_data):
-    def func(row):
-        return len(row["str_col"])
+    def func(st):
+        return len(st)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_startswith(str_udf_data, substr):
-    def func(row):
-        return row["str_col"].startswith(substr)
+    def func(st):
+        return st.startswith(substr)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_endswith(str_udf_data, substr):
-    def func(row):
-        return row["str_col"].endswith(substr)
+    def func(st):
+        return st.endswith(substr)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_find(str_udf_data, substr):
-    def func(row):
-        return row["str_col"].find(substr)
+    def func(st):
+        return st.find(substr)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_rfind(str_udf_data, substr):
-    def func(row):
-        return row["str_col"].rfind(substr)
+    def func(st):
+        return st.rfind(substr)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_contains(str_udf_data, substr):
-    def func(row):
-        return substr in row["str_col"]
+    def func(st):
+        return substr in st
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("other", ["cudf", "123", "", " "])
 @pytest.mark.parametrize("cmpop", comparison_ops)
 def test_string_udf_cmpops(str_udf_data, other, cmpop):
-    def func(row):
-        return cmpop(row["str_col"], other)
+    def func(st):
+        return cmpop(st, other)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isalnum(str_udf_data):
-    def func(row):
-        return row["str_col"].isalnum()
+    def func(st):
+        return st.isalnum()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isalpha(str_udf_data):
-    def func(row):
-        return row["str_col"].isalpha()
+    def func(st):
+        return st.isalpha()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isdigit(str_udf_data):
-    def func(row):
-        return row["str_col"].isdigit()
+    def func(st):
+        return st.isdigit()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isdecimal(str_udf_data):
-    def func(row):
-        return row["str_col"].isdecimal()
+    def func(st):
+        return st.isdecimal()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isupper(str_udf_data):
-    def func(row):
-        return row["str_col"].isupper()
+    def func(st):
+        return st.isupper()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_islower(str_udf_data):
-    def func(row):
-        return row["str_col"].islower()
+    def func(st):
+        return st.islower()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_isspace(str_udf_data):
-    def func(row):
-        return row["str_col"].isspace()
+    def func(st):
+        return st.isspace()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_istitle(str_udf_data):
-    def func(row):
-        return row["str_col"].istitle()
+    def func(st):
+        return st.istitle()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_count(str_udf_data, substr):
-    def func(row):
-        return row["str_col"].count(substr)
+    def func(st):
+        return st.count(substr)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_return_string(str_udf_data):
-    def func(row):
-        return row["str_col"]
+    def func(st):
+        return st
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_strip(str_udf_data, strip_char):
-    def func(row):
-        return row["str_col"].strip(strip_char)
+    def func(st):
+        return st.strip(strip_char)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_lstrip(str_udf_data, strip_char):
-    def func(row):
-        return row["str_col"].lstrip(strip_char)
+    def func(st):
+        return st.lstrip(strip_char)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("strip_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_rstrip(str_udf_data, strip_char):
-    def func(row):
-        return row["str_col"].rstrip(strip_char)
+    def func(st):
+        return st.rstrip(strip_char)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_upper(str_udf_data):
-    def func(row):
-        return row["str_col"].upper()
+    def func(st):
+        return st.upper()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 def test_string_udf_lower(str_udf_data):
-    def func(row):
-        return row["str_col"].lower()
+    def func(st):
+        return st.lower()
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_concat(str_udf_data, concat_char):
-    def func(row):
-        return row["str_col"] + concat_char
+    def func(st):
+        return st + concat_char
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @string_udf_test
 @pytest.mark.parametrize("to_replace", ["a", "1", "", "@"])
 @pytest.mark.parametrize("replacement", ["a", "1", "", "@"])
 def test_string_udf_replace(str_udf_data, to_replace, replacement):
-    def func(row):
-        return row["str_col"].replace(to_replace, replacement)
+    def func(st):
+        return st.replace(to_replace, replacement)
 
-    run_masked_udf_test(func, str_udf_data, check_dtype=False)
+    run_masked_string_udf_test(func, str_udf_data, check_dtype=False)
 
 
 @pytest.mark.parametrize(

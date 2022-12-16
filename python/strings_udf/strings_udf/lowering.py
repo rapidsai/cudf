@@ -18,7 +18,12 @@ from strings_udf._lib.tables import (
     get_character_flags_table_ptr,
     get_special_case_mapping_table_ptr,
 )
-from strings_udf._typing import size_type, string_view, udf_string
+from strings_udf._typing import (
+    size_type,
+    string_view,
+    sv_to_udf_str,
+    udf_string,
+)
 
 character_flags_table_ptr = get_character_flags_table_ptr()
 character_cases_table_ptr = get_character_cases_table_ptr()
@@ -403,7 +408,7 @@ def endswith_impl(sv, substr):
 
 
 @create_binary_string_func("count", size_type)
-def string_view_count_impl(st, substr):
+def count_impl(st, substr):
     return _string_view_count(st, substr)
 
 
@@ -563,3 +568,10 @@ def islower_impl(st, tbl):
 @create_unary_identifier_func("istitle")
 def istitle_impl(st, tbl):
     return _string_view_istitle(st, tbl)
+
+
+@cuda_lower(sv_to_udf_str, string_view)
+def sv_to_udf_str_testing_lowering(context, builder, sig, args):
+    return cast_string_view_to_udf_string(
+        context, builder, sig.args[0], sig.return_type, args[0]
+    )

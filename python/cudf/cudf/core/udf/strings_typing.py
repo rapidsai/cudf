@@ -9,6 +9,7 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 from strings_udf._typing import (
     StringView,
+    UDFString,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
@@ -25,11 +26,13 @@ from cudf.core.udf.masked_typing import MaskedType
 
 masked_typing.MASKED_INIT_MAP[types.pyobject] = string_view
 masked_typing.MASKED_INIT_MAP[string_view] = string_view
+masked_typing.MASKED_INIT_MAP[udf_string] = udf_string
 
 
 def _is_valid_string_arg(ty):
     return (
-        isinstance(ty, MaskedType) and isinstance(ty.value_type, StringView)
+        isinstance(ty, MaskedType)
+        and isinstance(ty.value_type, (StringView, UDFString))
     ) or isinstance(ty, types.StringLiteral)
 
 
@@ -53,7 +56,7 @@ def register_string_function(func):
 @register_string_function(len)
 def len_typing(self, args, kws):
     if isinstance(args[0], MaskedType) and isinstance(
-        args[0].value_type, StringView
+        args[0].value_type, (StringView, UDFString)
     ):
         return nb_signature(MaskedType(size_type), args[0])
     elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
@@ -223,4 +226,13 @@ for func in string_unary_funcs:
         create_masked_unary_attr(f"MaskedType.{func}", udf_string),
     )
 
+
+class MaskedUDFStringAttrs(MaskedStringViewAttrs):
+    key = MaskedType(udf_string)
+
+    def resolve_value(self, mod):
+        return udf_string
+
+
 cuda_decl_registry.register_attr(MaskedStringViewAttrs)
+cuda_decl_registry.register_attr(MaskedUDFStringAttrs)
