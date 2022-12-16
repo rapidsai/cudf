@@ -263,16 +263,24 @@ public:
       // empty table, so need to write an empty batch explicitly.
       // For more please see https://issues.apache.org/jira/browse/ARROW-17912.
       auto empty_batch = arrow::RecordBatch::MakeEmpty(arrow_tab->schema());
-      writer->WriteRecordBatch(*(*empty_batch));
+      if (!writer->WriteRecordBatch(*(*empty_batch)).ok()) {
+        throw std::runtime_error("writer failed to write batch");
+      }
     } else {
-      writer->WriteTable(*arrow_tab, max_chunk);
+      if (!writer->WriteTable(*arrow_tab, max_chunk).ok()) {
+        throw std::runtime_error("writer failed to write table");
+      };
     }
   }
 
   void close() {
     if (initialized) {
-      writer->Close();
-      sink->Close();
+      if (!writer->Close().ok()) {
+        throw std::runtime_error("Error in closing writer");
+      }
+      if (!sink->Close().ok()) {
+        throw std::runtime_error("Error in closing sink");
+      }
     }
     initialized = false;
   }
@@ -606,7 +614,11 @@ public:
   std::shared_ptr<arrow::io::InputStream> source;
   std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
 
-  void close() { source->Close(); }
+  void close() {
+    if (!source->Close().ok()) {
+      throw std::runtime_error("Error in closing source");
+    }
+  }
 };
 
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_result,
