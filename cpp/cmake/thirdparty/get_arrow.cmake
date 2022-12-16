@@ -69,7 +69,7 @@ endfunction()
 
 # This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
-         ENABLE_PARQUET
+         ENABLE_PARQUET ENABLE_FILESYSTEM
 )
 
   if(USE_LIBARROW_FROM_PYARROW)
@@ -166,6 +166,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             # e.g. needed by blazingsql-io
             ${ARROW_PARQUET_OPTIONS}
             "ARROW_PARQUET ${ENABLE_PARQUET}"
+            "ARROW_FILESYSTEM ${CUDF_ENABLE_ARROW_FILESYSTEM}"
             ${ARROW_PYTHON_OPTIONS}
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
             "ARROW_USE_CCACHE OFF"
@@ -372,5 +373,5 @@ endif()
 
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
-  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET}
+  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET} ${CUDF_ENABLE_ARROW_FILESYSTEM}
 )
