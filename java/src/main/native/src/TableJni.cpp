@@ -263,23 +263,35 @@ public:
       // empty table, so need to write an empty batch explicitly.
       // For more please see https://issues.apache.org/jira/browse/ARROW-17912.
       auto empty_batch = arrow::RecordBatch::MakeEmpty(arrow_tab->schema());
-      if (!writer->WriteRecordBatch(*(*empty_batch)).ok()) {
-        throw std::runtime_error("writer failed to write batch");
+      auto status = writer->WriteRecordBatch(*(*empty_batch));
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write batch with the following error: " +
+                                 status.ToString());
       }
     } else {
-      if (!writer->WriteTable(*arrow_tab, max_chunk).ok()) {
-        throw std::runtime_error("writer failed to write table");
+      auto status = writer->WriteTable(*arrow_tab, max_chunk);
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write table with the following error: " +
+                                 status.ToString());
       };
     }
   }
 
   void close() {
     if (initialized) {
-      if (!writer->Close().ok()) {
-        throw std::runtime_error("Error in closing writer");
+      {
+        auto status = writer->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing writer failed with the following error: " +
+                                   status.ToString());
+        }
       }
-      if (!sink->Close().ok()) {
-        throw std::runtime_error("Error in closing sink");
+      {
+        auto status = sink->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing sink failed with the following error: " +
+                                   status.ToString());
+        }
       }
     }
     initialized = false;
@@ -615,8 +627,10 @@ public:
   std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
 
   void close() {
-    if (!source->Close().ok()) {
-      throw std::runtime_error("Error in closing source");
+    auto status = source->Close();
+    if (!status.ok()) {
+      throw std::runtime_error("Closing source failed with the following error: " +
+                               status.ToString());
     }
   }
 };
