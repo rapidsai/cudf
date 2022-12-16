@@ -88,8 +88,6 @@ conda activate rapids
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
-gpuci_conda_retry remove --force pyarrow arrow-cpp
-gpuci_mamba_retry install -y "pyarrow=10.0.1" "arrow-cpp=10.0.1"
 
 gpuci_logger "Check conda environment"
 conda info
