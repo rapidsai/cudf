@@ -4045,8 +4045,7 @@ TEST_F(ParquetWriterTest, LargeColumnIndex)
 
   read_footer(source, &fmd);
 
-  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
-    auto const& rg = fmd.row_groups[r];
+  for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
 
