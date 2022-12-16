@@ -45,6 +45,8 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
+
+namespace {
 // Spark doesn't support RLE encoding for BOOLEANs
 #ifdef ENABLE_BOOL_RLE
 constexpr bool enable_bool_rle = true;
@@ -95,7 +97,7 @@ struct page_enc_state_s {
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-uint32_t __device__ physical_type_len(Type physical_type, type_id id)
+constexpr uint32_t physical_type_len(Type physical_type, type_id id)
 {
   if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
     return sizeof(__int128_t);
@@ -108,6 +110,23 @@ uint32_t __device__ physical_type_len(Type physical_type, type_id id)
     default: return sizeof(int32_t);
   }
 }
+
+constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
+{
+  if (value_bit_width == 0) return 0;
+
+  // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
+  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 256);
+}
+
+// subtract b from a, but return 0 if this would underflow
+constexpr size_t underflow_safe_subtract(size_t a, size_t b)
+{
+  if (b > a) { return 0; }
+  return a - b;
+}
+
+}  // anonymous namespace
 
 // blockDim {512,1,1}
 template <int block_size>
@@ -200,6 +219,10 @@ __global__ void __launch_bounds__(block_size)
       len = block_reduce(reduce_storage).Sum(len);
       if (t == 0) { s->frag.fragment_data_size += len; }
       __syncthreads();
+      // page fragment size must fit in a 32-bit signed integer
+      if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
+        CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
+      }
     }
     __syncthreads();
     if (t == 0) { frag[blockIdx.x][frag_y] = s->frag; }
@@ -227,14 +250,6 @@ __global__ void __launch_bounds__(128)
     }
     frag_id += gridDim.y * 4;
   }
-}
-
-constexpr uint32_t max_RLE_page_size(uint8_t value_bit_width, uint32_t num_values)
-{
-  if (value_bit_width == 0) return 0;
-
-  // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
-  return 4 + 5 + util::div_rounding_up_unsafe(num_values * value_bit_width, 8) + (num_values / 256);
 }
 
 // blockDim {128,1,1}
@@ -271,7 +286,7 @@ __global__ void __launch_bounds__(128)
     uint32_t rows_in_page        = 0;
     uint32_t values_in_page      = 0;
     uint32_t leaf_values_in_page = 0;
-    uint32_t page_size           = 0;
+    size_t page_size             = 0;
     uint32_t num_pages           = 0;
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
@@ -351,19 +366,26 @@ __global__ void __launch_bounds__(128)
         (ck_g.use_dictionary)
           ? frag_g.num_leaf_values * util::div_rounding_up_unsafe(ck_g.dict_rle_bits, 8)
           : frag_g.fragment_data_size;
+
+      // page fragment size must fit in a 32-bit signed integer
+      if (fragment_data_size > std::numeric_limits<int32_t>::max()) {
+        CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
+      }
+
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      long this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                                : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                          : 512 * 1024;
+      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                            : 512 * 1024;
 
       // override this_max_page_size if the requested size is smaller
-      this_max_page_size = min(this_max_page_size, static_cast<long>(max_page_size_bytes));
+      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
 
       // subtract size of rep and def level vectors
       auto num_vals = values_in_page + frag_g.num_values;
-      // underflow is ok here, it just means the test below will always be true
-      this_max_page_size -= max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
-                            max_RLE_page_size(col_g.num_rep_level_bits(), num_vals);
+      this_max_page_size =
+        underflow_safe_subtract(this_max_page_size,
+                                max_RLE_page_size(col_g.num_def_level_bits(), num_vals) +
+                                  max_RLE_page_size(col_g.num_rep_level_bits(), num_vals));
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
@@ -399,8 +421,12 @@ __global__ void __launch_bounds__(128)
           page_g.num_values         = values_in_page;
           auto const def_level_size = max_RLE_page_size(col_g.num_def_level_bits(), values_in_page);
           auto const rep_level_size = max_RLE_page_size(col_g.num_rep_level_bits(), values_in_page);
-          page_g.max_data_size      = page_size + def_level_size + rep_level_size;
-
+          auto const max_data_size  = page_size + def_level_size + rep_level_size;
+          // page size must fit in 32-bit signed integer
+          if (max_data_size > std::numeric_limits<int32_t>::max()) {
+            CUDF_UNREACHABLE("page size exceeds maximum for i32");
+          }
+          page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset +=
@@ -1536,7 +1562,7 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
 __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
                                                           bool is_min,
                                                           void* scratch,
-                                                          size_type truncate_length)
+                                                          int32_t truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is data at [len]. work backwards until we find
@@ -1576,7 +1602,7 @@ __device__ std::pair<const void*, uint32_t> truncate_utf8(device_span<unsigned c
 __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
                                                             bool is_min,
                                                             void* scratch,
-                                                            size_type truncate_length)
+                                                            int32_t truncate_length)
 {
   if (is_min) { return {arr.data(), truncate_length}; }
   memcpy(scratch, arr.data(), truncate_length);
@@ -1603,7 +1629,7 @@ __device__ std::pair<const void*, uint32_t> truncate_binary(device_span<uint8_t 
 __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& str,
                                                             bool is_min,
                                                             void* scratch,
-                                                            size_type truncate_length)
+                                                            int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
     return {str.data(), str.size_bytes()};
@@ -1625,7 +1651,7 @@ __device__ std::pair<const void*, uint32_t> truncate_string(const string_view& s
  * @brief Attempt to truncate a binary array to at most truncate_length bytes.
  */
 __device__ std::pair<const void*, uint32_t> truncate_byte_array(
-  const statistics::byte_array_view& arr, bool is_min, void* scratch, size_type truncate_length)
+  const statistics::byte_array_view& arr, bool is_min, void* scratch, int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
     return {arr.data(), arr.size_bytes()};
@@ -1649,7 +1675,7 @@ __device__ std::pair<const void*, uint32_t> get_extremum(const statistics_val* s
                                                          statistics_dtype dtype,
                                                          void* scratch,
                                                          bool is_min,
-                                                         size_type truncate_length)
+                                                         int32_t truncate_length)
 {
   switch (dtype) {
     case dtype_bool: return {stats_val, sizeof(bool)};
@@ -1962,7 +1988,7 @@ constexpr __device__ void* align8(void* ptr)
 __global__ void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length)
+                         int32_t column_index_truncate_length)
 {
   __align__(8) unsigned char s_scratch[MIN_STATS_SCRATCH_SIZE];
   uint8_t* col_idx_end;
@@ -2127,7 +2153,7 @@ void GatherPages(device_span<EncColumnChunk> chunks,
 
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length,
+                         int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream)
 {
   gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(

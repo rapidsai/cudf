@@ -77,7 +77,8 @@ def test_ufunc_index(ufunc):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     try:
         if ufunc.nout > 1:
@@ -313,8 +314,8 @@ def test_ufunc_dataframe(ufunc, has_nulls, indexed):
             "pandas does not currently support misaligned indexes in "
             "DataFrames, but we do. Until this is fixed we will skip these "
             "tests. See the error here: "
-            "https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L212, "  # noqa: E501
-            "called from https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L258"  # noqa: E501
+            "https://github.com/pandas-dev/pandas/blob/1.5.x/pandas/core/arraylike.py#L212, "  # noqa: E501
+            "called from https://github.com/pandas-dev/pandas/blob/1.5.x/pandas/core/arraylike.py#L258"  # noqa: E501
         )
     # TODO: Enable the check below when we remove the check above.
     # if indexed and fname in (

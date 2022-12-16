@@ -33,6 +33,7 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/reverse.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
@@ -668,8 +669,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNI
       case cudf::type_id::STRING:
         return release_as_jlong(cudf::strings::reverse(cudf::strings_column_view{*input}));
       case cudf::type_id::LIST:
-        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                      "List type is not yet supported in reverse()", 0);
+        return release_as_jlong(cudf::lists::reverse(cudf::lists_column_view{*input}));
       default:
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                       "A column of type string or list is required for reverse()", 0);
