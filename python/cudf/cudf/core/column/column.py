@@ -120,7 +120,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         self._unlink_shared_buffers(zero_copied=True)
 
-        return self._data_array_view
+        return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property
     def _data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
@@ -155,6 +155,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         View the mask as a device array
         """
+        self._unlink_shared_buffers(zero_copied=True)
+
         return cuda.as_cuda_array(self.mask).view(mask_dtype)
 
     def __len__(self) -> int:
