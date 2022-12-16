@@ -28,6 +28,7 @@ void nvbench_segmented_sort(nvbench::state& state)
 {
   cudf::rmm_pool_raii pool_raii;
 
+  auto const stable     = static_cast<bool>(state.get_int64("stable"));
   auto const dtype      = cudf::type_to_id<int32_t>();
   auto const size_bytes = static_cast<size_t>(state.get_int64("size_bytes"));
   auto const null_freq  = state.get_float64("null_frequency");
@@ -50,12 +51,16 @@ void nvbench_segmented_sort(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = cudf::segmented_sorted_order(*input, *segments);
+    if (stable)
+      cudf::stable_segmented_sorted_order(*input, *segments);
+    else
+      cudf::segmented_sorted_order(*input, *segments);
   });
 }
 
 NVBENCH_BENCH(nvbench_segmented_sort)
   .set_name("segmented_sort")
+  .add_int64_axis("stable", {0, 1})
   .add_int64_power_of_two_axis("size_bytes", {16, 18, 20, 22, 24, 28})
   .add_float64_axis("null_frequency", {0, 0.1})
   .add_int64_axis("row_width", {16, 128, 1024});
