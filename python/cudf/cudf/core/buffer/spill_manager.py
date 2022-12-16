@@ -156,7 +156,7 @@ class SpillStatistics:
                 stat.spilled_nbytes += spilled_nbytes
 
     def log_spill_on_demand(self, manager: SpillManager, nbytes: int):
-        """Log an spill-on-demand event (after it has been handled)
+        """Log a spill-on-demand event (after it has been handled)
 
         Parameters
         ----------
@@ -198,7 +198,7 @@ class SpillStatistics:
                 ret += f"{format_bytes(nbytes)} in {time:.3f}s\n"
 
             # Print expose stats
-            ret += "  Permanent exposed buffers (level >= 2): "
+            ret += "  Permanently exposed buffers (level >= 2): "
             if self.level < 2:
                 return ret + "disabled"
             if len(self.exposes) == 0:
