@@ -970,6 +970,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
 
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
+
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
