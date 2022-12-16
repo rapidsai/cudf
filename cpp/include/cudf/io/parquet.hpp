@@ -761,30 +761,21 @@ class parquet_writer_options {
    *
    * @param policy Policy for dictionary use
    */
-  void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
+  void set_dictionary_policy(dictionary_policy policy);
 
   /**
    * @brief Sets the maximum dictionary size, in bytes.
    *
    * @param size_bytes Maximum dictionary size, in bytes
    */
-  void set_max_dictionary_size(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
-                 "The maximum dictionary size cannot exceed 2GB.");
-    _max_dictionary_size = size_bytes;
-  }
+  void set_max_dictionary_size(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
-    _max_page_fragment_size = size_rows;
-  }
+  void set_max_page_fragment_size(size_type size_rows);
 };
 
 /**
@@ -962,11 +953,7 @@ class parquet_writer_options_builder {
    * @param val policy for dictionary use
    * @return this for chaining
    */
-  parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
-  {
-    options.set_dictionary_policy(val);
-    return *this;
-  }
+  parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
 
   /**
    * @brief Sets the maximum dictionary size, in bytes.
@@ -979,11 +966,7 @@ class parquet_writer_options_builder {
    * @param val maximum dictionary size
    * @return this for chaining
    */
-  parquet_writer_options_builder& max_dictionary_size(size_t val)
-  {
-    options.set_max_dictionary_size(val);
-    return *this;
-  }
+  parquet_writer_options_builder& max_dictionary_size(size_t val);
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
@@ -995,11 +978,7 @@ class parquet_writer_options_builder {
    * @param val maximum page fragment size
    * @return this for chaining
    */
-  parquet_writer_options_builder& max_page_fragment_size(size_type val)
-  {
-    options.set_max_page_fragment_size(val);
-    return *this;
-  }
+  parquet_writer_options_builder& max_page_fragment_size(size_type val);
 
   /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
@@ -1303,30 +1282,21 @@ class chunked_parquet_writer_options {
    *
    * @param policy Policy for dictionary use
    */
-  void set_dictionary_policy(dictionary_policy policy) { _dictionary_policy = policy; }
+  void set_dictionary_policy(dictionary_policy policy);
 
   /**
    * @brief Sets the maximum dictionary size, in bytes.
    *
    * @param size_bytes Maximum dictionary size, in bytes
    */
-  void set_max_dictionary_size(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
-                 "The maximum dictionary size cannot exceed 2GB.");
-    _max_dictionary_size = size_bytes;
-  }
+  void set_max_dictionary_size(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
    *
    * @param size_rows Maximum page fragment size, in rows.
    */
-  void set_max_page_fragment_size(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
-    _max_page_fragment_size = size_rows;
-  }
+  void set_max_page_fragment_size(size_type size_rows);
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1505,11 +1475,7 @@ class chunked_parquet_writer_options_builder {
    * @param val policy for dictionary use
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& dictionary_policy(dictionary_policy val)
-  {
-    options.set_dictionary_policy(val);
-    return *this;
-  }
+  chunked_parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
 
   /**
    * @brief Sets the maximum dictionary size, in bytes.
@@ -1522,11 +1488,7 @@ class chunked_parquet_writer_options_builder {
    * @param val maximum dictionary size
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& max_dictionary_size(size_t val)
-  {
-    options.set_max_dictionary_size(val);
-    return *this;
-  }
+  chunked_parquet_writer_options_builder& max_dictionary_size(size_t val);
 
   /**
    * @brief Sets the maximum page fragment size, in rows.
@@ -1538,11 +1500,7 @@ class chunked_parquet_writer_options_builder {
    * @param val maximum page fragment size
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val)
-  {
-    options.set_max_page_fragment_size(val);
-    return *this;
-  }
+  chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val);
 
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
