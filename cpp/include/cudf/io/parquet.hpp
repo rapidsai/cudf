@@ -20,7 +20,6 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -177,14 +176,7 @@ class parquet_reader_options {
    *
    * @param row_groups Vector of row groups to read
    */
-  void set_row_groups(std::vector<std::vector<size_type>> row_groups)
-  {
-    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
-      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
-    }
-
-    _row_groups = std::move(row_groups);
-  }
+  void set_row_groups(std::vector<std::vector<size_type>> row_groups);
 
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
@@ -216,28 +208,14 @@ class parquet_reader_options {
    *
    * @param val Number of rows to skip from start
    */
-  void set_skip_rows(size_type val)
-  {
-    if ((val != 0) and (!_row_groups.empty())) {
-      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-    }
-
-    _skip_rows = val;
-  }
+  void set_skip_rows(size_type val);
 
   /**
    * @brief Sets number of rows to read.
    *
    * @param val Number of rows to read after skip
    */
-  void set_num_rows(size_type val)
-  {
-    if ((val != -1) and (!_row_groups.empty())) {
-      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-    }
-
-    _num_rows = val;
-  }
+  void set_num_rows(size_type val);
 
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
@@ -668,12 +646,7 @@ class parquet_writer_options {
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
    */
-  void set_partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    _partitions = std::move(partitions);
-  }
+  void set_partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata.
@@ -687,12 +660,7 @@ class parquet_writer_options {
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics.
@@ -722,71 +690,42 @@ class parquet_writer_options {
    * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
    * data sinks in sink info
    */
-  void set_column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    _column_chunks_file_paths = std::move(file_paths);
-  }
+  void set_column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows Maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
-    CUDF_EXPECTS(size_bytes <= std::numeric_limits<int32_t>::max(),
-                 "The maximum page size cannot exceed 2GB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows Maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(int32_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
-  }
+  void set_column_index_truncate_length(int32_t size_bytes);
 };
 
 /**
@@ -821,13 +760,7 @@ class parquet_writer_options_builder {
    * be same size as number of sinks in sink_info
    * @return this for chaining
    */
-  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    options.set_partitions(std::move(partitions));
-    return *this;
-  }
+  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata in parquet_writer_options.
@@ -848,13 +781,7 @@ class parquet_writer_options_builder {
    * @return this for chaining
    */
   parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options._user_data = std::move(metadata);
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -887,13 +814,7 @@ class parquet_writer_options_builder {
    * data sinks
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    options.set_column_chunks_file_paths(std::move(file_paths));
-    return *this;
-  }
+  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1177,12 +1098,7 @@ class chunked_parquet_writer_options {
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -1212,59 +1128,35 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows The maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
-    CUDF_EXPECTS(size_bytes <= std::numeric_limits<int32_t>::max(),
-                 "The maximum page size cannot exceed 2GB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows The maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(int32_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
-  }
+  void set_column_index_truncate_length(int32_t size_bytes);
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1316,13 +1208,7 @@ class chunked_parquet_writer_options_builder {
    * @return this for chaining
    */
   chunked_parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options.set_key_value_metadata(std::move(metadata));
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
