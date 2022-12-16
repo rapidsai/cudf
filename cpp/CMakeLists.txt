@@ -161,7 +161,6 @@ include(cmake/thirdparty/get_thrust.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
-set(CUDF_ENABLE_ARROW_FILESYSTEM ${BUILD_TESTS})
 include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
