@@ -4813,13 +4813,13 @@ TEST_F(ParquetWriterTest, DictionaryNeverTest)
 {
   constexpr unsigned int nrows = 1'000U;
 
+  // only one value, so would normally use dictionary
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryNeverTest.parquet");
-  // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4833,7 +4833,7 @@ TEST_F(ParquetWriterTest, DictionaryNeverTest)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  // make sure dictionary was used
+  // make sure dictionary was not used
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
