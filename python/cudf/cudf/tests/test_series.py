@@ -482,7 +482,8 @@ def test_series_factorize(data, na_sentinel):
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
+    with expect_warning_if(na_sentinel == -1):
+        expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
     actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
