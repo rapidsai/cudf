@@ -20,6 +20,7 @@ from cudf.testing._utils import (
     _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
     gen_rand,
 )
 
@@ -1539,7 +1540,13 @@ def test_autocorr(cudf_series, lag):
     psr = cudf_series.to_pandas()
 
     cudf_corr = cudf_series.autocorr(lag=lag)
-    pd_corr = psr.autocorr(lag=lag)
+
+    # autocorrelation is undefined (nan) for less than two entries, but pandas
+    # short-circuits when there are 0 entries and bypasses the numpy function
+    # call that generates an error.
+    num_both_valid = (psr.notna() & psr.shift(lag).notna()).sum()
+    with expect_warning_if(num_both_valid == 1, RuntimeWarning):
+        pd_corr = psr.autocorr(lag=lag)
 
     assert_eq(pd_corr, cudf_corr)
 
