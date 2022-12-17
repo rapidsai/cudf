@@ -102,8 +102,10 @@ def test_series_append_basic(data, others, ignore_index):
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -147,8 +149,10 @@ def test_series_append_basic_str(data, others, ignore_index):
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -198,8 +202,10 @@ def test_series_append_series_with_index(data, others, ignore_index):
     other_ps = others
     other_gs = cudf.from_pandas(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -277,8 +283,10 @@ def test_series_append_list_series_with_index(data, others, ignore_index):
     other_ps = others
     other_gs = [cudf.from_pandas(obj) for obj in others]
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -288,13 +296,15 @@ def test_series_append_existing_buffers():
 
     # Add new buffer
     a2 = cudf.Series(np.arange(5))
-    gs = gs.append(a2)
+    with pytest.warns(FutureWarning):
+        gs = gs.append(a2)
     assert len(gs) == 15
     np.testing.assert_equal(gs.to_numpy(), np.hstack([a1, a2.to_numpy()]))
 
     # Ensure appending to previous buffer
     a3 = cudf.Series(np.arange(3))
-    gs = gs.append(a3)
+    with pytest.warns(FutureWarning):
+        gs = gs.append(a3)
     assert len(gs) == 18
     a4 = np.hstack([a1, a2.to_numpy(), a3.to_numpy()])
     np.testing.assert_equal(gs.to_numpy(), a4)
@@ -302,11 +312,13 @@ def test_series_append_existing_buffers():
     # Appending different dtype
     a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
     a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
-    gs = a5.append(a6)
+    with pytest.warns(FutureWarning):
+        gs = a5.append(a6)
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a5.to_numpy(), a6.to_numpy()])
     )
-    gs = cudf.Series(a6).append(a5)
+    with pytest.warns(FutureWarning):
+        gs = cudf.Series(a6).append(a5)
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
