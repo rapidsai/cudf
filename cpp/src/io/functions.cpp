@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include <io/orc/orc.hpp>
+
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
@@ -32,9 +34,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/orc/orc.hpp>
 
-#include <cudf/detail/iterator.cuh>
+#include <algorithm>
 
 namespace cudf {
 namespace io {
@@ -575,6 +576,159 @@ std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
 {
   CUDF_FUNC_RANGE();
   return writer->close(column_chunks_file_path);
+}
+
+void parquet_reader_options::set_row_groups(std::vector<std::vector<size_type>> row_groups)
+{
+  if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
+    CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
+  }
+
+  _row_groups = std::move(row_groups);
+}
+
+void parquet_reader_options::set_skip_rows(size_type val)
+{
+  if ((val != 0) and (!_row_groups.empty())) {
+    CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
+  }
+
+  _skip_rows = val;
+}
+
+void parquet_reader_options::set_num_rows(size_type val)
+{
+  if ((val != -1) and (!_row_groups.empty())) {
+    CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
+  }
+
+  _num_rows = val;
+}
+
+void parquet_writer_options::set_partitions(std::vector<partition_info> partitions)
+{
+  CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
+               "Mismatch between number of sinks and number of partitions");
+  _partitions = std::move(partitions);
+}
+
+void parquet_writer_options::set_key_value_metadata(
+  std::vector<std::map<std::string, std::string>> metadata)
+{
+  CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
+               "Mismatch between number of sinks and number of metadata maps");
+  _user_data = std::move(metadata);
+}
+
+void parquet_writer_options::set_column_chunks_file_paths(std::vector<std::string> file_paths)
+{
+  CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
+               "Mismatch between number of sinks and number of chunk paths to set");
+  _column_chunks_file_paths = std::move(file_paths);
+}
+
+void parquet_writer_options::set_row_group_size_bytes(size_t size_bytes)
+{
+  CUDF_EXPECTS(
+    size_bytes >= 1024,
+    "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
+  _row_group_size_bytes = size_bytes;
+}
+
+void parquet_writer_options::set_row_group_size_rows(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
+  _row_group_size_rows = size_rows;
+}
+
+void parquet_writer_options::set_max_page_size_bytes(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum page size cannot exceed 2GB.");
+  _max_page_size_bytes = size_bytes;
+}
+
+void parquet_writer_options::set_max_page_size_rows(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
+  _max_page_size_rows = size_rows;
+}
+
+void parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+  _column_index_truncate_length = size_bytes;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::partitions(
+  std::vector<partition_info> partitions)
+{
+  options.set_partitions(std::move(partitions));
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::key_value_metadata(
+  std::vector<std::map<std::string, std::string>> metadata)
+{
+  options.set_key_value_metadata(std::move(metadata));
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::column_chunks_file_paths(
+  std::vector<std::string> file_paths)
+{
+  options.set_column_chunks_file_paths(std::move(file_paths));
+  return *this;
+}
+
+void chunked_parquet_writer_options::set_key_value_metadata(
+  std::vector<std::map<std::string, std::string>> metadata)
+{
+  CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
+               "Mismatch between number of sinks and number of metadata maps");
+  _user_data = std::move(metadata);
+}
+
+void chunked_parquet_writer_options::set_row_group_size_bytes(size_t size_bytes)
+{
+  CUDF_EXPECTS(
+    size_bytes >= 1024,
+    "The maximum row group size cannot be smaller than the minimum page size, which is 1KB.");
+  _row_group_size_bytes = size_bytes;
+}
+
+void chunked_parquet_writer_options::set_row_group_size_rows(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "The maximum row group row count must be a positive integer.");
+  _row_group_size_rows = size_rows;
+}
+
+void chunked_parquet_writer_options::set_max_page_size_bytes(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes >= 1024, "The maximum page size cannot be smaller than 1KB.");
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum page size cannot exceed 2GB.");
+  _max_page_size_bytes = size_bytes;
+}
+
+void chunked_parquet_writer_options::set_max_page_size_rows(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "The maximum page row count must be a positive integer.");
+  _max_page_size_rows = size_rows;
+}
+
+void chunked_parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
+  _column_index_truncate_length = size_bytes;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::key_value_metadata(
+  std::vector<std::map<std::string, std::string>> metadata)
+{
+  options.set_key_value_metadata(std::move(metadata));
+  return *this;
 }
 
 }  // namespace io

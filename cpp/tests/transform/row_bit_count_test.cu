@@ -33,6 +33,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
+#include <numeric>
+
 template <typename T>
 struct RowBitCountTyped : public cudf::test::BaseFixture {
 };
@@ -289,14 +291,7 @@ std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> build_st
   //        (1 float + 1 validity bit) +
   //        (1 int16_t + 1 validity bit) +
   //        (1 validity bit)
-  auto size_iter =
-    cudf::detail::make_counting_transform_iterator(0, [&strings, &struct_validity](int i) {
-      return (sizeof(float) * CHAR_BIT) + 1 + (sizeof(int16_t) * CHAR_BIT) + 1 +
-             (static_cast<cudf::size_type>(strings[i].size()) * CHAR_BIT) +
-             (sizeof(cudf::offset_type) * CHAR_BIT) + 1 + 1;
-    });
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes(
-    size_iter, size_iter + strings.size());
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes{84, 108, 84, 92, 140, 84};
 
   return {struct_col.release(), expected_sizes.release()};
 }
@@ -355,25 +350,21 @@ TEST_F(RowBitCount, StructsNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>
-build_nested_and_expected_column(std::vector<bool> const& struct_validity)
+std::unique_ptr<cudf::column> build_nested_column1(std::vector<bool> const& struct_validity)
 {
   // tests the "branching" case ->  list<struct<list> ...>>>
 
   // List<Struct<List<int>, float, int16>
 
   // Inner list column
-  // clang-format off
-  cudf::test::lists_column_wrapper<int> list{
-    {1, 2, 3, 4, 5},
-    {6, 7, 8},
-    {33, 34, 35, 36, 37, 38, 39},
-    {-1, -2},
-    {-10, -11, -1, -20},
-    {40, 41, 42},
-    {100, 200, 300},
-    {-100, -200, -300}};
-  // clang-format on
+  cudf::test::lists_column_wrapper<int> list{{1, 2, 3, 4, 5},
+                                             {6, 7, 8},
+                                             {33, 34, 35, 36, 37, 38, 39},
+                                             {-1, -2},
+                                             {-10, -11, -1, -20},
+                                             {40, 41, 42},
+                                             {100, 200, 300},
+                                             {-100, -200, -300}};
 
   // floats
   std::vector<float> ages{5, 10, 15, 20, 4, 75, 16, -16};
@@ -395,18 +386,22 @@ build_nested_and_expected_column(std::vector<bool> const& struct_validity)
                                                                 outer_offsets.end());
   auto const size = static_cast<cudf::column_view>(outer_offsets_col).size() - 1;
 
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes{
-    276, 32, 520, 572, 212, 212};
+  // Each struct (list child) has size:
+  //    (1 offset (4 bytes) + (list size if row is valid) + 1 validity bit) +
+  //    (1 float + 1 validity bit) +
+  //    (1 int16_t + 1 validity bit) +
+  //    (1 validity bit)
+  // Each top level list has size:
+  //    1 offset (4 bytes) + (list size if row is valid).
 
-  return {cudf::make_lists_column(static_cast<cudf::size_type>(size),
-                                  outer_offsets_col.release(),
-                                  struct_column.release(),
-                                  cudf::UNKNOWN_NULL_COUNT,
-                                  rmm::device_buffer{}),
-          expected_sizes.release()};
+  return cudf::make_lists_column(static_cast<cudf::size_type>(size),
+                                 outer_offsets_col.release(),
+                                 struct_column.release(),
+                                 cudf::UNKNOWN_NULL_COUNT,
+                                 rmm::device_buffer{});
 }
 
-std::unique_ptr<cudf::column> build_nested_column(std::vector<bool> const& struct_validity)
+std::unique_ptr<cudf::column> build_nested_column2(std::vector<bool> const& struct_validity)
 {
   // List<Struct<List<List<int>>, Struct<int16>>>
 
@@ -442,12 +437,17 @@ TEST_F(RowBitCount, NestedTypes)
 {
   // List<Struct<List<int>, float, List<int>, int16>
   {
-    auto [col_no_nulls, expected_sizes] =
-      build_nested_and_expected_column({1, 1, 1, 1, 1, 1, 1, 1});
+    auto const col_no_nulls = build_nested_column1({1, 1, 1, 1, 1, 1, 1, 1});
+    auto const expected_sizes_no_nulls =
+      cudf::test::fixed_width_column_wrapper<cudf::size_type>{276, 32, 520, 572, 212, 212}
+        .release();
     cudf::table_view no_nulls_t({*col_no_nulls});
     auto no_nulls_result = cudf::row_bit_count(no_nulls_t);
 
-    auto col_nulls = build_nested_and_expected_column({0, 0, 1, 1, 1, 1, 1, 1}).first;
+    auto const col_nulls = build_nested_column1({0, 0, 1, 1, 1, 1, 1, 1});
+    auto const expected_sizes_with_nulls =
+      cudf::test::fixed_width_column_wrapper<cudf::size_type>{116, 32, 424, 572, 212, 212}
+        .release();
     cudf::table_view nulls_t({*col_nulls});
     auto nulls_result = cudf::row_bit_count(nulls_t);
 
@@ -467,25 +467,26 @@ TEST_F(RowBitCount, NestedTypes)
     // if row_bit_count() is changed to return a post-gather result (which may be desirable),
     // the nulls_result case below will start failing and will need to be changed.
     //
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *no_nulls_result);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *nulls_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes_no_nulls, *no_nulls_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes_with_nulls, *nulls_result);
   }
 
   // List<Struct<List<List<int>>, Struct<int16>>>
   {
-    auto col_no_nulls = build_nested_column({1, 1, 1});
+    auto col_no_nulls = build_nested_column2({1, 1, 1});
     cudf::table_view no_nulls_t({*col_no_nulls});
     auto no_nulls_result = cudf::row_bit_count(no_nulls_t);
 
-    auto col_nulls = build_nested_column({1, 0, 1});
+    auto col_nulls = build_nested_column2({1, 0, 1});
     cudf::table_view nulls_t({*col_nulls});
     auto nulls_result = cudf::row_bit_count(nulls_t);
 
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes{372, 32, 840};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes_no_nuls{372, 32, 840};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes_with_nuls{372, 32, 616};
 
     // same explanation as above
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *no_nulls_result);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *nulls_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes_no_nuls, *no_nulls_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes_with_nuls, *nulls_result);
   }
 
   // test pushing/popping multiple times within one struct, and branch depth > 1
@@ -600,7 +601,9 @@ struct sum_functor {
 TEST_F(RowBitCount, Table)
 {
   // complex nested column
-  auto [col0, col0_sizes] = build_nested_and_expected_column({1, 1, 1, 1, 1, 1, 1, 1});
+  auto col0 = build_nested_column1({1, 1, 1, 1, 1, 1, 1, 1});
+  auto col0_sizes =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{276, 32, 520, 572, 212, 212}.release();
 
   // struct column
   auto [col1, col1_sizes] = build_struct_column();
