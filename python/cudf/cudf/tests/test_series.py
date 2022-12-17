@@ -998,7 +998,10 @@ def test_series_update(data, other):
     ps = gs.to_pandas()
 
     ps.update(p_other)
-    gs.update(g_other)
+    with expect_warning_if(
+        isinstance(other, cudf.Series) and other.isna().any(), UserWarning
+    ):
+        gs.update(g_other)
     assert_eq(gs, ps)
 
 
