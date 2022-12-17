@@ -342,196 +342,203 @@ struct OverflowTest : public cudf::test::BaseFixture {
 
 TEST_F(OverflowTest, OverflowTest)
 {
-  using namespace cudf;
   // should concatenate up to size_type::max rows.
   {
     // 5 x size + size_last adds to size_type::max
-    constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
-    constexpr auto size_last = static_cast<size_type>(836763647);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
+    constexpr auto size_last = static_cast<cudf::size_type>(836763647);
 
-    auto many_chars      = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
-    auto many_chars_last = cudf::make_fixed_width_column(data_type{type_id::INT8}, size_last);
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
+    auto many_chars_last =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size_last);
 
-    table_view tbl({*many_chars});
-    table_view tbl_last({*many_chars_last});
+    cudf::table_view tbl({*many_chars});
+    cudf::table_view tbl_last({*many_chars_last});
     std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
     std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
     EXPECT_NO_THROW(cudf::get_default_stream().synchronize());
-    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
+    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<cudf::size_type>::max());
   }
 
   // primitive column
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 char columns of size 1 billion each
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
 
-    table_view tbl({*many_chars});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
+    cudf::table_view tbl({*many_chars});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
                  cudf::logic_error);
   }
 
   // string column, overflow on chars
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns of with 1 billion chars in each
-    auto offsets    = cudf::test::fixed_width_column_wrapper<offset_type>{0, size};
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto offsets    = cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, size};
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
     auto col        = cudf::make_strings_column(
       1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
-    table_view tbl({*col});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
                  cudf::logic_error);
   }
 
   // string column, overflow on offsets (rows)
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns 1 billion rows each
-    auto many_offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, size + 1);
-    auto chars        = cudf::test::fixed_width_column_wrapper<int8_t>{0, 1, 2};
-    auto col          = cudf::make_strings_column(
+    auto many_offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size + 1);
+    auto chars = cudf::test::fixed_width_column_wrapper<int8_t>{0, 1, 2};
+    auto col   = cudf::make_strings_column(
       size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{});
 
-    table_view tbl({*col});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
                  cudf::logic_error);
   }
 
   // list<struct>, structs too long
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
     auto struct_col =
       cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{});
 
     // list
-    auto offsets = cudf::test::fixed_width_column_wrapper<offset_type>{0, inner_size};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, inner_size};
     auto col =
       cudf::make_lists_column(1, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{});
 
-    table_view tbl({*col});
+    cudf::table_view tbl({*col});
     auto tables =
-      std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
+      std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
     EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
   }
 
   // struct<int, list>, list child too long
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
-    constexpr size_type size  = 3;
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+    constexpr cudf::size_type size = 3;
 
     // list
-    auto offsets    = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, inner_size};
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, 0, 0, inner_size};
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
     auto list_col =
       cudf::make_lists_column(3, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT32}, size));
+    children.push_back(cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size));
     children.push_back(std::move(list_col));
     auto col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{});
 
-    table_view tbl({*col});
+    cudf::table_view tbl({*col});
     auto tables =
-      std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
+      std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
     EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
   }
 }
 
 TEST_F(OverflowTest, Presliced)
 {
-  using namespace cudf;
-
   // primitive column
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 4 char columns of size ~1/2 billion each
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
     auto sliced     = cudf::split(*many_chars, {511 * 1024 * 1024});
 
     // 511 * 1024 * 1024, should succeed
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a}));
 
     // 513 * 1024 * 1024, should fail
-    table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({b, b, b, b})), cudf::logic_error);
+    cudf::table_view b({sliced[1]});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
   }
 
   // struct<int8> column
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 4 char columns of size ~1/2 billion each
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, size));
+    children.push_back(cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size));
     auto struct_col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{});
 
     auto sliced = cudf::split(*struct_col, {511 * 1024 * 1024});
 
     // 511 * 1024 * 1024, should succeed
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a}));
 
     // 513 * 1024 * 1024, should fail
-    table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({b, b, b, b})), cudf::logic_error);
+    cudf::table_view b({sliced[1]});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
   }
 
   // strings, overflow on chars
   {
-    constexpr size_type total_chars_size = 1024 * 1024 * 1024;
-    constexpr size_type string_size      = 64;
-    constexpr size_type num_rows         = total_chars_size / string_size;
+    constexpr cudf::size_type total_chars_size = 1024 * 1024 * 1024;
+    constexpr cudf::size_type string_size      = 64;
+    constexpr cudf::size_type num_rows         = total_chars_size / string_size;
 
     // try and concatenate 4 string columns of with ~1/2 billion chars in each
     auto offset_gen = cudf::detail::make_counting_transform_iterator(
-      0, [string_size](size_type index) { return index * string_size; });
+      0, [string_size](cudf::size_type index) { return index * string_size; });
     cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
-    auto col        = cudf::make_strings_column(
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, total_chars_size);
+    auto col = cudf::make_strings_column(
       num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::split(*col, {(num_rows / 2) - 1});
 
     // (num_rows / 2) - 1 should succeed
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a}));
 
     // (num_rows / 2) + 1 should fail
-    table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({b, b, b, b})), cudf::logic_error);
+    cudf::table_view b({sliced[1]});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
   }
 
   // strings, overflow on offsets
   {
-    constexpr size_type total_chars_size = 1024 * 1024 * 1024;
-    constexpr size_type string_size      = 1;
-    constexpr size_type num_rows         = total_chars_size / string_size;
+    constexpr cudf::size_type total_chars_size = 1024 * 1024 * 1024;
+    constexpr cudf::size_type string_size      = 1;
+    constexpr cudf::size_type num_rows         = total_chars_size / string_size;
 
     // try and concatenate 4 string columns of with ~1/2 billion chars in each
-    auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
+    auto offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
     thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<offset_type>(),
-                 offsets->mutable_view().end<offset_type>(),
+                 offsets->mutable_view().begin<cudf::offset_type>(),
+                 offsets->mutable_view().end<cudf::offset_type>(),
                  string_size);
     thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<offset_type>(),
-                           offsets->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
-    auto col        = cudf::make_strings_column(
+                           offsets->view().begin<cudf::offset_type>(),
+                           offsets->view().end<cudf::offset_type>(),
+                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, total_chars_size);
+    auto col = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     // should pass (with 2 rows to spare)
@@ -539,8 +546,8 @@ TEST_F(OverflowTest, Presliced)
     /*
     {
       auto sliced = cudf::split(*col, {(num_rows / 2) + 1});
-      table_view b({sliced[1]});
-      cudf::concatenate(std::vector<table_view>({b, b, b, b}));
+      cudf::table_view b({sliced[1]});
+      cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b}));
     }
     */
 
@@ -548,62 +555,69 @@ TEST_F(OverflowTest, Presliced)
     // offsets, which is not)
     {
       auto a = cudf::split(*col, {(num_rows / 2)});
-      table_view ta({a[1]});
+      cudf::table_view ta({a[1]});
 
       auto b = cudf::split(*col, {(num_rows / 2) + 1});
-      table_view tb({b[1]});
+      cudf::table_view tb({b[1]});
 
-      EXPECT_THROW(cudf::concatenate(std::vector<table_view>({ta, ta, ta, tb})), cudf::logic_error);
+      EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
+                   cudf::logic_error);
     }
   }
 
   // list<struct>, structs too long
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
     auto struct_col =
       cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{});
 
     // list
-    constexpr size_type list_size = inner_size / 4;
-    auto offsets                  = cudf::test::fixed_width_column_wrapper<int>{
+    constexpr cudf::size_type list_size = inner_size / 4;
+    auto offsets                        = cudf::test::fixed_width_column_wrapper<int>{
       0, list_size, list_size * 2, list_size * 3, inner_size};
     auto col =
       cudf::make_lists_column(4, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{});
 
     auto sliced = cudf::split(*col, {2});
-    table_view tbl({sliced[1]});
-    auto tables = std::vector<table_view>({tbl, tbl, tbl, tbl});
+    cudf::table_view tbl({sliced[1]});
+    auto tables = std::vector<cudf::table_view>({tbl, tbl, tbl, tbl});
     EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
   }
 
   // list<struct>, overflow on offsets
   {
-    constexpr size_type inner_size = 1024 * 1024 * 1024;
-    constexpr size_type list_size  = 1;
-    constexpr size_type num_rows   = inner_size / list_size;
+    constexpr cudf::size_type inner_size = 1024 * 1024 * 1024;
+    constexpr cudf::size_type list_size  = 1;
+    constexpr cudf::size_type num_rows   = inner_size / list_size;
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
     auto struct_col =
       cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{});
 
     // try and concatenate 4 struct columns of with ~1/2 billion elements in each
-    auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
+    auto offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
     thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<offset_type>(),
-                 offsets->mutable_view().end<offset_type>(),
+                 offsets->mutable_view().begin<cudf::offset_type>(),
+                 offsets->mutable_view().end<cudf::offset_type>(),
                  list_size);
     thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<offset_type>(),
-                           offsets->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>());
+                           offsets->view().begin<cudf::offset_type>(),
+                           offsets->view().end<cudf::offset_type>(),
+                           offsets->mutable_view().begin<cudf::offset_type>());
     auto col = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(struct_col), 0, rmm::device_buffer{});
 
@@ -612,8 +626,8 @@ TEST_F(OverflowTest, Presliced)
     /*
     {
       auto sliced = cudf::split(*col, {(num_rows / 2) + 1});
-      table_view b({sliced[1]});
-      cudf::concatenate(std::vector<table_view>({b, b, b, b}));
+      cudf::table_view b({sliced[1]});
+      cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b}));
     }
     */
 
@@ -621,23 +635,25 @@ TEST_F(OverflowTest, Presliced)
     // offsets, which is not)
     {
       auto a = cudf::split(*col, {(num_rows / 2)});
-      table_view ta({a[1]});
+      cudf::table_view ta({a[1]});
 
       auto b = cudf::split(*col, {(num_rows / 2) + 1});
-      table_view tb({b[1]});
+      cudf::table_view tb({b[1]});
 
-      EXPECT_THROW(cudf::concatenate(std::vector<table_view>({ta, ta, ta, tb})), cudf::logic_error);
+      EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({ta, ta, ta, tb})),
+                   cudf::logic_error);
     }
   }
 
   // struct<int8, list>, list child elements too long
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
-    constexpr size_type num_rows  = 4;
-    constexpr size_type list_size = inner_size / num_rows;
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr cudf::size_type num_rows  = 4;
+    constexpr cudf::size_type list_size = inner_size / num_rows;
 
     // list
-    auto offsets = cudf::test::fixed_width_column_wrapper<offset_type>{
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::offset_type>{
       0, list_size, (list_size * 2) - 1, list_size * 3, inner_size};
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
@@ -646,18 +662,19 @@ TEST_F(OverflowTest, Presliced)
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, num_rows));
     children.push_back(std::move(list_col));
     auto struct_col =
       cudf::make_structs_column(num_rows, std::move(children), 0, rmm::device_buffer{});
 
     auto sliced = cudf::split(*struct_col, {2});
 
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a}));
 
-    table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<table_view>({b, b, b, b})), cudf::logic_error);
+    cudf::table_view b({sliced[1]});
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
   }
 }
 
@@ -667,96 +684,104 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
   // that we are respecting the offset/sizes of the slices and not attempting to
   // concatenate the entire large initial columns
 
-  using namespace cudf;
-
   // primitive column
   {
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
     auto sliced     = cudf::slice(*many_chars, {16, 32});
 
     // 192 total rows
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
   }
 
   // strings column
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
-    constexpr size_type num_rows    = 1024;
-    constexpr size_type string_size = inner_size / num_rows;
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr cudf::size_type num_rows    = 1024;
+    constexpr cudf::size_type string_size = inner_size / num_rows;
 
-    auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
+    auto offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
     thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<offset_type>(),
-                 offsets->mutable_view().end<offset_type>(),
+                 offsets->mutable_view().begin<cudf::offset_type>(),
+                 offsets->mutable_view().end<cudf::offset_type>(),
                  string_size);
     thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<offset_type>(),
-                           offsets->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
-    auto col        = cudf::make_strings_column(
+                           offsets->view().begin<cudf::offset_type>(),
+                           offsets->view().end<cudf::offset_type>(),
+                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
+    auto col = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::slice(*col, {16, 32});
 
     // 192 outer rows
     // 201,326,592 inner rows
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
   }
 
   // list<int8> column
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
-    constexpr size_type num_rows  = 1024;
-    constexpr size_type list_size = inner_size / num_rows;
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr cudf::size_type num_rows  = 1024;
+    constexpr cudf::size_type list_size = inner_size / num_rows;
 
-    auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
+    auto offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
     thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<offset_type>(),
-                 offsets->mutable_view().end<offset_type>(),
+                 offsets->mutable_view().begin<cudf::offset_type>(),
+                 offsets->mutable_view().end<cudf::offset_type>(),
                  list_size);
     thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<offset_type>(),
-                           offsets->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
-    auto col        = cudf::make_lists_column(
+                           offsets->view().begin<cudf::offset_type>(),
+                           offsets->view().end<cudf::offset_type>(),
+                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
+    auto col = cudf::make_lists_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::slice(*col, {16, 32});
 
     // 192 outer rows
     // 201,326,592 inner rows
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
   }
 
   // struct<int8, list>
   {
-    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
-    constexpr size_type num_rows  = 1024;
-    constexpr size_type list_size = inner_size / num_rows;
+    constexpr auto inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr cudf::size_type num_rows  = 1024;
+    constexpr cudf::size_type list_size = inner_size / num_rows;
 
-    auto offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows + 1);
+    auto offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
     thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
-                 offsets->mutable_view().begin<offset_type>(),
-                 offsets->mutable_view().end<offset_type>(),
+                 offsets->mutable_view().begin<cudf::offset_type>(),
+                 offsets->mutable_view().end<cudf::offset_type>(),
                  list_size);
     thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
-                           offsets->view().begin<offset_type>(),
-                           offsets->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
-    auto list_col   = cudf::make_lists_column(
+                           offsets->view().begin<cudf::offset_type>(),
+                           offsets->view().end<cudf::offset_type>(),
+                           offsets->mutable_view().begin<cudf::offset_type>());
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
+    auto list_col = cudf::make_lists_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     // struct
     std::vector<std::unique_ptr<column>> children;
-    children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, num_rows));
     children.push_back(std::move(list_col));
     auto struct_col =
       cudf::make_structs_column(num_rows, std::move(children), 0, rmm::device_buffer{});
@@ -765,8 +790,8 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
 
     // 192 outer rows
     // 201,326,592 inner rows
-    table_view a({sliced[0]});
-    cudf::concatenate(std::vector<table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
+    cudf::table_view a({sliced[0]});
+    cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a, a, a, a, a, a, a, a, a}));
   }
 }
 
@@ -775,35 +800,34 @@ struct StructsColumnTest : public cudf::test::BaseFixture {
 
 TEST_F(StructsColumnTest, ConcatenateStructs)
 {
-  using namespace cudf::test;
-
   auto count_iter = thrust::make_counting_iterator(0);
 
   // 1. String "names" column.
   std::vector<std::vector<std::string>> names(
     {{"Vimes", "Carrot"}, {"Angua", "Cheery"}, {}, {"Detritus", "Slant"}});
   std::vector<std::vector<bool>> names_validity({{1, 1}, {1, 1}, {}, {1, 1}});
-  std::vector<strings_column_wrapper> name_cols;
+  std::vector<cudf::test::strings_column_wrapper> name_cols;
   std::transform(count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
-    return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+    return cudf::test::strings_column_wrapper(
+      names[i].begin(), names[i].end(), names_validity[i].begin());
   });
 
   // 2. Numeric "ages" column.
   std::vector<std::vector<int>> ages({{5, 10}, {15, 20}, {}, {25, 30}});
   std::vector<std::vector<bool>> ages_validity({{1, 1}, {1, 1}, {}, {0, 1}});
-  std::vector<fixed_width_column_wrapper<int>> age_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int>> age_cols;
   std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
-    return fixed_width_column_wrapper<int>(
+    return cudf::test::fixed_width_column_wrapper<int>(
       ages[i].begin(), ages[i].end(), ages_validity[i].begin());
   });
 
   // 3. Boolean "is_human" column.
   std::vector<std::vector<bool>> is_human({{true, true}, {false, false}, {}, {false, false}});
   std::vector<std::vector<bool>> is_human_validity({{1, 1}, {1, 0}, {}, {1, 1}});
-  std::vector<fixed_width_column_wrapper<bool>> is_human_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<bool>> is_human_cols;
   std::transform(
     count_iter, count_iter + is_human.size(), std::back_inserter(is_human_cols), [&](int i) {
-      return fixed_width_column_wrapper<bool>(
+      return cudf::test::fixed_width_column_wrapper<bool>(
         is_human[i].begin(), is_human[i].end(), is_human_validity[i].begin());
     });
 
@@ -825,11 +849,15 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
     cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
 
   // concatenate as structs
-  std::vector<structs_column_wrapper> src;
-  src.push_back(structs_column_wrapper({name_cols[0], age_cols[0], is_human_cols[0]}, {1, 0}));
-  src.push_back(structs_column_wrapper({name_cols[1], age_cols[1], is_human_cols[1]}, {1, 1}));
-  src.push_back(structs_column_wrapper({name_cols[2], age_cols[2], is_human_cols[2]}, {}));
-  src.push_back(structs_column_wrapper({name_cols[3], age_cols[3], is_human_cols[3]}, {1, 0}));
+  std::vector<cudf::test::structs_column_wrapper> src;
+  src.push_back(
+    cudf::test::structs_column_wrapper({name_cols[0], age_cols[0], is_human_cols[0]}, {1, 0}));
+  src.push_back(
+    cudf::test::structs_column_wrapper({name_cols[1], age_cols[1], is_human_cols[1]}, {1, 1}));
+  src.push_back(
+    cudf::test::structs_column_wrapper({name_cols[2], age_cols[2], is_human_cols[2]}, {}));
+  src.push_back(
+    cudf::test::structs_column_wrapper({name_cols[3], age_cols[3], is_human_cols[3]}, {1, 0}));
 
   // concatenate
   auto result = cudf::concatenate(std::vector<column_view>({src[0], src[1], src[2], src[3]}));
@@ -838,8 +866,6 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
 
 TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
 {
-  using namespace cudf::test;
-
   auto expected = cudf::make_structs_column(10, {}, 0, rmm::device_buffer());
   auto first    = cudf::make_structs_column(5, {}, 0, rmm::device_buffer());
   auto second   = cudf::make_structs_column(2, {}, 0, rmm::device_buffer());
@@ -854,8 +880,6 @@ TEST_F(StructsColumnTest, ConcatenateEmptyStructs)
 
 TEST_F(StructsColumnTest, ConcatenateSplitStructs)
 {
-  using namespace cudf::test;
-
   auto count_iter = thrust::make_counting_iterator(0);
 
   std::vector<int> splits({2});
@@ -865,17 +889,18 @@ TEST_F(StructsColumnTest, ConcatenateSplitStructs)
     {{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"},
      {"Bill", "Bob", "Sam", "Fred", "Tom"}});
   std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {0, 1, 0, 1, 0}});
-  std::vector<strings_column_wrapper> name_cols;
+  std::vector<cudf::test::strings_column_wrapper> name_cols;
   std::transform(count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
-    return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+    return cudf::test::strings_column_wrapper(
+      names[i].begin(), names[i].end(), names_validity[i].begin());
   });
 
   // 2. Numeric "ages" column.
   std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {11, 16, 17, 41, 42}});
   std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {1, 1, 1, 0, 0}});
-  std::vector<fixed_width_column_wrapper<int>> age_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int>> age_cols;
   std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
-    return fixed_width_column_wrapper<int>(
+    return cudf::test::fixed_width_column_wrapper<int>(
       ages[i].begin(), ages[i].end(), ages_validity[i].begin());
   });
 
@@ -883,10 +908,10 @@ TEST_F(StructsColumnTest, ConcatenateSplitStructs)
   std::vector<std::vector<bool>> is_human(
     {{true, true, false, false, false, false}, {true, true, true, false, true}});
   std::vector<std::vector<bool>> is_human_validity({{1, 1, 1, 0, 1, 1}, {0, 0, 0, 1, 1}});
-  std::vector<fixed_width_column_wrapper<bool>> is_human_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<bool>> is_human_cols;
   std::transform(
     count_iter, count_iter + is_human.size(), std::back_inserter(is_human_cols), [&](int i) {
-      return fixed_width_column_wrapper<bool>(
+      return cudf::test::fixed_width_column_wrapper<bool>(
         is_human[i].begin(), is_human[i].end(), is_human_validity[i].begin());
     });
 
@@ -910,13 +935,13 @@ TEST_F(StructsColumnTest, ConcatenateSplitStructs)
   auto expected = make_structs_column(7, std::move(expected_children), 0, rmm::device_buffer{});
 
   // concatenate as structs
-  std::vector<structs_column_wrapper> src;
+  std::vector<cudf::test::structs_column_wrapper> src;
   for (size_t idx = 0; idx < split_names_cols.size(); idx++) {
     std::vector<std::unique_ptr<column>> inputs;
     inputs.push_back(std::make_unique<column>(split_names_cols[idx]));
     inputs.push_back(std::make_unique<column>(split_ages_cols[idx]));
     inputs.push_back(std::make_unique<column>(split_is_human_cols[idx]));
-    src.push_back(structs_column_wrapper(std::move(inputs)));
+    src.push_back(cudf::test::structs_column_wrapper(std::move(inputs)));
   }
 
   // concatenate
@@ -928,30 +953,30 @@ TEST_F(StructsColumnTest, ConcatenateSplitStructs)
 TEST_F(StructsColumnTest, ConcatenateStructsNested)
 {
   // includes Struct<Struct> and Struct<List>
-  using namespace cudf::test;
 
   auto count_iter = thrust::make_counting_iterator(0);
 
   // inner structs
-  std::vector<structs_column_wrapper> inner_structs;
+  std::vector<cudf::test::structs_column_wrapper> inner_structs;
   {
     // 1. String "names" column.
     std::vector<std::vector<std::string>> names(
       {{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"},
        {"Bill", "Bob", "Sam", "Fred", "Tom"}});
     std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {0, 1, 0, 1, 0}});
-    std::vector<strings_column_wrapper> name_cols;
+    std::vector<cudf::test::strings_column_wrapper> name_cols;
     std::transform(
       count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
-        return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+        return cudf::test::strings_column_wrapper(
+          names[i].begin(), names[i].end(), names_validity[i].begin());
       });
 
     // 2. Numeric "ages" column.
     std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {11, 16, 17, 41, 42}});
     std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {1, 1, 1, 0, 0}});
-    std::vector<fixed_width_column_wrapper<int>> age_cols;
+    std::vector<cudf::test::fixed_width_column_wrapper<int>> age_cols;
     std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
-      return fixed_width_column_wrapper<int>(
+      return cudf::test::fixed_width_column_wrapper<int>(
         ages[i].begin(), ages[i].end(), ages_validity[i].begin());
     });
 
@@ -959,18 +984,18 @@ TEST_F(StructsColumnTest, ConcatenateStructsNested)
       std::vector<std::unique_ptr<column>> children;
       children.push_back(name_cols[idx].release());
       children.push_back(age_cols[idx].release());
-      inner_structs.push_back(structs_column_wrapper(std::move(children)));
+      inner_structs.push_back(cudf::test::structs_column_wrapper(std::move(children)));
     }
   }
 
   // inner lists
-  using LCW = lists_column_wrapper<cudf::string_view>;
-  std::vector<lists_column_wrapper<cudf::string_view>> inner_lists;
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  std::vector<cudf::test::lists_column_wrapper<cudf::string_view>> inner_lists;
   {
-    inner_lists.push_back(lists_column_wrapper<cudf::string_view>{
+    inner_lists.push_back(cudf::test::lists_column_wrapper<cudf::string_view>{
       {"abc", "d"}, {"ef", "ghi", "j"}, {"klm", "no"}, LCW{}, LCW{"whee"}, {"xyz", "ab", "g"}});
 
-    inner_lists.push_back(lists_column_wrapper<cudf::string_view>{
+    inner_lists.push_back(cudf::test::lists_column_wrapper<cudf::string_view>{
       {"er", "hyj"}, {"", "", "uvw"}, LCW{}, LCW{"oipq", "te"}, LCW{"yay", "bonk"}});
   }
 
@@ -984,12 +1009,12 @@ TEST_F(StructsColumnTest, ConcatenateStructsNested)
   auto expected = make_structs_column(11, std::move(expected_children), 0, rmm::device_buffer{});
 
   // concatenate as structs
-  std::vector<structs_column_wrapper> src;
+  std::vector<cudf::test::structs_column_wrapper> src;
   for (size_t idx = 0; idx < inner_structs.size(); idx++) {
     std::vector<std::unique_ptr<column>> inputs;
     inputs.push_back(std::make_unique<column>(inner_structs[idx]));
     inputs.push_back(std::make_unique<column>(inner_lists[idx]));
-    src.push_back(structs_column_wrapper(std::move(inputs)));
+    src.push_back(cudf::test::structs_column_wrapper(std::move(inputs)));
   }
 
   // concatenate
@@ -1495,12 +1520,10 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
 
 TEST_F(ListsColumnTest, ListOfStructs)
 {
-  using namespace cudf::test;
-
   auto count_iter = thrust::make_counting_iterator(0);
 
   // inner structs
-  std::vector<structs_column_wrapper> inner_structs;
+  std::vector<cudf::test::structs_column_wrapper> inner_structs;
   {
     // 1. String "names" column.
     std::vector<std::vector<std::string>> names(
@@ -1509,18 +1532,19 @@ TEST_F(ListsColumnTest, ListOfStructs)
        {},
        {"Bill", "Bob", "Sam", "Fred", "Tom"}});
     std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {}, {}, {0, 1, 0, 1, 0}});
-    std::vector<strings_column_wrapper> name_cols;
+    std::vector<cudf::test::strings_column_wrapper> name_cols;
     std::transform(
       count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
-        return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+        return cudf::test::strings_column_wrapper(
+          names[i].begin(), names[i].end(), names_validity[i].begin());
       });
 
     // 2. Numeric "ages" column.
     std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {}, {}, {11, 16, 17, 41, 42}});
     std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {}, {}, {1, 1, 1, 0, 0}});
-    std::vector<fixed_width_column_wrapper<int>> age_cols;
+    std::vector<cudf::test::fixed_width_column_wrapper<int>> age_cols;
     std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
-      return fixed_width_column_wrapper<int>(
+      return cudf::test::fixed_width_column_wrapper<int>(
         ages[i].begin(), ages[i].end(), ages_validity[i].begin());
     });
 
@@ -1528,7 +1552,7 @@ TEST_F(ListsColumnTest, ListOfStructs)
       std::vector<std::unique_ptr<column>> children;
       children.push_back(name_cols[idx].release());
       children.push_back(age_cols[idx].release());
-      inner_structs.push_back(structs_column_wrapper(std::move(children)));
+      inner_structs.push_back(cudf::test::structs_column_wrapper(std::move(children)));
     }
   }
 
@@ -1536,12 +1560,12 @@ TEST_F(ListsColumnTest, ListOfStructs)
   auto struct_views = std::vector<column_view>(
     {inner_structs[0], inner_structs[1], inner_structs[2], inner_structs[3]});
   auto expected_child = cudf::concatenate(struct_views);
-  fixed_width_column_wrapper<int> offsets_w{0, 1, 1, 1, 1, 4, 6, 6, 6, 10, 11};
+  cudf::test::fixed_width_column_wrapper<int> offsets_w{0, 1, 1, 1, 1, 4, 6, 6, 6, 10, 11};
   auto expected =
     make_lists_column(10, offsets_w.release(), std::move(expected_child), 0, rmm::device_buffer{});
 
   // lists
-  std::vector<fixed_width_column_wrapper<int>> offsets;
+  std::vector<cudf::test::fixed_width_column_wrapper<int>> offsets;
   offsets.push_back({0, 1, 1, 1, 1, 4, 6, 6});
   offsets.push_back({0});
   offsets.push_back({0});

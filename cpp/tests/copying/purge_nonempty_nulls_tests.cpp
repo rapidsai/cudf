@@ -393,17 +393,23 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
 // Struct<List<T>>.
 TEST_F(PurgeNonEmptyNullsTest, StructOfList)
 {
-  auto const structs_input =
-    [] {
-      auto child = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
-                           {5},
-                           {6, 7},  //<--- Unsanitized row.
-                           {8, 9, 10}},
-                          no_nulls()};
-      EXPECT_FALSE(cudf::has_nonempty_nulls(child));
-      return cudf::test::structs_column_wrapper{{child}, null_at(2)};
-    }()
-      .release();
+  auto const structs_input = [] {
+    auto child = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
+                         {5},
+                         {6, 7},  //<--- Unsanitized row.
+                         {8, 9, 10}},
+                        no_nulls()};
+    EXPECT_FALSE(cudf::has_nonempty_nulls(child));
+    return cudf::test::structs_column_wrapper{{child}}.release();
+  }();
+  auto null_mask_buff = [&] {
+    auto const valid_iter = null_at(2);
+    return cudf::test::detail::make_null_mask(valid_iter, valid_iter + structs_input->size());
+  }();
+
+  // Manually set the null mask for the columns, leaving the null at list index 2 unsanitized.
+  structs_input->child(0).set_null_mask(null_mask_buff);
+  structs_input->set_null_mask(std::move(null_mask_buff));
 
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*structs_input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*structs_input));
