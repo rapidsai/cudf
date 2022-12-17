@@ -16,7 +16,6 @@ from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
-    Int64Index,
     IntervalIndex,
     RangeIndex,
     as_index,
@@ -33,6 +32,7 @@ from cudf.testing._utils import (
     assert_column_memory_ne,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 from cudf.utils.utils import search_range
 
@@ -74,14 +74,14 @@ def test_df_slice_empty_index():
 
 def test_index_find_label_range_genericindex():
     # Monotonic Index
-    idx = Int64Index(np.asarray([4, 5, 6, 10]))
+    idx = cudf.Index(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
     assert idx.find_label_range(5, 10) == (1, 4)
     assert idx.find_label_range(0, 6) == (0, 3)
     assert idx.find_label_range(4, 11) == (0, 4)
 
     # Non-monotonic Index
-    idx_nm = Int64Index(np.asarray([5, 4, 6, 10]))
+    idx_nm = cudf.Index(np.asarray([5, 4, 6, 10]))
     assert idx_nm.find_label_range(4, 6) == (1, 3)
     assert idx_nm.find_label_range(5, 10) == (0, 4)
     # Last value not found
@@ -115,8 +115,8 @@ def test_index_find_label_range_rangeindex():
 
 def test_index_comparision():
     start, stop = 10, 34
-    rg = RangeIndex(start, stop)
-    gi = Int64Index(np.arange(start, stop))
+    rg = cudf.RangeIndex(start, stop)
+    gi = cudf.Index(np.arange(start, stop))
     assert rg.equals(gi)
     assert gi.equals(rg)
     assert not rg[:-1].equals(gi)
@@ -137,13 +137,13 @@ def test_index_comparision():
 )
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
-    idx = Int64Index(np.asarray([4, 5, 6, 10]))
+    idx = cudf.Index(np.asarray([4, 5, 6, 10]))
 
     assert func(x) == func(idx)
 
 
 def test_name():
-    idx = Int64Index(np.asarray([4, 5, 6, 10]), name="foo")
+    idx = cudf.Index(np.asarray([4, 5, 6, 10]), name="foo")
     assert idx.name == "foo"
 
 
@@ -152,7 +152,7 @@ def test_index_immutable():
     rg = RangeIndex(start, stop)
     with pytest.raises(TypeError):
         rg[1] = 5
-    gi = Int64Index(np.arange(start, stop))
+    gi = cudf.Index(np.arange(start, stop))
     with pytest.raises(TypeError):
         gi[1] = 5
 
@@ -189,9 +189,9 @@ def test_categorical_index():
 
 def test_pandas_as_index():
     # Define Pandas Indexes
-    pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])
-    pdf_uint_index = pd.UInt64Index([1, 2, 3, 4, 5])
-    pdf_float_index = pd.Float64Index([1.0, 2.0, 3.0, 4.0, 5.0])
+    pdf_int_index = pd.Index([1, 2, 3, 4, 5])
+    pdf_uint_index = pd.Index([1, 2, 3, 4, 5])
+    pdf_float_index = pd.Index([1.0, 2.0, 3.0, 4.0, 5.0])
     pdf_datetime_index = pd.DatetimeIndex(
         [1000000, 2000000, 3000000, 4000000, 5000000]
     )
@@ -265,7 +265,7 @@ def test_index_rename_inplace():
 
 
 def test_index_rename_preserves_arg():
-    idx1 = Int64Index([1, 2, 3], name="orig_name")
+    idx1 = cudf.Index([1, 2, 3], name="orig_name")
 
     # this should be an entirely new object
     idx2 = idx1.rename("new_name", inplace=False)
@@ -309,11 +309,15 @@ def test_set_index_as_property():
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_index_copy_range(name, dtype, deep=True):
-    idx = cudf.core.index.RangeIndex(1, 5)
-    idx_copy = idx.copy(name=name, deep=deep, dtype=dtype)
+    cidx = cudf.RangeIndex(1, 5)
+    pidx = cidx.to_pandas()
 
-    idx.name = name
-    assert_eq(idx, idx_copy)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+
+    assert_eq(pidx_copy, cidx_copy)
 
 
 @pytest.mark.parametrize("name", ["x"])
@@ -322,8 +326,10 @@ def test_index_copy_datetime(name, dtype, deep=True):
     cidx = cudf.DatetimeIndex(["2001", "2002", "2003"])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -334,8 +340,10 @@ def test_index_copy_string(name, dtype, deep=True):
     cidx = cudf.StringIndex(["a", "b", "c"])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -347,11 +355,13 @@ def test_index_copy_string(name, dtype, deep=True):
 )
 def test_index_copy_integer(name, dtype, deep=True):
     """Test for NumericIndex Copy Casts"""
-    cidx = cudf.Int64Index([1, 2, 3])
+    cidx = cudf.Index([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -360,11 +370,13 @@ def test_index_copy_integer(name, dtype, deep=True):
 @pytest.mark.parametrize("dtype", SIGNED_TYPES)
 def test_index_copy_float(name, dtype, deep=True):
     """Test for NumericIndex Copy Casts"""
-    cidx = cudf.Float64Index([1.0, 2.0, 3.0])
+    cidx = cudf.Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -375,8 +387,10 @@ def test_index_copy_category(name, dtype, deep=True):
     cidx = cudf.core.index.CategoricalIndex([1, 2, 3])
     pidx = cidx.to_pandas()
 
-    pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
-    cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        pidx_copy = pidx.copy(name=name, deep=deep, dtype=dtype)
+    with pytest.warns(FutureWarning):
+        cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
     assert_eq(pidx_copy, cidx_copy)
 
@@ -387,8 +401,8 @@ def test_index_copy_category(name, dtype, deep=True):
     [
         cudf.DatetimeIndex(["2001", "2002", "2003"]),
         cudf.StringIndex(["a", "b", "c"]),
-        cudf.Int64Index([1, 2, 3]),
-        cudf.Float64Index([1.0, 2.0, 3.0]),
+        cudf.Index([1, 2, 3]),
+        cudf.Index([1.0, 2.0, 3.0]),
         cudf.CategoricalIndex([1, 2, 3]),
         cudf.CategoricalIndex(["a", "b", "c"]),
     ],
@@ -405,14 +419,14 @@ def test_index_copy_deep(idx, deep):
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
-    gidx = cudf.core.index.Int64Index(idx, name="idx")
+    gidx = cudf.Index(idx, name="idx")
     assert_eq(gidx.isna(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
-    gidx = cudf.core.index.Int64Index(idx, name="idx")
+    gidx = cudf.Index(idx, name="idx")
     assert_eq(gidx.notna(), pidx.notna())
 
 
@@ -435,7 +449,7 @@ def test_from_pandas_str():
 def test_from_pandas_gen():
     idx = [2, 4, 6]
     pidx = pd.Index(idx, name="idx")
-    gidx_1 = cudf.core.index.Int64Index(idx, name="idx")
+    gidx_1 = cudf.Index(idx, name="idx")
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
@@ -1233,27 +1247,32 @@ def test_index_basic(data, dtype, name):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
-    pindex = pd.Int64Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        pindex = pd.Int64Index(data, dtype=dtype, name=name)
     # Int8Index
-    gindex = cudf.Int8Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Int8Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("int8")
 
     # Int16Index
-    gindex = cudf.Int16Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Int16Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("int16")
 
     # Int32Index
-    gindex = cudf.Int32Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Int32Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("int32")
 
     # Int64Index
-    gindex = cudf.Int64Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Int64Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("int64")
@@ -1262,28 +1281,33 @@ def test_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", UNSIGNED_TYPES)
-def test_unisgned_integer_index_apis(data, name, dtype):
-    pindex = pd.UInt64Index(data, dtype=dtype, name=name)
+def test_unsigned_integer_index_apis(data, name, dtype):
+    with pytest.warns(FutureWarning):
+        pindex = pd.UInt64Index(data, dtype=dtype, name=name)
     # UInt8Index
-    gindex = cudf.UInt8Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.UInt8Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("uint8")
 
     # UInt16Index
-    gindex = cudf.UInt16Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.UInt16Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("uint16")
 
     # UInt32Index
-    gindex = cudf.UInt32Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.UInt32Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("uint32")
 
     # UInt64Index
-    gindex = cudf.UInt64Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.UInt64Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("uint64")
@@ -1293,15 +1317,18 @@ def test_unisgned_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_float_index_apis(data, name, dtype):
-    pindex = pd.Float64Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        pindex = pd.Float64Index(data, dtype=dtype, name=name)
     # Float32Index
-    gindex = cudf.Float32Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Float32Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("float32")
 
     # Float64Index
-    gindex = cudf.Float64Index(data, dtype=dtype, name=name)
+    with pytest.warns(FutureWarning):
+        gindex = cudf.Float64Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
     assert gindex.dtype == np.dtype("float64")
@@ -1955,7 +1982,7 @@ def test_get_loc_single_unique_numeric(idx, key, method):
     if (
         (key not in pi and method is None)
         # `method` only applicable to monotonic index
-        or (not pi.is_monotonic and method is not None)
+        or (not pi.is_monotonic_increasing and method is not None)
         # Get key before the first element is KeyError
         or (key == 0 and method in "ffill")
         # Get key after the last element is KeyError
@@ -1966,10 +1993,13 @@ def test_get_loc_single_unique_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -1996,10 +2026,13 @@ def test_get_loc_rangeindex(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2023,10 +2056,13 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2043,7 +2079,7 @@ def test_get_loc_single_unique_string(idx, key, method):
     if (
         (key not in pi and method is None)
         # `method` only applicable to monotonic index
-        or (not pi.is_monotonic and method is not None)
+        or (not pi.is_monotonic_increasing and method is not None)
         # Get key before the first element is KeyError
         or (key == "a" and method == "ffill")
         # Get key after the last element is KeyError
@@ -2054,10 +2090,13 @@ def test_get_loc_single_unique_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2077,10 +2116,13 @@ def test_get_loc_single_duplicate_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2102,7 +2144,7 @@ def test_get_loc_single_duplicate_string(idx, key, method):
 @pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
 @pytest.mark.parametrize("method", [None])
 def test_get_loc_multi_numeric(idx, key, method):
-    pi = idx
+    pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
@@ -2111,10 +2153,13 @@ def test_get_loc_multi_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2142,16 +2187,26 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
     pi = idx
     gi = cudf.from_pandas(pi)
 
-    if key not in pi:
-        assert_exceptions_equal(
-            lfunc=pi.get_loc,
-            rfunc=gi.get_loc,
-            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-        )
+    with expect_warning_if(
+        isinstance(key, tuple), pd.errors.PerformanceWarning
+    ):
+        key_flag = key not in pi
+
+    if key_flag:
+        with expect_warning_if(
+            isinstance(key, tuple), pd.errors.PerformanceWarning
+        ):
+            assert_exceptions_equal(
+                lfunc=pi.get_loc,
+                rfunc=gi.get_loc,
+                lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+                rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+                compare_error_message=False,
+            )
     else:
         expected = result
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 
@@ -2216,7 +2271,7 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
 )
 @pytest.mark.parametrize("method", [None])
 def test_get_loc_multi_string(idx, key, method):
-    pi = idx
+    pi = idx.sort_values()
     gi = cudf.from_pandas(pi)
 
     if key not in pi:
@@ -2225,10 +2280,13 @@ def test_get_loc_multi_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            compare_error_message=False,
         )
     else:
-        expected = pi.get_loc(key, method=method)
-        got = gi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            expected = pi.get_loc(key, method=method)
+        with expect_warning_if(method is not None):
+            got = gi.get_loc(key, method=method)
 
         assert_eq(expected, got)
 

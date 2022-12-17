@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -233,6 +234,12 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property  # type: ignore

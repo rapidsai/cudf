@@ -38,8 +38,8 @@ def make_frames(index=None, nulls="none"):
         mask = np.arange(10)
         np.random.shuffle(mask)
         mask = mask[:5]
-        df.y.loc[mask] = np.nan
-        df2.y.loc[mask] = np.nan
+        df.loc[mask, "y"] = np.nan
+        df2.loc[mask, "y"] = np.nan
     gdf = gd.DataFrame.from_pandas(df)
     gdf2 = gd.DataFrame.from_pandas(df2)
     if index:
@@ -376,12 +376,13 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=pd.concat,
-        rfunc=gd.concat,
-        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-    )
+    with pytest.warns(FutureWarning):
+        assert_exceptions_equal(
+            lfunc=pd.concat,
+            rfunc=gd.concat,
+            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+        )
 
 
 @pytest.mark.parametrize("name", [None, "a"])

@@ -1366,8 +1366,11 @@ struct preprocessed_table {
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
   preprocessed_table(table_device_view_owner&& table,
-                     std::vector<rmm::device_buffer>&& null_buffers)
-    : _t(std::move(table)), _null_buffers(std::move(null_buffers))
+                     std::vector<rmm::device_buffer>&& null_buffers,
+                     std::vector<std::unique_ptr<column>>&& tmp_columns)
+    : _t(std::move(table)),
+      _null_buffers(std::move(null_buffers)),
+      _tmp_columns(std::move(tmp_columns))
   {
   }
 
@@ -1380,6 +1383,7 @@ struct preprocessed_table {
 
   table_device_view_owner _t;
   std::vector<rmm::device_buffer> _null_buffers;
+  std::vector<std::unique_ptr<column>> _tmp_columns;
 };
 
 /**

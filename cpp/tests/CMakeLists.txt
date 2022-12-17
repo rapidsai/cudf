@@ -202,7 +202,7 @@ ConfigureTest(
 # * unary transform tests -------------------------------------------------------------------------
 ConfigureTest(
   TRANSFORM_TEST
-  transform/integration/unary-transform-test.cpp
+  transform/integration/unary_transform_test.cpp
   transform/nans_to_null_test.cpp
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
@@ -492,6 +492,7 @@ ConfigureTest(
   lists/count_elements_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/reverse_tests.cpp
   lists/sequences_tests.cpp
   lists/set_operations/difference_distinct_tests.cpp
   lists/set_operations/have_overlap_tests.cpp

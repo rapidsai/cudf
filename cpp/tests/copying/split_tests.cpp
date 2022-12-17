@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/filling.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/copying/slice_tests.cuh>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -27,15 +23,19 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
 #include <rmm/device_buffer.hpp>
-
-#include <string>
-#include <vector>
-
-#include <tests/copying/slice_tests.cuh>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <string>
+#include <vector>
 
 std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> splits,
                                                cudf::size_type size)
@@ -895,35 +895,36 @@ void split_lists_with_nulls(SplitFunc Split, CompareFunc Compare)
 template <typename SplitFunc, typename CompareFunc>
 void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
 {
-  using namespace cudf::test;
-
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
   std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
-  strings_column_wrapper names_column(names.begin(), names.end());
+  cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102};
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
-  auto ages_column                = include_validity ? fixed_width_column_wrapper<int>(
-                                          ages.begin(), ages.end(), ages_validity.begin())
-                                                     : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
+  auto ages_column =
+    include_validity
+      ? cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin())
+      : cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end());
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
   std::vector<bool> is_human_validity{1, 1, 1, 0, 1, 1, 1, 1, 0};
-  auto is_human_col = include_validity
-                        ? fixed_width_column_wrapper<bool>(
-                            is_human.begin(), is_human.end(), is_human_validity.begin())
-                        : fixed_width_column_wrapper<bool>(is_human.begin(), is_human.end());
+  auto is_human_col =
+    include_validity
+      ? cudf::test::fixed_width_column_wrapper<bool>(
+          is_human.begin(), is_human.end(), is_human_validity.begin())
+      : cudf::test::fixed_width_column_wrapper<bool>(is_human.begin(), is_human.end());
 
   // Assemble struct column.
   auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0};
   auto struct_column =
     include_validity
-      ? structs_column_wrapper({names_column, ages_column, is_human_col}, struct_validity.begin())
-      : structs_column_wrapper({names_column, ages_column, is_human_col});
+      ? cudf::test::structs_column_wrapper({names_column, ages_column, is_human_col},
+                                           struct_validity.begin())
+      : cudf::test::structs_column_wrapper({names_column, ages_column, is_human_col});
 
   // split
   std::vector<cudf::size_type> splits{0, 1, 3, 8};
@@ -946,10 +947,10 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
 
   for (unsigned long index = 0; index < result.size(); index++) {
     auto expected = include_validity
-                      ? structs_column_wrapper(
+                      ? cudf::test::structs_column_wrapper(
                           {expected_names[index], expected_ages[index], expected_is_human[index]},
                           expected_struct_validity[index])
-                      : structs_column_wrapper(
+                      : cudf::test::structs_column_wrapper(
                           {expected_names[index], expected_ages[index], expected_is_human[index]});
 
     Compare(expected, result[index]);
@@ -959,8 +960,6 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
 template <typename SplitFunc, typename CompareFunc>
 void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
 {
-  using namespace cudf::test;
-
   // no nulls
   {
     auto struct_column = cudf::make_structs_column(4, {}, 0, rmm::device_buffer{});
@@ -979,11 +978,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   {
     std::vector<bool> struct_validity{false, false, false, false};
     auto struct_column = cudf::make_structs_column(
-      4, {}, 4, detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
 
     std::vector<bool> expected_validity{false, false};
     auto expected = cudf::make_structs_column(
-      2, {}, 2, detail::make_null_mask(expected_validity.begin(), expected_validity.end()));
+      2,
+      {},
+      2,
+      cudf::test::detail::make_null_mask(expected_validity.begin(), expected_validity.end()));
 
     // split
     std::vector<cudf::size_type> splits{2};
@@ -1013,11 +1015,14 @@ void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
   {
     std::vector<bool> struct_validity{false, false, false, false};
     auto struct_column = cudf::make_structs_column(
-      4, {}, 4, detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+      4, {}, 4, cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
 
     std::vector<bool> expected_validity0{false, false, false, false};
     auto expected0 = cudf::make_structs_column(
-      4, {}, 4, detail::make_null_mask(expected_validity0.begin(), expected_validity0.end()));
+      4,
+      {},
+      4,
+      cudf::test::detail::make_null_mask(expected_validity0.begin(), expected_validity0.end()));
 
     auto expected1 = cudf::make_structs_column(0, {}, 0, rmm::device_buffer{});
 
@@ -1035,38 +1040,37 @@ template <typename SplitFunc, typename CompareFunc>
 void split_nested_struct_of_list(SplitFunc Split, CompareFunc Compare)
 {
   // Struct<List<List>>
-  using namespace cudf::test;
   using LCW = cudf::test::lists_column_wrapper<float>;
 
   // 1. String "names" column.
   std::vector<std::string> names{
     "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred", "Todd", "Kevin"};
   std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1};
-  strings_column_wrapper names_column(names.begin(), names.end());
+  cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102};
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
   auto ages_column =
-    fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
+    cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
 
   // 3. List column
   std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
-  lists_column_wrapper<float> list({{{1, 2, 3}, {4}},
-                                    {{-1, -2}, LCW{}},
-                                    LCW{},
-                                    {{10}, {20, 30, 40}, {100, -100}},
-                                    {LCW{}, LCW{}, {8, 9}},
-                                    LCW{},
-                                    {{8}, {10, 9, 8, 7, 6, 5}},
-                                    {{5, 6}, LCW{}, {8}},
-                                    {LCW{-3, 4, -5}}},
-                                   list_validity.begin());
+  cudf::test::lists_column_wrapper<float> list({{{1, 2, 3}, {4}},
+                                                {{-1, -2}, LCW{}},
+                                                LCW{},
+                                                {{10}, {20, 30, 40}, {100, -100}},
+                                                {LCW{}, LCW{}, {8, 9}},
+                                                LCW{},
+                                                {{8}, {10, 9, 8, 7, 6, 5}},
+                                                {{5, 6}, LCW{}, {8}},
+                                                {LCW{-3, 4, -5}}},
+                                               list_validity.begin());
 
   // Assemble struct column.
   auto const struct_validity = std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0};
   auto struct_column =
-    structs_column_wrapper({names_column, ages_column, list}, struct_validity.begin());
+    cudf::test::structs_column_wrapper({names_column, ages_column, list}, struct_validity.begin());
 
   // split
   std::vector<cudf::size_type> splits{1, 3, 8};
@@ -1075,7 +1079,7 @@ void split_nested_struct_of_list(SplitFunc Split, CompareFunc Compare)
   // expected results
   auto expected_names = create_expected_string_columns_for_splits(names, splits, names_validity);
   auto expected_ages  = create_expected_columns_for_splits<int>(splits, ages, ages_validity);
-  std::vector<lists_column_wrapper<float>> expected_lists;
+  std::vector<cudf::test::lists_column_wrapper<float>> expected_lists;
   expected_lists.push_back(LCW({{{1, 2, 3}, {4}}}));
   expected_lists.push_back(LCW({{{-1, -2}, LCW{}}, LCW{}}));
   std::vector<bool> ex_v{1, 1, 0, 1, 0};
@@ -1091,9 +1095,9 @@ void split_nested_struct_of_list(SplitFunc Split, CompareFunc Compare)
   EXPECT_EQ(expected_names.size(), result.size());
 
   for (std::size_t index = 0; index < result.size(); index++) {
-    auto expected =
-      structs_column_wrapper({expected_names[index], expected_ages[index], expected_lists[index]},
-                             expected_struct_validity[index]);
+    auto expected = cudf::test::structs_column_wrapper(
+      {expected_names[index], expected_ages[index], expected_lists[index]},
+      expected_struct_validity[index]);
     Compare(expected, result[index]);
   }
 }
@@ -1969,7 +1973,6 @@ TEST_F(ContiguousSplitNestedTypesTest, StructsOfList)
 TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
 {
   // List<Struct<List<>>
-  using namespace cudf::test;
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
 
   // 1. String "names" column.
@@ -1992,17 +1995,17 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
                                  "Herman",
                                  "Will"};
   std::vector<bool> names_validity{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  strings_column_wrapper names_column(names.begin(), names.end());
+  cudf::test::strings_column_wrapper names_column(names.begin(), names.end());
 
   // 2. Numeric "ages" column.
   std::vector<int> ages{5, 10, 15, 20, 25, 30, 100, 101, 102, 26, 64, 12, 17, 16, 120, 44, 23, 50};
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0};
   auto ages_column =
-    fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
+    cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
 
   // 3. List column
   std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1};
-  lists_column_wrapper<cudf::string_view> list(
+  cudf::test::lists_column_wrapper<cudf::string_view> list(
     {{"ab", "cd", "ef"},
      LCW{"gh"},
      {"ijk", "lmn"},
@@ -2027,7 +2030,7 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStruct)
   auto const struct_validity =
     std::vector<bool>{1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1};
   auto struct_column =
-    structs_column_wrapper({names_column, ages_column, list}, struct_validity.begin());
+    cudf::test::structs_column_wrapper({names_column, ages_column, list}, struct_validity.begin());
 
   // wrap in a list
   std::vector<int> outer_offsets{0, 3, 4, 8, 13, 16, 17, 18};
