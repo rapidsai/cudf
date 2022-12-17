@@ -63,8 +63,8 @@ def test_array_func_cudf_series(np_ar, func):
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: np.mean(x),
-        lambda x: np.sum(x),
+        lambda x: np.mean(x, axis=0),
+        lambda x: np.sum(x, axis=0),
         lambda x: np.var(x, ddof=1),
         lambda x: np.dot(x, x.transpose()),
     ],
