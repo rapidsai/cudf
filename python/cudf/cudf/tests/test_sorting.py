@@ -14,6 +14,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 sort_nelem_args = [2, 257]
@@ -378,7 +379,8 @@ def test_dataframe_sort_values_kind(nelem, dtype, kind):
     df = DataFrame()
     df["a"] = aa = (100 * np.random.random(nelem)).astype(dtype)
     df["b"] = bb = (100 * np.random.random(nelem)).astype(dtype)
-    sorted_df = df.sort_values(by="a", kind=kind)
+    with expect_warning_if(kind != "quicksort", UserWarning):
+        sorted_df = df.sort_values(by="a", kind=kind)
     # Check
     sorted_index = np.argsort(aa, kind="mergesort")
     assert_eq(sorted_df.index.values, sorted_index)
