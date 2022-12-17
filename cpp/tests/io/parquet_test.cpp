@@ -4856,10 +4856,12 @@ TEST_F(ParquetWriterTest, DictionaryDefaultTest)
   // cardinality is chosen to result in a dictionary > 1MB in size
   constexpr unsigned int cardinality = 32'768U;
 
+  // single value will have a small dictionary
   auto elements0 = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
   auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
 
+  // high cardinality will have a large dictionary
   auto elements1  = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
     return "a unique string value suffixed with " + std::to_string(i % cardinality);
   });
@@ -4882,7 +4884,8 @@ TEST_F(ParquetWriterTest, DictionaryDefaultTest)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  // make sure dictionary was used
+  // make sure dictionary was used as expected. col0 should use one,
+  // col1 should not.
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
@@ -4906,10 +4909,12 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   // cardinality is chosen to result in a dictionary > 1MB in size
   constexpr unsigned int cardinality = 32'768U;
 
+  // single value will have a small dictionary
   auto elements0 = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "a unique string value suffixed with 1"; });
   auto const col0 = cudf::test::strings_column_wrapper(elements0, elements0 + nrows);
 
+  // high cardinality will have a large dictionary
   auto elements1  = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
     return "a unique string value suffixed with " + std::to_string(i % cardinality);
   });
@@ -4932,7 +4937,7 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  // make sure dictionary was used
+  // make sure dictionary was used for both columns
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::FileMetaData fmd;
 
