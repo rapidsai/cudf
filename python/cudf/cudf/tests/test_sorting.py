@@ -328,23 +328,27 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
                     assert sr.iloc[0] == i
         assert nrows == nelem
 
-    _check_scatter_by_map(
-        df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
-    )
+    with pytest.warns(UserWarning):
+        _check_scatter_by_map(
+            df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
+        )
     _check_scatter_by_map(
         df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
     )
     _check_scatter_by_map(
         df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
     )
-    _check_scatter_by_map(
-        df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
-    )
+    with pytest.warns(UserWarning):
+        _check_scatter_by_map(
+            df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
+        )
 
     if map_size == 2 and nelem == 100:
-        df.scatter_by_map("a")  # Auto-detect map_size
+        with pytest.warns(UserWarning):
+            df.scatter_by_map("a")  # Auto-detect map_size
         with pytest.raises(ValueError):
-            df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
+            with pytest.warns(UserWarning):
+                df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
     # Test GenericIndex
     df2 = df.set_index("c")
