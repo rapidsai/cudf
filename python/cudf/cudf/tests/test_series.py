@@ -218,14 +218,16 @@ def test_series_append_error_mixed_types():
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        gsr.append(other)
+        with pytest.warns(FutureWarning):
+            gsr.append(other)
 
     with pytest.raises(
         TypeError,
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        gsr.append([gsr, other, gsr, other])
+        with pytest.warns(FutureWarning):
+            gsr.append([gsr, other, gsr, other])
 
 
 @pytest.mark.parametrize(
@@ -482,7 +484,7 @@ def test_series_factorize(data, na_sentinel):
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    with expect_warning_if(na_sentinel == -1):
+    with pytest.warns(FutureWarning):
         expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
     actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
