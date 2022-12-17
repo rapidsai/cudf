@@ -608,7 +608,7 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  */
 void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
-                         size_type column_index_truncate_length,
+                         int32_t column_index_truncate_length,
                          rmm::cuda_stream_view stream);
 
 }  // namespace gpu
