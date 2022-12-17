@@ -4870,7 +4870,6 @@ TEST_F(ParquetWriterTest, DictionaryDefaultTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryDefaultTest.parquet");
-  // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
@@ -4923,7 +4922,6 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryAlwaysTest.parquet");
-  // set row group size so that there will be only one row group
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
