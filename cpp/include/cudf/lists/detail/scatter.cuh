@@ -138,7 +138,7 @@ std::unique_ptr<column> scatter_impl(
   // That is still not a correct final null mask for the scatter result.
   // In addition, that null mask may overshadow the non-null rows (lists) scattered from the source
   // column. Thus, avoid using `cudf::make_lists_column` since it calls `purge_nonempty_nulls`.
-  return std::make_unique<column>(cudf::data_type{type_id::LIST},
+  return std::make_unique<column>(data_type{type_id::LIST},
                                   target.size(),
                                   rmm::device_buffer{},
                                   std::move(null_mask),
