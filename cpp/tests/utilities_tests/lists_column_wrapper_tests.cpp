@@ -1420,9 +1420,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
@@ -1507,9 +1507,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
     test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
