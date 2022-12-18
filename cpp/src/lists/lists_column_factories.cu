@@ -115,8 +115,11 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                          std::move(null_mask),
                                          null_count,
                                          std::move(children));
-  return null_count == 0 ? std::move(output)
-                         : detail::purge_nonempty_nulls(output->view(), stream, mr);
+
+  // `null_mask` can be empty while `null_count` is `UNKNOWN_NULL_COUNT`.
+  return null_count == 0 || !output->nullable()
+           ? std::move(output)
+           : detail::purge_nonempty_nulls(output->view(), stream, mr);
 }
 
 }  // namespace cudf
