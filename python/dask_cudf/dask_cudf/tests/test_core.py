@@ -360,11 +360,7 @@ def test_setitem_scalar_datetime():
 )
 def test_repr(func):
     pdf = func()
-    try:
-        gdf = cudf.from_pandas(pdf)
-    except Exception:
-        raise pytest.xfail()
-    # gddf = dd.from_pandas(gdf, npartitions=3, sort=False)  # TODO
+    gdf = cudf.from_pandas(pdf)
     gddf = dd.from_pandas(gdf, npartitions=3, sort=False)
 
     assert repr(gddf)
