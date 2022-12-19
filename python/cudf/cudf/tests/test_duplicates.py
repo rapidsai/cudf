@@ -48,7 +48,6 @@ def test_duplicated_with_misspelled_column_name(subset):
         rfunc=gdf.drop_duplicates,
         lfunc_args_and_kwargs=([subset],),
         rfunc_args_and_kwargs=([subset],),
-        compare_error_message=False,
     )
 
 

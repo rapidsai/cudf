@@ -215,7 +215,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_1], {}),
         ([mask, replace_data_1], {}),
-        compare_error_message=False,
     )
 
     psr = pd.Series(data)
@@ -225,7 +224,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_2], {}),
         ([mask, replace_data_2], {}),
-        compare_error_message=False,
     )
 
 
@@ -239,7 +237,6 @@ def test_categorical_setitem_invalid():
             rfunc=gs.__setitem__,
             lfunc_args_and_kwargs=([0, 5], {}),
             rfunc_args_and_kwargs=([0, 5], {}),
-            compare_error_message=False,
         )
     else:
         # Following workaround is needed because:

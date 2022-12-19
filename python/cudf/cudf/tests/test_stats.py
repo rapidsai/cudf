@@ -575,7 +575,6 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.corr,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -583,7 +582,6 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.cov,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        compare_error_message=False,
     )
 
 

@@ -1067,7 +1067,6 @@ def test_replace_df_error():
         rfunc=gdf.replace,
         lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
         rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
-        compare_error_message=False,
     )
 
 

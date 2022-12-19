@@ -305,6 +305,4 @@ def test_categorical_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="category")
     psr = gsr.to_pandas()
 
-    utils.assert_exceptions_equal(
-        getattr(psr, op), getattr(gsr, op), compare_error_message=False
-    )
+    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))

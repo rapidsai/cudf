@@ -2283,7 +2283,6 @@ def test_arithmetic_binops_df(pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
@@ -2330,7 +2329,6 @@ def test_comparison_binops_df(pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
@@ -2389,7 +2387,6 @@ def test_comparison_binops_df_reindexing(pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
@@ -5955,9 +5952,6 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 [gs_condition],
                 {"other": gs_other, "inplace": inplace},
             ),
-            compare_error_message=False
-            if error is NotImplementedError
-            else True,
         )
 
         assert_exceptions_equal(
@@ -5971,7 +5965,6 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 [gs_condition],
                 {"other": gs_other, "inplace": inplace},
             ),
-            compare_error_message=False,
         )
 
 
