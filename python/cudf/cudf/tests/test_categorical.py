@@ -539,7 +539,6 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
             rfunc=cd_sr.cat.remove_categories,
             lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
             rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
-            expected_error_message="removals must all be in old categories",
         )
 
 

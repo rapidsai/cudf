@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 
-import re
 from decimal import Decimal
 from itertools import product
 
@@ -287,11 +286,6 @@ def test_datetime_unsupported_reductions(op):
     utils.assert_exceptions_equal(
         lfunc=getattr(psr, op),
         rfunc=getattr(gsr, op),
-        expected_error_message=re.escape(
-            "cannot perform "
-            + ("kurtosis" if op == "kurt" else op)
-            + " with type datetime64[ns]"
-        ),
     )
 
 
@@ -303,11 +297,6 @@ def test_timedelta_unsupported_reductions(op):
     utils.assert_exceptions_equal(
         lfunc=getattr(psr, op),
         rfunc=getattr(gsr, op),
-        expected_error_message=re.escape(
-            "cannot perform "
-            + ("kurtosis" if op == "kurt" else op)
-            + " with type timedelta64[ns]"
-        ),
     )
 
 

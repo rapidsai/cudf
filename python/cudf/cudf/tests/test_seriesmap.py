@@ -92,6 +92,4 @@ def test_series_map_non_unique_index():
         check_exception_type=False,
         lfunc_args_and_kwargs=([pd_map_series],),
         rfunc_args_and_kwargs=([gd_map_series],),
-        expected_error_message="Reindexing only valid with uniquely"
-        " valued Index objects",
     )

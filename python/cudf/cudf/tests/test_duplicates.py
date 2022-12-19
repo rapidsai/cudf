@@ -372,7 +372,6 @@ def test_dataframe_drop_duplicates_method():
         rfunc=gdf.drop_duplicates,
         lfunc_args_and_kwargs=(["n3"],),
         rfunc_args_and_kwargs=(["n3"],),
-        expected_error_message="columns {'n3'} do not exist",
     )
 
     assert_exceptions_equal(
@@ -380,7 +379,6 @@ def test_dataframe_drop_duplicates_method():
         rfunc=gdf.drop_duplicates,
         lfunc_args_and_kwargs=([["n1", "n4", "n3"]],),
         rfunc_args_and_kwargs=([["n1", "n4", "n3"]],),
-        expected_error_message="columns {'n[34]', 'n[34]'} do not exist",
     )
 
 

@@ -2,7 +2,6 @@
 
 import datetime
 import operator
-import re
 
 import cupy as cp
 import numpy as np
@@ -669,7 +668,6 @@ def test_to_datetime_errors(data):
         ([pd_data],),
         ([gd_data],),
         compare_error_message=False,
-        expected_error_message="Given date string not likely a datetime.",
     )
 
 
@@ -867,9 +865,6 @@ def test_str_to_datetime_error():
         lfunc_args_and_kwargs=(["datetime64[s]"],),
         rfunc_args_and_kwargs=(["datetime64[s]"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "Could not convert `None` value to datetime"
-        ),
     )
 
 
@@ -1287,10 +1282,6 @@ def test_datetime_to_datetime_error():
         lfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         rfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "errors parameter has to be either one of: ['ignore', 'raise', "
-            "'coerce', 'warn'], found: %d-%B-%Y %H:%M"
-        ),
     )
 
 

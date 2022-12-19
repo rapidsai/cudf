@@ -240,8 +240,6 @@ def test_categorical_setitem_invalid():
             lfunc_args_and_kwargs=([0, 5], {}),
             rfunc_args_and_kwargs=([0, 5], {}),
             compare_error_message=False,
-            expected_error_message="Cannot setitem on a Categorical with a "
-            "new category, set the categories first",
         )
     else:
         # Following workaround is needed because:

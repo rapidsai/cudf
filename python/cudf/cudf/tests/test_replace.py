@@ -1247,9 +1247,6 @@ def test_series_replace_errors():
         rfunc=gsr.replace,
         lfunc_args_and_kwargs=([[1, 2], [1]],),
         rfunc_args_and_kwargs=([[1, 2], [1]],),
-        expected_error_message=re.escape(
-            "Replacement lists must be of same length. " "Expected 2, got 1."
-        ),
     )
 
     assert_exceptions_equal(

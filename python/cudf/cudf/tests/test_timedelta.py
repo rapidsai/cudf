@@ -2,7 +2,6 @@
 
 import datetime
 import operator
-import re
 
 import cupy as cp
 import numpy as np
@@ -1374,9 +1373,6 @@ def test_timedelta_datetime_cast_invalid():
         sr.astype,
         (["datetime64[ns]"],),
         (["datetime64[ns]"],),
-        expected_error_message=re.escape(
-            "cannot astype a timedelta from timedelta64[ns] to datetime64[ns]"
-        ),
     )
 
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -1387,10 +1383,6 @@ def test_timedelta_datetime_cast_invalid():
         sr.astype,
         (["timedelta64[ns]"],),
         (["timedelta64[ns]"],),
-        expected_error_message=re.escape(
-            "cannot astype a datetimelike from "
-            "datetime64[ns] to timedelta64[ns]"
-        ),
     )
 
 

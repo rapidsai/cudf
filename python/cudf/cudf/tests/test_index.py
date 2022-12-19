@@ -1116,7 +1116,6 @@ def test_index_append_error(data, other):
         rfunc=gd_data.append,
         lfunc_args_and_kwargs=([[sr.to_pandas()]],),
         rfunc_args_and_kwargs=([[sr]],),
-        expected_error_message=r"all inputs must be Index",
     )
 
 
@@ -2571,10 +2570,6 @@ def test_isin_multiindex(data, values, level, err):
             lfunc_args_and_kwargs=([values], {"level": level}),
             rfunc_args_and_kwargs=([values], {"level": level}),
             check_exception_type=False,
-            expected_error_message=re.escape(
-                "values need to be a Multi-Index or set/list-like tuple "
-                "squences  when `level=None`."
-            ),
         )
 
 

@@ -308,7 +308,6 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         rfunc=gpu_data.view,
         lfunc_args_and_kwargs=([to_dtype],),
         rfunc_args_and_kwargs=([to_dtype],),
-        expected_error_message="Can not divide",
     )
 
 

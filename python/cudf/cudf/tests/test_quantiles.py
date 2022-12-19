@@ -62,9 +62,6 @@ def test_quantile_range_error(q):
         rfunc=gs.quantile,
         lfunc_args_and_kwargs=([q],),
         rfunc_args_and_kwargs=([q],),
-        expected_error_message=re.escape(
-            "percentiles should all be in the interval [0, 1]"
-        ),
     )
 
 

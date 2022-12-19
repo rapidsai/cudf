@@ -696,7 +696,6 @@ def test_advanced_groupby_levels():
         rfunc=gdg.groupby,
         lfunc_args_and_kwargs=([], {"level": 2}),
         rfunc_args_and_kwargs=([], {"level": 2}),
-        expected_error_message="Invalid level number",
     )
 
 

@@ -1144,7 +1144,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1152,7 +1151,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=([], {}),
         rfunc_args_and_kwargs=([], {}),
-        expected_error_message="Need to specify at least one",
     )
 
     assert_exceptions_equal(
@@ -1160,7 +1158,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["b"], {"axis": 1}),
         rfunc_args_and_kwargs=(["b"], {"axis": 1}),
-        expected_error_message="No axis named 1",
     )
 
 
@@ -1173,7 +1170,6 @@ def test_series_drop_raises():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["p"],),
         rfunc_args_and_kwargs=(["p"],),
-        expected_error_message="One or more values not found in axis",
     )
 
     # dtype specified mismatch
@@ -1182,7 +1178,6 @@ def test_series_drop_raises():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=([3],),
         rfunc_args_and_kwargs=([3],),
-        expected_error_message="One or more values not found in axis",
     )
 
     expect = ps.drop("p", errors="ignore")
@@ -1475,7 +1470,6 @@ def test_reset_index_dup_level_name_exceptions():
             [],
             {"level": [None]},
         ),
-        expected_error_message="occurs multiple times, use a level number",
     )
 
     # Cannot use drop=False and inplace=True to turn a series into dataframe.
