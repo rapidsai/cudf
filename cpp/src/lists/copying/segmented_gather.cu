@@ -38,7 +38,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 {
   CUDF_EXPECTS(is_index_type(gather_map.child().type()),
                "Gather map should be list column of index type");
-  CUDF_EXPECTS(!gather_map.has_nulls(), "Gather map contains nulls");
+  CUDF_EXPECTS(!gather_map.has_nulls(), "Gather map contains nulls", std::invalid_argument);
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
 

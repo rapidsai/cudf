@@ -572,16 +572,9 @@ class ListMethods(ColumnMethods):
                 "lists_indices should be column of values of index types."
             )
 
-        try:
-            res = self._return_or_inplace(
-                segmented_gather(self._column, lists_indices_col)
-            )
-        except RuntimeError as e:
-            if "contains nulls" in str(e):
-                raise ValueError("lists_indices contains null.") from e
-            raise
-        else:
-            return res
+        return self._return_or_inplace(
+            segmented_gather(self._column, lists_indices_col)
+        )
 
     def unique(self) -> ParentType:
         """
@@ -715,16 +708,9 @@ class ListMethods(ColumnMethods):
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
         """
-        try:
-            result = concatenate_list_elements(self._column, dropna=dropna)
-        except RuntimeError as e:
-            if "Rows of the input column must be lists." in str(e):
-                raise ValueError(
-                    "list.concat() can only be called on "
-                    "list columns with at least one level "
-                    "of nesting"
-                )
-        return self._return_or_inplace(result)
+        return self._return_or_inplace(
+            concatenate_list_elements(self._column, dropna=dropna)
+        )
 
     def astype(self, dtype):
         """
