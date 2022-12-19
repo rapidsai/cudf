@@ -16,6 +16,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -1366,7 +1367,10 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/rapidsai/cudf/issues/10618",
+)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
