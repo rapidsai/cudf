@@ -399,7 +399,8 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
     });
   // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated chars exceeds size_type range");
+               "Total number of concatenated chars exceeds size_type range",
+               std::overflow_error);
 }
 
 template <>
