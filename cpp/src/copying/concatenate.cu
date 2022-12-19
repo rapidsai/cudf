@@ -228,7 +228,8 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto const output_size  = std::get<3>(device_views);
 
   CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range");
+               "Total number of concatenated rows exceeds size_type range",
+               std::out_of_range);
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
