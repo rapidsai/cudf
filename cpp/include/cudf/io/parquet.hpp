@@ -941,14 +941,14 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the policy for dictionary use.
    *
-   * Certain compression algorithms (e.g zStandard) have limits on how large of a buffer can
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
    * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
    * will prevent the column from being compressed. This setting controls how the writer
    * should act in these circumstances. The default policy is to disable dictionary encoding
    * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
    * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
    * will allow the use of dictionary encoding even if it will result in the disabling of
-   * compression for that column.
+   * compression for columns that would otherwise be compressed.
    *
    * @param val policy for dictionary use
    * @return this for chaining
@@ -1463,14 +1463,14 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Sets the policy for dictionary use.
    *
-   * Certain compression algorithms (e.g zStandard) have limits on how large of a buffer can
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
    * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
    * will prevent the column from being compressed. This setting controls how the writer
    * should act in these circumstances. The default policy is to disable dictionary encoding
    * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
    * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
    * will allow the use of dictionary encoding even if it will result in the disabling of
-   * compression for that column.
+   * compression for columns that would otherwise be compressed.
    *
    * @param val policy for dictionary use
    * @return this for chaining
