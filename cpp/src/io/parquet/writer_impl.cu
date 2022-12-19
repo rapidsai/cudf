@@ -1052,10 +1052,9 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
   if (dict_policy == dictionary_policy::NEVER) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     h_chunks.begin(),
-                     h_chunks.end(),
-                     [] __device__(gpu::EncColumnChunk & chunk) { chunk.use_dictionary = false; });
+    thrust::for_each(h_chunks.begin(), h_chunks.end(), [](gpu::EncColumnChunk & chunk) {
+      chunk.use_dictionary = false;
+    });
     chunks.host_to_device(stream);
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
