@@ -2392,6 +2392,7 @@ def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
     else:
         request.applymarker(
             pytest.mark.xfail(
+                condition=pdf.columns.difference(other.index).size > 0,
                 reason="""
                 Currently we will not match pandas for equality/inequality
                 operators when there are columns that exist in a Series but not
@@ -2401,7 +2402,7 @@ def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
                 once pandas removes the deprecated behavior in 2.0.  When that
                 happens, this test can be merged with the two tests above into
                 a single test with common parameters.
-                """
+                """,
             )
         )
 
