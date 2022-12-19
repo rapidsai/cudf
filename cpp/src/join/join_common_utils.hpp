@@ -42,7 +42,7 @@ constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
 using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
-using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+using hash_type = cuco::murmurHash3_32<hash_value_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
