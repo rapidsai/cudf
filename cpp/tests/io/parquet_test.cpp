@@ -4016,6 +4016,51 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
   return 0;
 }
 
+TEST_F(ParquetWriterTest, LargeColumnIndex)
+{
+  // create a file large enough to be written in 2 batches (currently 1GB per batch)
+  const std::string s1(1000, 'a');
+  const std::string s2(1000, 'b');
+  constexpr auto num_rows = 512 * 1024;
+
+  // TODO(ets) need dictionary_policy set to NEVER from #12211. Then
+  // we don't need to append a number to make the strings unique.
+  auto col0_elements = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return ((i < num_rows) ? s1 : s2) + std::to_string(i); });
+  auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + 2 * num_rows);
+
+  auto const expected = table_view{{col0, col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("LargeColumnIndex.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .compression(cudf::io::compression_type::NONE)
+      .row_group_size_bytes(1024 * 1024 * 1024)
+      .row_group_size_rows(num_rows);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  for (auto const& rg : fmd.row_groups) {
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto const& chunk = rg.columns[c];
+
+      auto const ci    = read_column_index(source, chunk);
+      auto const stats = parse_statistics(chunk);
+
+      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      auto const ptype = fmd.schema[c + 1].type;
+      auto const ctype = fmd.schema[c + 1].converted_type;
+      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value, ptype, ctype) <= 0);
+      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value, ptype, ctype) >= 0);
+    }
+  }
+}
+
 TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
 {
   constexpr auto num_rows = 100000;
