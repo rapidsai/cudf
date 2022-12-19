@@ -476,6 +476,7 @@ add_library(
   src/sort/segmented_sort.cu
   src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
