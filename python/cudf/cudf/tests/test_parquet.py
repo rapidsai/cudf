@@ -2727,3 +2727,11 @@ def test_parquet_roundtrip_time_delta():
     buffer = BytesIO()
     df.to_parquet(buffer)
     assert_eq(df, cudf.read_parquet(buffer))
+
+
+def test_parquet_reader_malformed_file(datadir):
+    fname = datadir / "nested-unsigned-malformed.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
