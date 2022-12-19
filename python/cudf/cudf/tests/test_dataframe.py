@@ -5185,11 +5185,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
     pdf = gdf.to_pandas()
 
-    # TODO: This behavior seems erroneous in pandas. Why is the min/max over
-    # a mix of datetime and numeric dtypes not just throwing an error? This
-    # test will have to be rewritten anyway in pandas 2.0 when the implicit
-    # numeric_only behavior changes, at which point the dtype mixing should be
-    # reconsidered as well.
     with expect_warning_if(
         not all(cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes),
         UserWarning,
