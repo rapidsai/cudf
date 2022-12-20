@@ -346,6 +346,13 @@ Then run pre-commit hooks before committing code:
 pre-commit run
 ```
 
+By default, pre-commit runs on staged files (only changes and additions that will be committed).
+To run pre-commit checks on all files, execute:
+
+```bash
+pre-commit run --all-files
+```
+
 Optionally, you may set up the pre-commit hooks to run automatically when you make a git commit. This can be done by running:
 
 ```bash
@@ -358,13 +365,10 @@ You can skip these checks with `git commit --no-verify` or with the short versio
 
 ### Summary of pre-commit hooks
 
+The following section describes some of the core pre-commit hooks used by the repository.
+See `.pre-commit-config.yaml` for a full list.
+
 C++/CUDA is formatted with [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
-
-To format C++/CUDA files, stage them with `git add` and run pre-commit:
-
-```bash
-pre-commit run --all-files
-```
 
 Additionally, many editors have plugins or extensions that you can set up to automatically run
 `clang-format` either manually or on file save.
