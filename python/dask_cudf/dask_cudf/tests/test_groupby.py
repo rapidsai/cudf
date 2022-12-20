@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
+import contextlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -82,27 +84,23 @@ def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    if pdf.isna().sum().any():
-        with pytest.xfail(
-            reason="https://github.com/rapidsai/cudf/issues/12055"
-        ):
-            gdf_grouped = gdf.groupby("xx")
-    else:
-        gdf_grouped = gdf.groupby("xx")
-
+    gdf_grouped = gdf.groupby("xx")
     ddf_grouped = ddf.groupby("xx")
 
     if series:
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    a = getattr(gdf_grouped, aggregation)()
-    b = getattr(ddf_grouped, aggregation)()
-
-    if aggregation == "cumsum" and series:
-        with pytest.xfail(reason="https://github.com/dask/dask/issues/9313"):
-            dd.assert_eq(a, b)
+    if pdf.isna().sum().any():
+        # https://github.com/rapidsai/cudf/issues/12055
+        gdf_grouped = gdf.groupby("xx")
+        context = pytest.raises(ValueError)
     else:
+        context = contextlib.nullcontext()
+    with context:
+        a = getattr(gdf_grouped, aggregation)()
+        b = getattr(ddf_grouped, aggregation)()
+
         dd.assert_eq(a, b)
 
 

@@ -6,4 +6,4 @@ branch_checker: true
 label_checker: true
 release_drafter: true
 copy_prs: true
-recently_updated: true
+recently_updated: false

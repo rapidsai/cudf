@@ -339,10 +339,6 @@ def does_not_raise():
     yield
 
 
-def xfail_param(param, **kwargs):
-    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
-
-
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
