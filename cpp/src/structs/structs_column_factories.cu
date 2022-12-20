@@ -44,8 +44,11 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
-      cudf::structs::detail::superimpose_nulls(
-        static_cast<bitmask_type const*>(null_mask.data()), null_count, *child, stream, mr);
+      child = structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(null_mask.data()),
+                                                 null_count,
+                                                 std::move(child),
+                                                 stream,
+                                                 mr);
     }
   }
 

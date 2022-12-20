@@ -16,6 +16,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -1366,7 +1367,10 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/rapidsai/cudf/issues/10618",
+)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1646,7 +1650,7 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1663,7 +1667,7 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
