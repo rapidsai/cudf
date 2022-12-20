@@ -1058,7 +1058,16 @@ def test_groupby_index_type():
     "interpolation", ["linear", "lower", "higher", "nearest", "midpoint"]
 )
 @pytest.mark.parametrize("q", [0.25, 0.4, 0.5, 0.7, 1])
-def test_groupby_quantile(interpolation, q):
+def test_groupby_quantile(request, interpolation, q):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(q == 0.5 and interpolation == "nearest"),
+            reason=(
+                "Pandas NaN Rounding will fail nearest interpolation at 0.5"
+            ),
+        )
+    )
+
     raw_data = {
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
         "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
@@ -1078,11 +1087,6 @@ def test_groupby_quantile(interpolation, q):
     # so this is a temporary workaround
     pdresult = pdresult["y"].reset_index(drop=True)
     gdresult = gdresult["y"].reset_index(drop=True)
-
-    if q == 0.5 and interpolation == "nearest":
-        pytest.xfail(
-            "Pandas NaN Rounding will fail nearest interpolation at 0.5"
-        )
 
     assert_groupby_results_equal(pdresult, gdresult)
 
@@ -1344,9 +1348,10 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
+)
 def test_groupby_nunique(agg, by):
-    if not PANDAS_GE_110:
-        pytest.xfail("pandas >= 1.1 required")
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1931,8 +1936,24 @@ def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
 @pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
 @pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
 @pytest.mark.parametrize("direction", [1, -1])
-@pytest.mark.parametrize("fill_value", [None, 0, 42])
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10608")
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        None,
+        pytest.param(
+            0,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/10608"
+            ),
+        ),
+        pytest.param(
+            42,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/10608"
+            ),
+        ),
+    ],
+)
 def test_groupby_shift_row_mixed_numerics(
     nelem, shift_perc, direction, fill_value
 ):
