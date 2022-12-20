@@ -1105,7 +1105,7 @@ build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       // don't use dictionary if it gets too large for the given compression codec.
       // but in the case where the dictionary encoding is giving large savings, prefer
       // that over compression.
-      if (dict_policy == dictionary_policy::DEFAULT) {
+      if (dict_policy == dictionary_policy::ADAPTIVE) {
         auto const unique_size = static_cast<size_t>(ck.uniq_data_size);
         if (unique_size > max_page_bytes(compression, std::min(unique_size, max_dict_size))) {
           return {false, 0};

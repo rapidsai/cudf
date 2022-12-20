@@ -490,7 +490,7 @@ class parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
+  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -944,11 +944,13 @@ class parquet_writer_options_builder {
    * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
    * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
    * will prevent the column from being compressed. This setting controls how the writer
-   * should act in these circumstances. The default policy is to disable dictionary encoding
-   * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
-   * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
-   * will allow the use of dictionary encoding even if it will result in the disabling of
-   * compression for columns that would otherwise be compressed.
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   * 
+   * The default value is dictionary_policy::ADAPTIVE.
    *
    * @param val policy for dictionary use
    * @return this for chaining
@@ -959,7 +961,7 @@ class parquet_writer_options_builder {
    * @brief Sets the maximum dictionary size, in bytes.
    *
    * Disables dictionary encoding for any column chunk where the dictionary will
-   * exceed this limit.  Only used when the dictionary_policy is set to 'DEFAULT'.
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
    *
    * Default value is 1048576 (1MiB).
    *
@@ -1070,7 +1072,7 @@ class chunked_parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::DEFAULT;
+  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -1466,11 +1468,13 @@ class chunked_parquet_writer_options_builder {
    * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
    * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
    * will prevent the column from being compressed. This setting controls how the writer
-   * should act in these circumstances. The default policy is to disable dictionary encoding
-   * for columns where the dictionary exceeds the limit. A setting of dictionary_policy::NEVER
-   * will disable the use of dictionary encoding globally. A setting of dictionary_policy::ALWAYS
-   * will allow the use of dictionary encoding even if it will result in the disabling of
-   * compression for columns that would otherwise be compressed.
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   * 
+   * The default value is dictionary_policy::ADAPTIVE.
    *
    * @param val policy for dictionary use
    * @return this for chaining
@@ -1481,7 +1485,7 @@ class chunked_parquet_writer_options_builder {
    * @brief Sets the maximum dictionary size, in bytes.
    *
    * Disables dictionary encoding for any column chunk where the dictionary will
-   * exceed this limit.  Only used when the dictionary_policy is set to 'DEFAULT'.
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
    *
    * Default value is 1048576 (1MiB).
    *

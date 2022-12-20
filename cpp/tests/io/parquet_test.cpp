@@ -4895,7 +4895,7 @@ TEST_F(ParquetWriterTest, DictionaryNeverTest)
   EXPECT_FALSE(used_dict());
 }
 
-TEST_F(ParquetWriterTest, DictionaryDefaultTest)
+TEST_F(ParquetWriterTest, DictionaryAdaptiveTest)
 {
   constexpr unsigned int nrows = 65'536U;
   // cardinality is chosen to result in a dictionary > 1MB in size
@@ -4914,12 +4914,12 @@ TEST_F(ParquetWriterTest, DictionaryDefaultTest)
 
   auto const expected = table_view{{col0, col1}};
 
-  auto const filepath = temp_env->get_temp_filepath("DictionaryDefaultTest.parquet");
+  auto const filepath = temp_env->get_temp_filepath("DictionaryAdaptiveTest.parquet");
   // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
-      .dictionary_policy(cudf::io::dictionary_policy::DEFAULT);
+      .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options default_in_opts =

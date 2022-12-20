@@ -103,9 +103,9 @@ enum statistics_freq {
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {
-  NEVER,    ///< Never use dictionary encoding
-  DEFAULT,  ///< Use dictionary when it will not impact compression
-  ALWAYS    ///< Use dictionary reqardless of impact on compression
+  NEVER,     ///< Never use dictionary encoding
+  ADAPTIVE,  ///< Use dictionary when it will not impact compression
+  ALWAYS     ///< Use dictionary reqardless of impact on compression
 };
 
 /**
