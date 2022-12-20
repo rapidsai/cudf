@@ -70,7 +70,7 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
       run_script: "ci/test_notebooks.sh"
-  cudf-wheel-tests:
+  wheel-tests-cudf:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@upkeep/manylinux-improvements
     with:
@@ -82,7 +82,7 @@ jobs:
       package-name: cudf
       test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
-  dask-cudf-wheel-tests:
+  wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@upkeep/manylinux-improvements
     with:
