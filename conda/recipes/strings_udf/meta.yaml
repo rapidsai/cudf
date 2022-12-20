@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version = environ.get('CONDA_PY', 38) %}
+{% set py_version = environ['CONDA_PY'] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
 
@@ -46,12 +46,12 @@ requirements:
   host:
     - python
     - cython >=0.29,<0.30
-    - scikit-build>=0.13.1
+    - scikit-build >=0.13.1
     - setuptools
     - numba >=0.54
     - libcudf ={{ version }}
     - cudf ={{ version }}
-    - cudatoolkit {{ cuda_version }}.*
+    - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - typing_extensions
@@ -63,12 +63,11 @@ requirements:
     - cachetools
     - ptxcompiler >=0.7.0  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
 
-# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - strings_udf                       # [linux64]
+test:
+  requires:
+    - cudatoolkit ={{ cuda_version }}
+  imports:
+    - strings_udf
 
 about:
   home: https://rapids.ai/
