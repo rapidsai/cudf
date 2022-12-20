@@ -87,8 +87,8 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@upkeep/manylinux-improvements
     with:
       build_type: pull-request
-      package-dir: python/cudf
       package-name: cudf
+      package-dir: python/cudf
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
   cudf-wheel-tests:
     needs: cudf-wheel-build
