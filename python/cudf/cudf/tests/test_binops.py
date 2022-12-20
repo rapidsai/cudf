@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-
 import decimal
 import operator
 import random
@@ -910,19 +909,11 @@ def test_binop_bool_uint(func, rhs):
 
 
 @pytest.mark.parametrize(
-    "series_dtype", (np.bool_, np.int8, np.uint8, np.int64, np.uint64)
+    "series_dtype", (np.int8, np.uint8, np.int64, np.uint64)
 )
 @pytest.mark.parametrize(
     "divisor_dtype",
     (
-        pytest.param(
-            np.bool_,
-            marks=pytest_xfail(
-                reason=(
-                    "Pandas handling of division by zero-bool is too strange"
-                )
-            ),
-        ),
         np.int8,
         np.uint8,
         np.int64,
@@ -940,7 +931,28 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     else:
         pd_div = pd.Series([0], dtype=divisor_dtype)
         cudf_div = cudf.from_pandas(pd_div)
-    utils.assert_eq((sr // pd_div), (cr // cudf_div))
+    utils.assert_eq(sr // pd_div, cr // cudf_div)
+
+
+@pytest.mark.parametrize("scalar_divisor", [False, True])
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12162")
+def test_floordiv_zero_bool(scalar_divisor):
+    sr = pd.Series([True, True, False], dtype=np.bool_)
+    cr = cudf.from_pandas(sr)
+
+    if scalar_divisor:
+        pd_div = np.bool_(0)
+        cudf_div = cudf.Scalar(0, dtype=np.bool_)
+    else:
+        pd_div = pd.Series([0], dtype=np.bool_)
+        cudf_div = cudf.from_pandas(pd_div)
+
+    with pytest.raises((NotImplementedError, ZeroDivisionError)):
+        # Pandas does raise
+        sr // pd_div
+    with pytest.raises((NotImplementedError, ZeroDivisionError)):
+        # Cudf does not
+        cr // cudf_div
 
 
 @pytest.mark.parametrize(
@@ -1706,22 +1718,25 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
         pytest.param(
             {"milliseconds": 4},
-            marks=pytest_xfail(
-                reason="Pandas gets the wrong answer for milliseconds"
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="Pandas gets the wrong answer for milliseconds",
             ),
         ),
         pytest.param(
             {"milliseconds": 4, "years": 2},
             marks=pytest_xfail(
-                reason="Pandas construction fails with these keywords"
+                reason="https://github.com/pandas-dev/pandas/issues/49897"
             ),
         ),
         pytest.param(
             {"nanoseconds": 12},
-            marks=pytest_xfail(
-                reason="Pandas gets the wrong answer for nanoseconds"
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_150,
+                reason="Pandas gets the wrong answer for nanoseconds",
             ),
         ),
+        {"nanoseconds": 12},
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
