@@ -2169,16 +2169,30 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     assert_eq(actual_gdf, expected_gdf)
 
 
+def run_parquet_index(pdf, index):
+    pandas_buffer = BytesIO()
+    cudf_buffer = BytesIO()
+
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.to_parquet(pandas_buffer, index=index)
+    gdf.to_parquet(cudf_buffer, index=index)
+
+    expected = pd.read_parquet(cudf_buffer)
+    actual = cudf.read_parquet(pandas_buffer)
+
+    assert_eq(expected, actual, check_index_type=True)
+
+    expected = pd.read_parquet(pandas_buffer)
+    actual = cudf.read_parquet(cudf_buffer)
+
+    assert_eq(expected, actual, check_index_type=True)
+
+
 @pytest.mark.parametrize(
     "pdf",
     [
         pd.DataFrame(index=[1, 2, 3]),
-        pytest.param(
-            pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
-            marks=pytest.mark.xfail(
-                reason="https://issues.apache.org/jira/browse/ARROW-10643"
-            ),
-        ),
         pd.DataFrame({"a": [1, 2, 3]}, index=[0.43534, 345, 0.34534]),
         pd.DataFrame(
             {"b": [11, 22, 33], "c": ["a", "b", "c"]},
@@ -2207,23 +2221,21 @@ def test_parquet_nullable_boolean(tmpdir, engine):
 )
 @pytest.mark.parametrize("index", [None, True, False])
 def test_parquet_index(pdf, index):
-    pandas_buffer = BytesIO()
-    cudf_buffer = BytesIO()
+    run_parquet_index(pdf, index)
 
-    gdf = cudf.from_pandas(pdf)
 
-    pdf.to_parquet(pandas_buffer, index=index)
-    gdf.to_parquet(cudf_buffer, index=index)
+@pytest.mark.parametrize("index", [None, True])
+@pytest.mark.xfail(
+    reason="https://github.com/rapidsai/cudf/issues/12243",
+)
+def test_parquet_index_empty(index):
+    pdf = pd.DataFrame(index=pd.RangeIndex(0, 10, 1))
+    run_parquet_index(pdf, index)
 
-    expected = pd.read_parquet(cudf_buffer)
-    actual = cudf.read_parquet(pandas_buffer)
 
-    assert_eq(expected, actual, check_index_type=True)
-
-    expected = pd.read_parquet(pandas_buffer)
-    actual = cudf.read_parquet(cudf_buffer)
-
-    assert_eq(expected, actual, check_index_type=True)
+def test_parquet_no_index_empty():
+    pdf = pd.DataFrame(index=pd.RangeIndex(0, 10, 1))
+    run_parquet_index(pdf, index=False)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
