@@ -105,8 +105,8 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@upkeep/manylinux-improvements
     with:
       build_type: pull-request
-      package-dir: python/dask_cudf
       package-name: dask_cudf
+      package-dir: python/dask_cudf
   dask-cudf-wheel-tests:
     needs: dask-cudf-wheel-build
     secrets: inherit
