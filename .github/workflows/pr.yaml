@@ -20,6 +20,10 @@ jobs:
       - conda-python-other-tests
       - conda-java-tests
       - conda-notebook-tests
+      - cudf-wheel-build
+      - cudf-wheel-tests
+      - dask-cudf-wheel-build
+      - dask-cudf-wheel-tests
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@main
   checks:
@@ -78,3 +82,36 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
       run_script: "ci/test_notebooks.sh"
+  cudf-wheel-build:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@upkeep/manylinux-improvements
+    with:
+      build_type: pull-request
+      package-dir: python/cudf
+      package-name: cudf
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+  cudf-wheel-tests:
+    needs: cudf-wheel-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@upkeep/manylinux-improvements
+    with:
+      build_type: pull-request
+      package-name: cudf
+      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
+  dask-cudf-wheel-build:
+    needs: cudf-wheel-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@upkeep/manylinux-improvements
+    with:
+      build_type: pull-request
+      package-dir: python/dask_cudf
+      package-name: dask_cudf
+  dask-cudf-wheel-tests:
+    needs: dask-cudf-wheel-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@upkeep/manylinux-improvements
+    with:
+      build_type: pull-request
+      package-name: dask_cudf
+      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"

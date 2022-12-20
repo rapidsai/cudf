@@ -55,3 +55,53 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+  cudf-wheel-build:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@upkeep/manylinux-improvements
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf
+      package-dir: python/cudf
+      python-package-versioneer-override: ${{ inputs.wheel_versioneer_override }}
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+  cudf-wheel-publish:
+    needs: cudf-wheel-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@upkeep/manylinux-improvements
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf
+      python-package-build-tag: ${{ inputs.wheel_build_tag }}
+  dask-cudf-wheel-build:
+    needs: cudf-wheel-publish
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@upkeep/manylinux-improvements
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: dask_cudf
+      package-dir: python/dask_cudf
+      python-package-versioneer-override: ${{ inputs.wheel_versioneer_override }}
+  dask-cudf-wheel-publish:
+    needs: dask-cudf-wheel-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@upkeep/manylinux-improvements
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      repo: rapidsai/cudf
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: dask_cudf
+      python-package-build-tag: ${{ inputs.wheel_build_tag }}
