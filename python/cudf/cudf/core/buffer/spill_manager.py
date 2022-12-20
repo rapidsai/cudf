@@ -357,7 +357,9 @@ class SpillManager:
                 try:
                     if not buf.is_spilled and buf.spillable:
                         # Check if `buf` has a registered spill handler
-                        if (handler := self._spill_handlers.get(buf, None)) is not None:
+                        if (
+                            handler := self._spill_handlers.get(buf, None)
+                        ) is not None:
                             func, args, kwargs = handler
                             s = func(*args, **kwargs)
                             if s is not None:

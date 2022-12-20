@@ -150,7 +150,8 @@ def _clear_property_cache(
     The signature of this function is compatible with SpillManager's
     register_spill_handler.
 
-    To avoid keeping the instance alive, we take a weak reference of the instance.
+    To avoid keeping the instance alive, we take a weak reference of
+    the instance.
 
     Parameters
     ----------
@@ -186,14 +187,15 @@ def _clear_property_cache(
 
 
 class cached_property(functools.cached_property):
-    """A version of `cached_property` that deletes the cached value instead of spilling it.
+    """Cached property that deletes the cached value instead of spilling it
 
     When spilling is disabled (the default case), this decorator is identical
     to `functools.cached_property`.
 
-    When spilling is enabled, this registers a spill handler for the cached data
-    that deletes the data rather than spilling it. For now, only `RangeIndex`
-    are handled this way. See `SpillManager.register_spill_handler`.
+    When spilling is enabled, this registers a spill handler for the cached
+    data that deletes the data rather than spilling it. For now, only
+    `RangeIndex` are handled this way.
+    See `SpillManager.register_spill_handler`.
 
     It is always safe to use this instead of `functools.cached_property`.
     """
