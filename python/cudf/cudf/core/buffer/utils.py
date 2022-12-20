@@ -150,7 +150,7 @@ def _clear_property_cache(
     The signature of this function is compatible with SpillManager's
     register_spill_handler.
 
-    To avoid keeping instance alive, we take a weak reference of the instance.
+    To avoid keeping the instance alive, we take a weak reference of the instance.
 
     Parameters
     ----------
@@ -173,7 +173,7 @@ def _clear_property_cache(
 
     cached = instance.__dict__.get(attrname, None)
     if cached is None:
-        return None  # The cached has been cleared
+        return None  # The cache has been cleared
 
     # If `cached` is known outside of the cache, we cannot free any
     # memory by clearing the cache. We know of three references:
@@ -186,12 +186,12 @@ def _clear_property_cache(
 
 
 class cached_property(functools.cached_property):
-    """A version of `cached_property` that delete instead of spill the cache
+    """A version of `cached_property` that deletes the cached value instead of spilling it.
 
     When spilling is disabled (the default case), this decorator is identical
     to `functools.cached_property`.
 
-    When spilling is enabled, this register a spill handler for the cached data
+    When spilling is enabled, this registers a spill handler for the cached data
     that deletes the data rather than spilling it. For now, only `RangeIndex`
     are handled this way. See `SpillManager.register_spill_handler`.
 
