@@ -325,10 +325,10 @@ This will add the device debug symbols for this object file in `libcudf.so`.  Yo
 
 ### Using pre-commit hooks
 
-cuDF uses [pre-commit](https://pre-commit.com/) to execute all code linters and formatters. These tools ensure a consistent code format
-throughout the project. Using pre-commit ensures that linter versions and options are aligned for
-all developers. Additionally, there is a CI check in place to enforce that committed code follows
-our standards.
+cuDF uses [pre-commit](https://pre-commit.com/) to execute all code linters and formatters. These
+tools ensure a consistent code format throughout the project. Using pre-commit ensures that linter
+versions and options are aligned for all developers. Additionally, there is a CI check in place to
+enforce that committed code follows our standards.
 
 To use `pre-commit`, install via `conda` or `pip`:
 
@@ -360,7 +360,7 @@ You can skip these checks with `git commit --no-verify` or with the short versio
 
 C++/CUDA is formatted with [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
 
-In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
+To format C++/CUDA files, stage them with `git add` and run pre-commit:
 
 ```bash
 pre-commit run --all-files
@@ -370,17 +370,18 @@ Additionally, many editors have plugins or extensions that you can set up to aut
 `clang-format` either manually or on file save.
 
 [`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
-In order to run doxygen as linter on C++/CUDA code, run
+In order to run doxygen as a linter on C++/CUDA code, run
+
 ```bash
 ./ci/checks/doxygen.sh
 ```
 
-Python code runs several linters including [Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and
-[flake8](https://flake8.pycqa.org/en/latest/).
+Python code runs several linters including [Black](https://black.readthedocs.io/en/stable/),
+[isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/).
 
 cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
-mistakes, and this check is run as part of the pre-commit hook. To apply the suggested spelling
-fixes, you can run  `codespell -i 3 -w .` from the command-line in the cuDF root directory.
+mistakes, and this check is run as a pre-commit hook. To apply the suggested spelling fixes,
+you can run  `codespell -i 3 -w .` from the repository root directory.
 This will bring up an interactive prompt to select which spelling fixes to apply.
 
 ## Developer Guidelines
