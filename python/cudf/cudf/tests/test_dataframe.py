@@ -2349,17 +2349,6 @@ def test_comparison_binops_df(pdf, gdf, binop, other):
 
 
 @pytest_unmark_spilling
-@pytest.mark.xfail(
-    reason="""
-    Currently we will not match pandas for equality/inequality operators when
-    there are columns that exist in a Series but not the DataFrame because
-    pandas returns True/False values whereas we return NA. However, this
-    reindexing is deprecated in pandas so we opt not to add support. This test
-    should start passing once pandas removes the deprecated behavior in 2.0.
-    When that happens, this test can be merged with the two tests above into a
-    single test with common parameters.
-    """
-)
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2381,7 +2370,7 @@ def test_comparison_binops_df(pdf, gdf, binop, other):
         pd.Series([1.0, 2.0, 3.0], index=["x", "y", "z"]),
     ],
 )
-def test_comparison_binops_df_reindexing(pdf, gdf, binop, other):
+def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
     # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
     pdf[pdf == 1.0] = 2
     gdf[gdf == 1.0] = 2
@@ -2401,6 +2390,22 @@ def test_comparison_binops_df_reindexing(pdf, gdf, binop, other):
             compare_error_message=False,
         )
     else:
+        request.applymarker(
+            pytest.mark.xfail(
+                condition=pdf.columns.difference(other.index).size > 0,
+                reason="""
+                Currently we will not match pandas for equality/inequality
+                operators when there are columns that exist in a Series but not
+                the DataFrame because pandas returns True/False values whereas
+                we return NA. However, this reindexing is deprecated in pandas
+                so we opt not to add support. This test should start passing
+                once pandas removes the deprecated behavior in 2.0.  When that
+                happens, this test can be merged with the two tests above into
+                a single test with common parameters.
+                """,
+            )
+        )
+
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
         g = binop(gdf, other)
@@ -5181,11 +5186,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
     pdf = gdf.to_pandas()
 
-    # TODO: This behavior seems erroneous in pandas. Why is the min/max over
-    # a mix of datetime and numeric dtypes not just throwing an error? This
-    # test will have to be rewritten anyway in pandas 2.0 when the implicit
-    # numeric_only behavior changes, at which point the dtype mixing should be
-    # reconsidered as well.
     with expect_warning_if(
         not all(cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes),
         UserWarning,
