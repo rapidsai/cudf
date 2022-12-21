@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('RAPIDS_CUDA_VERSION', '11.5.2').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
 {% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
 
@@ -36,10 +36,10 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm {{ minor_version }}.*
-    - cudatoolkit {{ cuda_version }}.*
-    - cuda-nvrtc-dev {{ cuda_version }}.*
-    - cuda-nvtx {{ cuda_version }}.*
+    - librmm ={{ minor_version }}
+    - cudatoolkit ={{ cuda_version }}
+    - cuda-nvrtc-dev ={{ cuda_version }}
+    - cuda-nvtx ={{ cuda_version }}
     - libcurand-dev
     - arrow-cpp {{ arrow_cpp_version }}
     - dlpack {{ dlpack_version }}
@@ -61,7 +61,7 @@ outputs:
         - cmake {{ cmake_version }}
       run:
         - cudatoolkit {{ cuda_spec }}
-        - librmm {{ minor_version }}.*
+        - librmm ={{ minor_version }}
         - arrow-cpp {{ arrow_cpp_version }}
         - dlpack {{ dlpack_version }}
     test:
@@ -340,7 +340,7 @@ outputs:
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
-        - cuda-nvtx {{ cuda_version }}.*
+        - cuda-nvtx ={{ cuda_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
