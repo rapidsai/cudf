@@ -880,25 +880,6 @@ public final class Table implements AutoCloseable {
                    outputPath);
   }
 
-  private static native void writeCSVToBuffer(long table,
-                                              String[] columnNames,
-                                              boolean includeHeader,
-                                              String rowDelimiter,
-                                              byte fieldDelimiter,
-                                              String nullValue,
-                                              HostBufferConsumer buffer) throws CudfException;
-
-  public void writeCSVToBuffer(CSVWriterOptions options, HostBufferConsumer bufferConsumer)
-  {
-    writeCSVToBuffer(nativeHandle, 
-                     options.getColumnNames(), 
-                     options.getIncludeHeader(), 
-                     options.getRowDelimiter(), 
-                     options.getFieldDelimiter(), 
-                     options.getNullValue(), 
-                     bufferConsumer);
-  }
-
   private static native long writeCSVToBufferBegin(String[] columnNames,
                                                    boolean includeHeader,
                                                    String rowDelimiter,

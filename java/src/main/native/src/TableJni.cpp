@@ -1218,41 +1218,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(
-    JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
-    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jobject j_buffer) {
-  JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
-  JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
-  JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
-  JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", );
-  JNI_NULL_CHECK(env, j_null_value, "null representation string cannot be itself null", );
-  JNI_NULL_CHECK(env, j_buffer, "output buffer cannot be null", );
-
-  try {
-    cudf::jni::auto_set_device(env);
-
-    auto data_sink = cudf::jni::jni_writer_data_sink{env, j_buffer};
-
-    auto const table = reinterpret_cast<cudf::table_view *>(j_table_handle);
-    auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
-    auto const column_names = n_column_names.as_cpp_vector();
-
-    auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
-    auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
-    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{&data_sink}, *table)
-                       .names(column_names)
-                       .include_header(static_cast<bool>(include_header))
-                       .line_terminator(line_terminator.get())
-                       .inter_column_delimiter(j_field_delimiter)
-                       .na_rep(na_rep.get())
-                       .build();
-
-    cudf::io::write_csv(options);
-    data_sink.flush();
-  }
-  CATCH_STD(env, );
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
