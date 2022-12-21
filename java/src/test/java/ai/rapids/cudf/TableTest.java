@@ -50,7 +50,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.function.IntFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -665,9 +664,7 @@ public class TableTest extends CudfTestBase {
     testWriteCSVToBufferImpl('\u0001');
   }
 
-  @Test
-  void testChunkedCSVWriter() throws IOException {
-    char fieldDelim = ',';
+  private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader) throws IOException {
     Schema schema = Schema.builder()
                           .column(DType.INT32, "i")
                           .column(DType.FLOAT64, "f")
@@ -676,7 +673,7 @@ public class TableTest extends CudfTestBase {
                           .build(); 
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
                                                .withColumnNames(schema.getColumnNames())
-                                               .withIncludeHeader(false)
+                                               .withIncludeHeader(includeHeader)
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
@@ -702,7 +699,7 @@ public class TableTest extends CudfTestBase {
                                          .includeColumn("f")
                                          .includeColumn("b")
                                          .includeColumn("str")
-                                         .hasHeader(false)
+                                         .hasHeader(includeHeader)
                                          .withDelim(fieldDelim)
                                          .withNullValue("\\N")
                                          .build();
@@ -711,6 +708,14 @@ public class TableTest extends CudfTestBase {
         assertTablesAreEqual(expected, readTable);
       }
     }
+  }
+
+  @Test
+  void testChunkedCSVWriter() throws IOException {
+    testChunkedCSVWriterImpl(',', false);
+    testChunkedCSVWriterImpl(',', true);
+    testChunkedCSVWriterImpl('\u0001', false);
+    testChunkedCSVWriterImpl('\u0001', true);
   }
 
   @Test

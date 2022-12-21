@@ -1253,7 +1253,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(JNIEnv *env,
                         .na_rep(na_rep.get())
                         .build();
 
-    std::cout << "Unchunked write: rows per chunk: " << options.get_rows_per_chunk() << std::endl;
     cudf::io::write_csv(options);
     data_sink.flush();
   }
@@ -1295,7 +1294,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(JNIEnv *
                         .na_rep(na_rep.get())
                         .build();
 
-    std::cout << "writeBegin(): rows per chunk: " << options.get_rows_per_chunk() << std::endl;
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
   }
   CATCH_STD(env, 0);
