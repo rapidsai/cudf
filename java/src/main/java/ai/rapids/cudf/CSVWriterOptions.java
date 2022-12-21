@@ -29,6 +29,8 @@ public class CSVWriterOptions {
   private String rowDelimiter = "\n";
   private byte fieldDelimiter = ',';
   private String nullValue = "\\N";
+  private String falseValue = "false";
+  private String trueValue = "true";
 
   private CSVWriterOptions(Builder builder) {
     this.columnNames = builder.columnNames.toArray(new String[builder.columnNames.size()]);
@@ -36,6 +38,8 @@ public class CSVWriterOptions {
     this.includeHeader = builder.includeHeader;
     this.fieldDelimiter = builder.fieldDelimiter;
     this.rowDelimiter = builder.rowDelimiter;
+    this.falseValue = builder.falseValue;
+    this.trueValue = builder.trueValue;
   }
 
   public String[] getColumnNames() {
@@ -58,6 +62,14 @@ public class CSVWriterOptions {
     return nullValue;
   }
 
+  public String getTrueValue() {
+    return trueValue;
+  }
+
+  public String getFalseValue() {
+    return falseValue;
+  }  
+  
   public static Builder builder() {
     return new Builder();
   }
@@ -69,6 +81,8 @@ public class CSVWriterOptions {
     private String rowDelimiter = "\n";
     private byte fieldDelimiter = ',';
     private String nullValue = "\\N";
+    private String falseValue = "false";
+    private String trueValue = "true";
     
     public CSVWriterOptions build() {
       return new CSVWriterOptions(this);
@@ -104,6 +118,16 @@ public class CSVWriterOptions {
 
     public Builder withNullValue(String nullValue) {
       this.nullValue = nullValue;
+      return this;
+    }
+    
+    public Builder withTrueValue(String trueValue) {
+      this.trueValue = trueValue;
+      return this;
+    }
+    
+    public Builder withFalseValue(String falseValue) {
+      this.falseValue = falseValue;
       return this;
     }
   }

@@ -588,6 +588,8 @@ public class TableTest extends CudfTestBase {
                                                .withIncludeHeader(false)
                                                .withFieldDelimiter((byte)'\u0001')
                                                .withRowDelimiter("\n")
+                                               .withTrueValue("T")
+                                               .withFalseValue("F")
                                                .build();
     try (Table inputTable 
           = new Table.TestBuilder()
@@ -606,6 +608,8 @@ public class TableTest extends CudfTestBase {
                                          .includeColumn("str")
                                          .hasHeader(false)
                                          .withDelim('\u0001')
+                                         .withTrueValue("T")
+                                         .withFalseValue("F")
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
         assertTablesAreEqual(inputTable, readTable);
@@ -677,6 +681,8 @@ public class TableTest extends CudfTestBase {
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
+                                               .withTrueValue("T")
+                                               .withFalseValue("F")
                                                .build();
     try (Table inputTable 
           = new Table.TestBuilder()
@@ -702,6 +708,8 @@ public class TableTest extends CudfTestBase {
                                          .hasHeader(includeHeader)
                                          .withDelim(fieldDelim)
                                          .withNullValue("\\N")
+                                         .withTrueValue("T")
+                                         .withFalseValue("F")
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
            Table expected  = Table.concatenate(inputTable, inputTable, inputTable)) {

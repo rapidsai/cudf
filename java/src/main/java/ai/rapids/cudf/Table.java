@@ -863,6 +863,8 @@ public final class Table implements AutoCloseable {
                                             String rowDelimiter,
                                             byte fieldDelimiter,
                                             String nullValue,
+                                            String trueValue,
+                                            String falseValue,
                                             String outputPath) throws CudfException;
 
   public void writeCSVToFile(CSVWriterOptions options, String outputPath)
@@ -873,6 +875,8 @@ public final class Table implements AutoCloseable {
                    options.getRowDelimiter(), 
                    options.getFieldDelimiter(), 
                    options.getNullValue(), 
+                   options.getTrueValue(),
+                   options.getFalseValue(),
                    outputPath);
   }
 
@@ -900,6 +904,8 @@ public final class Table implements AutoCloseable {
                                                    String rowDelimiter,
                                                    byte fieldDelimiter,
                                                    String nullValue,
+                                                   String trueValue,
+                                                   String falseValue,
                                                    HostBufferConsumer buffer) throws CudfException;
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
@@ -916,6 +922,8 @@ public final class Table implements AutoCloseable {
                                                 options.getRowDelimiter(),
                                                 options.getFieldDelimiter(),
                                                 options.getNullValue(),
+                                                options.getTrueValue(),
+                                                options.getFalseValue(),
                                                 consumer);
       this.consumer = consumer;
     }

@@ -1178,12 +1178,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
-    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_output_path) {
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
+    jstring j_false_value, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", );
   JNI_NULL_CHECK(env, j_null_value, "null representation string cannot be itself null", );
+  JNI_NULL_CHECK(env, j_true_value, "representation string for `true` cannot be null", );
+  JNI_NULL_CHECK(env, j_false_value, "representation string for `false` cannot be null", );
   JNI_NULL_CHECK(env, j_output_path, "output path cannot be null", );
 
   try {
@@ -1198,12 +1201,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
 
     auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
+    auto const true_value = cudf::jni::native_jstring{env, j_true_value};
+    auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
                        .names(column_names)
                        .include_header(static_cast<bool>(include_header))
                        .line_terminator(line_terminator.get())
                        .inter_column_delimiter(j_field_delimiter)
-                       .na_rep(na_rep.get());
+                       .na_rep(na_rep.get())
+                       .true_value(true_value.get())
+                       .false_value(false_value.get());
 
     cudf::io::write_csv(options.build());
   }
@@ -1247,13 +1255,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
-    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jobject j_buffer) {
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
+    jstring j_false_value, jobject j_buffer) {
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_null_value, "null representation string cannot be itself null", 0);
   JNI_NULL_CHECK(env, j_buffer, "output buffer cannot be null", 0);
-  // TODO: Add support for true/false string representations.
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1265,6 +1273,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
 
     auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
+    auto const true_value = cudf::jni::native_jstring{env, j_true_value};
+    auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
                                                          cudf::table_view{})
                        .names(column_names)
@@ -1272,6 +1283,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
                        .line_terminator(line_terminator.get())
                        .inter_column_delimiter(j_field_delimiter)
                        .na_rep(na_rep.get())
+                       .true_value(true_value.get())
+                       .false_value(false_value.get())
                        .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
