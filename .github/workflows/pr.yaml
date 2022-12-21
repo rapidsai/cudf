@@ -99,7 +99,7 @@ jobs:
       package-name: cudf
       test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
-      test-smoketest: "python -c 'import cudf; import pyarrow as pa; n_legs = pa.array([2, 4, 5, 100]); animals = pa.array([\"Flamingo\", \"Horse\", \"Brittle stars\", \"Centipede\"]); names = [\"n_legs\", \"animals\"]; print(animals); foo = pa.table([n_legs, animals], names=names); print(foo); df = cudf.DataFrame.from_arrow(foo); print(df); print(df.loc[df[\"animals\"] == \"Centipede\"][\"n_legs\"]); assert df.loc[df[\"animals\"] == \"Centipede\"][\"n_legs\"].iloc[0] == 100'"
+      test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
