@@ -2231,18 +2231,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
