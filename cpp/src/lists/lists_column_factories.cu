@@ -105,6 +105,9 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
   CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
+  // Save type_id of the child column for later use.
+  auto const child_type_id = child_column->type().id();
+
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
@@ -116,8 +119,8 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                          null_count,
                                          std::move(children));
 
-  // `null_mask` can be empty while `null_count` is `UNKNOWN_NULL_COUNT`.
-  return null_count == 0 || !output->nullable()
+  // We need to enforce all null lists to be empty.
+  return null_count == 0 || !output->nullable() || child_type_id == type_id::EMPTY
            ? std::move(output)
            : detail::purge_nonempty_nulls(output->view(), stream, mr);
 }
