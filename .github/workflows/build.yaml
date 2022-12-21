@@ -20,6 +20,12 @@ on:
       build_type:
         type: string
         default: nightly
+      wheel_versioneer_override:
+        type: string
+        default: ''
+      wheel_build_tag:
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
