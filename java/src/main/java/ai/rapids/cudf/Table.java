@@ -887,12 +887,63 @@ public final class Table implements AutoCloseable {
   public void writeCSVToBuffer(CSVWriterOptions options, HostBufferConsumer bufferConsumer)
   {
     writeCSVToBuffer(nativeHandle, 
-                    options.getColumnNames(), 
-                    options.getIncludeHeader(), 
-                    options.getRowDelimiter(), 
-                    options.getFieldDelimiter(), 
-                    options.getNullValue(), 
-                    bufferConsumer);
+                     options.getColumnNames(), 
+                     options.getIncludeHeader(), 
+                     options.getRowDelimiter(), 
+                     options.getFieldDelimiter(), 
+                     options.getNullValue(), 
+                     bufferConsumer);
+  }
+
+  private static native long writeCSVToBufferBegin(String[] columnNames,
+                                                   boolean includeHeader,
+                                                   String rowDelimiter,
+                                                   byte fieldDelimiter,
+                                                   String nullValue,
+                                                   HostBufferConsumer buffer) throws CudfException;
+
+  private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
+
+  private static native void writeCSVToBufferEnd(long writerHandle);
+
+  private static class CSVTableWriter implements TableWriter {
+    private long writerHandle;
+    private HostBufferConsumer consumer;
+
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+      this.writerHandle = writeCSVToBufferBegin(options.getColumnNames(),
+                                                options.getIncludeHeader(),
+                                                options.getRowDelimiter(),
+                                                options.getFieldDelimiter(),
+                                                options.getNullValue(),
+                                                consumer);
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (writerHandle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeCSVChunkToBuffer(writerHandle, table.nativeHandle);
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (writerHandle != 0) {
+        writeCSVToBufferEnd(writerHandle);
+        writerHandle = 0;
+      }
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
+  }
+
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer)
+  {
+    return new CSVTableWriter(options, bufferConsumer);
   }
 
   /**

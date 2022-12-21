@@ -666,6 +666,54 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testChunkedCSVWriter() throws IOException {
+    char fieldDelim = ',';
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build(); 
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .build();
+    try (Table inputTable 
+          = new Table.TestBuilder()
+              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, null)
+              .column(0.0, 1.0, 2.0, 3.0, 4.0, null, 6.0, 7.0, 8.0, 9.0)
+              .column(false, true, null, true, false, true, null, true, false, true)
+              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", null)
+              .build();
+          MyBufferConsumer consumer = new MyBufferConsumer()) {
+      
+      try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
+        writer.write(inputTable);
+        writer.write(inputTable);
+        writer.write(inputTable);
+      }
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("i")
+                                         .includeColumn("f")
+                                         .includeColumn("b")
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim(fieldDelim)
+                                         .withNullValue("\\N")
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
+           Table expected  = Table.concatenate(inputTable, inputTable, inputTable)) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    }
+  }
+
+  @Test
   void testReadParquet() {
     ParquetOptions opts = ParquetOptions.builder()
         .includeColumn("loan_id")

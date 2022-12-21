@@ -1332,7 +1332,7 @@ class csv_writer_options {
   size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // character to use for separating lines (default "\n")
   std::string _line_terminator = "\n";
-  // character to use for separating lines (default "\n")
+  // character to use for separating column values (default ",")
   char _inter_column_delimiter = ',';
   // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
@@ -1498,6 +1498,13 @@ class csv_writer_options {
    * @param val String to represent values == 0 in INT8 types
    */
   void set_false_value(std::string val) { _false_value = val; }
+
+  /**
+   * @brief (Re)sets the table being written.
+   * 
+   * @param table Table to be written
+   */
+  void set_table(table_view const& table) { _table = table; }
 };
 
 /**
