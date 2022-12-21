@@ -77,7 +77,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@upkeep/manylinux-improvements
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@upkeep/manylinux-improvements
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       repo: rapidsai/cudf
@@ -85,7 +85,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: cudf
-      python-package-build-tag: ${{ inputs.wheel_build_tag }}
+      build-tag: ${{ inputs.wheel_build_tag }}
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
@@ -102,7 +102,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-publish.yml@upkeep/manylinux-improvements
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@upkeep/manylinux-improvements
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       repo: rapidsai/cudf
@@ -110,4 +110,4 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: dask_cudf
-      python-package-build-tag: ${{ inputs.wheel_build_tag }}
+      build-tag: ${{ inputs.wheel_build_tag }}
