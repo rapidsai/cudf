@@ -574,8 +574,8 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  @Test
-  void testWriteCSVToFile() throws IOException {
+  private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader, 
+                                      String trueValue, String falseValue) throws IOException {
     File outputFile = File.createTempFile("testWriteCSVToFile", ".csv");
     Schema schema = Schema.builder()
                           .column(DType.INT32, "i")
@@ -617,6 +617,16 @@ public class TableTest extends CudfTestBase {
     } finally {
       outputFile.delete();
     }
+  }
+
+  @Test
+  void testWriteCSVToFile() throws IOException {
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testWriteCSVToFileImpl(',', INCLUDE_HEADER, "true", "false");
+    testWriteCSVToFileImpl(',', NO_HEADER, "TRUE", "FALSE");
+    testWriteCSVToFileImpl('\u0001', INCLUDE_HEADER, "T", "F");
+    testWriteCSVToFileImpl('\u0001', NO_HEADER, "True", "False");
   }
 
   private void testWriteCSVToBufferImpl(char fieldDelim) throws IOException {
@@ -668,7 +678,8 @@ public class TableTest extends CudfTestBase {
     testWriteCSVToBufferImpl('\u0001');
   }
 
-  private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader) throws IOException {
+  private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader,
+                                        String trueValue, String falseValue) throws IOException {
     Schema schema = Schema.builder()
                           .column(DType.INT32, "i")
                           .column(DType.FLOAT64, "f")
@@ -681,8 +692,8 @@ public class TableTest extends CudfTestBase {
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
-                                               .withTrueValue("T")
-                                               .withFalseValue("F")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
                                                .build();
     try (Table inputTable 
           = new Table.TestBuilder()
@@ -708,8 +719,8 @@ public class TableTest extends CudfTestBase {
                                          .hasHeader(includeHeader)
                                          .withDelim(fieldDelim)
                                          .withNullValue("\\N")
-                                         .withTrueValue("T")
-                                         .withFalseValue("F")
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
            Table expected  = Table.concatenate(inputTable, inputTable, inputTable)) {
@@ -720,10 +731,12 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testChunkedCSVWriter() throws IOException {
-    testChunkedCSVWriterImpl(',', false);
-    testChunkedCSVWriterImpl(',', true);
-    testChunkedCSVWriterImpl('\u0001', false);
-    testChunkedCSVWriterImpl('\u0001', true);
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testChunkedCSVWriterImpl(',', NO_HEADER, "true", "false");
+    testChunkedCSVWriterImpl(',', INCLUDE_HEADER, "TRUE", "FALSE");
+    testChunkedCSVWriterImpl('\u0001', NO_HEADER, "T", "F");
+    testChunkedCSVWriterImpl('\u0001', INCLUDE_HEADER, "True", "False");
   }
 
   @Test
