@@ -1501,7 +1501,7 @@ class csv_writer_options {
 
   /**
    * @brief (Re)sets the table being written.
-   * 
+   *
    * @param table Table to be written
    */
   void set_table(table_view const& table) { _table = table; }

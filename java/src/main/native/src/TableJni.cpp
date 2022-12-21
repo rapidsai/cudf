@@ -1176,16 +1176,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(JNIEnv *env,
-                                                                jclass,
-                                                                jlong j_table_handle,
-                                                                jobjectArray j_column_names,
-                                                                jboolean include_header,
-                                                                jstring j_row_delimiter,
-                                                                jbyte j_field_delimiter,
-                                                                jstring j_null_value,
-                                                                jstring j_output_path) 
-{
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
+    JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
@@ -1206,27 +1199,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(JNIEnv *env,
     auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
-                        .names(column_names)
-                        .include_header(static_cast<bool>(include_header))
-                        .line_terminator(line_terminator.get())
-                        .inter_column_delimiter(j_field_delimiter)
-                        .na_rep(na_rep.get());
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get());
 
     cudf::io::write_csv(options.build());
   }
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(JNIEnv *env,
-                                                                  jclass,
-                                                                  jlong j_table_handle,
-                                                                  jobjectArray j_column_names,
-                                                                  jboolean include_header,
-                                                                  jstring j_row_delimiter,
-                                                                  jbyte j_field_delimiter,
-                                                                  jstring j_null_value,
-                                                                  jobject j_buffer) 
-{
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(
+    JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jobject j_buffer) {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
@@ -1237,7 +1223,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
 
-    auto data_sink = cudf::jni::jni_writer_data_sink{env, j_buffer}; 
+    auto data_sink = cudf::jni::jni_writer_data_sink{env, j_buffer};
 
     auto const table = reinterpret_cast<cudf::table_view *>(j_table_handle);
     auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
@@ -1246,12 +1232,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(JNIEnv *env,
     auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{&data_sink}, *table)
-                        .names(column_names)
-                        .include_header(static_cast<bool>(include_header))
-                        .line_terminator(line_terminator.get())
-                        .inter_column_delimiter(j_field_delimiter)
-                        .na_rep(na_rep.get())
-                        .build();
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get())
+                       .build();
 
     cudf::io::write_csv(options);
     data_sink.flush();
@@ -1259,15 +1245,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBuffer(JNIEnv *env,
   CATCH_STD(env, );
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(JNIEnv *env,
-                                                                        jclass,
-                                                                        jobjectArray j_column_names,
-                                                                        jboolean include_header,
-                                                                        jstring j_row_delimiter,
-                                                                        jbyte j_field_delimiter,
-                                                                        jstring j_null_value,
-                                                                        jobject j_buffer) 
-{
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
+    JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jobject j_buffer) {
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
@@ -1278,36 +1258,35 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
 
-    auto data_sink = std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer); 
+    auto data_sink = std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer);
 
     auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
     auto const column_names = n_column_names.as_cpp_vector();
 
     auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
-    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()}, 
+    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
                                                          cudf::table_view{})
-                        .names(column_names)
-                        .include_header(static_cast<bool>(include_header))
-                        .line_terminator(line_terminator.get())
-                        .inter_column_delimiter(j_field_delimiter)
-                        .na_rep(na_rep.get())
-                        .build();
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get())
+                       .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVChunkToBuffer(JNIEnv *env,
-                                                                       jclass,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVChunkToBuffer(JNIEnv *env, jclass,
                                                                        jlong j_writer_handle,
                                                                        jlong j_table_handle) {
   JNI_NULL_CHECK(env, j_writer_handle, "writer handle cannot be null.", );
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
 
   auto const table = reinterpret_cast<cudf::table_view *>(j_table_handle);
-  auto writer = reinterpret_cast<cudf::jni::io::csv_chunked_writer *>(j_writer_handle); 
+  auto writer = reinterpret_cast<cudf::jni::io::csv_chunked_writer *>(j_writer_handle);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1316,13 +1295,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVChunkToBuffer(JNIEnv *e
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferEnd(JNIEnv *env,
-                                                                    jclass,
-                                                                    jlong j_writer_handle) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferEnd(JNIEnv *env, jclass,
+                                                                     jlong j_writer_handle) {
   JNI_NULL_CHECK(env, j_writer_handle, "writer handle cannot be null.", );
 
   using cudf::jni::io::csv_chunked_writer;
-  auto writer = std::unique_ptr<csv_chunked_writer>{reinterpret_cast<csv_chunked_writer *>(j_writer_handle)}; 
+  auto writer =
+      std::unique_ptr<csv_chunked_writer>{reinterpret_cast<csv_chunked_writer *>(j_writer_handle)};
 
   try {
     cudf::jni::auto_set_device(env);
