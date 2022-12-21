@@ -72,7 +72,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: cudf
       package-dir: python/cudf
-      python-package-versioneer-override: ${{ inputs.wheel_versioneer_override }}
+      versioneer-override: ${{ inputs.wheel_versioneer_override }}
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
   wheel-publish-cudf:
     needs: wheel-build-cudf
@@ -98,7 +98,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      python-package-versioneer-override: ${{ inputs.wheel_versioneer_override }}
+      versioneer-override: ${{ inputs.wheel_versioneer_override }}
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
