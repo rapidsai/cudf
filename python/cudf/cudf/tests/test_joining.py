@@ -768,9 +768,9 @@ def test_merge_sort_on_indexes(kwargs):
         definitely_sorted.index.name = None
         assert_eq(gd_merge, definitely_sorted)
     elif left_index:
-        assert gd_merge["b"].is_monotonic
+        assert gd_merge["b"].is_monotonic_increasing
     elif right_index:
-        assert gd_merge["a"].is_monotonic
+        assert gd_merge["a"].is_monotonic_increasing
 
 
 @pytest.mark.parametrize(
