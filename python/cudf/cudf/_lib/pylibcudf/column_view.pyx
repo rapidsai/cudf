@@ -2,10 +2,13 @@
 
 from enum import IntEnum
 
+from cython.operator cimport dereference
 from libc.stdint cimport int32_t, uintptr_t
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 
@@ -99,3 +102,31 @@ cdef class ColumnView:
                 dtype, size, data, null_mask, null_count, offset, children
             )
         )
+
+    cdef column_view get(self) nogil:
+        """Get the underlying column_view object.
+
+        Note that this returns a copy, but by design column_view is designed to
+        be lightweight and easy to copy so this is acceptable.
+        """
+        return dereference(self.c_obj.get())
+
+
+cdef unique_ptr[column] copy_column(ColumnView col):
+    """Deep copies a column
+
+    Parameters
+    ----------
+    col : ColumnView
+        The column to be copied.
+
+    Returns
+    -------
+    column
+        A deep copy of the input column.
+    """
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(make_unique[column](col.get()))
+
+    return move(c_result)
