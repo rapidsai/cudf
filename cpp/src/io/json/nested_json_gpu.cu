@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "nested_json.hpp"
-
 #include <io/fst/logical_stack.cuh>
 #include <io/fst/lookup_tables.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -27,6 +25,7 @@
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/detail/data_casting.cuh>
+#include <cudf/io/detail/nested_json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>

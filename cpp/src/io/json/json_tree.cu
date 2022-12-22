@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "nested_json.hpp"
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/nested_json.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
