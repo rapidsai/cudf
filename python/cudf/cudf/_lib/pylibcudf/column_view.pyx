@@ -15,18 +15,24 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 cdef class ColumnView:
     """Wrapper around column_view."""
-    cdef unique_ptr[column_view] * c_obj
+    cdef unique_ptr[column_view] c_obj
 
     # TODO: For now assuming data and mask are Buffers, but eventually need to
     # define a new gpumemoryview type to handle this. For that object it should
     # be possible to access all attributes via fast cdef functions (no Python
     # overhead for querying size etc).
-    def __cinit__(self, py_type_id, object data_buf, object mask_buf):
+    # TODO: Need a way to map the data buffer size to the number of
+    # elements. For fixed width types a mapping could be made based on the
+    # number of bytes they occupy, but not for nested types. Not sure how
+    # best to expose that in the API yet, but matching C++ for now and
+    # requesting the size from the user. The gpumemoryview may also help.
+    def __cinit__(
+        self, py_type_id, size_type size, object data_buf, object mask_buf
+    ):
         cdef type_id c_type_id = py_type_to_c_type(py_type_id)
         cdef data_type dtype = data_type(c_type_id)
-        cdef size_type size = data_buf.size
         cdef const void * data = int_to_void_ptr(data_buf.ptr)
-        cdef const bitmask_type * null_mask
+        cdef const bitmask_type * null_mask = NULL
         if mask_buf is not None:
             null_mask = int_to_bitmask_ptr(mask_buf.ptr)
         # TODO: At the moment libcudf does not expose APIs for counting the
@@ -54,21 +60,29 @@ cdef class ColumnView:
         return dereference(self.c_obj.get())
 
 
-cdef unique_ptr[column] copy_column(ColumnView col):
-    """Deep copies a column
+cdef class Column:
+    """Wrapper around column."""
+    cdef unique_ptr[column] c_obj
 
-    Parameters
-    ----------
-    col : ColumnView
-        The column to be copied.
+    @staticmethod
+    def from_column_view(ColumnView cv):
+        """Deep copies a column view's data.
 
-    Returns
-    -------
-    column
-        A deep copy of the input column.
-    """
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(make_unique[column](col.get()))
+        Parameters
+        ----------
+        col : ColumnView
+            The column to be copied.
 
-    return move(c_result)
+        Returns
+        -------
+        column
+            A deep copy of the input column.
+        """
+        ret = Column()
+
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(make_unique[column](cv.get()))
+
+        ret.c_obj.swap(c_result)
+        return ret
