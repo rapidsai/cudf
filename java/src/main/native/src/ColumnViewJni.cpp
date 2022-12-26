@@ -1931,6 +1931,7 @@ Java_ai_rapids_cudf_ColumnView_getNativeDataBuffer(JNIEnv *env, jclass, jlong in
         auto const chars_col = cudf::strings_column_view{*input}.chars();
         buff_address = reinterpret_cast<jlong>(chars_col.data<char>());
         buff_size = static_cast<jlong>(chars_col.size());
+        break;
       }
 
       default: {
