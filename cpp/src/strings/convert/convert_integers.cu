@@ -320,8 +320,7 @@ struct from_integers_fn {
   char* d_chars;
 
   /**
-   * @brief Calculate the size of the each string required for
-   * converting each integer in base-10 format.
+   * @brief Calculates the size of the string required to convert the element, in base-10 format.
    */
   __device__ size_type compute_output_size(size_type idx)
   {
@@ -331,7 +330,7 @@ struct from_integers_fn {
   }
 
   /**
-   * @brief Convert each integer into a string.
+   * @brief Converts an integer element into a string.
    *
    * The integer is converted into base-10 using only characters [0-9].
    * No formatting is done for the string other than prepending the '-'

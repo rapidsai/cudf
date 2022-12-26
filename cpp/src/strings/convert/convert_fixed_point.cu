@@ -202,10 +202,9 @@ struct from_fixed_point_fn {
   char* d_chars{};
 
   /**
-   * @brief Calculate the size of the each string required for
-   * converting each value in base-10 format.
+   * @brief Calculates the size of the string required to convert the element, in base-10 format.
    *
-   * output format is [-]integer.fraction
+   * Output format is [-]integer.fraction
    */
   __device__ int32_t compute_output_size(size_type idx)
   {
@@ -227,7 +226,7 @@ struct from_fixed_point_fn {
   }
 
   /**
-   * @brief Convert each value into a string.
+   * @brief Converts a decimal element into a string.
    *
    * The value is converted into base-10 digits [0-9]
    * plus the decimal point and a negative sign prefix.
