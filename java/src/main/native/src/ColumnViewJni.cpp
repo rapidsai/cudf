@@ -1913,23 +1913,24 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnView_deleteColumnView(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIEnv *env, jclass,
-                                                                            jlong handle) {
-  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+                                                                            jlong input_handle) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    jlong result = 0;
-    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::type_id::STRING) {
-      if (column->size() > 0) {
-        cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = reinterpret_cast<jlong>(data_view.data<char>());
-      }
-    } else if (column->type().id() != cudf::type_id::LIST &&
-               column->type().id() != cudf::type_id::STRUCT) {
-      result = reinterpret_cast<jlong>(column->data<char>());
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+
+    switch (input->type().id()) {
+      case cudf::type_id::LIST:
+      case cudf::type_id::STRUCT:
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                      "Cannot get native data pointer on LIST or STRUCT column", 0);
+
+      case cudf::type_id::STRING:
+        return static_cast<jlong>(
+            input->child(cudf::strings_column_view::chars_column_index).data<char>());
+
+      default: return static_cast<jlong>(input->data<char>());
     }
-    return result;
   }
   CATCH_STD(env, 0);
 }
