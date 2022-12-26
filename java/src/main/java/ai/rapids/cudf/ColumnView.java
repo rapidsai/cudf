@@ -3746,12 +3746,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   static DeviceMemoryBufferView getDataBuffer(long viewHandle) {
-    long address = getNativeDataAddress(viewHandle);
-    if (address == 0) {
+    long[] bufferAddressAndLength = getNativeDataBuffer(viewHandle);
+    assert bufferAddressAndLength.length == 2;
+
+    if (bufferAddressAndLength[0] == 0) {
       return null;
     }
-    long length = getNativeDataLength(viewHandle);
-    return new DeviceMemoryBufferView(address, length);
+    return new DeviceMemoryBufferView(bufferAddressAndLength[0], bufferAddressAndLength[1]);
   }
 
   static DeviceMemoryBufferView getValidityBuffer(long viewHandle) {
@@ -4446,8 +4447,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native void deleteColumnView(long viewHandle) throws CudfException;
 
-  private static native long getNativeDataAddress(long viewHandle) throws CudfException;
-  private static native long getNativeDataLength(long viewHandle) throws CudfException;
+  private static native long[] getNativeDataBuffer(long viewHandle) throws CudfException;
 
   private static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
   private static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
