@@ -15,8 +15,6 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 cdef class ColumnView:
     """Wrapper around column_view."""
-    cdef unique_ptr[column_view] c_obj
-
     # TODO: For now assuming data and mask are Buffers, but eventually need to
     # define a new gpumemoryview type to handle this. For that object it should
     # be possible to access all attributes via fast cdef functions (no Python
@@ -62,7 +60,6 @@ cdef class ColumnView:
 
 cdef class Column:
     """Wrapper around column."""
-    cdef unique_ptr[column] c_obj
 
     @staticmethod
     def from_column_view(ColumnView cv):
