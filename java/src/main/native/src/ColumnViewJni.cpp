@@ -1918,7 +1918,8 @@ Java_ai_rapids_cudf_ColumnView_getNativeDataBuffer(JNIEnv *env, jclass, jlong in
   try {
     cudf::jni::auto_set_device(env);
     auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
-    std::vector<jlong> buff_address_and_size{0, 0};
+    jlong buff_address{0};
+    jlong buff_size{0};
 
     switch (input->type().id()) {
       case cudf::type_id::LIST:
@@ -1928,16 +1929,18 @@ Java_ai_rapids_cudf_ColumnView_getNativeDataBuffer(JNIEnv *env, jclass, jlong in
 
       case cudf::type_id::STRING: {
         auto const chars_col = cudf::strings_column_view{*input}.chars();
-        buff_address_and_size = {static_cast<jlong>(chars_col.data<char>()),
-                                 static_cast<jlong>(chars_col.size())};
+        buff_address = reinterpret_cast<jlong>(chars_col.data<char>());
+        buff_size = static_cast<jlong>(chars_col.size());
       }
 
-      default:
-        buff_address_and_size = {static_cast<jlong>(input->data<char>()),
-                                 static_cast<jlong>(cudf::size_of(input->type()) * input->size())};
+      default: {
+        buff_address = reinterpret_cast<jlong>(input->data<char>());
+        buff_size = static_cast<jlong>(cudf::size_of(input->type()) * input->size());
+      }
     }
 
-    return cudf::jni::native_jlongArray(env, buff_address_and_size).get_jArray();
+    return cudf::jni::native_jlongArray(env, std::vector<jlong>{buff_address, buff_size})
+        .get_jArray();
   }
   CATCH_STD(env, nullptr);
 }
