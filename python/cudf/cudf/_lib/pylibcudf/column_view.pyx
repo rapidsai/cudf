@@ -1,11 +1,8 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libcpp.memory cimport make_unique, unique_ptr
-from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 
@@ -56,30 +53,3 @@ cdef class ColumnView:
         be lightweight and easy to copy so this is acceptable.
         """
         return dereference(self.c_obj.get())
-
-
-cdef class Column:
-    """Wrapper around column."""
-
-    @staticmethod
-    def from_column_view(ColumnView cv):
-        """Deep copies a column view's data.
-
-        Parameters
-        ----------
-        col : ColumnView
-            The column to be copied.
-
-        Returns
-        -------
-        column
-            A deep copy of the input column.
-        """
-        ret = Column()
-
-        cdef unique_ptr[column] c_result
-        with nogil:
-            c_result = move(make_unique[column](cv.get()))
-
-        ret.c_obj.swap(c_result)
-        return ret
