@@ -1912,12 +1912,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnView_deleteColumnView(JNIEnv *e
   CATCH_STD(env, );
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIEnv *env, jclass,
-                                                                            jlong input_handle) {
+JNIEXPORT jlongArray JNICALL
+Java_ai_rapids_cudf_ColumnView_getNativeDataBuffer(JNIEnv *env, jclass, jlong input_handle) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    std::vector<jlong> buff_address_and_size{0, 0};
 
     switch (input->type().id()) {
       case cudf::type_id::LIST:
@@ -1925,36 +1926,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIE
         JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                       "Cannot get native data pointer on LIST or STRUCT column", 0);
 
-      case cudf::type_id::STRING:
-        return static_cast<jlong>(
-            input->child(cudf::strings_column_view::chars_column_index).data<char>());
-
-      default: return static_cast<jlong>(input->data<char>());
-    }
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataLength(JNIEnv *env, jclass,
-                                                                           jlong handle) {
-  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    jlong result = 0;
-    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    if (column->type().id() == cudf::type_id::STRING) {
-      if (column->size() > 0) {
-        cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = data_view.size();
+      case cudf::type_id::STRING: {
+        auto const chars_col = cudf::strings_column_view{*input}.chars();
+        buff_address_and_size = {static_cast<jlong>(chars_col.data<char>()),
+                                 static_cast<jlong>(chars_col.size())};
       }
-    } else if (column->type().id() != cudf::type_id::LIST &&
-               column->type().id() != cudf::type_id::STRUCT) {
-      result = cudf::size_of(column->type()) * column->size();
+
+      default:
+        buff_address_and_size = {static_cast<jlong>(input->data<char>()),
+                                 static_cast<jlong>(cudf::size_of(input->type()) * input->size())};
     }
-    return result;
+
+    return cudf::jni::native_jlongArray(env, buff_address_and_size).get_jArray();
   }
-  CATCH_STD(env, 0);
+  CATCH_STD(env, nullptr);
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeNumChildren(JNIEnv *env,
