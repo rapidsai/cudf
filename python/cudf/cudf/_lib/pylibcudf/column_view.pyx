@@ -26,6 +26,10 @@ cdef class ColumnView:
     ):
         cdef type_id c_type_id = py_type_to_c_type(py_type_id)
         cdef data_type dtype = data_type(c_type_id)
+        # TODO: Can the data_buf be None? We currently allow for that in cudf
+        # when a Column's base_data is None, but I don't know why. I think that
+        # should be filtered out upstream of here.
+        # don't know if that's actually support
         cdef const void * data = int_to_void_ptr(data_buf.ptr)
         cdef const bitmask_type * null_mask = NULL
         if mask_buf is not None:

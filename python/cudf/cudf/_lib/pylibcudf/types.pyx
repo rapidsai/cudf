@@ -8,8 +8,12 @@ from cudf._lib.cpp.types cimport type_id
 
 
 # TODO: Unclear what the perf impacts of using pure Python enums here will be,
-# but I think it will be necessary because ultimately we need these to be
-# constructible from cudf (not just pylibcudf or custom Cython code using it).
+# but there's no real alternative because ultimately we need these to be
+# constructible from pure Python clients of pylibcudf (like cudf), not just
+# Cython consumers with access to a cdef enum.
+# TODO: An enum is not sufficient to represent a decimal scale. May need to
+# create a DataType class in addition to the TypeId to fully capture the
+# equivalent.
 class TypeId(IntEnum):
     EMPTY = type_id.EMPTY
     INT8 = type_id.INT8
