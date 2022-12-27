@@ -13,7 +13,11 @@
         }
       },
       "ConfigureTest": {
-        "flags": ["TEST_NAME", "TEST_SRC"]
+        "flags": ["TEST_NAME", "TEST_SRC"],
+        "kwargs": {
+          "GPUS": 1,
+          "PERCENT": 1
+        }
       },
       "ConfigureBench": {
         "flags": ["BENCH_NAME", "BENCH_SRC"]
