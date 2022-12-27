@@ -37,6 +37,8 @@ using cudf::null_policy;
 using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
+auto constexpr null{0};  // null at current level
+auto constexpr XXX{0};   // null pushed down from parent level
 auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;
 auto constexpr KEEP_FIRST   = cudf::duplicate_keep_option::KEEP_FIRST;
 auto constexpr KEEP_LAST    = cudf::duplicate_keep_option::KEEP_LAST;
@@ -419,4 +421,396 @@ CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
+}
+
+TEST_F(Unique, ListsOfStructsKeepAny)
+{
+  // Constructing a list of structs of two elements
+  // 0.   []                  ==
+  // 1.   []                  !=
+  // 2.   Null                ==
+  // 3.   Null                !=
+  // 4.   [Null, Null]        !=
+  // 5.   [Null]              ==
+  // 6.   [Null]              ==
+  // 7.   [Null]              !=
+  // 8.   [{Null, Null}]      !=
+  // 9.   [{1,'a'}, {2,'b'}]  !=
+  // 10.  [{0,'a'}, {2,'b'}]  !=
+  // 11.  [{0,'a'}, {2,'c'}]  ==
+  // 12.  [{0,'a'}, {2,'c'}]  !=
+  // 13.  [{0,Null}]          ==
+  // 14.  [{0,Null}]          !=
+  // 15.  [{Null, 'b'}]       ==
+  // 16.  [{Null, 'b'}]
+
+  auto const structs = [] {
+    auto child1 =
+      int32s_col{{XXX, XXX, XXX, XXX, XXX, null, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, null, null},
+                 nulls_at({5, 16, 17})};
+    auto child2 = strings_col{{"" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*null*/,
+                               "a",
+                               "b",
+                               "a",
+                               "b",
+                               "a",
+                               "c",
+                               "a",
+                               "c",
+                               "" /*null*/,
+                               "" /*null*/,
+                               "b",
+                               "b"},
+                              nulls_at({5, 14, 15})};
+
+    return structs_col{{child1, child2}, nulls_at({0, 1, 2, 3, 4})};
+  }();
+
+  auto const offsets      = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+  auto const null_it      = nulls_at({2, 3});
+  auto const nullmask_buf = cudf::test::detail::make_null_mask(null_it, null_it + 17);
+  auto const keys         = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                                      17,
+                                      nullptr,
+                                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
+                                      cudf::UNKNOWN_NULL_COUNT,
+                                      0,
+                                      {offsets, structs});
+
+  auto const idx     = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // Nulls are equal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 4, 5, 8, 9, 10, 11, 13, 15};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // Nulls are unequal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+}
+
+TEST_F(Unique, ListsOfStructsKeepFirstLastNone)
+{
+  // Constructing a list of structs of two elements
+  // 0.   []                  ==
+  // 1.   []                  !=
+  // 2.   Null                ==
+  // 3.   Null                !=
+  // 4.   [Null, Null]        !=
+  // 5.   [Null]              ==
+  // 6.   [Null]              ==
+  // 7.   [Null]              !=
+  // 8.   [{Null, Null}]      !=
+  // 9.   [{1,'a'}, {2,'b'}]  !=
+  // 10.  [{0,'a'}, {2,'b'}]  !=
+  // 11.  [{0,'a'}, {2,'c'}]  ==
+  // 12.  [{0,'a'}, {2,'c'}]  !=
+  // 13.  [{0,Null}]          ==
+  // 14.  [{0,Null}]          !=
+  // 15.  [{Null, 'b'}]       ==
+  // 16.  [{Null, 'b'}]
+
+  auto const structs = [] {
+    auto child1 =
+      int32s_col{{XXX, XXX, XXX, XXX, XXX, null, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, null, null},
+                 nulls_at({5, 16, 17})};
+    auto child2 = strings_col{{"" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*XXX*/,
+                               "" /*null*/,
+                               "a",
+                               "b",
+                               "a",
+                               "b",
+                               "a",
+                               "c",
+                               "a",
+                               "c",
+                               "" /*null*/,
+                               "" /*null*/,
+                               "b",
+                               "b"},
+                              nulls_at({5, 14, 15})};
+
+    return structs_col{{child1, child2}, nulls_at({0, 1, 2, 3, 4})};
+  }();
+
+  auto const offsets      = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+  auto const null_it      = nulls_at({2, 3});
+  auto const nullmask_buf = cudf::test::detail::make_null_mask(null_it, null_it + 17);
+  auto const keys         = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                                      17,
+                                      nullptr,
+                                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
+                                      cudf::UNKNOWN_NULL_COUNT,
+                                      0,
+                                      {offsets, structs});
+
+  auto const idx     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // KEEP_FIRST
+  {
+    auto const expect_map   = int32s_col{0, 2, 4, 5, 8, 9, 10, 11, 13, 15};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // KEEP_LAST
+  {
+    auto const expect_map   = int32s_col{1, 3, 4, 7, 8, 9, 10, 12, 14, 16};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_LAST);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // KEEP_NONE
+  {
+    auto const expect_map   = int32s_col{4, 8, 9, 10};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_NONE);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+}
+
+TEST_F(Unique, ListsOfEmptyStructsKeepAny)
+{
+  // 0.  []             ==
+  // 1.  []             !=
+  // 2.  Null           ==
+  // 3.  Null           !=
+  // 4.  [Null, Null]   ==
+  // 5.  [Null, Null]   ==
+  // 6.  [Null, Null]   !=
+  // 7.  [Null]         ==
+  // 8.  [Null]         !=
+  // 9.  [{}]           ==
+  // 10. [{}]           !=
+  // 11. [{}, {}]       ==
+  // 12. [{}, {}]
+
+  auto const structs_null_it = nulls_at({0, 1, 2, 3, 4, 5, 6, 7});
+  auto const structs_nullmask_buf =
+    cudf::test::detail::make_null_mask(structs_null_it, structs_null_it + 14);
+  auto const structs =
+    cudf::column_view(cudf::data_type(cudf::type_id::STRUCT),
+                      14,
+                      nullptr,
+                      static_cast<cudf::bitmask_type const*>(structs_nullmask_buf.data()),
+                      cudf::UNKNOWN_NULL_COUNT,
+                      0,
+                      {});
+
+  auto const offsets       = int32s_col{0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
+  auto const lists_null_it = nulls_at({2, 3});
+  auto const lists_nullmask_buf =
+    cudf::test::detail::make_null_mask(lists_null_it, lists_null_it + 13);
+  auto const keys =
+    cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                      13,
+                      nullptr,
+                      static_cast<cudf::bitmask_type const*>(lists_nullmask_buf.data()),
+                      cudf::UNKNOWN_NULL_COUNT,
+                      0,
+                      {offsets, structs});
+
+  auto const idx     = int32s_col{1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // Nulls are equal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 4, 7, 9, 11};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // Nulls are unequal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 5, 6, 7, 8, 9, 11};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+}
+
+TEST_F(Unique, EmptyDeepListKeepAny)
+{
+  // List<List<int>>, where all lists are empty:
+  //
+  // 0. []
+  // 1. []
+  // 2. Null
+  // 3. Null
+
+  auto const keys =
+    lists_col{{lists_col{}, lists_col{}, lists_col{}, lists_col{}}, nulls_at({2, 3})};
+
+  auto const idx     = int32s_col{1, 1, 2, 2};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // Nulls are equal.
+  {
+    auto const expect_map   = int32s_col{0, 2};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // Nulls are unequal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 3};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+}
+
+TEST_F(Unique, StructsOfStructsKeepAny)
+{
+  //  +-----------------+
+  //  |  s1{s2{a,b}, c} |
+  //  +-----------------+
+  // 0 |  { {1, 1}, 5}  |
+  // 1 |  { {1, 1}, 5}  |  // Same as 0
+  // 2 |  { {1, 2}, 4}  |
+  // 3 |  { Null,   6}  |
+  // 4 |  { Null,   4}  |
+  // 5 |  { Null,   4}  |  // Same as 4
+  // 6 |  Null          |
+  // 7 |  Null          |  // Same as 6
+  // 8 |  { {2, 1}, 5}  |
+
+  auto s1 = [&] {
+    auto a  = int32s_col{1, 1, 1, XXX, XXX, XXX, 2, 1, 2};
+    auto b  = int32s_col{1, 1, 2, XXX, XXX, XXX, 2, 1, 1};
+    auto s2 = structs_col{{a, b}, nulls_at({3, 4, 5})};
+
+    auto c = int32s_col{5, 5, 4, 6, 4, 4, 3, 3, 5};
+    std::vector<std::unique_ptr<cudf::column>> s1_children;
+    s1_children.emplace_back(s2.release());
+    s1_children.emplace_back(c.release());
+    auto const null_it = nulls_at({6, 7});
+    return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
+  }();
+
+  auto const idx     = int32s_col{0, 0, 1, 2, 3, 3, 4, 4, 5};
+  auto const input   = cudf::table_view{{idx, s1}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // Nulls are equal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 6, 8};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // Nulls are unequal.
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 5, 6, 7, 8};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_ANY, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+}
+
+TEST_F(Unique, StructsOfListsKeepAny)
+{
+  auto const idx  = int32s_col{1, 1, 2, 3, 4, 4, 4, 5, 5, 6};
+  auto const keys = [] {
+    // All child columns are identical.
+    auto child1 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child2 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child3 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    return structs_col{{child1, child2, child3}};
+  }();
+
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  auto const exp_idx  = int32s_col{1, 2, 3, 4, 5, 6};
+  auto const exp_keys = [] {
+    auto child1 = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+    auto child2 = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+    auto child3 = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+    return structs_col{{child1, child2, child3}};
+  }();
+  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+  auto const result = cudf::unique(input, key_idx, KEEP_ANY);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+}
+
+TEST_F(Unique, StructsOfListsKeepFirstLastNone)
+{
+  auto const idx  = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const keys = [] {
+    // All child columns are identical.
+    auto child1 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child2 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    auto child3 = lists_col{{1}, {1}, {1, 1}, {1, 2}, {2, 2}, {2, 2}, {2, 2}, {2}, {2}, {2, 1}};
+    return structs_col{{child1, child2, child3}};
+  }();
+
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // KEEP_FIRST
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 7, 9};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // KEEP_LAST
+  {
+    auto const expect_map   = int32s_col{1, 2, 3, 6, 8, 9};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_LAST);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
+
+  // KEEP_NONE
+  {
+    auto const expect_map   = int32s_col{2, 3, 9};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    auto const result = cudf::unique(input, key_idx, KEEP_NONE);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result);
+  }
 }
