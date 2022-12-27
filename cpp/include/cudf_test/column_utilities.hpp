@@ -164,6 +164,13 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
 std::vector<std::string> to_strings(cudf::column_view const& col);
 
 /**
+ * @brief Convert a type_id value to a string
+ *
+ * @param type The data type id
+ */
+std::string to_string(cudf::type_id type);
+
+/**
  * @brief Print a column view to an ostream
  *
  * @param os        The output stream

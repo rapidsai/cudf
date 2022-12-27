@@ -1261,11 +1261,50 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 }  // namespace detail
 
 /**
- * @copydoc cudf::test::to_strings
+ * @copydoc cudf::test::to_strings(cudf::column_view const&)
  */
 std::vector<std::string> to_strings(cudf::column_view const& col)
 {
   return detail::to_strings(col);
+}
+
+/**
+ * @copydoc cudf::test::to_string(cudf::type_id)
+ */
+std::string to_string(cudf::type_id type)
+{
+  switch (type) {
+    case EMPTY: return "EMPTY";
+    case INT8: return "INT8";
+    case INT16: return "INT16 ";
+    case INT32: return "INT32";
+    case INT64: return "INT32";
+    case UINT8: return "UINT8";
+    case UINT16: return "UINT16";
+    case UINT32: return "UINT32";
+    case UINT64: return "UINT64";
+    case FLOAT32: return "FLOAT32";
+    case FLOAT64: return "FLOAT64";
+    case BOOL8: return "BOOL8";
+    case TIMESTAMP_DAYS: return "TIMESTAMP_DAYS";
+    case TIMESTAMP_SECONDS: return "TIMESTAMP_SECONDS";
+    case TIMESTAMP_MILLISECONDS: return "TIMESTAMP_MILLISECONDS";
+    case TIMESTAMP_MICROSECONDS: return "TIMESTAMP_MICROSECONDS";
+    case TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
+    case DURATION_DAYS: return "DURATION_DAYS";
+    case DURATION_SECONDS: return "DURATION_SECONDS";
+    case DURATION_MILLISECONDS: return "DURATION_MILLISECONDS";
+    case DURATION_MICROSECONDS: return "DURATION_MICROSECONDS";
+    case DURATION_NANOSECONDS: return "DURATION_NANOSECONDS";
+    case DICTIONARY32: return "DICTIONARY32";
+    case STRING: return "STRING";
+    case LIST: return "LIST";
+    case DECIMAL32: return "DECIMAL32";
+    case DECIMAL64: return "DECIMAL64";
+    case DECIMAL128: return "DECIMAL128";
+    case STRUCT: return "STRUCT";
+    default: return "INVALID_TYPE";
+  }
 }
 
 /**
