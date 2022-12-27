@@ -32,6 +32,6 @@ SUITEERROR=0
 rapids-print-env
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
   cudf libcudf

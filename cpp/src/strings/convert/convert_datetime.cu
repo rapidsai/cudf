@@ -685,12 +685,18 @@ struct time_components {
 };
 
 /**
- * @brief Base class for the `from_timestamps_size_fn` and the `date_time_formatter`
+ * @brief Functor for from_timestamps to convert a timestamp to a string
  *
- * These contain some common utility functions used by both subclasses.
+ * This is designed to be used with make_strings_children
  */
 template <typename T>
-struct from_timestamp_base {
+struct datetime_formatter_fn {
+  column_device_view const d_timestamps;
+  column_device_view const d_format_names;
+  device_span<format_item const> const d_format_items;
+  size_type* d_offsets{};
+  char* d_chars{};
+
   /**
    * @brief Specialized modulo expression that handles negative values.
    *
@@ -700,7 +706,7 @@ struct from_timestamp_base {
    *     modulo(-1,60) -> 59
    * @endcode
    */
-  [[nodiscard]] __device__ int32_t modulo_time(int64_t time, int64_t base) const
+  __device__ int32_t modulo_time(int64_t time, int64_t base) const
   {
     return static_cast<int32_t>(((time % base) + base) % base);
   };
@@ -718,12 +724,12 @@ struct from_timestamp_base {
    *     scale( 61,60) ->  1
    * @endcode
    */
-  [[nodiscard]] __device__ int64_t scale_time(int64_t time, int64_t base) const
+  __device__ int64_t scale_time(int64_t time, int64_t base) const
   {
     return (time - ((time < 0) * (base - 1L))) / base;
   };
 
-  [[nodiscard]] __device__ time_components get_time_components(int64_t tstamp) const
+  __device__ time_components get_time_components(int64_t tstamp) const
   {
     time_components result = {0};
     if constexpr (std::is_same_v<T, cudf::timestamp_D>) { return result; }
@@ -747,34 +753,18 @@ struct from_timestamp_base {
 
     return result;
   }
-};
 
-template <typename T>
-struct from_timestamps_size_fn : public from_timestamp_base<T> {
-  column_device_view const d_timestamps;
-  column_device_view const d_format_names;
-  device_span<format_item const> const d_format_items;
-
-  from_timestamps_size_fn(column_device_view const& d_timestamps,
-                          column_device_view const& d_format_names,
-                          device_span<format_item const> const& d_format_items)
-    : d_timestamps(d_timestamps), d_format_names(d_format_names), d_format_items(d_format_items)
+  __device__ size_type compute_output_size(T const tstamp) const
   {
-  }
-
-  __device__ size_type operator()(size_type idx) const
-  {
-    if (d_timestamps.is_null(idx)) { return 0; }
-
     // We only dissect the timestamp into components if needed
     // by a specifier. And then we only do it once and reuse it.
     // This can improve performance when not using uncommon specifiers.
     thrust::optional<cuda::std::chrono::sys_days> days;
 
-    auto days_from_timestamp = [&]() {
-      auto const tstamp = d_timestamps.element<T>(idx).time_since_epoch().count();
+    auto days_from_timestamp = [tstamp]() {
+      auto const count = tstamp.time_since_epoch().count();
       return cuda::std::chrono::sys_days(static_cast<cudf::timestamp_D::duration>(
-        floor<cuda::std::chrono::days>(T::duration(tstamp))));
+        floor<cuda::std::chrono::days>(T::duration(count))));
     };
 
     size_type bytes = 0;  // output size
@@ -810,7 +800,7 @@ struct from_timestamps_size_fn : public from_timestamp_base<T> {
         }
         case 'p':  // AM/PM
         {
-          auto times = get_time_components(d_timestamps.element<T>(idx).time_since_epoch().count());
+          auto const times = get_time_components(tstamp.time_since_epoch().count());
           bytes += d_format_names.size() > 1
                      ? d_format_names.element<cudf::string_view>(static_cast<int>(times.hour >= 12))
                          .size_bytes()
@@ -825,32 +815,9 @@ struct from_timestamps_size_fn : public from_timestamp_base<T> {
     }
     return bytes;
   }
-};
-
-// converts a timestamp into date-time formatted string
-template <typename T>
-struct datetime_formatter : public from_timestamp_base<T> {
-  column_device_view const d_timestamps;
-  column_device_view const d_format_names;
-  device_span<format_item const> const d_format_items;
-  int32_t const* d_offsets{};
-  char* d_chars{};
-
-  datetime_formatter(column_device_view const& d_timestamps,
-                     column_device_view const& d_format_names,
-                     device_span<format_item const> const& d_format_items,
-                     int32_t const* d_offsets,
-                     char* d_chars)
-    : d_timestamps(d_timestamps),
-      d_format_names(d_format_names),
-      d_format_items(d_format_items),
-      d_offsets(d_offsets),
-      d_chars(d_chars)
-  {
-  }
 
   // utility to create 0-padded integers (up to 9 chars)
-  __device__ char* int2str(char* str, int bytes, int val)
+  __device__ char* int2str(char* str, int bytes, int val) const
   {
     char tmpl[9] = {'0', '0', '0', '0', '0', '0', '0', '0', '0'};
     char* ptr    = tmpl;
@@ -866,7 +833,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
   }
 
   // from https://howardhinnant.github.io/date/date.html
-  [[nodiscard]] __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
+  __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
     cuda::std::chrono::year_month_day const& ymd) const
   {
     auto const days = cuda::std::chrono::sys_days(ymd);
@@ -896,8 +863,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
       static_cast<int32_t>(year));
   }
 
-  [[nodiscard]] __device__ int8_t get_week_of_year(cuda::std::chrono::sys_days const days,
-                                                   cuda::std::chrono::sys_days const start) const
+  __device__ int8_t get_week_of_year(cuda::std::chrono::sys_days const days,
+                                     cuda::std::chrono::sys_days const start) const
   {
     return days < start
              ? 0
@@ -906,7 +873,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
                  .count();
   }
 
-  __device__ int32_t get_day_of_year(cuda::std::chrono::year_month_day const& ymd)
+  __device__ int32_t get_day_of_year(cuda::std::chrono::year_month_day const& ymd) const
   {
     auto const month               = static_cast<uint32_t>(ymd.month());
     auto const day                 = static_cast<uint32_t>(ymd.day());
@@ -915,19 +882,16 @@ struct datetime_formatter : public from_timestamp_base<T> {
                                 (month > 2 and ymd.year().is_leap()));
   }
 
-  __device__ void operator()(size_type idx)
+  __device__ void timestamp_to_string(T const tstamp, char* ptr) const
   {
-    if (d_timestamps.is_null(idx)) return;
-    auto tstamp = d_timestamps.element<T>(idx).time_since_epoch().count();
+    auto const days = cuda::std::chrono::sys_days(
+      static_cast<cudf::timestamp_D::duration>(cuda::std::chrono::floor<cuda::std::chrono::days>(
+        T::duration(tstamp.time_since_epoch().count()))));
+    auto const ymd = cuda::std::chrono::year_month_day(days);
 
-    auto const days = cuda::std::chrono::sys_days(static_cast<cudf::timestamp_D::duration>(
-      cuda::std::chrono::floor<cuda::std::chrono::days>(T::duration(tstamp))));
-    auto const ymd  = cuda::std::chrono::year_month_day(days);
-
-    auto timeparts = get_time_components(tstamp);
+    auto timeparts = get_time_components(tstamp.time_since_epoch().count());
 
     // convert to characters using the format items
-    auto ptr = d_chars + d_offsets[idx];
     for (auto item : d_format_items) {
       if (item.item_type == format_char_type::literal) {
         *ptr++ = item.value;
@@ -1057,6 +1021,20 @@ struct datetime_formatter : public from_timestamp_base<T> {
       if (copy_value >= 0) ptr = int2str(ptr, item.length, copy_value);
     }
   }
+
+  __device__ void operator()(size_type idx) const
+  {
+    if (d_timestamps.is_null(idx)) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+    auto const tstamp = d_timestamps.element<T>(idx);
+    if (d_chars) {
+      timestamp_to_string(tstamp, d_chars + d_offsets[idx]);
+    } else {
+      d_offsets[idx] = compute_output_size(tstamp);
+    }
+  }
 };
 
 //
@@ -1069,26 +1047,11 @@ struct dispatch_from_timestamps_fn {
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr) const
   {
-    size_type const strings_count = d_timestamps.size();
-    // build offsets column
-    auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
-      0, from_timestamps_size_fn<T>{d_timestamps, d_format_names, d_format_items});
-    auto offsets_column = make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto d_offsets = offsets_column->mutable_view().template data<offset_type>();
-
-    // build chars column
-    auto const bytes =
-      cudf::detail::get_value<offset_type>(offsets_column->view(), strings_count, stream);
-    auto chars_column = create_chars_child_column(bytes, stream, mr);
-    auto d_chars      = chars_column->mutable_view().template data<char>();
-
-    datetime_formatter<T> pfn{d_timestamps, d_format_names, d_format_items, d_offsets, d_chars};
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<cudf::size_type>(0),
-                       d_timestamps.size(),
-                       pfn);
-    return std::pair(std::move(offsets_column), std::move(chars_column));
+    return make_strings_children(
+      datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
+      d_timestamps.size(),
+      stream,
+      mr);
   }
 
   template <typename T, typename... Args>

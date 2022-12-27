@@ -10,6 +10,8 @@ import pytest
 
 import cudf
 
+pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
+
 
 def _name_in_all(parent, name):
     return name in getattr(parent, "__all__", [])

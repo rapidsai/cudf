@@ -24,7 +24,7 @@ rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
   libcudf
 
 SUITEERROR=0
