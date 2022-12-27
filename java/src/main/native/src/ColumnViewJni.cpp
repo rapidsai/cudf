@@ -1917,31 +1917,22 @@ Java_ai_rapids_cudf_ColumnView_getNativeDataBuffer(JNIEnv *env, jclass, jlong in
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
+
     auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
-    jlong buff_address{0};
-    jlong buff_size{0};
-
-    switch (input->type().id()) {
-      case cudf::type_id::LIST:
-      case cudf::type_id::STRUCT:
-        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                      "Cannot get native data pointer on LIST or STRUCT column", 0);
-
-      case cudf::type_id::STRING: {
+    auto const buff_address_and_size = [&]() -> std::vector<jlong> {
+      if (input->type().id() == cudf::type_id::STRING) {
         auto const chars_col = cudf::strings_column_view{*input}.chars();
-        buff_address = reinterpret_cast<jlong>(chars_col.data<char>());
-        buff_size = static_cast<jlong>(chars_col.size());
-        break;
+        return {reinterpret_cast<jlong>(chars_col.data<char>()),
+                static_cast<jlong>(chars_col.size())};
+      } else if (input->type().id() != cudf::type_id::LIST &&
+                 input->type().id() != cudf::type_id::STRUCT) {
+        return {reinterpret_cast<jlong>(input->data<char>()),
+                static_cast<jlong>(cudf::size_of(input->type()) * input->size())};
       }
+      return {0, 0};
+    }();
 
-      default: {
-        buff_address = reinterpret_cast<jlong>(input->data<char>());
-        buff_size = static_cast<jlong>(cudf::size_of(input->type()) * input->size());
-      }
-    }
-
-    return cudf::jni::native_jlongArray(env, std::vector<jlong>{buff_address, buff_size})
-        .get_jArray();
+    return cudf::jni::native_jlongArray(env, buff_address_and_size).get_jArray();
   }
   CATCH_STD(env, nullptr);
 }
