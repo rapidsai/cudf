@@ -16,6 +16,7 @@ from cudf._lib.types cimport (
 )
 
 import cudf
+from cudf._lib import pylibcudf
 
 size_type_dtype = np.dtype("int32")
 
@@ -92,6 +93,29 @@ SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
     np.dtype("timedelta64[ms]"): TypeId.DURATION_MILLISECONDS,
     np.dtype("timedelta64[us]"): TypeId.DURATION_MICROSECONDS,
     np.dtype("timedelta64[ns]"): TypeId.DURATION_NANOSECONDS,
+}
+
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+    np.dtype("int8"): pylibcudf.TypeId.INT8,
+    np.dtype("int16"): pylibcudf.TypeId.INT16,
+    np.dtype("int32"): pylibcudf.TypeId.INT32,
+    np.dtype("int64"): pylibcudf.TypeId.INT64,
+    np.dtype("uint8"): pylibcudf.TypeId.UINT8,
+    np.dtype("uint16"): pylibcudf.TypeId.UINT16,
+    np.dtype("uint32"): pylibcudf.TypeId.UINT32,
+    np.dtype("uint64"): pylibcudf.TypeId.UINT64,
+    np.dtype("float32"): pylibcudf.TypeId.FLOAT32,
+    np.dtype("float64"): pylibcudf.TypeId.FLOAT64,
+    np.dtype("datetime64[s]"): pylibcudf.TypeId.TIMESTAMP_SECONDS,
+    np.dtype("datetime64[ms]"): pylibcudf.TypeId.TIMESTAMP_MILLISECONDS,
+    np.dtype("datetime64[us]"): pylibcudf.TypeId.TIMESTAMP_MICROSECONDS,
+    np.dtype("datetime64[ns]"): pylibcudf.TypeId.TIMESTAMP_NANOSECONDS,
+    np.dtype("object"): pylibcudf.TypeId.STRING,
+    np.dtype("bool"): pylibcudf.TypeId.BOOL8,
+    np.dtype("timedelta64[s]"): pylibcudf.TypeId.DURATION_SECONDS,
+    np.dtype("timedelta64[ms]"): pylibcudf.TypeId.DURATION_MILLISECONDS,
+    np.dtype("timedelta64[us]"): pylibcudf.TypeId.DURATION_MICROSECONDS,
+    np.dtype("timedelta64[ns]"): pylibcudf.TypeId.DURATION_NANOSECONDS,
 }
 
 LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
@@ -244,6 +268,31 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         return libcudf_types.data_type(tid, -dtype.scale)
     else:
         return libcudf_types.data_type(tid)
+
+# TODO: Should this function be available in pylibcudf?
+# TODO: Should this function be cpdefed? I think so, it needs to be visible in
+# Python code not just Cython. Does it even need to be a non-def function?
+cdef dtype_to_pylibcudf_type(dtype):
+    if cudf.api.types.is_list_dtype(dtype):
+        tid = pylibcudf.TypeId.LIST
+    elif cudf.api.types.is_struct_dtype(dtype):
+        tid = pylibcudf.TypeId.STRUCT
+    elif cudf.api.types.is_decimal_dtype(dtype):
+        assert False, "Not yet supported"
+    # elif cudf.api.types.is_decimal128_dtype(dtype):
+    #     tid = pylibcudf.TypeId.DECIMAL128
+    # elif cudf.api.types.is_decimal64_dtype(dtype):
+    #     tid = pylibcudf.TypeId.DECIMAL64
+    # elif cudf.api.types.is_decimal32_dtype(dtype):
+    #     tid = pylibcudf.TypeId.DECIMAL32
+    else:
+        tid = <libcudf_types.type_id> (
+            <underlying_type_t_type_id> (
+                SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]))
+
+    # if is_decimal_type_id(tid):
+    #     return libcudf_types.data_type(tid, -dtype.scale)
+    return tid
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (
