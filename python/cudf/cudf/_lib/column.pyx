@@ -8,6 +8,11 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+
+from cudf._lib import pylibcudf
+
+from cudf._lib cimport pylibcudf
+
 from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
@@ -26,7 +31,11 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport dtype_from_column_view, dtype_to_data_type
+from cudf._lib.types cimport (
+    dtype_from_column_view,
+    dtype_to_data_type,
+    dtype_to_pylibcudf_type,
+)
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
@@ -427,6 +436,62 @@ cdef class Column:
             c_null_count,
             offset,
             children)
+
+    # TODO: Figure out appropriate exception handling
+    # TODO: Determine whether this should take a null count or if we can rely
+    # on lower-level null count caching from libcudf
+    # TODO: For now the function name reflects the CapsCase of the pylibcudf
+    # class to differentiate from libcudf's snake_case column_view, but we will
+    # want to change that once cudf stops interfacing directly with libcudf.
+    cpdef pylibcudf.ColumnView to_ColumnView(self):
+        # TODO: Categoricals will need to be treated differently eventually.
+        # There is no 1-1 correspondence between cudf and libcudf for
+        # categoricals due to the ordering question.
+        if is_categorical_dtype(self.dtype):
+            col = self.base_children[0]
+            data_dtype = col.dtype
+        else:
+            col = self
+            data_dtype = self.dtype
+
+        # cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        type_id = dtype_to_pylibcudf_type(data_dtype)
+        # cdef libcudf_types.size_type offset = self.offset
+        # cdef vector[column_view] children
+        # cdef void* data
+
+        # if col.base_data is None:
+        #     data = NULL
+        # elif isinstance(col.base_data, SpillableBuffer):
+        #     data = <void*><uintptr_t>(col.base_data).get_ptr(
+        #         spill_lock=get_spill_lock()
+        #     )
+        # else:
+        #     data = <void*><uintptr_t>(col.base_data.ptr)
+
+        # cdef Column child_column
+        # if col.base_children:
+        #     for child_column in col.base_children:
+        #         children.push_back(child_column.view())
+
+        # cdef libcudf_types.bitmask_type* mask
+        if self.nullable:
+            assert False, "Not yet supported."
+        # else:
+        #     mask = NULL
+
+        # cdef libcudf_types.size_type c_null_count = null_count
+
+        mask = None
+        return pylibcudf.ColumnView(type_id, self.size, self.base_data, mask)
+        # return column_view(
+        #     dtype,
+        #     self.size,
+        #     data,
+        #     mask,
+        #     c_null_count,
+        #     offset,
+        #     children)
 
     @staticmethod
     cdef Column from_unique_ptr(

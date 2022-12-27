@@ -16,11 +16,13 @@ cdef class ColumnView:
     # define a new gpumemoryview type to handle this. For that object it should
     # be possible to access all attributes via fast cdef functions (no Python
     # overhead for querying size etc).
+    # TODO: Not currently supporting SpillableBuffers.
     # TODO: Need a way to map the data buffer size to the number of
     # elements. For fixed width types a mapping could be made based on the
     # number of bytes they occupy, but not for nested types. Not sure how
     # best to expose that in the API yet, but matching C++ for now and
     # requesting the size from the user. The gpumemoryview may also help.
+    # TODO: Should be using `not None` where possible.
     def __cinit__(
         self, py_type_id, size_type size, object data_buf, object mask_buf
     ):
