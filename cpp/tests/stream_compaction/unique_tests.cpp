@@ -306,8 +306,7 @@ TEST_F(Unique, NullableListsKeepAny)
   // nondeterministic.
   // clang-format off
   auto const idx = int32s_col{0,   0,      2,    1,   1,      3,               3,           5,   5,      6,      4,      4};
-  auto const keys = lists_col{{{}, {}, {1, 1}, {1}, {1},     {} /*NULL*/,     {} /*NULL*/, {2}, {2}, {2, 1}, {2, 2}, {2, 2}}, 
-                              nulls_at({5, 6})};
+  auto const keys = lists_col{{{}, {}, {1, 1}, {1}, {1},     {} /*NULL*/,     {} /*NULL*/, {2}, {2}, {2, 1}, {2, 2}, {2, 2}}, nulls_at({5, 6})};
   // clang-format on
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
@@ -339,12 +338,9 @@ TEST_F(Unique, NullableListsKeepAny)
 
 TEST_F(Unique, NullableListsKeepFirstLastNone)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
-  // nondeterministic.
   // clang-format off
   auto const idx = int32s_col{0,   1,      2,    1,   2,      3,               4,           5,   6,      6,      4,      5};
-  auto const keys = lists_col{{{}, {}, {1, 1}, {1}, {1},     {} /*NULL*/,     {} /*NULL*/, {2}, {2}, {2, 1}, {2, 2}, {2, 2}}, 
-                              nulls_at({5, 6})};
+  auto const keys = lists_col{{{}, {}, {1, 1}, {1}, {1},     {} /*NULL*/,     {} /*NULL*/, {2}, {2}, {2, 1}, {2, 2}, {2, 2}}, nulls_at({5, 6})};
   // clang-format on
   auto const input   = cudf::table_view{{idx, keys}};
   auto const key_idx = std::vector<cudf::size_type>{1};
