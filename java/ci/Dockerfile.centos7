@@ -17,7 +17,7 @@
 ###
 # Build the image for cudf development environment.
 #
-# Arguments: CUDA_VERSION=11.8.0
+# Arguments: CUDA_VERSION=11.X.Y
 #
 ###
 ARG CUDA_VERSION=11.8.0
