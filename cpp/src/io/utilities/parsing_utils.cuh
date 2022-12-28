@@ -388,6 +388,61 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
   return &stats.string_count;
 }
 
+__device__ __inline__ column_type_bool_any::type infer_integral_field_counter2(
+  char const* data_begin, char const* data_end, bool is_negative)
+{
+  static constexpr char uint64_max_abs[] = "18446744073709551615";
+  static constexpr char int64_min_abs[]  = "9223372036854775808";
+  static constexpr char int64_max_abs[]  = "9223372036854775807";
+
+  auto digit_count = data_end - data_begin;
+
+  // Remove preceding zeros
+  if (digit_count >= (sizeof(int64_max_abs) - 1)) {
+    // Trim zeros at the beginning of raw_data
+    while (*data_begin == '0' && (data_begin < data_end)) {
+      data_begin++;
+    }
+  }
+  digit_count = data_end - data_begin;
+
+  // After trimming the number of digits could be less than maximum
+  // int64 digit count
+  if (digit_count < (sizeof(int64_max_abs) - 1)) {  // CASE 0 : Accept validity
+    // If the length of the string representing the integer is smaller
+    // than string length of Int64Max then count this as an integer
+    // representable by int64
+    // If digit_count is 0 then ignore - sign, i.e. -000..00 should
+    // be treated as a positive small integer
+    return is_negative && (digit_count != 0) ? column_type_bool_any::type::NEGATIVE_SMALL_INT_COUNT
+                                             : column_type_bool_any::type::POSITIVE_SMALL_INT_COUNT;
+  } else if (digit_count > (sizeof(uint64_max_abs) - 1)) {  // CASE 1 : Reject validity
+    // If the length of the string representing the integer is greater
+    // than string length of UInt64Max then count this as a string
+    // since it cannot be represented as an int64 or uint64
+    return column_type_bool_any::type::STRING_COUNT;
+  } else if (digit_count == (sizeof(uint64_max_abs) - 1) && is_negative) {
+    // A negative integer of length UInt64Max digit count cannot be represented
+    // as a 64 bit integer
+    return column_type_bool_any::type::STRING_COUNT;
+  }
+
+  if (digit_count == (sizeof(int64_max_abs) - 1) && is_negative) {
+    return less_equal_than(data_begin, int64_min_abs)
+             ? column_type_bool_any::type::NEGATIVE_SMALL_INT_COUNT
+             : column_type_bool_any::type::STRING_COUNT;
+  } else if (digit_count == (sizeof(int64_max_abs) - 1) && !is_negative) {
+    return less_equal_than(data_begin, int64_max_abs)
+             ? column_type_bool_any::type::POSITIVE_SMALL_INT_COUNT
+             : column_type_bool_any::type::BIG_INT_COUNT;
+  } else if (digit_count == (sizeof(uint64_max_abs) - 1)) {
+    return less_equal_than(data_begin, uint64_max_abs) ? column_type_bool_any::type::BIG_INT_COUNT
+                                                       : column_type_bool_any::type::STRING_COUNT;
+  }
+
+  return column_type_bool_any::type::STRING_COUNT;
+}
+
 }  // namespace gpu
 
 /**

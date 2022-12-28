@@ -185,9 +185,14 @@ struct device_json_column {
 
   // The inferred type of this column (list, struct, or value/string column)
   json_col_t type = json_col_t::Unknown;
+  data_type cudf_type{type_id::EMPTY};
 
   rmm::device_uvector<row_offset_t> string_offsets;
   rmm::device_uvector<row_offset_t> string_lengths;
+
+  // Fixed width column
+  std::unique_ptr<column> fixed_width_column;
+  void* d_fixed_width_data{nullptr};
 
   // Row offsets
   rmm::device_uvector<row_offset_t> child_offsets;
