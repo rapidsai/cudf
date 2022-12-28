@@ -465,47 +465,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
 
-  // 3. scatter List offset
-  //   pre-condition: {node_id} is already sorted by {col_id}
-  //   unique_copy_by_key {parent_node_id} {row_offset} to
-  //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-
-  auto ordered_parent_node_ids =
-    thrust::make_permutation_iterator(tree.parent_node_ids.begin(), node_ids.begin());
-  auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), node_ids.begin());
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<size_type>(0),
-    num_nodes,
-    [num_nodes,
-     ordered_parent_node_ids,
-     ordered_row_offsets,
-     col_ids         = col_ids.begin(),
-     sorted_col_ids  = sorted_col_ids.begin(),
-     row_offsets     = row_offsets.begin(),
-     node_categories = tree.node_categories.begin(),
-     d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
-      auto parent_node_id = ordered_parent_node_ids[i];
-      if (parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST) {
-        // unique item
-        if (i == 0 or (sorted_col_ids[i - 1] != sorted_col_ids[i] or
-                       ordered_parent_node_ids[i - 1] != parent_node_id)) {
-          // scatter to list_offset
-          d_columns_data[col_ids[parent_node_id]].child_offsets[row_offsets[parent_node_id]] =
-            ordered_row_offsets[i];
-        }
-        // TODO: verify if this code is right. check with more test cases.
-        if (i == num_nodes - 1 or (sorted_col_ids[i] != sorted_col_ids[i + 1] or
-                                   ordered_parent_node_ids[i + 1] != parent_node_id)) {
-          // last value of list child_offset is its size.
-          d_columns_data[col_ids[parent_node_id]].child_offsets[row_offsets[parent_node_id] + 1] =
-            ordered_row_offsets[i] + 1;
-        }
-      }
-    });
-
-  // 4. scatter string offsets to respective columns, set validity bits
+  // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
@@ -528,6 +488,63 @@ void make_device_json_column(device_span<SymbolT const> input,
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;
         default: break;
+      }
+    });
+
+  // 4. scatter List offset
+  // copy_if only node's whose parent is list, transform to parent_col_id. (copy node_id,
+  // parent_col_id) stable_sort by parent_col_id of {node_id}. for all unique parent_node_id of
+  // (i==0, i-1!=i), write start offset.
+  //                               (i==last, i+1!=i), write end offset.
+  //   unique_copy_by_key {parent_node_id} {row_offset} to
+  //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
+
+  auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
+  auto parent_col_id   = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0),
+    [col_ids         = col_ids.begin(),
+     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                : col_ids[parent_node_ids[node_id]];
+    });
+  auto const list_children_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
+    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
+      num_nodes,
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
+    [node_categories = tree.node_categories.begin(),
+     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+      auto parent_node_id = parent_node_ids[node_id];
+      return parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST;
+    });
+
+  auto const num_list_children =
+    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             parent_col_ids.begin(),
+                             parent_col_ids.begin() + num_list_children,
+                             node_ids.begin());
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    num_list_children,
+    [node_ids        = node_ids.begin(),
+     parent_node_ids = tree.parent_node_ids.begin(),
+     parent_col_ids  = parent_col_ids.begin(),
+     row_offsets     = row_offsets.begin(),
+     d_columns_data  = d_columns_data.begin(),
+     num_list_children] __device__(size_type i) {
+      auto const node_id        = node_ids[i];
+      auto const parent_node_id = parent_node_ids[node_id];
+      if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
+          row_offsets[node_id];
+      }
+      if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
+          row_offsets[node_id] + 1;
       }
     });
 
