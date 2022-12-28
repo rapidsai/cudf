@@ -987,10 +987,11 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
-            warnings.warn(
-                "`n` parameter is not supported when "
-                "`pat` and `repl` are list-like inputs"
-            )
+            if n != -1:
+                warnings.warn(
+                    "`n` parameter is not supported when "
+                    "`pat` and `repl` are list-like inputs"
+                )
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(

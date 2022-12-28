@@ -13,7 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -416,9 +416,7 @@ def test_datetime_to_arrow(dtype):
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
-@pytest.mark.parametrize(
-    "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
     psr = data.copy()
 
@@ -431,7 +429,11 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    assert_eq(pd.Series(expected), got.to_pandas())
+    # Unique does not provide a guarantee on ordering.
+    assert_eq(
+        pd.Series(expected).sort_values(ignore_index=True),
+        got.sort_values(ignore_index=True).to_pandas(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1488,7 +1490,7 @@ date_range_test_freq = [
     pytest.param(
         "110546789L",
         marks=pytest.mark.xfail(
-            True,
+            condition=not PANDAS_GE_150,
             reason="Pandas DateOffset ignores milliseconds. "
             "https://github.com/pandas-dev/pandas/issues/43371",
         ),
@@ -1527,7 +1529,17 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-def test_date_range_start_end_freq(start, end, freq):
+def test_date_range_start_end_freq(request, start, end, freq):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                start == "1831-05-08 15:23:21"
+                and end == "1996-11-21 04:05:30"
+                and freq == "110546789L"
+            ),
+            reason="https://github.com/rapidsai/cudf/issues/12133",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1559,12 +1571,20 @@ def test_date_range_start_freq_periods(start, freq, periods):
     )
 
 
-def test_date_range_end_freq_periods(end, freq, periods):
+def test_date_range_end_freq_periods(request, end, freq, periods):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                "nanoseconds" in freq
+                and periods != 1
+                and end == "1970-01-01 00:00:00"
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/46877",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
-        if "nanoseconds" in freq:
-            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 

@@ -140,6 +140,84 @@ def test_odds():
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
 
+### Tests with expected failures (`xfail`s)
+
+In some circumstances it makes sense to mark a test as _expected_ to
+fail, perhaps because the functionality is not yet implemented in
+cuDF. To do so use the
+[`pytest.mark.xfail`](https://docs.pytest.org/en/stable/reference/reference.html#pytest.mark.xfail)
+fixture on the test.
+
+If the test is parametrized and only a single parameter is expected to
+fail, rather than marking the entire test as xfailing, mark the single
+parameter by creating a
+[`pytest.param`](https://docs.pytest.org/en/stable/how-to/skipping.html#skip-xfail-with-parametrize)
+with appropriate marks.
+
+```python
+@pytest.mark.parametrize(
+    "value",
+    [
+        1,
+        2,
+        pytest.param(
+            3, marks=pytest.mark.xfail(reason="code doesn't work for 3")
+        ),
+    ],
+)
+def test_value(value):
+    assert value < 3
+```
+
+When marking an `xfail`ing test, provide a descriptive reason. This
+_should_ include a link to an issue describing the problem so that
+progress towards fixing the problem can be tracked. If no such issue
+exists already, create one!
+
+#### Conditional `xfail`s
+
+Sometimes, a parametrized test is only expected to fail for some
+combination of its parameters. Say, for example, division by zero but
+only if the datatype is `bool`. If all combinations with a given
+parameter are expected to fail, one can mark the parameter with
+`pytest.mark.xfail`, indicating a reason for the expected failure. If
+only _some_ of the combinations are expected to fail, it can be
+tempting to mark the parameter as `xfail`, but this should be avoided.
+A test marked as `xfail` that passes is an "unexpected pass" or
+`XPASS` which is considered a failure by the test suite since we use
+the pytest option
+[`xfail_strict=true`](https://docs.pytest.org/en/latest/how-to/skipping.html#strict-parameter).
+Another option is to use the programmatic `pytest.xfail` function to
+fail in the test body to `xfail` the relevant combination of
+parameters. **DO NOT USE THIS OPTION**. Unlike the mark-based
+approach, `pytest.xfail` *does not* run the rest of the test body, so
+we will never know if the test starts to pass because the bug is
+fixed. Use of `pytest.xfail` is checked for, and forbidden, via
+a pre-commit hook.
+
+Instead, to handle this (hopefully rare) case, we can programmatically
+mark a test as expected to fail under a combination of conditions by
+applying the `pytest.mark.xfail` mark to the current test `request`.
+To achieve this, the test function should take an extra parameter
+named `request`, on which we call `applymarker`:
+
+```python
+@pytest.mark.parametrize("v1", [1, 2, 3])
+@pytest.mark.parametrize("v2", [1, 2, 3])
+def test_sum_lt_6(request, v1, v2):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(v1 == 3 and v2 == 3),
+            reason="Add comment linking to relevant issue",
+        )
+    )
+    assert v1 + v2 < 6
+```
+
+This way, when the bug is fixed, the test suite will fail at this
+point (and we will remember to update the test).
+
+
 ### Testing utility functions
 
 The `cudf.testing` subpackage provides a handful of utilities for testing the equality of objects.
