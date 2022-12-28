@@ -183,9 +183,7 @@ def _integer_validator(val):
         int(val)
         return True
     except ValueError:
-        raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer."
-        )
+        raise ValueError(f"{val} is not a valid option. Must be an integer.")
 
 
 def _integer_and_none_validator(val):
@@ -194,7 +192,15 @@ def _integer_and_none_validator(val):
             return
     except ValueError:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer or None."
+            f"{val} is not a valid option. Must be an integer or None."
+        )
+
+
+def _bool_validator(val):
+    # Doesn't make sense to accept arbitrary truthy values here.
+    if val not in (True, False):
+        raise ValueError(
+            f"{val} is not a valid option. Must be a bool or None."
         )
 
 
@@ -321,6 +327,12 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "_use_pylibcudf",
+    False,
+    "If true, use pylibcudf as a backend for operations.",
+    _bool_validator,
+)
 
 class option_context(ContextDecorator):
     """
