@@ -48,8 +48,9 @@ NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::ti
 template <typename Type, cudf::duplicate_keep_option Keep>
 void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enum_type<Keep>>)
 {
+  // KEEP_FIRST and KEEP_ANY are equivalent for unique
   if constexpr (not std::is_same_v<Type, int32_t> and
-                Keep != cudf::duplicate_keep_option::KEEP_FIRST) {
+                Keep == cudf::duplicate_keep_option::KEEP_ANY) {
     state.skip("Skip unwanted benchmarks.");
   }
 
@@ -65,9 +66,12 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
+  auto const sort_order = cudf::sorted_order(input_table);
+  auto const sort_table = cudf::gather(input_table, *sort_order);
+
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = cudf::unique(input_table, {0}, Keep, cudf::null_equality::EQUAL);
+    auto result = cudf::unique(*sort_table, {0}, Keep, cudf::null_equality::EQUAL);
   });
 }
 
@@ -84,7 +88,8 @@ NVBENCH_BENCH_TYPES(nvbench_unique, NVBENCH_TYPE_AXES(data_type, keep_option))
 template <typename Type, cudf::duplicate_keep_option Keep>
 void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench::enum_type<Keep>>)
 {
-  if constexpr (Keep != cudf::duplicate_keep_option::KEEP_FIRST) {
+  // KEEP_FIRST and KEEP_ANY are equivalent for unique
+  if constexpr (Keep == cudf::duplicate_keep_option::KEEP_ANY) {
     state.skip("Skip unwanted benchmarks.");
   }
 
@@ -123,4 +128,4 @@ NVBENCH_BENCH_TYPES(nvbench_unique_list,
   .set_name("unique_list")
   .set_type_axes_names({"Type", "KeepOption"})
   .add_float64_axis("null_probability", {0.0, 0.1})
-  .add_int64_axis("ColumnSize", {100'000'000});
+  .add_int64_axis("ColumnSize", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000});
