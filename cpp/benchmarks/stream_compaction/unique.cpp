@@ -18,6 +18,9 @@
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/lists/list_view.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
@@ -77,3 +80,47 @@ NVBENCH_BENCH_TYPES(nvbench_unique, NVBENCH_TYPE_AXES(data_type, keep_option))
   .set_name("unique")
   .set_type_axes_names({"Type", "KeepOption"})
   .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+template <typename Type, cudf::duplicate_keep_option Keep>
+void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench::enum_type<Keep>>)
+{
+  if constexpr (Keep != cudf::duplicate_keep_option::KEEP_FIRST) {
+    state.skip("Skip unwanted benchmarks.");
+  }
+
+  cudf::rmm_pool_raii pool_raii;
+
+  auto const size               = state.get_int64("ColumnSize");
+  auto const dtype              = cudf::type_to_id<Type>();
+  double const null_probability = state.get_float64("null_probability");
+
+  auto builder = data_profile_builder().null_probability(null_probability);
+  if (dtype == cudf::type_id::LIST) {
+    builder.distribution(dtype, distribution_id::UNIFORM, 0, 4)
+      .distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 4)
+      .list_depth(1);
+  } else {
+    // We're comparing unique() on a non-nested column to that on a list column with the same
+    // number of unique rows. The max list size is 4 and the number of unique values in the
+    // list's child is 5. So the number of unique rows in the list = 1 + 5 + 5^2 + 5^3 + 5^4 = 781
+    // We want this column to also have 781 unique values.
+    builder.distribution(dtype, distribution_id::UNIFORM, 0, 781);
+  }
+
+  auto const table = create_random_table(
+    {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 0);
+  auto const sort_order = cudf::sorted_order(*table);
+  auto const sort_table = cudf::gather(*table, *sort_order);
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto result = cudf::unique(*sort_table, {0}, Keep, cudf::null_equality::EQUAL);
+  });
+}
+
+NVBENCH_BENCH_TYPES(nvbench_unique_list,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, cudf::list_view>, keep_option))
+  .set_name("unique_list")
+  .set_type_axes_names({"Type", "KeepOption"})
+  .add_float64_axis("null_probability", {0.0, 0.1})
+  .add_int64_axis("ColumnSize", {100'000'000});
