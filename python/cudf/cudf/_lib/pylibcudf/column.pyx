@@ -34,3 +34,7 @@ cdef class Column:
 
         ret.c_obj.swap(c_result)
         return ret
+
+    cdef column * get(self) nogil:
+        """Get the underlying column object."""
+        return self.c_obj.get()

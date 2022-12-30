@@ -52,9 +52,5 @@ cdef class ColumnView:
         )
 
     cdef column_view * get(self) nogil:
-        """Get the underlying column_view object.
-
-        Note that this returns a copy, but by design column_view is designed to
-        be lightweight and easy to copy so this is acceptable.
-        """
+        """Get the underlying column_view object."""
         return self.c_obj.get()
