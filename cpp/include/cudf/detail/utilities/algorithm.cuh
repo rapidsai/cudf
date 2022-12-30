@@ -15,6 +15,10 @@
  */
 #pragma once
 
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+
 namespace cudf::detail {
 
 template <typename Iterator, typename T, typename BinaryOp>
@@ -25,4 +29,47 @@ __device__ __forceinline__ T accumulate(Iterator first, Iterator last, T init, B
   }
   return init;
 }
+
+/**
+ * @brief Utility for calling thrust::copy_if.
+ *
+ * Workaround for thrust::copy_if bug (https://github.com/NVIDIA/thrust/issues/1302)
+ * where it cannot iterate over int-max values `distance(first,last) > int-max`
+ * This calls thrust::copy_if in 2B chunks instead.
+ */
+template <typename InputIterator,
+          typename StencilIterator,
+          typename OutputIterator,
+          typename Predicate>
+OutputIterator copy_if(rmm::exec_policy policy,
+                       InputIterator first,
+                       InputIterator last,
+                       StencilIterator stencil,
+                       OutputIterator result,
+                       Predicate pred)
+{
+  auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
+                                  static_cast<std::size_t>(std::numeric_limits<int>::max()));
+
+  auto itr = first;
+  while (itr != last) {
+    auto const copy_end =
+      static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
+    result = thrust::copy_if(policy, itr, copy_end, stencil, result, pred);
+    stencil += std::distance(itr, copy_end);
+    itr = copy_end;
+  }
+  return result;
+}
+
+template <typename InputIterator, typename OutputIterator, typename Predicate>
+OutputIterator copy_if(rmm::exec_policy policy,
+                       InputIterator first,
+                       InputIterator last,
+                       OutputIterator result,
+                       Predicate pred)
+{
+  return copy_if(policy, first, last, first, result, pred);
+}
+
 }  // namespace cudf::detail
