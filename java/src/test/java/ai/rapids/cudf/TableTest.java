@@ -574,7 +574,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader, 
+  private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader,
                                       String trueValue, String falseValue) throws IOException {
     File outputFile = File.createTempFile("testWriteCSVToFile", ".csv");
     Schema schema = Schema.builder()
@@ -582,7 +582,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.FLOAT64, "f")
                           .column(DType.BOOL8, "b")
                           .column(DType.STRING, "str")
-                          .build(); 
+                          .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
                                                .withColumnNames(schema.getColumnNames())
                                                .withIncludeHeader(false)
@@ -591,7 +591,7 @@ public class TableTest extends CudfTestBase {
                                                .withTrueValue("T")
                                                .withFalseValue("F")
                                                .build();
-    try (Table inputTable 
+    try (Table inputTable
           = new Table.TestBuilder()
               .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
               .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
@@ -599,7 +599,7 @@ public class TableTest extends CudfTestBase {
               .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", "grey")
               .build()) {
       inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
-      
+
       // Read back.
       CSVOptions readOptions = CSVOptions.builder()
                                          .includeColumn("i")
@@ -636,7 +636,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.FLOAT64, "f")
                           .column(DType.BOOL8, "b")
                           .column(DType.STRING, "str")
-                          .build(); 
+                          .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
                                                .withColumnNames(schema.getColumnNames())
                                                .withIncludeHeader(includeHeader)
@@ -646,7 +646,7 @@ public class TableTest extends CudfTestBase {
                                                .withTrueValue(trueValue)
                                                .withFalseValue(falseValue)
                                                .build();
-    try (Table inputTable 
+    try (Table inputTable
           = new Table.TestBuilder()
               .column(0, 1, 2, 3, 4, 5, 6, 7, 8, null)
               .column(0.0, 1.0, 2.0, 3.0, 4.0, null, 6.0, 7.0, 8.0, 9.0)
@@ -654,7 +654,7 @@ public class TableTest extends CudfTestBase {
               .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", null)
               .build();
           MyBufferConsumer consumer = new MyBufferConsumer()) {
-      
+
       try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
         writer.write(inputTable);
         writer.write(inputTable);

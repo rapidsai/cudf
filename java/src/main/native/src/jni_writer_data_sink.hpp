@@ -15,10 +15,10 @@
  */
 #pragma once
 
+#include <cudf/io/data_sink.hpp>
+
 #include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
-
-#include <cudf/io/data_sink.hpp>
 
 namespace cudf::jni {
 
@@ -173,4 +173,3 @@ private:
 };
 
 } // namespace cudf::jni
-

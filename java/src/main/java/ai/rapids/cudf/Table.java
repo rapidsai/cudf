@@ -868,12 +868,12 @@ public final class Table implements AutoCloseable {
                                             String outputPath) throws CudfException;
 
   public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
-    writeCSVToFile(nativeHandle, 
-                   options.getColumnNames(), 
-                   options.getIncludeHeader(), 
-                   options.getRowDelimiter(), 
-                   options.getFieldDelimiter(), 
-                   options.getNullValue(), 
+    writeCSVToFile(nativeHandle,
+                   options.getColumnNames(),
+                   options.getIncludeHeader(),
+                   options.getRowDelimiter(),
+                   options.getFieldDelimiter(),
+                   options.getNullValue(),
                    options.getTrueValue(),
                    options.getFalseValue(),
                    outputPath);

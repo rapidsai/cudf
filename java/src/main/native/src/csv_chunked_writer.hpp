@@ -15,11 +15,11 @@
  */
 #pragma once
 
-#include "jni_writer_data_sink.hpp"
+#include <cassert>
 
 #include <cudf/io/csv.hpp>
 
-#include <cassert>
+#include "jni_writer_data_sink.hpp"
 
 namespace cudf::jni::io {
 
@@ -73,4 +73,3 @@ public:
 };
 
 } // namespace cudf::jni::io
-

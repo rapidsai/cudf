@@ -23,7 +23,7 @@ import java.util.Collections;
 import java.util.List;
 
 public class CSVWriterOptions {
-  
+
   private String[] columnNames;
   private Boolean includeHeader = false;
   private String rowDelimiter = "\n";
@@ -68,8 +68,8 @@ public class CSVWriterOptions {
 
   public String getFalseValue() {
     return falseValue;
-  }  
-  
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -83,7 +83,7 @@ public class CSVWriterOptions {
     private String nullValue = "\\N";
     private String falseValue = "false";
     private String trueValue = "true";
-    
+
     public CSVWriterOptions build() {
       return new CSVWriterOptions(this);
     }
@@ -120,12 +120,12 @@ public class CSVWriterOptions {
       this.nullValue = nullValue;
       return this;
     }
-    
+
     public Builder withTrueValue(String trueValue) {
       this.trueValue = trueValue;
       return this;
     }
-    
+
     public Builder withFalseValue(String falseValue) {
       this.falseValue = falseValue;
       return this;
