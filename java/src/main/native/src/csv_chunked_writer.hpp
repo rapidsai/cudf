@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cassert>
+#include "jni_writer_data_sink.hpp"
 
 #include <cudf/io/csv.hpp>
 
-#include "jni_writer_data_sink.hpp"
+#include <cassert>
 
 namespace cudf::jni::io {
 
@@ -75,4 +74,3 @@ public:
 };
 
 } // namespace cudf::jni::io
-

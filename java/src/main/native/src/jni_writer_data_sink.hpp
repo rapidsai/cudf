@@ -13,13 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <cudf/io/data_sink.hpp>
+#pragma once
 
 #include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
 
-#pragma once
+#include <cudf/io/data_sink.hpp>
 
 namespace cudf::jni {
 
@@ -174,4 +173,3 @@ private:
 };
 
 } // namespace cudf::jni
-
