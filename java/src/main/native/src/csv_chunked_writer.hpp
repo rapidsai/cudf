@@ -57,14 +57,13 @@ public:
   void write(cudf::table_view const &table) {
     if (_first_write_completed) {
       _options.enable_include_header(false); // Don't write header after the first write.
-    } else {
-      _first_write_completed = true;
     }
 
     _options.set_table(table);
     _options.set_rows_per_chunk(table.num_rows());
 
     cudf::io::write_csv(_options);
+    _first_write_completed = true;
   }
 
   void close() {
