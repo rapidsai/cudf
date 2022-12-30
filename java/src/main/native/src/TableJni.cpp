@@ -1217,7 +1217,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
   CATCH_STD(env, );
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferBegin(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
     jstring j_false_value, jobject j_buffer) {
@@ -1272,7 +1272,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVChunkToBuffer(JNIEnv *e
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToBufferEnd(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env, jclass,
                                                                      jlong j_writer_handle) {
   JNI_NULL_CHECK(env, j_writer_handle, "writer handle cannot be null.", );
 

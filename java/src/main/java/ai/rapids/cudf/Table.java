@@ -867,8 +867,7 @@ public final class Table implements AutoCloseable {
                                             String falseValue,
                                             String outputPath) throws CudfException;
 
-  public void writeCSVToFile(CSVWriterOptions options, String outputPath)
-  {
+  public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
     writeCSVToFile(nativeHandle, 
                    options.getColumnNames(), 
                    options.getIncludeHeader(), 
@@ -880,7 +879,7 @@ public final class Table implements AutoCloseable {
                    outputPath);
   }
 
-  private static native long writeCSVToBufferBegin(String[] columnNames,
+  private static native long startWriteCSVToBuffer(String[] columnNames,
                                                    boolean includeHeader,
                                                    String rowDelimiter,
                                                    byte fieldDelimiter,
@@ -891,14 +890,14 @@ public final class Table implements AutoCloseable {
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
 
-  private static native void writeCSVToBufferEnd(long writerHandle);
+  private static native void endWriteCSVToBuffer(long writerHandle);
 
   private static class CSVTableWriter implements TableWriter {
     private long writerHandle;
     private HostBufferConsumer consumer;
 
     private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
-      this.writerHandle = writeCSVToBufferBegin(options.getColumnNames(),
+      this.writerHandle = startWriteCSVToBuffer(options.getColumnNames(),
                                                 options.getIncludeHeader(),
                                                 options.getRowDelimiter(),
                                                 options.getFieldDelimiter(),
@@ -920,7 +919,7 @@ public final class Table implements AutoCloseable {
     @Override
     public void close() throws CudfException {
       if (writerHandle != 0) {
-        writeCSVToBufferEnd(writerHandle);
+        endWriteCSVToBuffer(writerHandle);
         writerHandle = 0;
       }
       if (consumer != null) {
@@ -930,8 +929,7 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer)
-  {
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
     return new CSVTableWriter(options, bufferConsumer);
   }
 
