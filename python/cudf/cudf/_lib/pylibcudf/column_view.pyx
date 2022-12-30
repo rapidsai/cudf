@@ -1,6 +1,5 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from cython.operator cimport dereference
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -52,10 +51,10 @@ cdef class ColumnView:
             )
         )
 
-    cdef column_view get(self) nogil:
+    cdef column_view * get(self) nogil:
         """Get the underlying column_view object.
 
         Note that this returns a copy, but by design column_view is designed to
         be lightweight and easy to copy so this is acceptable.
         """
-        return dereference(self.c_obj.get())
+        return self.c_obj.get()

@@ -1,5 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
@@ -29,7 +30,7 @@ cdef class Column:
 
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_unique[column](cv.get()))
+            c_result = move(make_unique[column](dereference(cv.get())))
 
         ret.c_obj.swap(c_result)
         return ret
