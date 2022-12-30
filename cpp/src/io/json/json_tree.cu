@@ -280,12 +280,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto const node_levels_end = cudf::detail::copy_if(rmm::exec_policy(stream),
-                                                       token_levels.begin(),
+    auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
                                                        token_levels.end(),
                                                        tokens.begin(),
                                                        node_levels.begin(),
-                                                       is_node);
+                                                       is_node,
+                                                       stream);
     CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -296,12 +296,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
     rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
-    cudf::detail::copy_if(rmm::exec_policy(stream),
-                          thrust::make_counting_iterator<NodeIndexT>(0),
+    cudf::detail::copy_if(thrust::make_counting_iterator<NodeIndexT>(0),
                           thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
                           tokens.begin(),
                           node_token_ids.begin(),
-                          is_node);
+                          is_node,
+                          stream);
 
     // previous push node_id
     // if previous node is a push, then i-1
@@ -350,8 +350,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
   auto const node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
-  auto const node_categories_end = cudf::detail::copy_if(
-    rmm::exec_policy(stream), tokens.begin(), tokens.end(), node_categories_it, is_node);
+  auto const node_categories_end =
+    cudf::detail::copy_if(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
 
@@ -366,14 +366,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto const node_range_out_it      = thrust::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
-  auto const node_range_out_end =
-    cudf::detail::copy_if(rmm::exec_policy(stream),
-                          thrust::make_counting_iterator<size_type>(0),
-                          thrust::make_counting_iterator<size_type>(0) + num_tokens,
-                          node_range_out_it,
-                          [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
-                            return is_node(tokens_gpu[i]);
-                          });
+  auto const node_range_out_end = cudf::detail::copy_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+    node_range_out_it,
+    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
+      return is_node(tokens_gpu[i]);
+    },
+    stream);
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
   return {std::move(node_categories),

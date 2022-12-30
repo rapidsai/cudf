@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
@@ -41,12 +42,12 @@ template <typename InputIterator,
           typename StencilIterator,
           typename OutputIterator,
           typename Predicate>
-OutputIterator copy_if(rmm::exec_policy policy,
-                       InputIterator first,
+OutputIterator copy_if(InputIterator first,
                        InputIterator last,
                        StencilIterator stencil,
                        OutputIterator result,
-                       Predicate pred)
+                       Predicate pred,
+                       rmm::cuda_stream_view stream)
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -55,7 +56,7 @@ OutputIterator copy_if(rmm::exec_policy policy,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::copy_if(policy, itr, copy_end, stencil, result, pred);
+    result = thrust::copy_if(rmm::exec_policy(stream), itr, copy_end, stencil, result, pred);
     stencil += std::distance(itr, copy_end);
     itr = copy_end;
   }
@@ -73,22 +74,22 @@ OutputIterator copy_if(rmm::exec_policy policy,
  * @tparam OutputIterator Type of the output iterator
  * @tparam Predicate Type of the binary predicate used to determine elements to copy
  *
- * @param policy The execution policy to use for parallelization
  * @param first The beginning of the sequence from which to copy
  * @param last The end of the sequence from which to copy
  * @param result The beginning of the sequence into which to copy
  * @param pred The predicate to test on every value of the range `[first, last)`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return An iterator pointing to the position `result + n`, where `n` is equal to the number of
  *         times `pred` evaluated to `true` in the range `[first, last)`.
  */
 template <typename InputIterator, typename OutputIterator, typename Predicate>
-OutputIterator copy_if(rmm::exec_policy policy,
-                       InputIterator first,
+OutputIterator copy_if(InputIterator first,
                        InputIterator last,
                        OutputIterator result,
-                       Predicate pred)
+                       Predicate pred,
+                       rmm::cuda_stream_view stream)
 {
-  return copy_if(policy, first, last, first, result, pred);
+  return copy_if(first, last, first, result, pred, stream);
 }
 
 }  // namespace cudf::detail
