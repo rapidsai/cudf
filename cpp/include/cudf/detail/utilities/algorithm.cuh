@@ -31,11 +31,11 @@ __device__ __forceinline__ T accumulate(Iterator first, Iterator last, T init, B
 }
 
 /**
- * @brief Utility for calling thrust::copy_if.
+ * @copydoc cudf::detail::copy_if(rmm::exec_policy, InputIterator, InputIterator, OutputIterator,
+ * Predicate)
  *
- * Workaround for thrust::copy_if bug (https://github.com/NVIDIA/thrust/issues/1302)
- * where it cannot iterate over int-max values `distance(first,last) > int-max`
- * This calls thrust::copy_if in 2B chunks instead.
+ * @tparam StencilIterator Type of the stencil iterator
+ * @param stencil The beginning of the stencil sequence
  */
 template <typename InputIterator,
           typename StencilIterator,
@@ -62,6 +62,25 @@ OutputIterator copy_if(rmm::exec_policy policy,
   return result;
 }
 
+/**
+ * @brief Utility for calling `thrust::copy_if`.
+ *
+ * This is a proxy for `thrust::copy_if` which is a workaround for its bug
+ * (https://github.com/NVIDIA/thrust/issues/1302) where it cannot iterate over int-max values
+ * `distance(first,last) > int-max` This calls thrust::copy_if in 2B chunks instead.
+ *
+ * @tparam InputIterator Type of the input iterator
+ * @tparam OutputIterator Type of the output iterator
+ * @tparam Predicate Type of the binary predicate used to determine elements to copy
+ *
+ * @param policy The execution policy to use for parallelization
+ * @param first The beginning of the sequence from which to copy
+ * @param last The end of the sequence from which to copy
+ * @param result The beginning of the sequence into which to copy
+ * @param pred The predicate to test on every value of the range `[first, last)`
+ * @return An iterator pointing to the position `result + n`, where `n` is equal to the number of
+ *         times `pred` evaluated to `true` in the range `[first, last)`.
+ */
 template <typename InputIterator, typename OutputIterator, typename Predicate>
 OutputIterator copy_if(rmm::exec_policy policy,
                        InputIterator first,
