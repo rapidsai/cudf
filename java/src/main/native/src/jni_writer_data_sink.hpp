@@ -64,55 +64,20 @@ public:
   }
 
   void host_write(void const *data, size_t size) override {
-    JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    long left_to_copy = static_cast<long>(size);
-    const char *copy_from = static_cast<const char *>(data);
-    while (left_to_copy > 0) {
-      long buffer_amount_available = current_buffer_len - current_buffer_written;
-      if (buffer_amount_available <= 0) {
-        // should never be < 0, but just to be safe
-        rotate_buffer(env);
-        buffer_amount_available = current_buffer_len - current_buffer_written;
-      }
-      long amount_to_copy =
-          left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
-      char *copy_to = current_buffer_data + current_buffer_written;
-
+    auto const host_memcpy = [](void* copy_to, void const* copy_from, size_t amount_to_copy) {
       std::memcpy(copy_to, copy_from, amount_to_copy);
-      copy_from = copy_from + amount_to_copy;
-      current_buffer_written += amount_to_copy;
-      total_written += amount_to_copy;
-      left_to_copy -= amount_to_copy;
-    }
+    };
+    write_impl(data, size, host_memcpy);
   }
 
   bool supports_device_write() const override { return true; }
 
   void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) override {
-    JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    long left_to_copy = static_cast<long>(size);
-    const char *copy_from = static_cast<const char *>(gpu_data);
-    while (left_to_copy > 0) {
-      long buffer_amount_available = current_buffer_len - current_buffer_written;
-      if (buffer_amount_available <= 0) {
-        // should never be < 0, but just to be safe
-        stream.synchronize();
-        rotate_buffer(env);
-        buffer_amount_available = current_buffer_len - current_buffer_written;
-      }
-      long amount_to_copy =
-          left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
-      char *copy_to = current_buffer_data + current_buffer_written;
-
+    auto const device_memcpy = [stream](void* copy_to, void const* copy_from, size_t amount_to_copy) {
       CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
                                     stream.value()));
-
-      copy_from = copy_from + amount_to_copy;
-      current_buffer_written += amount_to_copy;
-      total_written += amount_to_copy;
-      left_to_copy -= amount_to_copy;
-    }
-    stream.synchronize();
+    };
+    write_impl(gpu_data, size, device_memcpy, stream);
   }
 
   std::future<void> device_write_async(void const *gpu_data, size_t size,
@@ -141,6 +106,38 @@ public:
   void set_alloc_size(long size) { this->alloc_size = size; }
 
 private:
+  
+  template <typename CopyFunc>
+  void write_impl(void const* data, size_t size, CopyFunc copyFunc, 
+                  std::optional<rmm::cuda_stream_view> stream = std::nullopt) {
+    JNIEnv *env = cudf::jni::get_jni_env(jvm);
+    long left_to_copy = static_cast<long>(size);
+    const char *copy_from = static_cast<const char *>(data);
+    while (left_to_copy > 0) {
+      long buffer_amount_available = current_buffer_len - current_buffer_written;
+      if (buffer_amount_available <= 0) {
+        // should never be < 0, but just to be safe
+        if (stream) { stream->synchronize(); }
+        rotate_buffer(env);
+        buffer_amount_available = current_buffer_len - current_buffer_written;
+      }
+      long amount_to_copy =
+          left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
+      char *copy_to = current_buffer_data + current_buffer_written;
+
+      // CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
+                                    // stream.value()));
+
+      copyFunc(copy_to, copy_from, amount_to_copy);
+
+      copy_from = copy_from + amount_to_copy;
+      current_buffer_written += amount_to_copy;
+      total_written += amount_to_copy;
+      left_to_copy -= amount_to_copy;
+    }
+    if (stream) { stream->synchronize(); }
+  }
+
   void rotate_buffer(JNIEnv *env) {
     if (current_buffer != nullptr) {
       handle_buffer(env, current_buffer, current_buffer_written);
