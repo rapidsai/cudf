@@ -117,7 +117,7 @@ reduce_to_column_tree(tree_meta_t& tree,
 {
   CUDF_FUNC_RANGE();
   // 1. column count for allocation
-  auto num_columns =
+  auto const num_columns =
     thrust::unique_count(rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end());
 
   // 2. reduce_by_key {col_id}, {row_offset}, max.

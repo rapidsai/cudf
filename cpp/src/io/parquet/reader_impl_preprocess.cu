@@ -1259,6 +1259,97 @@ struct start_offset_output_iterator {
   }
 };
 
+struct flat_column_num_rows {
+  gpu::PageInfo const* pages;
+  gpu::ColumnChunkDesc const* chunks;
+
+  __device__ size_type operator()(size_type pindex) const
+  {
+    gpu::PageInfo const& page = pages[pindex];
+    // ignore dictionary pages and pages belonging to any column containing repetition (lists)
+    if ((page.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) ||
+        (chunks[page.chunk_idx].max_level[gpu::level_type::REPETITION] > 0)) {
+      return 0;
+    }
+    return page.num_rows;
+  }
+};
+
+struct row_counts_nonzero {
+  __device__ bool operator()(size_type count) const { return count > 0; }
+};
+
+struct row_counts_different {
+  size_type const expected;
+  __device__ bool operator()(size_type count) const { return (count != 0) && (count != expected); }
+};
+
+/**
+ * @brief Detect malformed parquet input data.
+ *
+ * We have seen cases where parquet files can be oddly malformed. This function specifically
+ * detects one case in particular:
+ *
+ * - When you have a file containing N rows
+ * - For some reason, the sum total of the number of rows over all pages for a given column
+ *   is != N
+ *
+ * @param pages All pages to be decoded
+ * @param chunks Chunk data
+ * @param page_keys Keys (schema id) associated with each page, sorted by column
+ * @param page_index Page indices for iteration, sorted by column
+ * @param expected_row_count Expected row count, if applicable
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void detect_malformed_pages(hostdevice_vector<gpu::PageInfo>& pages,
+                            hostdevice_vector<gpu::ColumnChunkDesc> const& chunks,
+                            device_span<const int> page_keys,
+                            device_span<const int> page_index,
+                            std::optional<size_t> expected_row_count,
+                            rmm::cuda_stream_view stream)
+{
+  // sum row counts for all non-dictionary, non-list columns. other columns will be indicated as 0
+  rmm::device_uvector<size_type> row_counts(pages.size(),
+                                            stream);  // worst case:  num keys == num pages
+  auto const size_iter = thrust::make_transform_iterator(
+    page_index.begin(), flat_column_num_rows{pages.device_ptr(), chunks.device_ptr()});
+  auto const row_counts_begin = row_counts.begin();
+  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
+                                                    page_keys.begin(),
+                                                    page_keys.end(),
+                                                    size_iter,
+                                                    thrust::make_discard_iterator(),
+                                                    row_counts_begin)
+                                .second;
+
+  // make sure all non-zero row counts are the same
+  rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
+  auto const compacted_row_counts_begin = compacted_row_counts.begin();
+  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
+                                                        row_counts_begin,
+                                                        row_counts_end,
+                                                        compacted_row_counts_begin,
+                                                        row_counts_nonzero{});
+  if (compacted_row_counts_end != compacted_row_counts_begin) {
+    size_t const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+
+    // if we somehow don't match the expected row count from the row groups themselves
+    if (expected_row_count.has_value()) {
+      CUDF_EXPECTS(expected_row_count.value() == found_row_count,
+                   "Encountered malformed parquet page data (unexpected row count in page data)");
+    }
+
+    // all non-zero row counts must be the same
+    auto const chk =
+      thrust::count_if(rmm::exec_policy(stream),
+                       compacted_row_counts_begin,
+                       compacted_row_counts_end,
+                       row_counts_different{static_cast<size_type>(found_row_count)});
+    CUDF_EXPECTS(chk == 0,
+                 "Encountered malformed parquet page data (row count mismatch in page data)");
+  }
+}
+
 }  // anonymous namespace
 
 void reader::impl::preprocess_pages(size_t skip_rows,
@@ -1268,6 +1359,55 @@ void reader::impl::preprocess_pages(size_t skip_rows,
 {
   auto& chunks = _file_itm_data.chunks;
   auto& pages  = _file_itm_data.pages_info;
+
+  // compute page ordering.
+  //
+  // ordering of pages is by input column schema, repeated across row groups.  so
+  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
+  //
+  // 1, 1, 2, 2, 3, 3
+  //
+  // However, if we had more than one row group, the pattern would be
+  //
+  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
+  // ^ row group 0     |
+  //                   ^ row group 1
+  //
+  // To process pages by key (exclusive_scan_by_key, reduce_by_key, etc), the ordering we actually
+  // want is
+  //
+  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  //
+  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
+  rmm::device_uvector<int> page_keys(pages.size(), _stream);
+  rmm::device_uvector<int> page_index(pages.size(), _stream);
+  {
+    thrust::transform(rmm::exec_policy(_stream),
+                      pages.device_ptr(),
+                      pages.device_ptr() + pages.size(),
+                      page_keys.begin(),
+                      get_page_schema{});
+
+    thrust::sequence(rmm::exec_policy(_stream), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(_stream),
+                               page_keys.begin(),
+                               page_keys.end(),
+                               page_index.begin(),
+                               thrust::less<int>());
+  }
+
+  // detect malformed columns.
+  // - we have seen some cases in the wild where we have a row group containing N
+  //   rows, but the total number of rows in the pages for column X is != N. while it
+  //   is possible to load this by just capping the number of rows read, we cannot tell
+  //   which rows are invalid so we may be returning bad data. in addition, this mismatch
+  //   confuses the chunked reader
+  detect_malformed_pages(pages,
+                         chunks,
+                         page_keys,
+                         page_index,
+                         uses_custom_row_bounds ? std::nullopt : std::make_optional(num_rows),
+                         _stream);
 
   // iterate over all input columns and determine if they contain lists so we can further
   // preprocess them.
@@ -1364,49 +1504,14 @@ void reader::impl::preprocess_pages(size_t skip_rows,
                                   page_input,
                                   chunk_row_output_iter{pages.device_ptr()});
 
-    // compute page ordering.
-    //
-    // ordering of pages is by input column schema, repeated across row groups.  so
-    // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
-    //
-    // 1, 1, 2, 2, 3, 3
-    //
-    // However, if we had more than one row group, the pattern would be
-    //
-    // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
-    // ^ row group 0     |
-    //                   ^ row group 1
-    //
-    // To use exclusive_scan_by_key, the ordering we actually want is
-    //
-    // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
-    //
-    // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-    _chunk_itm_data.page_keys  = rmm::device_uvector<int>(pages.size(), _stream);
-    _chunk_itm_data.page_index = rmm::device_uvector<int>(pages.size(), _stream);
-    auto& page_keys            = _chunk_itm_data.page_keys;
-    auto& page_index           = _chunk_itm_data.page_index;
-    {
-      thrust::transform(rmm::exec_policy(_stream),
-                        pages.device_ptr(),
-                        pages.device_ptr() + pages.size(),
-                        page_keys.begin(),
-                        get_page_schema{});
-
-      thrust::sequence(rmm::exec_policy(_stream), page_index.begin(), page_index.end());
-      thrust::stable_sort_by_key(rmm::exec_policy(_stream),
-                                 page_keys.begin(),
-                                 page_keys.end(),
-                                 page_index.begin(),
-                                 thrust::less<int>());
-    }
+    // preserve page ordering data
+    _chunk_itm_data.page_keys  = std::move(page_keys);
+    _chunk_itm_data.page_index = std::move(page_index);
 
     // retrieve pages back
     pages.device_to_host(_stream, true);
 
-#if defined(PREPROCESS_DEBUG)
-    print_pages(pages, _stream);
-#endif
+    // print_pages(pages, _stream);
   }
 
   // compute splits if necessary. otherwise return a single split representing
@@ -1437,9 +1542,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                           false,  // num_rows is already computed
                           false,  // no need to compute string sizes
                           _stream);
-#if defined(PREPROCESS_DEBUG)
-    print_pages(pages, _stream);
-#endif
+
+    // print_pages(pages, _stream);
   }
 
   // iterate over all input columns and allocate any associated output

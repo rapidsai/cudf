@@ -36,6 +36,12 @@ void column_buffer::create(size_type _size,
 
   switch (type.id()) {
     case type_id::STRING:
+      // The contents of _strings will never be directly returned to the user.
+      // Due to the fact that make_strings_column copies the input data to
+      // produce its outputs, _strings is actually a temporary. As a result, we
+      // do not pass the provided mr to the call to
+      // make_zeroed_device_uvector_async here and instead let it use the
+      // default rmm memory resource.
       _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
         cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(size, stream));
       break;
@@ -53,6 +59,7 @@ void column_buffer::create(size_type _size,
     _null_mask =
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
   }
+  this->mr = mr;
 }
 
 namespace {
@@ -82,14 +89,10 @@ column_buffer column_buffer::empty_like(column_buffer const& input)
   return new_buff;
 }
 
-/**
- * @copydoc cudf::io::detail::make_column
- */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream)
 {
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
@@ -101,10 +104,14 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
           schema_info->children.push_back(column_name_info{"chars"});
         }
 
-        return make_strings_column(*buffer._strings, stream, mr);
+        // make_strings_column allocates new memory, it does not simply move
+        // from the inputs, so we need to pass it the memory resource given to
+        // the buffer on construction so that the memory is allocated using the
+        // resource that the calling code expected.
+        return make_strings_column(*buffer._strings, stream, buffer.mr);
       } else {
         // convert to binary
-        auto const string_col = make_strings_column(*buffer._strings, stream, mr);
+        auto const string_col = make_strings_column(*buffer._strings, stream, buffer.mr);
         auto const num_rows   = string_col->size();
         auto col_content      = string_col->release();
 
@@ -153,7 +160,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], child_info, child_schema, stream, mr);
+      auto child = make_column(buffer.children[0], child_info, child_schema, stream);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -163,7 +170,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                buffer._null_count,
                                std::move(buffer._null_mask),
                                stream,
-                               mr);
+                               buffer.mr);
     } break;
 
     case type_id::STRUCT: {
@@ -183,7 +190,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                     : std::nullopt;
 
         output_children.emplace_back(
-          make_column(buffer.children[i], child_info, child_schema, stream, mr));
+          make_column(buffer.children[i], child_info, child_schema, stream));
       }
 
       return make_structs_column(buffer.size,
@@ -191,7 +198,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                                  buffer._null_count,
                                  std::move(buffer._null_mask),
                                  stream,
-                                 mr);
+                                 buffer.mr);
     } break;
 
     default: {
