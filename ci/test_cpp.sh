@@ -26,7 +26,7 @@ SUITEERROR=0
 rapids-print-env
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
   libcudf libcudf_kafka libcudf-tests
 
 rapids-logger "Check GPU usage"
