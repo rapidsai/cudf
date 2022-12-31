@@ -667,8 +667,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      auto ret_col                      = make_structs_column(
-        num_rows, std::move(child_columns), cudf::UNKNOWN_NULL_COUNT, {}, stream, mr);
+      // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
+      // null validation applied in make_structs_column factory, which is not needed for json
+      auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
       ret_col->set_null_mask(std::move(result_bitmask), null_count);
       return {std::move(ret_col), column_names};
     }
