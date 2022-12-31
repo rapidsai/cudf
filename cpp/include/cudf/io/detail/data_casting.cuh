@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
@@ -313,7 +314,6 @@ struct string_parse {
     if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
       clear_bit(null_mask, idx);
       if (!d_chars) d_offsets[idx] = 0;
-      return;
     } else {
       if (!d_chars) d_offsets[idx] = str_process_info.bytes;
     }
@@ -353,7 +353,7 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
     return make_strings_column(col_size,
                                std::move(offsets),
                                std::move(chars),
-                               cudf::UNKNOWN_NULL_COUNT,
+                               cudf::detail::null_count(null_mask.data(), 0, col_size, stream),
                                std::move(null_mask));
   }
 

@@ -586,7 +586,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
     auto null_count =
-      cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
+      json_col.type == json_col_t::StringColumn
+        // Skipped because calculated again in parse_data
+        ? cudf::UNKNOWN_NULL_COUNT
+        : cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
     // full null_mask is always required for parse_data
     return {json_col.validity.release(), null_count};
     // Note: json_col modified here, moves this memory
