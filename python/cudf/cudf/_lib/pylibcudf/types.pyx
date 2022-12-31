@@ -7,13 +7,11 @@ from libc.stdint cimport int32_t
 from cudf._lib.cpp.types cimport type_id
 
 
-# TODO: Unclear what the perf impacts of using pure Python enums here will be,
-# but there's no real alternative because ultimately we need these to be
-# constructible from pure Python clients of pylibcudf (like cudf), not just
-# Cython consumers with access to a cdef enum.
-# TODO: An enum is not sufficient to represent a decimal scale. May need to
-# create a DataType class in addition to the TypeId to fully capture the
-# equivalent.
+# TODO: Python enums are fairly slow. We can't use Cython enums since we need
+# something usable from Python. One option is to remove the inheritance from
+# IntEnum and adding a new staticmethod for constructing from a value rather
+# than the call operator of the Enum metaclass. That won't work with a cdef
+# class though.
 class TypeId(IntEnum):
     EMPTY = type_id.EMPTY
     INT8 = type_id.INT8
@@ -53,3 +51,14 @@ class TypeId(IntEnum):
 ctypedef int32_t underlying_type_t_type_id
 cdef type_id py_type_to_c_type(py_type_id):
     return <type_id> (<underlying_type_t_type_id> py_type_id)
+
+
+cdef class DataType:
+    def __cinit__(self, id, int32_t scale):
+        self.c_obj = data_type(py_type_to_c_type(id), scale)
+
+    cpdef id(self):
+        return TypeId(self.c_obj.id())
+
+    cpdef int32_t scale(self):
+        return self.c_obj.scale()
