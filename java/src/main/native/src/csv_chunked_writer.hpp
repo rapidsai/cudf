@@ -24,20 +24,20 @@
 namespace cudf::jni::io {
 
 /**
- * @brief Class to write multiple Tables into the jni_writer_data_sink.
+ * @brief Class to write multiple Tables into the writer_data_sink.
  *
  * TODO: Consider moving to cpp/ in the future, if there is interest.
  */
 class csv_chunked_writer {
 
   cudf::io::csv_writer_options _options;
-  std::unique_ptr<cudf::jni::jni_writer_data_sink> _sink;
+  std::unique_ptr<cudf::jni::io::writer_data_sink> _sink;
 
   bool _first_write_completed = false; ///< Decides if header should be written.
 
 public:
   explicit csv_chunked_writer(cudf::io::csv_writer_options options,
-                              std::unique_ptr<cudf::jni::jni_writer_data_sink> &sink)
+                              std::unique_ptr<cudf::jni::io::writer_data_sink> &sink)
       : _options{options}, _sink{std::move(sink)} {
     auto const &sink_info = _options.get_sink();
     // Assert invariants.

@@ -58,6 +58,8 @@
 namespace cudf {
 namespace jni {
 
+using jni_writer_data_sink = cudf::jni::io::writer_data_sink;
+
 template <typename WRITER> class jni_table_writer_handle final {
 public:
   explicit jni_table_writer_handle(std::unique_ptr<WRITER> writer)
@@ -309,7 +311,7 @@ private:
   long current_buffer_len = 0;
   long current_buffer_written = 0;
   int64_t total_written = 0;
-  long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
+  long alloc_size = cudf::jni::io::MINIMUM_WRITE_BUFFER_SIZE;
   bool is_closed = false;
 };
 
@@ -1662,7 +1664,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv *env, 
       reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
 
   if (state->sink) {
-    long alloc_size = std::max(cudf::jni::MINIMUM_WRITE_BUFFER_SIZE, mem_size / 2);
+    long alloc_size = std::max(cudf::jni::io::MINIMUM_WRITE_BUFFER_SIZE, mem_size / 2);
     state->sink->set_alloc_size(alloc_size);
   }
   try {
@@ -1846,7 +1848,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
       reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
 
   if (state->sink) {
-    long alloc_size = std::max(cudf::jni::MINIMUM_WRITE_BUFFER_SIZE, mem_size / 2);
+    long alloc_size = std::max(cudf::jni::io::MINIMUM_WRITE_BUFFER_SIZE, mem_size / 2);
     state->sink->set_alloc_size(alloc_size);
   }
   try {

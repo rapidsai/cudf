@@ -20,13 +20,13 @@
 #include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
 
-namespace cudf::jni {
+namespace cudf::jni::io {
 
 constexpr long MINIMUM_WRITE_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
 
-class jni_writer_data_sink final : public cudf::io::data_sink {
+class writer_data_sink final : public cudf::io::data_sink {
 public:
-  explicit jni_writer_data_sink(JNIEnv *env, jobject callback) {
+  explicit writer_data_sink(JNIEnv *env, jobject callback) {
     if (env->GetJavaVM(&jvm) < 0) {
       throw std::runtime_error("GetJavaVM failed");
     }
@@ -48,7 +48,7 @@ public:
     }
   }
 
-  virtual ~jni_writer_data_sink() {
+  virtual ~writer_data_sink() {
     // This should normally be called by a JVM thread. If the JVM environment is missing then this
     // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
     // already be destroyed and this thread should not try to attach to get an environment.
@@ -107,8 +107,8 @@ public:
 
 private:
   
-  template <typename CopyFunc>
-  void write_impl(void const* data, size_t size, CopyFunc copyFunc, 
+  template <typename CopyFunction>
+  void write_impl(void const* data, size_t size, CopyFunction copy, 
                   std::optional<rmm::cuda_stream_view> stream = std::nullopt) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     long left_to_copy = static_cast<long>(size);
@@ -125,10 +125,7 @@ private:
           left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
       char *copy_to = current_buffer_data + current_buffer_written;
 
-      // CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
-                                    // stream.value()));
-
-      copyFunc(copy_to, copy_from, amount_to_copy);
+      copy(copy_to, copy_from, amount_to_copy);
 
       copy_from = copy_from + amount_to_copy;
       current_buffer_written += amount_to_copy;
