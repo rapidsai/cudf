@@ -52,8 +52,8 @@
 #include "dtype_utils.hpp"
 #include "jni_compiled_expr.hpp"
 #include "jni_utils.hpp"
-#include "jni_writer_data_sink.hpp"
 #include "row_conversion.hpp"
+#include "writer_data_sink.hpp"
 
 namespace cudf {
 namespace jni {

@@ -19,7 +19,7 @@
 
 #include <cudf/io/csv.hpp>
 
-#include "jni_writer_data_sink.hpp"
+#include "writer_data_sink.hpp"
 
 namespace cudf::jni::io {
 
