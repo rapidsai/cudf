@@ -131,7 +131,7 @@ __device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
  * \p out_it
  */
 template <typename utf8_char_t>
-__device__ __forceinline__ size_type write_utf8_char(utf8_char_t utf8_chars, char* out_it)
+__device__ __forceinline__ size_type write_utf8_char(utf8_char_t utf8_chars, char*& out_it)
 {
   constexpr size_type MAX_UTF8_BYTES_PER_CODE_POINT = 4;
   char char_bytes[MAX_UTF8_BYTES_PER_CODE_POINT];
@@ -350,11 +350,12 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       stream,
       mr);
 
-    return make_strings_column(col_size,
-                               std::move(offsets),
-                               std::move(chars),
-                               cudf::detail::null_count(null_mask.data(), 0, col_size, stream),
-                               std::move(null_mask));
+    return make_strings_column(
+      col_size,
+      std::move(offsets),
+      std::move(chars),
+      cudf::detail::null_count(static_cast<bitmask_type*>(null_mask.data()), 0, col_size, stream),
+      std::move(null_mask));
   }
 
   auto out_col = make_fixed_width_column(
