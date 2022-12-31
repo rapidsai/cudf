@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/data_casting.cuh>
@@ -36,6 +37,7 @@
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -194,6 +196,45 @@ reduce_to_column_tree(tree_meta_t& tree,
       return parent_node_id == parent_node_sentinel ? parent_node_sentinel
                                                     : col_ids[parent_node_id];
     });
+
+  // Mixed types in List children go to different columns,
+  // so all immediate children of list column should have same max_row_offsets.
+  //   create list's children max_row_offsets array. (initialize to zero)
+  //   atomicMax on  children max_row_offsets array.
+  //   gather the max_row_offsets from children row offset array.
+  {
+    rmm::device_uvector<NodeIndexT> list_parents_children_max_row_offsets(num_columns, stream);
+    thrust::fill(rmm::exec_policy(stream),
+                 list_parents_children_max_row_offsets.begin(),
+                 list_parents_children_max_row_offsets.end(),
+                 0);
+    thrust::for_each(rmm::exec_policy(stream),
+                     unique_col_ids.begin(),
+                     unique_col_ids.end(),
+                     [column_categories = column_categories.begin(),
+                      parent_col_ids    = parent_col_ids.begin(),
+                      max_row_offsets   = max_row_offsets.begin(),
+                      list_parents_children_max_row_offsets =
+                        list_parents_children_max_row_offsets.begin()] __device__(auto col_id) {
+                       auto parent_col_id = parent_col_ids[col_id];
+                       if (parent_col_id != parent_node_sentinel and
+                           column_categories[parent_col_id] == node_t::NC_LIST) {
+                         atomicMax(list_parents_children_max_row_offsets + parent_col_id,
+                                   max_row_offsets[col_id]);
+                       }
+                     });
+    thrust::gather_if(
+      rmm::exec_policy(stream),
+      parent_col_ids.begin(),
+      parent_col_ids.end(),
+      parent_col_ids.begin(),
+      list_parents_children_max_row_offsets.begin(),
+      max_row_offsets.begin(),
+      [column_categories = column_categories.begin()] __device__(size_type parent_col_id) {
+        return parent_col_id != parent_node_sentinel and
+               column_categories[parent_col_id] == node_t::NC_LIST;
+      });
+  }
 
   // copy lists' max_row_offsets to children.
   // all structs should have same size.
@@ -492,12 +533,12 @@ void make_device_json_column(device_span<SymbolT const> input,
     });
 
   // 4. scatter List offset
-  // copy_if only node's whose parent is list, transform to parent_col_id. (copy node_id,
-  // parent_col_id) stable_sort by parent_col_id of {node_id}. for all unique parent_node_id of
-  // (i==0, i-1!=i), write start offset.
-  //                               (i==last, i+1!=i), write end offset.
-  //   unique_copy_by_key {parent_node_id} {row_offset} to
-  //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
+  // copy_if only node's whose parent is list, (node_id, parent_col_id)
+  // stable_sort by parent_col_id of {node_id}.
+  // For all unique parent_node_id of (i==0, i-1!=i), write start offset.
+  //                                  (i==last, i+1!=i), write end offset.
+  //    unique_copy_by_key {parent_node_id} {row_offset} to
+  //    col[parent_col_id].child_offsets[row_offset[parent_node_id]]
 
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
