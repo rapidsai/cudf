@@ -64,7 +64,7 @@ public:
   }
 
   void host_write(void const *data, size_t size) override {
-    auto const host_memcpy = [](void* copy_to, void const* copy_from, size_t amount_to_copy) {
+    auto const host_memcpy = [](void *copy_to, void const *copy_from, size_t amount_to_copy) {
       std::memcpy(copy_to, copy_from, amount_to_copy);
     };
     write_impl(data, size, host_memcpy);
@@ -73,7 +73,8 @@ public:
   bool supports_device_write() const override { return true; }
 
   void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) override {
-    auto const device_memcpy = [stream](void* copy_to, void const* copy_from, size_t amount_to_copy) {
+    auto const device_memcpy = [stream](void *copy_to, void const *copy_from,
+                                        size_t amount_to_copy) {
       CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
                                     stream.value()));
     };
@@ -106,9 +107,8 @@ public:
   void set_alloc_size(long size) { this->alloc_size = size; }
 
 private:
-  
   template <typename CopyFunction>
-  void write_impl(void const* data, size_t size, CopyFunction copy, 
+  void write_impl(void const *data, size_t size, CopyFunction copy,
                   std::optional<rmm::cuda_stream_view> stream = std::nullopt) {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     long left_to_copy = static_cast<long>(size);
@@ -117,8 +117,10 @@ private:
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {
         // should never be < 0, but just to be safe
-        if (stream) { stream->synchronize(); }
-        rotate_buffer(env);
+        if (stream) {
+          stream->synchronize();
+        }
+        handle_buffer_and_reallocate(env);
         buffer_amount_available = current_buffer_len - current_buffer_written;
       }
       long amount_to_copy =
@@ -132,10 +134,12 @@ private:
       total_written += amount_to_copy;
       left_to_copy -= amount_to_copy;
     }
-    if (stream) { stream->synchronize(); }
+    if (stream) {
+      stream->synchronize();
+    }
   }
 
-  void rotate_buffer(JNIEnv *env) {
+  void handle_buffer_and_reallocate(JNIEnv *env) {
     if (current_buffer != nullptr) {
       handle_buffer(env, current_buffer, current_buffer_written);
       env->DeleteGlobalRef(current_buffer);
@@ -166,4 +170,4 @@ private:
   long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
 };
 
-} // namespace cudf::jni
+} // namespace cudf::jni::io
