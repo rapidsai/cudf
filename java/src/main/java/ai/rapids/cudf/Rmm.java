@@ -24,6 +24,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class Rmm {
   private static volatile boolean initialized = false;
+  private static volatile long poolSize = -1;
+  private static volatile boolean poolingEnabled = false;
   static {
     NativeDepsLoader.loadNativeDeps();
   }
@@ -119,6 +121,23 @@ public class Rmm {
     initializeInternal(allocationMode, loc.internalId, path, poolSize);
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
+    Rmm.poolingEnabled = isPool || isArena || isAsync;
+    Rmm.poolSize = Rmm.poolingEnabled ? poolSize : -1;
+  }
+
+  /**
+   * Get the most recently set pool size or -1 if RMM has not been initialized or pooling is
+   * not enabled.
+   */
+  public static synchronized long getPoolSize() {
+    return poolSize;
+  }
+
+  /**
+   * Return true if rmm is initialized and pooling has been enabled, else false.
+   */
+  public static synchronized boolean isPoolingEnabled() {
+    return poolingEnabled;
   }
 
   /**
@@ -280,6 +299,8 @@ public class Rmm {
     if (initialized) {
       shutdownInternal();
       initialized = false;
+      poolSize = -1;
+      poolingEnabled = false;
     }
   }
 
