@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 # This script is a wrapper for cmakelang that may be used with pre-commit. The
 # wrapping is necessary because RAPIDS libraries split configuration for

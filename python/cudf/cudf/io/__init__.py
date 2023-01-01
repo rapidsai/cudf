@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.dlpack import from_dlpack

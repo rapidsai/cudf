@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations

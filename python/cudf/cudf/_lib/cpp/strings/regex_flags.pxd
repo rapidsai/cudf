@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 cdef extern from "cudf/strings/regex/flags.hpp" \
         namespace "cudf::strings" nogil:

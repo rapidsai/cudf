@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np

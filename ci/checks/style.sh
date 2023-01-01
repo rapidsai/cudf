@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #####################
 # cuDF Style Tester #
 #####################

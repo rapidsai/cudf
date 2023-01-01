@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
