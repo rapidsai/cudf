@@ -85,15 +85,13 @@ __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 template <typename T>
 __device__ void device_sum(T const* data, int const items_per_thread, size_type size, T* sum)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
   T local_sum = 0;
 
 // Calculate local sum for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load = data[threadIdx.x + item * blockDim.x];
       local_sum += load;
     }
   }
@@ -108,8 +106,6 @@ template <typename T>
 __device__ void device_var(
   T const* data, int const items_per_thread, size_type size, T* sum, double* var)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
   T local_sum      = 0;
   double local_var = 0;
@@ -124,8 +120,8 @@ __device__ void device_var(
 // Calculate local sum for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load      = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load      = data[threadIdx.x + item * blockDim.x];
       double temp = load - mean;
       temp        = pow(temp, 2);
       local_var += temp;
@@ -146,16 +142,13 @@ template <typename T>
 __device__ void device_max(
   T const* data, int const items_per_thread, size_type size, T init_val, T* smax)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
-
   T local_max = init_val;
 
 // Calculate local max for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load    = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load    = data[threadIdx.x + item * blockDim.x];
       local_max = max(local_max, load);
     }
   }
@@ -173,16 +166,14 @@ template <typename T>
 __device__ void device_min(
   T const* data, int const items_per_thread, size_type size, T init_val, T* smin)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
 
   T local_min = init_val;
 
 // Calculate local min for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load    = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load    = data[threadIdx.x + item * blockDim.x];
       local_min = min(local_min, load);
     }
   }
@@ -205,8 +196,6 @@ __device__ void device_idxmax(T const* data,
                               T* smax,
                               int64_t* sidx)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
 
   // Calculate how many elements each thread is working on
   T local_max       = init_val;
@@ -215,11 +204,11 @@ __device__ void device_idxmax(T const* data,
 // Calculate local max for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load = data[threadIdx.x + item * blockDim.x];
       if (load > local_max) {
         local_max = load;
-        local_idx = index[tid + item * tb_size];
+        local_idx = index[threadIdx.x + item * blockDim.x];
       }
     }
   }
@@ -246,8 +235,6 @@ __device__ void device_idxmin(T const* data,
                               T* smin,
                               int64_t* sidx)
 {
-  int tid     = threadIdx.x;
-  int tb_size = blockDim.x;
 
   T local_min       = init_val;
   int64_t local_idx = -1;
@@ -255,11 +242,11 @@ __device__ void device_idxmin(T const* data,
 // Calculate local max for each thread
 #pragma unroll
   for (size_type item = 0; item < items_per_thread; item++) {
-    if (tid + (item * tb_size) < size) {
-      T load = data[tid + item * tb_size];
+    if (threadIdx.x + (item * blockDim.x) < size) {
+      T load = data[threadIdx.x + item * blockDim.x];
       if (load < local_min) {
         local_min = load;
-        local_idx = index[tid + item * tb_size];
+        local_idx = index[threadIdx.x + item * blockDim.x];
       }
     }
   }
@@ -280,9 +267,8 @@ extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t sum;
   if (threadIdx.x == 0) { sum = 0; }
@@ -300,9 +286,8 @@ extern "C" __device__ int BlockSum_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double sum;
   if (threadIdx.x == 0) { sum = 0; }
@@ -320,9 +305,8 @@ extern "C" __device__ int BlockMean_int64(double* numba_return_value,
                                           int64_t const* data,
                                           int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t sum;
   if (threadIdx.x == 0) { sum = 0; }
@@ -342,9 +326,8 @@ extern "C" __device__ int BlockMean_float64(double* numba_return_value,
                                             double const* data,
                                             int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double sum;
   if (threadIdx.x == 0) { sum = 0; }
@@ -364,9 +347,8 @@ extern "C" __device__ int BlockStd_int64(double* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t sum;
   __shared__ double var;
@@ -389,9 +371,8 @@ extern "C" __device__ int BlockStd_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double sum;
   __shared__ double var;
@@ -414,9 +395,8 @@ extern "C" __device__ int BlockVar_int64(double* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t sum;
   __shared__ double var;
@@ -439,9 +419,8 @@ extern "C" __device__ int BlockVar_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double sum;
   __shared__ double var;
@@ -465,9 +444,8 @@ extern "C" __device__ int BlockMax_int64(int64_t* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t smax;
 
@@ -487,9 +465,8 @@ extern "C" __device__ int BlockMax_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double smax;
 
@@ -509,9 +486,8 @@ extern "C" __device__ int BlockMin_int64(int64_t* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t smin;
 
@@ -531,9 +507,8 @@ extern "C" __device__ int BlockMin_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double smin;
 
@@ -554,9 +529,8 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t* numba_return_value,
                                             int64_t* index,
                                             int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t smax;
   __shared__ int64_t sidx;
@@ -581,9 +555,8 @@ extern "C" __device__ int BlockIdxMax_float64(int64_t* numba_return_value,
                                               int64_t* index,
                                               int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double smax;
   __shared__ int64_t sidx;
@@ -608,9 +581,8 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
                                             int64_t* index,
                                             int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ int64_t smin;
   __shared__ int64_t sidx;
@@ -635,9 +607,8 @@ extern "C" __device__ int BlockIdxMin_float64(int64_t* numba_return_value,
                                               int64_t* index,
                                               int64_t size)
 {
-  int tb_size = blockDim.x;
   // Calculate how many elements each thread is working on
-  auto const items_per_thread = (size + tb_size - 1) / tb_size;
+  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ double smin;
   __shared__ int64_t sidx;
