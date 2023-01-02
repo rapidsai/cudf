@@ -21,6 +21,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <io/json/nested_json.hpp>
+
 #include <tests/io/fst/common.hpp>
 
 #include <cudf/scalar/scalar_factories.hpp>
