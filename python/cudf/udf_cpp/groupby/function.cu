@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 
 using size_type = int;
 
-/*
+
 // double atomicAdd
-__device__ __forceinline__ double atomicAdd(double* address, double val)
+__device__ __forceinline__ double atomicAdds(double* address, double val)
 {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
   unsigned long long int old             = *address_as_ull, assumed;
@@ -35,10 +35,10 @@ __device__ __forceinline__ double atomicAdd(double* address, double val)
 
   return __longlong_as_double(old);
 }
-*/
+
 
 // int64_t atomicAdd
-__device__ __forceinline__ int64_t atomicAdd(int64_t* address, int64_t val)
+__device__ __forceinline__ int64_t atomicAdds(int64_t* address, int64_t val)
 {
   return atomicAdd((unsigned long long*)address, (unsigned long long)val);
 }
@@ -98,7 +98,7 @@ __device__ void device_sum(T const* data, int const items_per_thread, size_type 
     }
   }
 
-  atomicAdd(sum, local_sum);
+  atomicAdds(sum, local_sum);
 
   __syncthreads();
 }
@@ -132,7 +132,7 @@ __device__ void device_var(
     }
   }
 
-  atomicAdd(var, local_var);
+  atomicAdds(var, local_var);
 
   __syncthreads();
 

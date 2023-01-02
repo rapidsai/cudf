@@ -12,13 +12,13 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.20.1)
+cmake_minimum_required(VERSION 3.23.1)
 
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
 
-rapids_cuda_init_architectures(GROUPBY_UDF)
+rapids_cuda_init_architectures(groupby-udf-cpp)
 
 # Create a project so that we can enable CUDA architectures in this file.
 project(
@@ -53,7 +53,7 @@ file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
 endfunction()
 
 # Create the shim library for each architecture.
-set(GROUPBY_FUNCTION_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+set(GROUPBY_FUNCTION_CUDA_FLAGS --expt-relaxed-constexpr)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
@@ -72,13 +72,12 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
     ${tgt}
     PROPERTIES CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-               INTERFACE_POSITION_INDEPENDENT_CODE ON
                CUDA_ARCHITECTURES ${arch}
                CUDA_PTX_COMPILATION ON
+               CUDA_SEPARABLE_COMPILATION ON
   )
 
-  target_include_directories(${tgt} PUBLIC include)
+  target_include_directories(${tgt} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_options(
     ${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${GROUPBY_FUNCTION_CUDA_FLAGS}>"
   )
