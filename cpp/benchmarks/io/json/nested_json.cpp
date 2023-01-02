@@ -20,9 +20,9 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <io/json/nested_json.hpp>
 #include <tests/io/fst/common.hpp>
 
-#include <cudf/io/detail/nested_json.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
