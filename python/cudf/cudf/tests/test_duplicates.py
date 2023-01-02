@@ -4,8 +4,8 @@ import itertools
 import random
 
 import numpy as np
+import pandas as pd
 import pytest
-from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
@@ -40,7 +40,7 @@ def assert_df2(g, p):
 
 @pytest.mark.parametrize("subset", ["a", ["a"], ["a", "B"]])
 def test_duplicated_with_misspelled_column_name(subset):
-    df = DataFrame({"A": [0, 0, 1], "B": [0, 0, 1], "C": [0, 0, 1]})
+    df = pd.DataFrame({"A": [0, 0, 1], "B": [0, 0, 1], "C": [0, 0, 1]})
     gdf = cudf.DataFrame.from_pandas(df)
 
     assert_exceptions_equal(
@@ -59,7 +59,7 @@ def test_duplicated_with_misspelled_column_name(subset):
         [1, 2, 4, 5, 6, 6],
         [],
         ["a", "b", "s", "sd", "a", "b"],
-        Series(["aaa"] * 10, dtype="object"),
+        pd.Series(["aaa"] * 10, dtype="object"),
     ],
 )
 def test_drop_duplicates_series(data, keep):
@@ -73,7 +73,7 @@ def test_drop_duplicates_series(data, keep):
 
 
 def test_drop_duplicates():
-    pdf = DataFrame(
+    pdf = pd.DataFrame(
         {
             "AAA": ["foo", "bar", "foo", "bar", "foo", "bar", "bar", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -146,36 +146,40 @@ def test_drop_duplicates():
     expected = pdf.drop_duplicates("E", keep="last")
     assert_df(result, expected)
 
-    pdf = DataFrame({"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]})
+    pdf = pd.DataFrame(
+        {"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]}
+    )
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    pdf = DataFrame([[1, 0], [0, 2]])
+    pdf = pd.DataFrame([[1, 0], [0, 2]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    pdf = DataFrame([[-2, 0], [0, -4]])
+    pdf = pd.DataFrame([[-2, 0], [0, -4]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     x = np.iinfo(np.int64).max / 3 * 2
-    pdf = DataFrame([[-x, x], [0, x + 4]])
+    pdf = pd.DataFrame([[-x, x], [0, x + 4]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    pdf = DataFrame([[-x, x], [x, x + 4]])
+    pdf = pd.DataFrame([[-x, x], [x, x + 4]])
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    pdf = DataFrame([i] * 9 for i in range(16))
-    pdf = pdf.append([[1] + [0] * 8], ignore_index=True)
+    pdf = pd.DataFrame([i] * 9 for i in range(16))
+    pdf = pd.concat([pdf, pd.DataFrame([[1] + [0] * 8])], ignore_index=True)
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 @pytest.mark.skip(reason="cudf does not support duplicate column names yet")
 def test_drop_duplicates_with_duplicate_column_names():
-    df = DataFrame([[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"])
+    df = pd.DataFrame(
+        [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
+    )
     df = cudf.DataFrame.from_pandas(df)
 
     result0 = df.drop_duplicates()
@@ -187,7 +191,7 @@ def test_drop_duplicates_with_duplicate_column_names():
 
 
 def test_drop_duplicates_for_take_all():
-    pdf = DataFrame(
+    pdf = pd.DataFrame(
         {
             "AAA": ["foo", "bar", "baz", "bar", "foo", "bar", "qux", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -224,7 +228,7 @@ def test_drop_duplicates_for_take_all():
 
 
 def test_drop_duplicates_tuple():
-    pdf = DataFrame(
+    pdf = pd.DataFrame(
         {
             ("AA", "AB"): [
                 "foo",
@@ -265,11 +269,11 @@ def test_drop_duplicates_tuple():
 @pytest.mark.parametrize(
     "df",
     [
-        DataFrame(),
-        DataFrame(columns=[]),
-        DataFrame(columns=["A", "B", "C"]),
-        DataFrame(index=[]),
-        DataFrame(index=["A", "B", "C"]),
+        pd.DataFrame(),
+        pd.DataFrame(columns=[]),
+        pd.DataFrame(columns=["A", "B", "C"]),
+        pd.DataFrame(index=[]),
+        pd.DataFrame(index=["A", "B", "C"]),
     ],
 )
 def test_drop_duplicates_empty(df):
@@ -292,7 +296,7 @@ def test_dataframe_drop_duplicates_numeric_method(num_columns):
         # create dataframe with n_dup duplicate rows
         rows = comb + shuf[:n_dup]
         random.Random(n_dup).shuffle(rows)
-        return DataFrame(rows)
+        return pd.DataFrame(rows)
 
     for i in range(5):
         pdf = get_pdf(i)
@@ -328,7 +332,7 @@ def test_dataframe_drop_duplicates_numeric_method(num_columns):
 
 
 def test_dataframe_drop_duplicates_method():
-    pdf = DataFrame(
+    pdf = pd.DataFrame(
         [(1, 2, "a"), (2, 3, "b"), (3, 4, "c"), (2, 3, "d"), (3, 5, "c")],
         columns=["n1", "n2", "s1"],
     )
@@ -387,7 +391,7 @@ def test_dataframe_drop_duplicates_method():
 def test_datetime_drop_duplicates():
 
     date_df = cudf.DataFrame()
-    date_df["date"] = date_range("11/20/2018", periods=6, freq="D")
+    date_df["date"] = pd.date_range("11/20/2018", periods=6, freq="D")
     date_df["value"] = np.random.sample(len(date_df))
 
     df = concat([date_df, date_df[:4]])
@@ -402,7 +406,7 @@ def test_datetime_drop_duplicates():
 
 def test_drop_duplicates_NA():
     # none
-    df = DataFrame(
+    df = pd.DataFrame(
         {
             "A": [None, None, "foo", "bar", "foo", "bar", "bar", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -439,7 +443,7 @@ def test_drop_duplicates_NA():
     assert_df(result, expected)
 
     # nan
-    df = DataFrame(
+    df = pd.DataFrame(
         {
             "A": ["foo", "bar", "foo", "bar", "foo", "bar", "bar", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -481,7 +485,7 @@ def test_drop_duplicates_NA_for_take_all():
     # pandas drop_duplicates calls in this function.
 
     # none
-    pdf = DataFrame(
+    pdf = pd.DataFrame(
         {
             "A": [None, None, "foo", "bar", "foo", "baz", "bar", "qux"],
             "C": [1.0, np.nan, np.nan, np.nan, 1.0, 2.0, 3, 1.0],
@@ -531,7 +535,7 @@ def test_drop_duplicates_NA_for_take_all():
 
 
 def test_drop_duplicates_inplace():
-    orig = DataFrame(
+    orig = pd.DataFrame(
         {
             "A": ["foo", "bar", "foo", "bar", "foo", "bar", "bar", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -608,8 +612,8 @@ def test_drop_duplicates_multi_index():
         ["one", "two", "one", "two", "one", "two", "one", "two"],
     ]
 
-    idx = MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
-    pdf = DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
+    idx = pd.MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
+    pdf = pd.DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     expected = pdf.drop_duplicates()
