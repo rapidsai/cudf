@@ -17,9 +17,9 @@
 #include "read_json.hpp"
 
 #include <io/comp/io_uncomp.hpp>
+#include <io/json/nested_json.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/io/detail/nested_json.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <numeric>

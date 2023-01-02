@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <io/json/nested_json.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/detail/nested_json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/lists/lists_column_view.hpp>
