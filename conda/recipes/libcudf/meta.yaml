@@ -41,7 +41,7 @@ requirements:
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
     - libcurand-dev
-    - arrow-cpp {{ arrow_cpp_version }}
+    - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
 
@@ -62,7 +62,7 @@ outputs:
       run:
         - cudatoolkit {{ cuda_spec }}
         - librmm ={{ minor_version }}
-        - arrow-cpp {{ arrow_cpp_version }}
+        - libarrow {{ libarrow_version }}
         - dlpack {{ dlpack_version }}
     test:
       commands:

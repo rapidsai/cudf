@@ -20,7 +20,8 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
 
-set(targets_using_numpy io_datasource io_utils)
-foreach(target IN LISTS targets_using_numpy)
+set(targets_using_numpy_and_arrow_headers io_datasource io_utils)
+foreach(target IN LISTS targets_using_numpy_and_arrow_headers)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
+  target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
 endforeach()
