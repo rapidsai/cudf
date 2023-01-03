@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
@@ -21,6 +21,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
+from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -226,7 +227,7 @@ class ListColumn(ColumnBase):
                 offset += len(data)
                 offset_col.append(offset)
 
-        offset_col = column.as_column(offset_col, dtype="int32")
+        offset_col = column.as_column(offset_col, dtype=size_type_dtype)
 
         # Build ListColumn
         res = cls(
