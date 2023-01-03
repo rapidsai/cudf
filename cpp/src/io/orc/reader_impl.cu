@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1107,8 +1107,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
                   offset, len);
               CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-              CUDF_CUDA_TRY(cudaMemcpyAsync(
-                d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+              CUDF_CUDA_TRY(
+                cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, stream.value()));
               stream.synchronize();
             }
           }

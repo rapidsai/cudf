@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -304,7 +304,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   CUDF_CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
                            d_integers.data(),
                            d_integers.size() * sizeof(TypeParam),
-                           cudaMemcpyDeviceToDevice));
+                           cudaMemcpyDefault));
   integers_view.set_null_count(0);
 
   // convert to strings
