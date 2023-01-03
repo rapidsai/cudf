@@ -456,6 +456,7 @@ cdef class Column:
 
         # cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         type_id = dtype_to_pylibcudf_type(data_dtype)
+        cdef pylibcudf.DataType dtype = pylibcudf.DataType(type_id)
         # cdef libcudf_types.size_type offset = self.offset
         # cdef vector[column_view] children
         # cdef void* data
@@ -483,7 +484,7 @@ cdef class Column:
         # cdef libcudf_types.size_type c_null_count = null_count
 
         mask = None
-        return pylibcudf.ColumnView(type_id, self.size, self.base_data, mask)
+        return pylibcudf.ColumnView(dtype, self.size, self.base_data, mask)
         # return column_view(
         #     dtype,
         #     self.size,

@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -54,9 +54,10 @@ cdef type_id py_type_to_c_type(py_type_id):
 
 
 cdef class DataType:
-    def __cinit__(self, id, int32_t scale):
+    def __cinit__(self, id, int32_t scale=0):
         self.c_obj = data_type(py_type_to_c_type(id), scale)
 
+    # TODO: Consider making both id and scale cached properties.
     cpdef id(self):
         return TypeId(self.c_obj.id())
 

@@ -1,11 +1,11 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
+from cudf._lib.cpp.types cimport bitmask_type, size_type
 
-from .types cimport py_type_to_c_type
+from .types cimport DataType
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
@@ -23,10 +23,8 @@ cdef class ColumnView:
     # requesting the size from the user. The gpumemoryview may also help.
     # TODO: Should be using `not None` where possible.
     def __cinit__(
-        self, py_type_id, size_type size, object data_buf, object mask_buf
+        self, DataType dtype, size_type size, object data_buf, object mask_buf
     ):
-        cdef type_id c_type_id = py_type_to_c_type(py_type_id)
-        cdef data_type dtype = data_type(c_type_id)
         # TODO: Can the data_buf be None? We currently allow for that in cudf
         # when a Column's base_data is None, but I don't know why. I think that
         # should be filtered out upstream of here.
@@ -47,7 +45,8 @@ cdef class ColumnView:
 
         self.c_obj.reset(
             new column_view(
-                dtype, size, data, null_mask, null_count, offset, children
+                dtype.c_obj, size, data, null_mask, null_count, offset,
+                children
             )
         )
 
