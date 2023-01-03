@@ -136,3 +136,22 @@ Standard C++ natively supports various [exception types](https://en.cppreference
 which Cython maps to [these Python exception types](https://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
 In the future, libcudf may employ custom C++ exception types.
 If that occurs, this section will be updated to reflect how these may be mapped to desired Python exception types.
+
+### Raising warnings
+
+Where appropriate, cuDF should throw the same warnings as pandas.
+For instance, API deprecations in cuDF should track pandas as closely as possible.
+However, not all pandas warnings are appropriate for cuDF.
+Common exceptional cases include
+[implementation-dependent performance warnings](https://pandas.pydata.org/docs/reference/api/pandas.errors.PerformanceWarning.html)
+that do not apply to cuDF's internals.
+The decision of whether or not to match pandas must be made on a case-by-case
+basis and is left to the best judgment of developers and PR reviewers.
+
+### Catching warnings from dependencies
+
+cuDF developers should avoid using deprecated APIs from package dependencies.
+However, there may be cases where such uses cannot be avoided, at least in the short term.
+If such cases arise, developers should
+[catch the warnings](https://docs.python.org/3/library/warnings.html#warnings.catch_warnings)
+within cuDF so that they are not visible to the user.
