@@ -83,6 +83,12 @@ repos:
                 entry: '(category=|\s)DeprecationWarning[,)]'
                 language: pygrep
                 types_or: [python, cython]
+              - id: no-programmatic-xfail
+                name: no-programmatic-xfail
+                description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'
+                entry: 'pytest\.xfail'
+                language: pygrep
+                types: [python]
               - id: cmake-format
                 name: cmake-format
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-format

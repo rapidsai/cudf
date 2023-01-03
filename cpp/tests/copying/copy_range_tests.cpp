@@ -492,7 +492,6 @@ TYPED_TEST(FixedPointTypesCopyRange, FixedPointSimple)
 TYPED_TEST(FixedPointTypesCopyRange, FixedPointLarge)
 {
   using namespace numeric;
-  using namespace cudf::test;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
