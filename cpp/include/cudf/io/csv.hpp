@@ -1422,9 +1422,9 @@ class csv_writer_options {
   [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
 
   /**
-   * @brief Returns character used for separating lines.
+   * @brief Returns character used for separating column values.
    *
-   * @return Character used for separating lines
+   * @return Character used for separating column values.
    */
   [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
 
@@ -1479,9 +1479,9 @@ class csv_writer_options {
   void set_line_terminator(std::string term) { _line_terminator = term; }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    */
   void set_inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
 
@@ -1593,9 +1593,9 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    * @return this for chaining
    */
   csv_writer_options_builder& inter_column_delimiter(char delim)
