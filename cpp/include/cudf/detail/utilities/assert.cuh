@@ -22,7 +22,7 @@
  * @brief `assert`-like macro for device code
  *
  * This is effectively the same as the standard `assert` macro, except it
- * reiles on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang
+ * relies on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang
  * to produce better assert messages.
  */
 #if !defined(NDEBUG) && defined(__CUDA_ARCH__) && (defined(__clang__) || defined(__GNUC__))
