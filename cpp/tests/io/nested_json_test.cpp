@@ -469,7 +469,7 @@ TEST_P(JsonParserTest, ExtractColumn)
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
-  auto const d_input      = cudf::detail::make_device_uvector_sync(
+  auto const d_input      = cudf::detail::make_device_uvector_async(
     cudf::host_span<char const>{input.c_str(), input.size()}, stream);
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
@@ -554,7 +554,7 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
   options.enable_keep_quotes(true);
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
-  auto const d_input      = cudf::detail::make_device_uvector_sync(
+  auto const d_input      = cudf::detail::make_device_uvector_async(
     cudf::host_span<char const>{input.c_str(), input.size()}, stream);
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, options, stream, mr);
@@ -598,14 +598,14 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
 
   // libcudf does not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
-    auto const d_input = cudf::detail::make_device_uvector_sync(
+    auto const d_input = cudf::detail::make_device_uvector_async(
       cudf::host_span<char const>{input.c_str(), input.size()}, stream);
     EXPECT_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr),
                  cudf::logic_error);
   }
 
   for (auto const& input : inputs_succeed) {
-    auto const d_input = cudf::detail::make_device_uvector_sync(
+    auto const d_input = cudf::detail::make_device_uvector_async(
       cudf::host_span<char const>{input.c_str(), input.size()}, stream);
     CUDF_EXPECT_NO_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr));
   }
