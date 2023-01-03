@@ -32,8 +32,8 @@ __device__ __forceinline__ T accumulate(Iterator first, Iterator last, T init, B
 }
 
 /**
- * @copydoc cudf::detail::copy_if(rmm::exec_policy, InputIterator, InputIterator, OutputIterator,
- * Predicate, rmm::cuda_stream_view)
+ * @copydoc cudf::detail::copy_if_safe(rmm::exec_policy, InputIterator, InputIterator,
+ * OutputIterator, Predicate, rmm::cuda_stream_view)
  *
  * @tparam StencilIterator Type of the stencil iterator
  * @param stencil The beginning of the stencil sequence
