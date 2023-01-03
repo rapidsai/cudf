@@ -239,6 +239,7 @@ Unlike `pytest.warns`, which _requires_ that the expected warning be raised,
 The cudf testing suite should avoid such ambiguities.
 ```
 For parametrized tests that raise warnings under specific conditions, use the `testing._utils.expect_warning_if` decorator instead of `pytest.warns`.
+```
 
 
 ### Testing utility functions
