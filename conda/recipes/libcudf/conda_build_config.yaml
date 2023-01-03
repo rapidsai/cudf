@@ -16,8 +16,8 @@ cmake_version:
 gtest_version:
   - "=1.10.0"
 
-arrow_cpp_version:
-  - "=9"
+libarrow_version:
+  - "=10"
 
 dlpack_version:
   - ">=0.5,<0.6.0a0"
