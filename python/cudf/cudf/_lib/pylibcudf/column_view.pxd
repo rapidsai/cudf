@@ -11,6 +11,8 @@ cdef class ColumnView:
     # acceptable to return by value rather than reference here, similar helpers
     # will be necessary for owning types to simplify their internals (e.g. a
     # `pylibcudf.Column.get` method) and in those cases we will need to return
-    # a pointer. Returning a pointer here is therefore preferable for symmetry
-    # for symmetry.
+    # a pointer. Returning a pointer here is therefore preferable for symmetry.
     cdef column_view * get(self) nogil
+
+    @staticmethod
+    cdef from_column_view(column_view cv)

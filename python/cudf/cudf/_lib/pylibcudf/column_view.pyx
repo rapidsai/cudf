@@ -53,3 +53,11 @@ cdef class ColumnView:
     cdef column_view * get(self) nogil:
         """Get the underlying column_view object."""
         return self.c_obj.get()
+
+    # TODO: Unclear if this needs to be exposed in the Python API or if Cython
+    # is sufficient.
+    @staticmethod
+    cdef from_column_view(column_view cv):
+        cdef ColumnView ret = ColumnView.__new__()
+        ret.c_obj.reset(new column_view(cv))
+        return ret

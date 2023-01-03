@@ -14,8 +14,11 @@ from .column_view cimport ColumnView
 cdef class Column:
     """Wrapper around column."""
 
+    # TODO: Would be nice to have this cpdefed, but static cpdef methods are
+    # not yet supported. Best option for now may be to have a separate cdef
+    # function that is called by the def function.
     @staticmethod
-    def from_column_view(ColumnView cv):
+    def from_ColumnView(ColumnView cv):
         """Deep copies a column view's data.
 
         Parameters
@@ -49,3 +52,6 @@ cdef class Column:
 
     cpdef cbool has_nulls(self):
         return self.get().has_nulls()
+
+    cpdef ColumnView view(self):
+        return ColumnView.from_column_view(self.get().view())
