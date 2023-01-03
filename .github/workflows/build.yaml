@@ -6,7 +6,7 @@ on:
       - "branch-*"
     tags:
       - v[0-9][0-9].[0-9][0-9].[0-9][0-9]
-  workflow_call:
+  workflow_dispatch:
     inputs:
       branch:
         required: true
@@ -31,7 +31,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-matrix-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -41,7 +40,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-matrix-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -51,7 +49,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
