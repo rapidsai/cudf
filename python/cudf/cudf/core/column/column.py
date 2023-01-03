@@ -440,7 +440,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         A method to create deep copy irrespective of whether
         `copy-on-write` is enabled.
         """
-        result = libcudf.copying.copy_column(self)
+        result = libcudf.copying.copy_column_new(self)
         return result._with_type_metadata(self.dtype)
 
     def copy(self, deep: bool = True) -> Self:

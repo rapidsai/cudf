@@ -13,6 +13,7 @@ from rmm._lib.device_buffer cimport DeviceBuffer
 import cudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
+from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
@@ -84,6 +85,25 @@ def copy_column(Column input_column):
         c_result = move(make_unique[column](input_column_view))
 
     return Column.from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
+def copy_column_new(Column input_column):
+    """
+    Deep copies a column
+
+    Parameters
+    ----------
+    input_columns : column to be copied
+
+    Returns
+    -------
+    Deep copied column
+    """
+
+    cdef pylibcudf.ColumnView cv = input_column.to_ColumnView()
+    cdef pylibcudf.Column c = pylibcudf.Column.from_ColumnView(cv)
+    return Column.from_Column(c)
 
 
 @acquire_spill_lock()
