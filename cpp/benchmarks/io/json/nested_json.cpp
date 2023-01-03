@@ -24,7 +24,6 @@
 
 #include <tests/io/fst/common.hpp>
 
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
