@@ -2,11 +2,20 @@
 
 from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+
+from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.types cimport size_type
 
 from .column_view cimport ColumnView
+
+
+cdef class ColumnContents:
+    cdef DeviceBuffer data
+    cdef DeviceBuffer null_mask
+    cdef list children
 
 
 cdef class Column:
@@ -19,4 +28,4 @@ cdef class Column:
     # cpdef data_type type(self)
     # cpdef column_view view()
     # cpdef mutable_column_view mutable_view()
-    # cpdef column_contents release()
+    cpdef ColumnContents release(self)

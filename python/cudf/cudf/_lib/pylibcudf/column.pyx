@@ -5,10 +5,18 @@ from libcpp cimport bool as cbool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
+from rmm._lib.device_buffer cimport DeviceBuffer
+
+from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.types cimport size_type
 
 from .column_view cimport ColumnView
+
+
+cdef class ColumnContents:
+    # TODO: Currently treating this like a C POD struct, should consider giving
+    # it more real structure.
+    pass
 
 
 cdef class Column:
@@ -23,12 +31,12 @@ cdef class Column:
 
         Parameters
         ----------
-        col : ColumnView
+        cv : ColumnView
             The column to be copied.
 
         Returns
         -------
-        column
+        Column
             A deep copy of the input column.
         """
         ret = Column()
@@ -55,3 +63,16 @@ cdef class Column:
 
     cpdef ColumnView view(self):
         return ColumnView.from_column_view(self.get().view())
+
+    cpdef ColumnContents release(self):
+        cdef column_contents contents = move(self.get().release())
+        cdef ColumnContents ret = ColumnContents()
+        ret.data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
+        ret.null_mask = DeviceBuffer.c_from_unique_ptr(
+            move(
+                contents.null_mask
+            )
+        )
+        # TODO: Implement for children (currently they are discarded).
+        # cdef
+        return ret
