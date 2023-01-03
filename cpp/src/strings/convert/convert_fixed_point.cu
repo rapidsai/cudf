@@ -208,7 +208,6 @@ struct from_fixed_point_fn {
    */
   __device__ int32_t compute_output_size(size_type idx)
   {
-    if (d_decimals.is_null(idx)) return 0;
     auto const value = d_decimals.element<DecimalType>(idx);
     auto const scale = d_decimals.type().scale();
 
@@ -233,7 +232,6 @@ struct from_fixed_point_fn {
    */
   __device__ void decimal_to_string(size_type idx)
   {
-    if (d_decimals.is_null(idx)) return;
     auto const value = d_decimals.element<DecimalType>(idx);
     auto const scale = d_decimals.type().scale();
     char* d_buffer   = d_chars + d_offsets[idx];

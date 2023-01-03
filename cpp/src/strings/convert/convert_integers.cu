@@ -324,7 +324,6 @@ struct from_integers_fn {
    */
   __device__ size_type compute_output_size(size_type idx)
   {
-    if (d_integers.is_null(idx)) return 0;
     IntegerType value = d_integers.element<IntegerType>(idx);
     return count_digits(value);
   }
@@ -338,7 +337,6 @@ struct from_integers_fn {
    */
   __device__ void integer_element_to_string(size_type idx)
   {
-    if (d_integers.is_null(idx)) return;
     IntegerType value = d_integers.element<IntegerType>(idx);
     char* d_buffer    = d_chars + d_offsets[idx];
     integer_to_string(value, d_buffer);

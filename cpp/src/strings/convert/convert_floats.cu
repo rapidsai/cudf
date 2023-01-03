@@ -358,7 +358,6 @@ struct from_floats_fn {
 
   __device__ size_type compute_output_size(size_type idx)
   {
-    if (d_floats.is_null(idx)) return 0;
     FloatType value = d_floats.element<FloatType>(idx);
     ftos_converter fts;
     return static_cast<size_type>(fts.compute_ftos_size(static_cast<double>(value)));
@@ -366,7 +365,6 @@ struct from_floats_fn {
 
   __device__ void float_to_string(size_type idx)
   {
-    if (d_floats.is_null(idx)) return;
     FloatType value = d_floats.element<FloatType>(idx);
     ftos_converter fts;
     fts.float_to_string(static_cast<double>(value), d_chars + d_offsets[idx]);

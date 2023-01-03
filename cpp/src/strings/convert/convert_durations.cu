@@ -352,7 +352,6 @@ struct from_durations_fn {
 
   __device__ size_type string_size(size_type idx)
   {
-    if (d_durations.is_null(idx)) return 0;
     auto duration                = d_durations.element<T>(idx);
     duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration, &timeparts);
@@ -374,7 +373,6 @@ struct from_durations_fn {
 
   __device__ void set_chars(size_type idx)
   {
-    if (d_durations.is_null(idx)) return;
     auto duration                = d_durations.template element<T>(idx);
     duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration, &timeparts);
