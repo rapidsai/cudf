@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -1894,20 +1894,6 @@ def test_reader_empty_stripe(datadir, fname):
     expected = pd.read_orc(path)
     got = cudf.read_orc(path)
     assert_eq(expected, got)
-
-
-def test_orc_reader_zstd_max_ratio():
-    # Encodes as 64KB of zeros, which compresses to 18 bytes with ZSTD
-    expected = cudf.DataFrame({"s": [0.0] * 8 * 1024})
-
-    buff = BytesIO()
-    try:
-        expected.to_orc(buff, compression="ZSTD")
-    except RuntimeError:
-        pytest.mark.xfail(reason="Newer nvCOMP version is required")
-    else:
-        got = cudf.read_orc(buff)
-        assert_eq(expected, got)
 
 
 @pytest.mark.xfail(
