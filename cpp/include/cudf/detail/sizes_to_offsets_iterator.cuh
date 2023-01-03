@@ -285,7 +285,7 @@ auto sizes_to_offsets(SizesIterator begin,
  * @throw cudf::logic_error if the total size of the scan (last element) greater than maximum value
  * of `size_type`
  *
- * @tparam Iterator Used as input to scan to set the offset values
+ * @tparam InputIterator Used as input to scan to set the offset values
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
  * @param stream CUDA stream used for device memory operations and kernel launches
