@@ -280,12 +280,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto const node_levels_end = cudf::detail::copy_if(token_levels.begin(),
-                                                       token_levels.end(),
-                                                       tokens.begin(),
-                                                       node_levels.begin(),
-                                                       is_node,
-                                                       stream);
+    auto const node_levels_end = cudf::detail::copy_if_safe(token_levels.begin(),
+                                                            token_levels.end(),
+                                                            tokens.begin(),
+                                                            node_levels.begin(),
+                                                            is_node,
+                                                            stream);
     CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -351,7 +351,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto const node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
   auto const node_categories_end =
-    cudf::detail::copy_if(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
+    cudf::detail::copy_if_safe(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
 
@@ -366,7 +366,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto const node_range_out_it      = thrust::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
-  auto const node_range_out_end = cudf::detail::copy_if(
+  auto const node_range_out_end = cudf::detail::copy_if_safe(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(0) + num_tokens,
     node_range_out_it,
