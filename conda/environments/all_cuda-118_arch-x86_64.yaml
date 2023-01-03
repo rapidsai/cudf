@@ -60,7 +60,7 @@ dependencies:
 - pytest-xdist
 - python-confluent-kafka=1.7.0
 - python-snappy>=0.6.0
-- python>=3.8,<3.10
+- python>=3.8,<3.11
 - pytorch<1.12.0
 - rmm=23.02.*
 - s3fs>=2022.3.0
