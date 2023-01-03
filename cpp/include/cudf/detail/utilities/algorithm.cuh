@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ __device__ __forceinline__ T accumulate(Iterator first, Iterator last, T init, B
 
 /**
  * @copydoc cudf::detail::copy_if(rmm::exec_policy, InputIterator, InputIterator, OutputIterator,
- * Predicate)
+ * Predicate, rmm::cuda_stream_view)
  *
  * @tparam StencilIterator Type of the stencil iterator
  * @param stencil The beginning of the stencil sequence
@@ -42,12 +42,12 @@ template <typename InputIterator,
           typename StencilIterator,
           typename OutputIterator,
           typename Predicate>
-OutputIterator copy_if(InputIterator first,
-                       InputIterator last,
-                       StencilIterator stencil,
-                       OutputIterator result,
-                       Predicate pred,
-                       rmm::cuda_stream_view stream)
+OutputIterator copy_if_safe(InputIterator first,
+                            InputIterator last,
+                            StencilIterator stencil,
+                            OutputIterator result,
+                            Predicate pred,
+                            rmm::cuda_stream_view stream)
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -83,13 +83,13 @@ OutputIterator copy_if(InputIterator first,
  *         times `pred` evaluated to `true` in the range `[first, last)`.
  */
 template <typename InputIterator, typename OutputIterator, typename Predicate>
-OutputIterator copy_if(InputIterator first,
-                       InputIterator last,
-                       OutputIterator result,
-                       Predicate pred,
-                       rmm::cuda_stream_view stream)
+OutputIterator copy_if_safe(InputIterator first,
+                            InputIterator last,
+                            OutputIterator result,
+                            Predicate pred,
+                            rmm::cuda_stream_view stream)
 {
-  return copy_if(first, last, first, result, pred, stream);
+  return copy_if_safe(first, last, first, result, pred, stream);
 }
 
 }  // namespace cudf::detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -518,7 +518,7 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
     return key != unused;
   };
   auto const key_itr = thrust::make_transform_iterator(map.data(), get_key);
-  auto const end_it  = cudf::detail::copy_if(
+  auto const end_it  = cudf::detail::copy_if_safe(
     key_itr, key_itr + map.capacity(), populated_keys.begin(), key_used, stream);
 
   populated_keys.resize(std::distance(populated_keys.begin(), end_it), stream);

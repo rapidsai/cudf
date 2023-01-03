@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,12 +296,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
     rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
-    cudf::detail::copy_if(thrust::make_counting_iterator<NodeIndexT>(0),
-                          thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
-                          tokens.begin(),
-                          node_token_ids.begin(),
-                          is_node,
-                          stream);
+    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
+                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+                               tokens.begin(),
+                               node_token_ids.begin(),
+                               is_node,
+                               stream);
 
     // previous push node_id
     // if previous node is a push, then i-1
