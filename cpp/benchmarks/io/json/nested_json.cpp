@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,20 +34,20 @@
 
 namespace {
 
+// pre-generate all the number strings
+std::vector<std::string> _num_to_string;
+std::string num_to_string(int32_t num) { return _num_to_string.at(num); }
+
 // List of List nested.
 std::string generate_list_of_lists(int32_t max_depth, int32_t max_rows, std::string elem)
 {
   std::string json = "[";
-  for (int32_t depth = 1; depth < max_depth; ++depth) {
-    json += "[";
-  }
+  if (max_depth > 1) json += std::string(max_depth - 1, '[');
   for (int32_t row = 0; row < max_rows; ++row) {
     json += elem;
     if (row < max_rows - 1) { json += ", "; }
   }
-  for (int32_t depth = 1; depth < max_depth; ++depth) {
-    json += "]";
-  }
+  if (max_depth > 1) json += std::string(max_depth - 1, ']');
   json += "]";
   return json;
 }
@@ -55,22 +55,20 @@ std::string generate_list_of_lists(int32_t max_depth, int32_t max_rows, std::str
 // Struct of Struct nested.
 std::string generate_struct_of_structs(int32_t max_depth, int32_t max_rows, std::string elem)
 {
-  if (max_depth == 0) return "{}";
+  if (max_depth <= 0) return "{}";
   std::string json;
   for (int32_t depth = 0; depth < max_depth / 2; ++depth) {
-    json += R"({"a)" + std::to_string(depth) + R"(": )";
+    json += R"({"a)" + num_to_string(depth) + R"(": )";
   }
   if (max_rows == 0) json += "{}";
 
   for (int32_t row = 0; row < max_rows; ++row) {
     json += elem;
     if (row < max_rows - 1) {
-      json += R"(, "a)" + std::to_string(max_depth / 2 - 1) + "_" + std::to_string(row) + R"(": )";
+      json += R"(, "a)" + num_to_string(max_depth / 2 - 1) + "_" + num_to_string(row) + R"(": )";
     }
   }
-  for (int32_t depth = 0; depth < max_depth / 2; ++depth) {
-    json += "}";
-  }
+  if (max_depth > 0) json += std::string(max_depth / 2, '}');
   return json;
 }
 
@@ -78,14 +76,14 @@ std::string generate_row(
   int num_columns, int max_depth, int max_list_size, int max_struct_size, size_t max_bytes)
 {
   std::string s = "{";
-  std::vector<std::string> elems{
+  const std::vector<std::string> elems{
     R"(1)", R"(-2)", R"(3.4)", R"("5")", R"("abcdefghij")", R"(true)", R"(null)"};
   for (int i = 0; i < num_columns; i++) {
-    s += R"("col)" + std::to_string(i) + R"(": )";
+    s += R"("col)" + num_to_string(i) + R"(": )";
     if (i % 2 == 0) {
-      s += generate_struct_of_structs(max_depth - 2, (max_struct_size), elems[i % elems.size()]);
+      s += generate_struct_of_structs(max_depth - 2, max_struct_size, elems[i % elems.size()]);
     } else {
-      s += generate_list_of_lists(max_depth - 2, (max_struct_size), elems[i % elems.size()]);
+      s += generate_list_of_lists(max_depth - 2, max_struct_size, elems[i % elems.size()]);
     }
     if (s.length() > max_bytes) break;
     if (i < num_columns - 1) s += ", ";
@@ -101,7 +99,15 @@ std::string generate_json(int num_rows,
                           int max_struct_size,
                           size_t max_json_bytes)
 {
+  // std::to_string is slow, so we pre-generate all number strings we need.
+  _num_to_string.clear();
+  auto max_num_str =
+    std::max(std::max(num_columns, max_depth), std::max(max_list_size, max_struct_size));
+  for (int i = 0; i < max_num_str; i++)
+    _num_to_string.emplace_back(std::to_string(i));
+
   std::string s = "[\n";
+  s.reserve(max_json_bytes + 1024);
   for (int i = 0; i < num_rows; i++) {
     s += generate_row(
       num_columns, max_depth - 2, max_list_size, max_struct_size, max_json_bytes - s.length());
