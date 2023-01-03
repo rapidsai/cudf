@@ -118,8 +118,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         View the data as a device array object
         """
-        self._unlink_shared_buffers(zero_copied=True)
-
         return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property
@@ -155,8 +153,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         View the mask as a device array
         """
-        self._unlink_shared_buffers(zero_copied=True)
-
         return cuda.as_cuda_array(self.mask).view(mask_dtype)
 
     def __len__(self) -> int:
@@ -422,8 +418,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.force_deep_copy()
         else:
             if cudf.get_option("copy_on_write"):
-                if self._is_externally_referenced:
-                    return self.force_deep_copy()
 
                 copied_col = cast(
                     T,

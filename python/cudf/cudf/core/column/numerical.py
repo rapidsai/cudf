@@ -164,7 +164,6 @@ class NumericalColumn(NumericalBaseColumn):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        self._unlink_shared_buffers(zero_copied=True)
 
         output = {
             "shape": (len(self),),

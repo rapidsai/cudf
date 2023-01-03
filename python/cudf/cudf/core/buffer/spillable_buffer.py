@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -253,6 +253,10 @@ class SpillableBuffer(Buffer):
             self._exposed = True
             self._last_accessed = time.monotonic()
             return self._ptr
+
+    @property
+    def mutable_ptr(self) -> int:
+        return self.get_ptr(spill_lock=SpillLock())
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         """Spill lock the buffer

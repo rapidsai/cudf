@@ -209,6 +209,11 @@ class Buffer(Serializable):
         return self._ptr
 
     @property
+    def mutable_ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
+        return self._ptr
+
+    @property
     def owner(self) -> Any:
         """Object owning the memory of the buffer."""
         return self._owner

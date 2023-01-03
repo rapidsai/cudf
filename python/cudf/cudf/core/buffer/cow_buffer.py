@@ -9,7 +9,7 @@ from weakref import WeakSet
 
 import rmm
 
-from cudf.core.buffer.buffer import Buffer
+from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
 
 T = TypeVar("T", bound="CopyOnWriteBuffer")
 
@@ -42,10 +42,10 @@ class CopyOnWriteBuffer(Buffer):
     def _finalize_init(self):
         # the last step in initializing a `CopyOnWriteBuffer`
         # is to track it in `_instances`:
-        key = (self.ptr, self.size)
+        key = (self._ptr, self._size)
         self.__class__._instances[key].add(self)
         self._zero_copied = False
-        weakref.finalize(self, _keys_cleanup, self.ptr, self.size)
+        weakref.finalize(self, _keys_cleanup, self._ptr, self._size)
 
     @classmethod
     def _from_device_memory(cls: Type[T], data: Any) -> T:
@@ -80,7 +80,30 @@ class CopyOnWriteBuffer(Buffer):
         """
         Return `True` if `self`'s memory is shared with other columns.
         """
-        return len(self.__class__._instances[(self.ptr, self.size)]) > 1
+        return len(self.__class__._instances[(self._ptr, self._size)]) > 1
+
+    @property
+    def ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
+        self._unlink_shared_buffers(zero_copied=True)
+        return self._ptr
+
+    @property
+    def mutable_ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
+        self._unlink_shared_buffers()
+        return self._ptr
+
+    def _getitem(self, offset: int, size: int) -> Buffer:
+        """
+        Sub-classes can overwrite this to implement __getitem__
+        without having to handle non-slice inputs.
+        """
+        return self._from_device_memory(
+            cuda_array_interface_wrapper(
+                ptr=self._ptr + offset, size=size, owner=self.owner
+            )
+        )
 
     def copy(self, deep: bool = True):
         """
@@ -97,7 +120,7 @@ class CopyOnWriteBuffer(Buffer):
         -------
         Buffer
         """
-        if not deep:
+        if not deep and not self._zero_copied:
             copied_buf = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
             copied_buf._ptr = self._ptr
             copied_buf._size = self._size
@@ -106,7 +129,7 @@ class CopyOnWriteBuffer(Buffer):
             return copied_buf
         else:
             return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
+                rmm.DeviceBuffer(ptr=self._ptr, size=self.size)
             )
 
     @property
@@ -123,18 +146,32 @@ class CopyOnWriteBuffer(Buffer):
         self._unlink_shared_buffers(zero_copied=True)
 
         result = self._cuda_array_interface_readonly
-        result["data"] = (self.ptr, False)
+        result["data"] = (self._ptr, False)
         return result
+
+    @property
+    def _cuda_array_interface_readonly(self) -> dict:
+        """
+        Internal Implementation for the CUDA Array Interface which is
+        read-only.
+        """
+        return {
+            "data": (self._ptr, True),
+            "shape": (self.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
     def _unlink_shared_buffers(self, zero_copied=False):
         """
         Unlinks a Buffer if it is shared with other buffers(i.e.,
         weak references exist) by making a true deep-copy.
         """
-        if not self._zero_copied and self._shallow_copied():
+        if not self._zero_copied and self._is_shared:
             # make a deep copy of existing DeviceBuffer
             # and replace pointer to it.
-            current_buf = rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
+            current_buf = rmm.DeviceBuffer(ptr=self._ptr, size=self._size)
             new_buf = current_buf.copy()
             self._ptr = new_buf.ptr
             self._size = new_buf.size

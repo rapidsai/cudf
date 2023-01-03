@@ -313,47 +313,6 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    @property
-    def _is_internally_referenced(self) -> bool:
-        """
-        Determines if any of the buffers underneath the column
-        have been shared internally(i.e., between other columns).
-        """
-        return any(
-            isinstance(buf, CopyOnWriteBuffer) and buf._is_shared
-            for buf in (self.base_data, self.base_mask)
-        )
-
-    @property
-    def _is_externally_referenced(self):
-        """
-        Determines if any of the buffers underneath the column
-        have been shared externally(i.e., via __cuda_array_interface__).
-        """
-        return any(
-            isinstance(buf, CopyOnWriteBuffer) and buf._zero_copied
-            for buf in (self.base_data, self.base_mask)
-        )
-
-    def _unlink_shared_buffers(self, zero_copied=False):
-        """
-        Detaches a column from its current Buffers by making
-        a true deep-copy.
-        """
-        if not self._is_externally_referenced \
-                and self._is_internally_referenced:
-            new_col = self.force_deep_copy()
-            self._offset = new_col.offset
-            self._size = new_col.size
-            self._dtype = new_col._dtype
-            self.set_base_data(new_col.base_data)
-            self.set_base_children(new_col.base_children)
-            self.set_base_mask(new_col.base_mask)
-        if self.base_data is not None:
-            self.base_data._zero_copied = zero_copied
-        if self.base_mask is not None:
-            self.base_mask._zero_copied = zero_copied
-
     def _mimic_inplace(self, other_col, inplace=False):
         """
         Given another column, update the attributes of this column to mimic an
@@ -377,7 +336,7 @@ cdef class Column:
             return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
-        self._unlink_shared_buffers()
+
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:
@@ -391,12 +350,8 @@ cdef class Column:
 
         if col.base_data is None:
             data = NULL
-        elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(col.base_data).get_ptr(
-                spill_lock=get_spill_lock()
-            )
         else:
-            data = <void*><uintptr_t>(col.base_data.ptr)
+            data = <void*><uintptr_t>(col.base_data.mutable_ptr)
 
         cdef Column child_column
         if col.base_children:
@@ -456,7 +411,7 @@ cdef class Column:
                 spill_lock=get_spill_lock()
             )
         else:
-            data = <void*><uintptr_t>(col.base_data.ptr)
+            data = <void*><uintptr_t>(col.base_data._ptr)
 
         cdef Column child_column
         if col.base_children:
