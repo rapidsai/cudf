@@ -72,6 +72,9 @@ std::string generate_struct_of_structs(int32_t max_depth, int32_t max_rows, std:
   return json;
 }
 
+// Memoize the generated rows so we don't have to regenerate them.
+std::map<std::tuple<int, int, int, int>, std::string> _row_cache;
+
 std::string generate_row(
   int num_columns, int max_depth, int max_list_size, int max_struct_size, size_t max_bytes)
 {
@@ -80,10 +83,20 @@ std::string generate_row(
     R"(1)", R"(-2)", R"(3.4)", R"("5")", R"("abcdefghij")", R"(true)", R"(null)"};
   for (int i = 0; i < num_columns; i++) {
     s += R"("col)" + num_to_string(i) + R"(": )";
-    if (i % 2 == 0) {
-      s += generate_struct_of_structs(max_depth - 2, max_struct_size, elems[i % elems.size()]);
+    if (auto it = _row_cache.find({i % 2, max_depth - 2, max_struct_size, i % elems.size()});
+        it != _row_cache.end()) {
+      s += it->second;
     } else {
-      s += generate_list_of_lists(max_depth - 2, max_struct_size, elems[i % elems.size()]);
+      if (i % 2 == 0) {
+        auto r =
+          generate_struct_of_structs(max_depth - 2, max_struct_size, elems[i % elems.size()]);
+        _row_cache[{i % 2, max_depth - 2, max_struct_size, i % elems.size()}] = r;
+        s += r;
+      } else {
+        auto r = generate_list_of_lists(max_depth - 2, max_struct_size, elems[i % elems.size()]);
+        _row_cache[{i % 2, max_depth - 2, max_struct_size, i % elems.size()}] = r;
+        s += r;
+      }
     }
     if (s.length() > max_bytes) break;
     if (i < num_columns - 1) s += ", ";
@@ -105,6 +118,7 @@ std::string generate_json(int num_rows,
     std::max(std::max(num_columns, max_depth), std::max(max_list_size, max_struct_size));
   for (int i = 0; i < max_num_str; i++)
     _num_to_string.emplace_back(std::to_string(i));
+  _row_cache.clear();
 
   std::string s = "[\n";
   s.reserve(max_json_bytes + 1024);
