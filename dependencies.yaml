@@ -86,12 +86,12 @@ dependencies:
               arch: x86_64
               cuda: "11.8"
             packages:
-              - &nvcc_amd64_115 nvcc_linux-64=11.8
+              - nvcc_linux-64=11.8
           - matrix:
               arch: aarch64
               cuda: "11.8"
             packages:
-              - &nvcc_aarch64_115 nvcc_linux-aarch64=11.8
+              - nvcc_linux-aarch64=11.8
   cudatoolkit:
     specific:
       - output_types: conda
@@ -178,12 +178,22 @@ dependencies:
               arch: x86_64
               cuda: "11.5"
             packages:
-              - *nvcc_amd64_115
+              - nvcc_linux-64=11.5
           - matrix:
               arch: aarch64
               cuda: "11.5"
             packages:
-              - *nvcc_aarch64_115
+              - nvcc_linux-aarch64=11.5
+          - matrix:
+              arch: x86_64
+              cuda: "11.8"
+            packages:
+              - nvcc_linux-64=11.8
+          - matrix:
+              arch: aarch64
+              cuda: "11.8"
+            packages:
+              - nvcc_linux-aarch64=11.8
   notebooks:
     common:
       - output_types: [conda, requirements]
