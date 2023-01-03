@@ -230,6 +230,8 @@ Just as importantly, it can help catch real errors like integer overflow or divi
 
 When testing code that is expected to throw a warnings, developers should use the
 [`pytest.warns`](https://docs.pytest.org/en/7.1.x/how-to/capture-warnings.html#assertwarnings) context to catch the warning.
+For parametrized tests that raise warnings under specific conditions, use the `testing._utils.expect_warning_if` decorator instead of `pytest.warns`.
+
 ```{warning}
 [`warnings.catch_warnings`](https://docs.python.org/3/library/warnings.html#warnings.catch_warnings)
 is a tempting alternative to `pytest.warns`.
@@ -238,9 +240,6 @@ Unlike `pytest.warns`, which _requires_ that the expected warning be raised,
 `warnings.catch_warnings` simply catches warnings that appear without requiring them.
 The cudf testing suite should avoid such ambiguities.
 ```
-For parametrized tests that raise warnings under specific conditions, use the `testing._utils.expect_warning_if` decorator instead of `pytest.warns`.
-```
-
 
 ### Testing utility functions
 
