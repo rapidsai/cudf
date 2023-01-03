@@ -263,16 +263,36 @@ public:
       // empty table, so need to write an empty batch explicitly.
       // For more please see https://issues.apache.org/jira/browse/ARROW-17912.
       auto empty_batch = arrow::RecordBatch::MakeEmpty(arrow_tab->schema());
-      writer->WriteRecordBatch(*(*empty_batch));
+      auto status = writer->WriteRecordBatch(*(*empty_batch));
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write batch with the following error: " +
+                                 status.ToString());
+      }
     } else {
-      writer->WriteTable(*arrow_tab, max_chunk);
+      auto status = writer->WriteTable(*arrow_tab, max_chunk);
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write table with the following error: " +
+                                 status.ToString());
+      };
     }
   }
 
   void close() {
     if (initialized) {
-      writer->Close();
-      sink->Close();
+      {
+        auto status = writer->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing writer failed with the following error: " +
+                                   status.ToString());
+        }
+      }
+      {
+        auto status = sink->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing sink failed with the following error: " +
+                                   status.ToString());
+        }
+      }
     }
     initialized = false;
   }
@@ -606,7 +626,13 @@ public:
   std::shared_ptr<arrow::io::InputStream> source;
   std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
 
-  void close() { source->Close(); }
+  void close() {
+    auto status = source->Close();
+    if (!status.ok()) {
+      throw std::runtime_error("Closing source failed with the following error: " +
+                               status.ToString());
+    }
+  }
 };
 
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_result,
