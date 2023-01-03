@@ -25,9 +25,9 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
-  cudf
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
+  cudf libcudf
 
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
