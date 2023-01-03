@@ -31,10 +31,15 @@
 #include <arrow/filesystem/s3fs.h>
 #pragma nv_diag_default 611
 
+// We disable warning 2810 to workaround the compile issue (warning treated as error):
+// result.h(263): error #2810-D: ignoring return value type with "nodiscard" attribute
+#pragma nv_diag_suppress 2810
+#include <arrow/result.h>
+#pragma nv_diag_default 2810
+
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include <arrow/result.h>
 #include <arrow/status.h>
 
 #include <future>
