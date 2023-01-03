@@ -1200,10 +1200,10 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   if (column_stats != nullptr) {
-    auto batch_column_stats =
-      device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
-    EncodeColumnIndexes(
-      d_chunks_in_batch.flat_view(), batch_column_stats, column_index_truncate_length, stream);
+    EncodeColumnIndexes(d_chunks_in_batch.flat_view(),
+                        {column_stats, pages.size()},
+                        column_index_truncate_length,
+                        stream);
   }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1626,10 +1626,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
+  auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];

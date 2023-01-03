@@ -78,7 +78,6 @@ conda config --set ssl_verify False
 
 # TODO: Move boa install to gpuci/rapidsai
 gpuci_mamba_retry install boa
-
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
