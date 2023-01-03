@@ -3,6 +3,7 @@
 
 import cupy as cp
 import numpy as np
+from cython.operator cimport dereference
 
 import rmm
 
@@ -561,6 +562,73 @@ cdef class Column:
             size=size,
             null_count=null_count,
             children=tuple(children)
+        )
+
+    @staticmethod
+    def from_Column(
+        pylibcudf.Column col, bint data_ptr_exposed=False
+    ):
+        """Create a Column from a column
+
+        Typically, this is called on the result of a libcudf operation.
+        If the data of the libcudf result has been exposed, set
+        `data_ptr_exposed=True` to expose the memory of the returned Column
+        as well.
+        """
+        cdef pylibcudf.ColumnView view = col.view()
+        # cdef libcudf_types.type_id tid = view.type().id()
+        # cdef libcudf_types.data_type c_dtype
+        cdef size_type size = view.size()
+        cdef size_type null_count = view.null_count()
+        # cdef libcudf_types.mask_state mask_state
+
+        # TODO: Not sure why the below special cases exist, and this definitely
+        # doesn't seem like the best way to handle it in any case. Will revisit
+        # later.
+
+        # if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
+        #     c_dtype = libcudf_types.data_type(
+        #         libcudf_types.type_id.TIMESTAMP_SECONDS
+        #     )
+        #     with nogil:
+        #         c_col = move(libcudf_unary.cast(view, c_dtype))
+        # elif tid == libcudf_types.type_id.EMPTY:
+        #     c_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
+        #     mask_state = libcudf_types.mask_state.ALL_NULL
+        #     with nogil:
+        #         c_col = move(make_numeric_column(c_dtype, size, mask_state))
+
+        # size = c_col.get()[0].size()
+        dtype = dtype_from_column_view(dereference(view.c_obj.get()))
+
+        cdef pylibcudf.ColumnContents contents = col.release()
+
+        data = as_buffer(contents.data, exposed=data_ptr_exposed)
+
+        mask = None
+        if null_count > 0:
+            mask = as_buffer(contents.null_mask, exposed=data_ptr_exposed)
+
+        # TODO: Support for children
+        # cdef vector[unique_ptr[column]] c_children = move(contents.children)
+        # children = []
+        # if c_children.size() != 0:
+        #     # Because of a bug in Cython, we cannot set the optional
+        #     # `data_ptr_exposed` argument within a comprehension.
+        #     for i in range(c_children.size()):
+        #         child = Column.from_unique_ptr(
+        #             move(c_children[i]),
+        #             data_ptr_exposed=data_ptr_exposed
+        #         )
+        #         children.append(child)
+
+        return cudf.core.column.build_column(
+            data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            null_count=null_count,
+            # children=tuple(children)
         )
 
     @staticmethod

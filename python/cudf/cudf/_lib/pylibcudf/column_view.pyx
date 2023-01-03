@@ -22,7 +22,10 @@ cdef class ColumnView:
     # best to expose that in the API yet, but matching C++ for now and
     # requesting the size from the user. The gpumemoryview may also help.
     # TODO: Should be using `not None` where possible.
-    def __cinit__(
+    # TODO: I've temporarily defined __init__ instead of __cinit__ so that
+    # factory functions can call __new__ without arguments. I'll need to think
+    # more fully about what construction patterns we actually want to support.
+    def __init__(
         self, DataType dtype, size_type size, object data_buf, object mask_buf
     ):
         # TODO: Can the data_buf be None? We currently allow for that in cudf
@@ -58,6 +61,12 @@ cdef class ColumnView:
     # is sufficient.
     @staticmethod
     cdef from_column_view(column_view cv):
-        cdef ColumnView ret = ColumnView.__new__()
+        cdef ColumnView ret = ColumnView.__new__(ColumnView)
         ret.c_obj.reset(new column_view(cv))
         return ret
+
+    cpdef size_type size(self):
+        return self.get().size()
+
+    cpdef size_type null_count(self):
+        return self.get().null_count()

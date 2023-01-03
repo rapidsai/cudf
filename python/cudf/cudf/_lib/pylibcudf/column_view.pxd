@@ -3,6 +3,7 @@
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef class ColumnView:
@@ -16,3 +17,5 @@ cdef class ColumnView:
 
     @staticmethod
     cdef from_column_view(column_view cv)
+    cpdef size_type size(self)
+    cpdef size_type null_count(self)

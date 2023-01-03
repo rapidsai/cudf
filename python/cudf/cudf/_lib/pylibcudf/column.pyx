@@ -65,6 +65,14 @@ cdef class Column:
         return ColumnView.from_column_view(self.get().view())
 
     cpdef ColumnContents release(self):
+        """Release the data in this column.
+
+        After this method is called, any usage of this object will lead to seg
+        faults.
+        """
+        # TODO: Consider implementing a safety flag to prevent performing any
+        # operations on a released Column. Using a c bool flag it should be
+        # basically free (although repetitive) to do.
         cdef column_contents contents = move(self.get().release())
         cdef ColumnContents ret = ColumnContents()
         ret.data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
