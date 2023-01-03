@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -322,6 +322,7 @@ cdef columns_from_table_view(
     in the table view is ``owners[i]``. For more about memory ownership,
     see ``Column.from_column_view``.
     """
+
     return [
         Column.from_column_view(
             tv.column(i), owners[i] if isinstance(owners, list) else None
