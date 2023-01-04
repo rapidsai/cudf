@@ -356,9 +356,8 @@ struct from_floats_fn {
   int32_t* d_offsets;
   char* d_chars;
 
-  __device__ size_type compute_output_size(size_type idx)
+  __device__ size_type compute_output_size(FloatType value)
   {
-    FloatType value = d_floats.element<FloatType>(idx);
     ftos_converter fts;
     return static_cast<size_type>(fts.compute_ftos_size(static_cast<double>(value)));
   }
@@ -379,7 +378,7 @@ struct from_floats_fn {
     if (d_chars != nullptr) {
       float_to_string(idx);
     } else {
-      d_offsets[idx] = compute_output_size(idx);
+      d_offsets[idx] = compute_output_size(d_floats.element<FloatType>(idx));
     }
   }
 };

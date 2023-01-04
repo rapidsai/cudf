@@ -350,9 +350,8 @@ struct from_durations_fn {
     return ptr;
   }
 
-  __device__ size_type string_size(size_type idx)
+  __device__ size_type string_size(T duration)
   {
-    auto duration                = d_durations.element<T>(idx);
     duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration, &timeparts);
     return thrust::transform_reduce(
@@ -390,7 +389,7 @@ struct from_durations_fn {
     if (d_chars != nullptr) {
       set_chars(idx);
     } else {
-      d_offsets[idx] = string_size(idx);
+      d_offsets[idx] = string_size(d_durations.template element<T>(idx));
     }
   }
 };

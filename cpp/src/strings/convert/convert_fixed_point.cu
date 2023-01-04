@@ -206,9 +206,8 @@ struct from_fixed_point_fn {
    *
    * Output format is [-]integer.fraction
    */
-  __device__ int32_t compute_output_size(size_type idx)
+  __device__ int32_t compute_output_size(DecimalType value)
   {
-    auto const value = d_decimals.element<DecimalType>(idx);
     auto const scale = d_decimals.type().scale();
 
     if (scale >= 0) return count_digits(value) + scale;
@@ -269,7 +268,7 @@ struct from_fixed_point_fn {
     if (d_chars != nullptr) {
       decimal_to_string(idx);
     } else {
-      d_offsets[idx] = compute_output_size(idx);
+      d_offsets[idx] = compute_output_size(d_decimals.element<DecimalType>(idx));
     }
   }
 };

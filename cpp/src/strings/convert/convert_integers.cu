@@ -320,15 +320,6 @@ struct from_integers_fn {
   char* d_chars;
 
   /**
-   * @brief Calculates the size of the string required to convert the element, in base-10 format.
-   */
-  __device__ size_type compute_output_size(size_type idx)
-  {
-    IntegerType value = d_integers.element<IntegerType>(idx);
-    return count_digits(value);
-  }
-
-  /**
    * @brief Converts an integer element into a string.
    *
    * The integer is converted into base-10 using only characters [0-9].
@@ -351,7 +342,7 @@ struct from_integers_fn {
     if (d_chars != nullptr) {
       integer_element_to_string(idx);
     } else {
-      d_offsets[idx] = compute_output_size(idx);
+      d_offsets[idx] = count_digits(d_integers.element<IntegerType>(idx));
     }
   }
 };
