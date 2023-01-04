@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,13 +207,13 @@ TEST_F(LogicalStackTest, GroundTruth)
   cudaMemcpyAsync(d_stack_ops.data(),
                   stack_symbols.data(),
                   stack_symbols.size() * sizeof(SymbolT),
-                  cudaMemcpyHostToDevice,
+                  cudaMemcpyDefault,
                   stream.value());
 
   cudaMemcpyAsync(d_stack_op_indexes.data(),
                   stack_op_indexes.data(),
                   stack_op_indexes.size() * sizeof(SymbolOffsetT),
-                  cudaMemcpyHostToDevice,
+                  cudaMemcpyDefault,
                   stream.value());
 
   // Run algorithm

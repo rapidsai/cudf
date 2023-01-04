@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_ctx.device_ptr(),
                                   num_blocks * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -302,7 +302,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                     row_ctx.host_ptr(),
                                     num_blocks * sizeof(uint64_t),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
 
       // Pass 2: Output row offsets
@@ -323,7 +323,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
         CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                       row_ctx.device_ptr(),
                                       num_blocks * sizeof(uint64_t),
-                                      cudaMemcpyDeviceToHost,
+                                      cudaMemcpyDefault,
                                       stream.value()));
         stream.synchronize();
 
@@ -372,7 +372,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
                                   2 * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
