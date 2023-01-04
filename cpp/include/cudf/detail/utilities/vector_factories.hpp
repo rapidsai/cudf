@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -288,7 +288,7 @@ OutContainer make_vector_async(device_span<T const> v, rmm::cuda_stream_view str
 {
   OutContainer result(v.size());
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDeviceToHost, stream.value()));
+    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   return result;
 }
 

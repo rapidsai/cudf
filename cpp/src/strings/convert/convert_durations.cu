@@ -157,7 +157,7 @@ struct format_compiler {
     CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
                                   items.data(),
                                   items.size() * sizeof(items[0]),
-                                  cudaMemcpyHostToDevice,
+                                  cudaMemcpyDefault,
                                   stream.value()));
   }
 
