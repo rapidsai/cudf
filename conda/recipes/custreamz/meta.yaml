@@ -1,10 +1,9 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
-{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('RAPIDS_CUDA_VERSION', '11.5.2').split('.')[:2]) %}
-{% set py_version = environ.get('PY_VER', '3.8') %}
-{% set py_version_numeric = py_version.replace('.', '') %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version = environ['CONDA_PY'] %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 
 package:
   name: custreamz
@@ -15,10 +14,9 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - PARALLEL_LEVEL
-    - VERSION_SUFFIX
     - CMAKE_GENERATOR
     - CMAKE_C_COMPILER_LAUNCHER
     - CMAKE_CXX_COMPILER_LAUNCHER
@@ -40,17 +38,16 @@ requirements:
     - python
     - streamz
     - cudf ={{ version }}
-    - dask>=2022.12.0
-    - distributed>=2022.12.0
+    - dask >=2022.12.0
+    - distributed >=2022.12.0
     - python-confluent-kafka >=1.7.0,<1.8.0a0
     - cudf_kafka ={{ version }}
 
-# TODO: Remove the linux64 tags on tests after disabling gpuCI / Jenkins
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - custreamz                         # [linux64]
+test:
+  requires:
+    - cudatoolkit ={{ cuda_version }}
+  imports:
+    - custreamz
 
 about:
   home: https://rapids.ai/

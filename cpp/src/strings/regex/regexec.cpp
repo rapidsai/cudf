@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,8 +114,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyDefault, stream.value()));
 
   // build deleter to cleanup device memory
   auto deleter = [d_buffer](reprog_device* t) {

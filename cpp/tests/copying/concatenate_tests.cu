@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,10 +63,10 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
     std::iota(h_data.begin(), h_data.end(), char{0});
     std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(typed_data, h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(typed_mask, h_mask.data(), mask.size(), cudaMemcpyDefault, stream.value()));
     stream.synchronize();
   }
 

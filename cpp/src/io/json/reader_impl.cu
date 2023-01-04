@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,17 +361,14 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&first_row_len,
-                                  rec_starts.data() + 1,
-                                  sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &first_row_len, rec_starts.data() + 1, sizeof(uint64_t), cudaMemcpyDefault, stream.value()));
   }
   std::vector<char> first_row(first_row_len);
   CUDF_CUDA_TRY(cudaMemcpyAsync(first_row.data(),
                                 d_data.data(),
                                 first_row_len * sizeof(char),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
