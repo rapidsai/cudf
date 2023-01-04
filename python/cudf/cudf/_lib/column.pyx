@@ -485,7 +485,7 @@ cdef class Column:
         # cdef libcudf_types.size_type c_null_count = null_count
 
         mask = None
-        return pylibcudf.ColumnView(dtype, self.size, self.base_data, mask)
+        return pylibcudf.ColumnView(dtype, self.size, col.base_data, mask)
         # return column_view(
         #     dtype,
         #     self.size,

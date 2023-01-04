@@ -28,11 +28,11 @@ cdef class ColumnView:
     def __init__(
         self, DataType dtype, size_type size, object data_buf, object mask_buf
     ):
-        # TODO: Can the data_buf be None? We currently allow for that in cudf
-        # when a Column's base_data is None, but I don't know why. I think that
-        # should be filtered out upstream of here.
-        # don't know if that's actually support
-        cdef const void * data = int_to_void_ptr(data_buf.ptr)
+        # TODO: Investigate cases where the data_buf is None. I'm not sure that
+        # this is a real use case that we should support.
+        cdef const void * data = NULL
+        if data_buf is not None:
+            data = int_to_void_ptr(data_buf.ptr)
         cdef const bitmask_type * null_mask = NULL
         if mask_buf is not None:
             null_mask = int_to_bitmask_ptr(mask_buf.ptr)
