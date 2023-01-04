@@ -5,6 +5,7 @@ import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
+import pyarrow as pa
 import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
@@ -68,6 +69,7 @@ extensions = [
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
+            pa.get_include(),
             cuda_include_dir,
         ],
         library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),

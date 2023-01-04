@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ struct DataChunkSourceTest : public BaseFixture {
 std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
 {
   std::string result(chunk.size(), '\0');
-  cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDeviceToHost);
+  cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDefault);
   return result;
 }
 
