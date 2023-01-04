@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       cudaMemcpyAsync(&error_index,
                       token_indices.data() + thrust::distance(tokens.begin(), error_location),
                       sizeof(SymbolOffsetT),
-                      cudaMemcpyDeviceToHost,
+                      cudaMemcpyDefault,
                       stream.value()));
     stream.synchronize();
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +

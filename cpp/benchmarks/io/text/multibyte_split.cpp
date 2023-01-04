@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,10 +148,8 @@ static void bench_multibyte_split(nvbench::state& state,
   }
   if (source_type == data_chunk_source_type::host_pinned) {
     host_pinned_input.resize(static_cast<std::size_t>(device_input.size()));
-    cudaMemcpy(host_pinned_input.data(),
-               device_input.data(),
-               host_pinned_input.size(),
-               cudaMemcpyDeviceToHost);
+    cudaMemcpy(
+      host_pinned_input.data(), device_input.data(), host_pinned_input.size(), cudaMemcpyDefault);
   }
 
   auto source = [&] {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -817,13 +817,10 @@ void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
 
   std::vector<int> schemas(pages.size());
   std::vector<int> h_page_index(pages.size());
-  cudaMemcpy(
-    h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDefault);
   std::vector<cumulative_row_info> h_cinfo(pages.size());
-  cudaMemcpy(h_cinfo.data(),
-             c_info.data(),
-             sizeof(cumulative_row_info) * pages.size(),
-             cudaMemcpyDeviceToHost);
+  cudaMemcpy(
+    h_cinfo.data(), c_info.data(), sizeof(cumulative_row_info) * pages.size(), cudaMemcpyDefault);
   auto schema_iter = cudf::detail::make_counting_transform_iterator(
     0, [&](size_type i) { return pages[h_page_index[i]].src_col_schema; });
   thrust::copy(thrust::seq, schema_iter, schema_iter + pages.size(), schemas.begin());
@@ -1114,7 +1111,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   cudaMemcpy(h_c_info_sorted.data(),
              c_info_sorted.data(),
              sizeof(cumulative_row_info) * c_info_sorted.size(),
-             cudaMemcpyDeviceToHost);
+             cudaMemcpyDefault);
   // print_cumulative_row_info(h_c_info_sorted, "raw");
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
@@ -1153,7 +1150,7 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
   cudaMemcpyAsync(h_aggregated_info.data(),
                   aggregated_info.data(),
                   sizeof(cumulative_row_info) * c_info.size(),
-                  cudaMemcpyDeviceToHost,
+                  cudaMemcpyDefault,
                   stream);
   stream.synchronize();
 

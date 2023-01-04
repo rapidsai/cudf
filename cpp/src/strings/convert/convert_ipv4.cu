@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
+#include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -27,10 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/count.h>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -123,38 +120,34 @@ namespace {
  */
 struct integers_to_ipv4_fn {
   column_device_view const d_column;
-  int32_t const* d_offsets;
-  char* d_chars;
-
-  __device__ int convert(int value, char* digits)
-  {
-    int digits_idx = 0;
-    while ((value > 0) && (digits_idx < 3)) {
-      digits[digits_idx++] = '0' + (value % 10);
-      value                = value / 10;
-    }
-    return digits_idx;
-  }
+  size_type* d_offsets{};
+  char* d_chars{};
 
   __device__ void operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    int64_t ip_number = d_column.element<int64_t>(idx);
-    char* out_ptr     = d_chars + d_offsets[idx];
-    int shift_bits    = 24;
+    if (d_column.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+
+    auto const ip_number = d_column.element<int64_t>(idx);
+
+    char* out_ptr   = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    int shift_bits  = 24;
+    size_type bytes = 3;  // at least 3 dots: xxx.xxx.xxx.xxx
+#pragma unroll
     for (int n = 0; n < 4; ++n) {
-      int value = static_cast<int>((ip_number >> shift_bits) & 0x00FF);
-      if (value == 0)
-        *out_ptr++ = '0';
-      else {
-        char digits[3];
-        int num_digits = convert(value, digits);
-        while (num_digits-- > 0)
-          *out_ptr++ = digits[num_digits];
+      uint8_t value = static_cast<uint8_t>((ip_number >> shift_bits) & 0x00FF);
+      if (out_ptr) {
+        out_ptr += integer_to_string(value, out_ptr);
+        if ((n + 1) < 4) *out_ptr++ = '.';
+      } else {
+        bytes += count_digits(value);
       }
-      if ((n + 1) < 4) *out_ptr++ = '.';
       shift_bits -= 8;
     }
+
+    if (!d_chars) { d_offsets[idx] = bytes; }
   }
 };
 
@@ -165,48 +158,19 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = integers.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (integers.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto column   = column_device_view::create(integers, stream);
-  auto d_column = *column;
+  auto d_column = column_device_view::create(integers, stream);
+  auto children = cudf::strings::detail::make_strings_children(
+    integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
-  // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
-  // build offsets column
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0), [d_column] __device__(size_type idx) {
-      if (d_column.is_null(idx)) return 0;
-      size_type bytes   = 3;  // at least 3 dots: xxx.xxx.xxx.xxx
-      int64_t ip_number = d_column.element<int64_t>(idx);
-      for (int n = 0; n < 4; ++n) {
-        auto value = ip_number & 0x00FF;
-        bytes += (value < 10 ? 1 : (value < 100 ? 2 : 3));
-        ip_number = ip_number >> 8;
-      }
-      return bytes;
-    });
-  auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
-
-  // build chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = create_chars_child_column(bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     integers_to_ipv4_fn{d_column, d_offsets, d_chars});
-
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+  return make_strings_column(integers.size(),
+                             std::move(children.first),
+                             std::move(children.second),
                              integers.null_count(),
-                             std::move(null_mask));
+                             cudf::detail::copy_bitmask(integers, stream, mr));
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
