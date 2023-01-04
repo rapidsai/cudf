@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -343,6 +343,7 @@ add_library(
   src/io/json/reader_impl.cu
   src/io/json/experimental/byte_range_info.cu
   src/io/json/experimental/read_json.cpp
+  src/io/json/writer_impl.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp

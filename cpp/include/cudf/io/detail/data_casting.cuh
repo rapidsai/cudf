@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,27 @@ __device__ __forceinline__ char get_escape_char(char escaped_char)
   }
 }
 
+/**
+ * @brief Returns the escaped characters for a given character.
+ *
+ * @param escaped_char The character to escape.
+ * @return The escaped characters for a given character.
+ */
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
 /**
  * @brief Parses the hex value from the four hex digits of a unicode code point escape sequence
  * \uXXXX.

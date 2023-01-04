@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,6 +202,21 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_size_with_padding());
 
   return detail::json::read_json(datasources, options, cudf::get_default_stream(), mr);
+}
+
+void write_json(json_writer_options const& options, rmm::mr::device_memory_resource* mr)
+{
+  using namespace cudf::io::detail;
+
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
+
+  return json::write_json(  //
+    sinks[0].get(),
+    options.get_table(),
+    options,
+    cudf::get_default_stream(),
+    mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
