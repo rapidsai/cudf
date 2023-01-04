@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,11 +169,11 @@ size_type inplace_bitmask_binop(Binop op,
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
+    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
                                 masks_begin_bits.data(),
                                 masks_begin_bits.size_bytes(),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
 
   auto constexpr block_size = 256;

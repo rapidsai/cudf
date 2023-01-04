@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,14 +211,12 @@ constexpr uint32_t encode_block_size = 512;
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
  * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
  * compressed size)
- * @param[in] allow_block_size_estimate If true, estimate uncompressed size for small blocks
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
                                uint32_t compression_block_size,
                                uint32_t log2maxcr,
-                               bool allow_block_size_estimate,
                                rmm::cuda_stream_view stream);
 
 /**
