@@ -1842,7 +1842,14 @@ def test_string_wrap(data, width):
     ps = pd.Series(data)
 
     assert_eq(
-        gs.str.wrap(width=width),
+        gs.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         ps.str.wrap(
             width=width,
             break_long_words=False,
@@ -1857,7 +1864,14 @@ def test_string_wrap(data, width):
     pi = pd.Index(data)
 
     assert_eq(
-        gi.str.wrap(width=width),
+        gi.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         pi.str.wrap(
             width=width,
             break_long_words=False,
