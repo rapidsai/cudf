@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1022,7 +1022,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   cudaMemcpyAsync(h_inner_offsets.data(),
                   tdigest_offsets.begin<offset_type>(),
                   sizeof(offset_type) * tdigest_offsets.size(),
-                  cudaMemcpyDeviceToHost,
+                  cudaMemcpyDefault,
                   stream);
 
   stream.synchronize();
@@ -1274,7 +1274,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   cudaMemcpyAsync(h_group_offsets.data(),
                   group_offsets.begin(),
                   sizeof(size_type) * group_offsets.size(),
-                  cudaMemcpyDeviceToHost,
+                  cudaMemcpyDefault,
                   stream);
 
   return merge_tdigests(tdv,
