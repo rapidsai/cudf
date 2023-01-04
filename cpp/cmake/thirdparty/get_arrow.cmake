@@ -173,6 +173,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             # e.g. needed by blazingsql-io
             ${ARROW_PARQUET_OPTIONS}
             "ARROW_PARQUET ${ENABLE_PARQUET}"
+            "ARROW_FILESYSTEM ON"
             ${ARROW_PYTHON_OPTIONS}
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
             "ARROW_USE_CCACHE OFF"
@@ -372,7 +373,7 @@ endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
-      9.0.0
+      10.0.1
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()

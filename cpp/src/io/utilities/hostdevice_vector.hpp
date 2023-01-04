@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,15 +133,15 @@ class hostdevice_vector {
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      device_ptr(), host_ptr(), memory_size(), cudaMemcpyHostToDevice, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(device_ptr(), host_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      host_ptr(), device_ptr(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(host_ptr(), device_ptr(), memory_size(), cudaMemcpyDefault, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
