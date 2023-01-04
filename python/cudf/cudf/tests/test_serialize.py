@@ -340,7 +340,8 @@ def test_deserialize_cudf_0_16(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
 
     expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
-    actual = pickle.load(open(fname, "rb"))
+    with open(fname, "rb") as f:
+        actual = pickle.load(f)
 
     assert_eq(expected, actual)
 

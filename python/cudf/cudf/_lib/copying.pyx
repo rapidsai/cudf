@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
-import warnings
 
 from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
@@ -56,7 +55,7 @@ def _gather_map_is_valid(
     """Returns true if gather map is valid.
 
     A gather map is valid if empty or all indices are within the range
-    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    ``[-nrows, nrows)``, except when ``nullify`` is specified.
     """
     if not check_bounds or nullify or len(gather_map) == 0:
         return True
@@ -628,19 +627,9 @@ def shift(Column input, int offset, object fill_value=None):
     cdef DeviceScalar fill
 
     if isinstance(fill_value, DeviceScalar):
-        fill_value_type = fill_value.dtype
         fill = fill_value
     else:
-        fill_value_type = type(fill_value)
         fill = as_device_scalar(fill_value, input.dtype)
-
-    if not cudf.utils.dtypes._can_cast(input.dtype, fill_value_type):
-        warnings.warn(
-            f"Passing {fill_value_type} to shift is deprecated and will "
-            f"raise in a future version"
-            f", pass a {input.dtype} scalar instead.",
-            FutureWarning,
-        )
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset

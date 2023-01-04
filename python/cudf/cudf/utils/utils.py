@@ -214,6 +214,7 @@ def set_allocator(
         Enable logging (default ``False``).
         Enabling this option will introduce performance overhead.
     """
+    # TODO: Remove this in 23.04 to give users some time to switch.
     warnings.warn(
         "The cudf.set_allocator function is deprecated and will be removed in "
         "a future release. Please use rmm.reinitialize "

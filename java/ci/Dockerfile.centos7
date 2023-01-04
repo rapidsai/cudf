@@ -17,13 +17,11 @@
 ###
 # Build the image for cudf development environment.
 #
-# Arguments: CUDA_VERSION=11.5.0
+# Arguments: CUDA_VERSION=11.X.Y
 #
 ###
-ARG CUDA_VERSION=11.5.0
-# use rapids gpuci/cuda images until nvidia/cuda cuda 11.5+ images are available in docker hub
-# FROM nvidia/cuda:$CUDA_VERSION-devel-centos7
-FROM gpuci/cuda:$CUDA_VERSION-devel-centos7
+ARG CUDA_VERSION=11.8.0
+FROM nvidia/cuda:$CUDA_VERSION-devel-centos7
 
 ### Install basic requirements
 ARG DEVTOOLSET_VERSION=9

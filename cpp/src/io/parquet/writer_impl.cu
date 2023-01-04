@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "parquet_gpu.cuh"
-#include "writer_impl.hpp"
-
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "parquet_common.hpp"
+#include "parquet_gpu.cuh"
+#include "writer_impl.hpp"
 
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
@@ -430,16 +430,16 @@ struct leaf_schema_fn {
     if (std::is_same_v<T, numeric::decimal32>) {
       col_schema.type              = Type::INT32;
       col_schema.stats_dtype       = statistics_dtype::dtype_int32;
-      col_schema.decimal_precision = 9;
+      col_schema.decimal_precision = MAX_DECIMAL32_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type              = Type::INT64;
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
-      col_schema.decimal_precision = 18;
+      col_schema.decimal_precision = MAX_DECIMAL64_PRECISION;
     } else if (std::is_same_v<T, numeric::decimal128>) {
       col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
       col_schema.type_length       = sizeof(__int128_t);
       col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
-      col_schema.decimal_precision = 38;
+      col_schema.decimal_precision = MAX_DECIMAL128_PRECISION;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -1200,17 +1200,17 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   if (column_stats != nullptr) {
-    auto batch_column_stats =
-      device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
-    EncodeColumnIndexes(
-      d_chunks_in_batch.flat_view(), batch_column_stats, column_index_truncate_length, stream);
+    EncodeColumnIndexes(d_chunks_in_batch.flat_view(),
+                        {column_stats, pages.size()},
+                        column_index_truncate_length,
+                        stream);
   }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
                                 d_chunks_in_batch.data(),
                                 d_chunks_in_batch.flat_view().size_bytes(),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 }
@@ -1253,7 +1253,9 @@ size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
                               ? std::nullopt
                               : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
-  return std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  // page size must fit in a 32-bit signed integer
+  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
 
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
@@ -1624,10 +1626,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
+  auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];
@@ -1705,7 +1707,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
                                           dev_bfr,
                                           ck.ck_stat_size,
-                                          cudaMemcpyDeviceToHost,
+                                          cudaMemcpyDefault,
                                           stream.value()));
             stream.synchronize();
           }
@@ -1722,7 +1724,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
                                         dev_bfr,
                                         ck.ck_stat_size + ck.compressed_size,
-                                        cudaMemcpyDeviceToHost,
+                                        cudaMemcpyDefault,
                                         stream.value()));
           stream.synchronize();
           out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
@@ -1769,10 +1771,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
                                         ck.column_index_blob,
                                         ck.column_index_size,
-                                        cudaMemcpyDeviceToHost,
+                                        cudaMemcpyDefault,
                                         stream.value()));
 
-          // calculate offsets while the column index is transfering
+          // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;

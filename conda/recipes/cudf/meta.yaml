@@ -2,9 +2,9 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
-{% set cuda_major=cuda_version.split('.')[0] %}
+{% set py_version = environ['CONDA_PY'] %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
 
 package:
   name: cudf
@@ -17,10 +17,20 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - VERSION_SUFFIX
     - PARALLEL_LEVEL
-  # libcudf's run_exports pinning is looser than we would like
+    - CMAKE_GENERATOR
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
   ignore_run_exports:
+    # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
     - {{ compiler('cuda') }}
@@ -31,21 +41,22 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
+    - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf>=3.20.1,<3.21.0a0
+    - protobuf =4.21
     - python
     - cython >=0.29,<0.30
-    - scikit-build>=0.13.1
+    - scikit-build >=0.13.1
     - setuptools
     - numba >=0.56.2
-    - dlpack>=0.5,<0.6.0a0
-    - pyarrow =9
+    - dlpack >=0.5,<0.6.0a0
+    - pyarrow =10
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
   run:
-    - protobuf>=3.20.1,<3.21.0a0
+    - protobuf =4.21
     - python
     - typing_extensions
     - pandas >=1.0,<1.6.0dev0
@@ -56,18 +67,19 @@ requirements:
     - libcudf {{ version }}
     - fastavro >=0.22.0
     - {{ pin_compatible('rmm', max_pin='x.x') }}
-    - fsspec>=0.6.0
+    - fsspec >=0.6.0
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
     - cachetools
-    - cubinlinker  # [linux64]  # CUDA enhanced compatibility.
+    - cubinlinker  # CUDA enhanced compatibility.
     - cuda-python >=11.7.1,<12.0
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - cudf                              # [linux64]
+
+test:
+  requires:
+    - cudatoolkit ={{ cuda_version }}
+  imports:
+    - cudf
 
 about:
   home: https://rapids.ai/

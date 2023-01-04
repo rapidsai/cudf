@@ -187,7 +187,8 @@ ConfigureBench(
   reduction/reduce.cpp reduction/scan.cpp
 )
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
+  reduction/segment_reduce.cu
 )
 
 # ##################################################################################################
@@ -291,7 +292,7 @@ ConfigureBench(
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------

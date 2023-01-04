@@ -101,8 +101,7 @@ TEST_F(TypeInference, Null)
                     string_offset.size(),
                     stream);
 
-  EXPECT_EQ(res_type,
-            cudf::data_type{cudf::type_id::FLOAT64});  // FLOAT64 to align with pandas's behavior
+  EXPECT_EQ(res_type, cudf::data_type{cudf::type_id::INT64});
 }
 
 TEST_F(TypeInference, AllNull)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,14 +46,14 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
   CUDF_CUDA_TRY(cudaMemcpy(h_values.data(),
                            sorted_values.data<double>(),
                            sizeof(double) * sorted_values.size(),
-                           cudaMemcpyDeviceToHost));
+                           cudaMemcpyDefault));
   std::vector<char> h_validity(sorted_values.size());
   if (sorted_values.null_mask() != nullptr) {
     auto validity = cudf::mask_to_bools(sorted_values.null_mask(), 0, sorted_values.size());
     CUDF_CUDA_TRY(cudaMemcpy(h_validity.data(),
                              (validity->view().data<char>()),
                              sizeof(char) * sorted_values.size(),
-                             cudaMemcpyDeviceToHost));
+                             cudaMemcpyDefault));
   }
 
   // generate the tdigest
@@ -103,7 +103,7 @@ struct percentile_approx_dispatch {
     cudf::tdigest::tdigest_column_view tdv(*agg_result);
     auto result = cudf::percentile_approx(tdv, g_percentages);
 
-    cudf::test::expect_columns_equivalent(
+    cudf::test::detail::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
 
     return result;
@@ -251,7 +251,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
                            h_keys.data(),
                            h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyHostToDevice));
+                           cudaMemcpyDefault));
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
     percentile_approx_test(
@@ -297,7 +297,7 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   CUDF_CUDA_TRY(cudaMemcpy(keys->mutable_view().data<int32_t>(),
                            h_keys.data(),
                            h_keys.size() * sizeof(int32_t),
-                           cudaMemcpyHostToDevice));
+                           cudaMemcpyDefault));
 
   // add a null mask
   auto mask = make_null_mask(*values);

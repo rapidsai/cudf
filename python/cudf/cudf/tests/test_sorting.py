@@ -14,6 +14,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 sort_nelem_args = [2, 257]
@@ -328,23 +329,27 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
                     assert sr.iloc[0] == i
         assert nrows == nelem
 
-    _check_scatter_by_map(
-        df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
-    )
+    with pytest.warns(UserWarning):
+        _check_scatter_by_map(
+            df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
+        )
     _check_scatter_by_map(
         df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
     )
     _check_scatter_by_map(
         df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
     )
-    _check_scatter_by_map(
-        df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
-    )
+    with pytest.warns(UserWarning):
+        _check_scatter_by_map(
+            df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
+        )
 
     if map_size == 2 and nelem == 100:
-        df.scatter_by_map("a")  # Auto-detect map_size
+        with pytest.warns(UserWarning):
+            df.scatter_by_map("a")  # Auto-detect map_size
         with pytest.raises(ValueError):
-            df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
+            with pytest.warns(UserWarning):
+                df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
     # Test GenericIndex
     df2 = df.set_index("c")
@@ -374,7 +379,8 @@ def test_dataframe_sort_values_kind(nelem, dtype, kind):
     df = DataFrame()
     df["a"] = aa = (100 * np.random.random(nelem)).astype(dtype)
     df["b"] = bb = (100 * np.random.random(nelem)).astype(dtype)
-    sorted_df = df.sort_values(by="a", kind=kind)
+    with expect_warning_if(kind != "quicksort", UserWarning):
+        sorted_df = df.sort_values(by="a", kind=kind)
     # Check
     sorted_index = np.argsort(aa, kind="mergesort")
     assert_eq(sorted_df.index.values, sorted_index)

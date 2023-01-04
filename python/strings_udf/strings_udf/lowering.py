@@ -20,10 +20,6 @@ from strings_udf._lib.tables import (
 )
 from strings_udf._typing import size_type, string_view, udf_string
 
-character_flags_table_ptr = get_character_flags_table_ptr()
-character_cases_table_ptr = get_character_cases_table_ptr()
-special_case_mapping_table_ptr = get_special_case_mapping_table_ptr()
-
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
 
@@ -33,6 +29,11 @@ _UDF_STRING_PTR = types.CPointer(udf_string)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
 _concat_string_view = cuda.declare_device(
     "concat", types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR)
+)
+
+_string_view_replace = cuda.declare_device(
+    "replace",
+    types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
 )
 
 
@@ -209,6 +210,37 @@ def concat_impl(context, builder, sig, args):
     return result._getvalue()
 
 
+def call_string_view_replace(result, src, to_replace, replacement):
+    return _string_view_replace(result, src, to_replace, replacement)
+
+
+@cuda_lower("StringView.replace", string_view, string_view, string_view)
+def replace_impl(context, builder, sig, args):
+    src_ptr = builder.alloca(args[0].type)
+    to_replace_ptr = builder.alloca(args[1].type)
+    replacement_ptr = builder.alloca(args[2].type)
+
+    builder.store(args[0], src_ptr)
+    builder.store(args[1], to_replace_ptr),
+    builder.store(args[2], replacement_ptr)
+
+    udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+
+    _ = context.compile_internal(
+        builder,
+        call_string_view_replace,
+        types.void(
+            _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+        ),
+        (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(udf_string)(
+        context, builder, value=builder.load(udf_str_ptr)
+    )
+    return result._getvalue()
+
+
 def create_binary_string_func(binary_func, retty):
     """
     Provide a wrapper around numba's low-level extension API which
@@ -356,7 +388,7 @@ def create_unary_identifier_func(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             tbl_ptr = context.get_constant(
-                types.uintp, character_flags_table_ptr
+                types.uintp, get_character_flags_table_ptr()
             )
             result = context.compile_internal(
                 builder,
@@ -389,13 +421,13 @@ def create_upper_or_lower(id_func):
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
             flags_tbl_ptr = context.get_constant(
-                types.uintp, character_flags_table_ptr
+                types.uintp, get_character_flags_table_ptr()
             )
             cases_tbl_ptr = context.get_constant(
-                types.uintp, character_cases_table_ptr
+                types.uintp, get_character_cases_table_ptr()
             )
             special_tbl_ptr = context.get_constant(
-                types.uintp, special_case_mapping_table_ptr
+                types.uintp, get_special_case_mapping_table_ptr()
             )
             udf_str_ptr = builder.alloca(
                 default_manager[udf_string].get_value_type()

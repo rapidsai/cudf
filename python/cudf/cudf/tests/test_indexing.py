@@ -988,9 +988,6 @@ def test_series_setitem_iloc(key, value, nulls):
         pytest.param(
             0,
             0.5,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/9913"
-            ),
         ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
@@ -1276,7 +1273,7 @@ def test_iloc_categorical_index(index):
         slice("2001", "2002"),
         slice("2002", "2001"),
         slice(None, "2020"),
-        slice("2020", None),
+        slice("2001", None),
     ],
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
