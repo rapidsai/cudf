@@ -102,7 +102,7 @@ struct from_booleans_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
-      if (d_chars == nullptr) d_offsets[idx] = 0;
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
       return;
     }
 
