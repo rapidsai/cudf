@@ -222,14 +222,14 @@ point (and we will remember to update the test).
 
 Some code may be expected to throw warnings.
 A common example is when a cudf API is deprecated for future removal, but many other possibilities exist as well.
-The cudf testing suite [surfaces all warnings as errors](https://docs.pytest.org/en/7.1.x/how-to/capture-warnings.html#controlling-warnings).
+The cudf testing suite [surfaces all warnings as errors](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#controlling-warnings).
 This includes warnings raised from non-cudf code, such as calls to pandas or pyarrow.
 This setting forces developers to proactively deal with deprecations from other libraries,
 as well as preventing the internal use of deprecated cudf APIs in other parts of the library.
 Just as importantly, it can help catch real errors like integer overflow or division by zero.
 
 When testing code that is expected to throw a warnings, developers should use the
-[`pytest.warns`](https://docs.pytest.org/en/7.1.x/how-to/capture-warnings.html#assertwarnings) context to catch the warning.
+[`pytest.warns`](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#assertwarnings) context to catch the warning.
 For parametrized tests that raise warnings under specific conditions, use the `testing._utils.expect_warning_if` decorator instead of `pytest.warns`.
 
 ```{warning}
