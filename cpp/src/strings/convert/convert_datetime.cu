@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,8 @@ struct timestamp_components {
   int8_t hour;
   int8_t minute;
   int8_t second;
+  int8_t weeks;
+  int8_t weekday;
   int32_t subsecond;
   int32_t tz_minutes;
 };
@@ -112,7 +114,8 @@ struct format_compiler {
   // https://en.cppreference.com/w/cpp/chrono/system_clock/formatter
   specifier_map specifiers = {
     {'Y', 4}, {'y', 2}, {'m', 2}, {'d', 2}, {'H', 2}, {'I', 2}, {'M', 2},
-    {'S', 2}, {'f', 6}, {'z', 5}, {'Z', 3}, {'p', 2}, {'j', 3}};
+    {'S', 2}, {'f', 6}, {'z', 5}, {'Z', 3}, {'p', 2}, {'j', 3},
+    {'W', 2}, {'w', 1}};
   // clang-format on
 
   format_compiler(std::string_view fmt,
@@ -298,6 +301,18 @@ struct parse_datetime {
           timeparts.hour = hour;
           break;
         }
+        case 'W': {  // week of year
+          auto const [weeks, left] = parse_int(ptr, item.length);
+          timeparts.weeks          = static_cast<int8_t>(weeks + 1);
+          bytes_read -= left;
+          break;
+        }
+        case 'w': {  // day of week; Mon(1)-Sat(6): 0 is mapped to Sun(7)
+          auto const [weekday, left] = parse_int(ptr, item.length);
+          timeparts.weekday          = static_cast<int8_t>(weekday == 0 ? 7 : weekday);
+          bytes_read -= left;
+          break;
+        }
         case 'z': {
           // 'z' format is +hh:mm -- single sign char and 2 chars each for hour and minute
           if (item.length == 5) {
@@ -321,12 +336,25 @@ struct parse_datetime {
 
   [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
-    auto const ymd =  // convenient chrono class handles the leap year calculations for us
-      cuda::std::chrono::year_month_day(
-        cuda::std::chrono::year{timeparts.year},
-        cuda::std::chrono::month{static_cast<uint32_t>(timeparts.month)},
-        cuda::std::chrono::day{static_cast<uint32_t>(timeparts.day)});
-    auto const days = cuda::std::chrono::sys_days(ymd).time_since_epoch().count();
+    auto const days = [timeparts] {
+      if (timeparts.weeks > 0 && timeparts.weekday > 0) {
+        auto const y = cuda::std::chrono::year{timeparts.year};
+        // clang-format off
+        auto days    =  // compute days from year, weeks and weekday
+          cuda::std::chrono::sys_days{cuda::std::chrono::Monday[1]/cuda::std::chrono::January/y} +
+          cuda::std::chrono::weeks(timeparts.weeks - 1) - cuda::std::chrono::weeks{1} +
+          (cuda::std::chrono::weekday(timeparts.weekday) -
+           cuda::std::chrono::weekday{1});  // cuda::std::chrono::Monday causes compile error here
+        // clang-format on
+        return days.time_since_epoch().count();
+      }
+      auto const ymd =  // chrono class handles the leap year calculations for us
+        cuda::std::chrono::year_month_day(
+          cuda::std::chrono::year{timeparts.year},
+          cuda::std::chrono::month{static_cast<uint32_t>(timeparts.month)},
+          cuda::std::chrono::day{static_cast<uint32_t>(timeparts.day)});
+      return cuda::std::chrono::sys_days(ymd).time_since_epoch().count();
+    }();
 
     if constexpr (std::is_same_v<T, cudf::timestamp_D>) { return days; }
 
@@ -570,6 +598,18 @@ struct check_datetime_format {
             result = (am_pm.compare("AM", 2) == 0) || (am_pm.compare("am", 2) == 0) ||
                      (am_pm.compare("PM", 2) == 0) || (am_pm.compare("pm", 2) == 0);
           }
+          break;
+        }
+        case 'W': {
+          auto const cv = check_value(ptr, item.length, 0, 53);
+          result        = cv.first;
+          bytes_read -= cv.second;
+          break;
+        }
+        case 'w': {
+          auto const cv = check_value(ptr, item.length, 0, 6);
+          result        = cv.first;
+          bytes_read -= cv.second;
           break;
         }
         case 'z': {  // timezone offset
@@ -1081,7 +1121,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // This API supports a few more specifiers than to_timestamps.
   // clang-format off
   format_compiler compiler(format, stream,
-    specifier_map{{'w', 1}, {'W', 2}, {'u', 1}, {'U', 2}, {'V', 2}, {'G', 4},
+    specifier_map{{'u', 1}, {'U', 2}, {'V', 2}, {'G', 4},
                   {'a', 3}, {'A', 3}, {'b', 3}, {'B', 3}});
   // clang-format on
   auto const d_format_items = compiler.format_items();

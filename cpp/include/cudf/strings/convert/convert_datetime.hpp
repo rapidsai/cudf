@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,8 @@ namespace strings {
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
  * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%W | Week of the year: 00-53 |
+ * | \%w | Day of week: 0-6 = Sunday-Saturday |
  *
  * Other specifiers are not currently supported.
  *
@@ -67,6 +69,9 @@ namespace strings {
  *
  * Although leap second is not supported for "%S", no checking is performed on the value.
  * The cudf::strings::is_timestamp can be used to verify the valid range of values.
+ *
+ * If "%W" and "%w" are specified, then "%m" and "%d" values are ignored when computing
+ * the date part of the timestamp result.
  *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
@@ -102,6 +107,8 @@ std::unique_ptr<column> to_timestamps(
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
  * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%W | Week of the year: 00-53 |
+ * | \%w | Day of week: 0-6 = Sunday-Saturday |
  *
  * Other specifiers are not currently supported.
  * The "%f" supports a precision value to read the numeric digits. Specify the

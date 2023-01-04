@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,6 +240,18 @@ TEST_F(StringsDatetimeTest, ToTimestampYear)
   results = cudf::strings::is_timestamp(strings_view, "%d/%m/%y");
   cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampWeeks)
+{
+  cudf::test::strings_column_wrapper strings{
+    "2012-01/3", "2012-04/4", "2023-01/1", "2012-52/5", "2020-44/2", "1960-20/0", "1986-04/6"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%Y-%W/%w");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected{
+    15343, 15365, 19359, 15702, 18569, -3511, 5875};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
