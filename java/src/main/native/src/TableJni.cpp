@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,8 +138,8 @@ public:
           left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
       char *copy_to = current_buffer_data + current_buffer_written;
 
-      CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
-                                    stream.value()));
+      CUDF_CUDA_TRY(
+          cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDefault, stream.value()));
 
       copy_from = copy_from + amount_to_copy;
       current_buffer_written += amount_to_copy;
@@ -263,16 +263,36 @@ public:
       // empty table, so need to write an empty batch explicitly.
       // For more please see https://issues.apache.org/jira/browse/ARROW-17912.
       auto empty_batch = arrow::RecordBatch::MakeEmpty(arrow_tab->schema());
-      writer->WriteRecordBatch(*(*empty_batch));
+      auto status = writer->WriteRecordBatch(*(*empty_batch));
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write batch with the following error: " +
+                                 status.ToString());
+      }
     } else {
-      writer->WriteTable(*arrow_tab, max_chunk);
+      auto status = writer->WriteTable(*arrow_tab, max_chunk);
+      if (!status.ok()) {
+        throw std::runtime_error("writer failed to write table with the following error: " +
+                                 status.ToString());
+      };
     }
   }
 
   void close() {
     if (initialized) {
-      writer->Close();
-      sink->Close();
+      {
+        auto status = writer->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing writer failed with the following error: " +
+                                   status.ToString());
+        }
+      }
+      {
+        auto status = sink->Close();
+        if (!status.ok()) {
+          throw std::runtime_error("Closing sink failed with the following error: " +
+                                   status.ToString());
+        }
+      }
     }
     initialized = false;
   }
@@ -606,7 +626,13 @@ public:
   std::shared_ptr<arrow::io::InputStream> source;
   std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
 
-  void close() { source->Close(); }
+  void close() {
+    auto status = source->Close();
+    if (!status.ok()) {
+      throw std::runtime_error("Closing source failed with the following error: " +
+                               status.ToString());
+    }
+  }
 };
 
 jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_result,
