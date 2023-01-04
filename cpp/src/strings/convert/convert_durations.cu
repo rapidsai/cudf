@@ -359,12 +359,8 @@ struct from_durations_fn {
       d_format_items,
       d_format_items + items_count,
       [this, &timeparts] __device__(format_item item) -> size_type {
-        if (item.item_type == format_char_type::literal)
-          return 1;
-        else if (item.length != -1)
-          return item.length;
-        else
-          return format_length(item.value, &timeparts);
+        if (item.item_type == format_char_type::literal) { return 1; }
+        return (item.length != -1) ? item.length : format_length(item.value, &timeparts);
       },
       size_type{0},
       thrust::plus<size_type>());
@@ -382,7 +378,7 @@ struct from_durations_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_durations.is_null(idx)) {
-      if (d_chars == nullptr) d_offsets[idx] = 0;
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
       return;
     }
 
