@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -516,29 +517,11 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
   auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
     return key != unused;
   };
-  auto key_itr = thrust::make_transform_iterator(map.data(), get_key);
+  auto const key_itr = thrust::make_transform_iterator(map.data(), get_key);
+  auto const end_it  = cudf::detail::copy_if_safe(
+    key_itr, key_itr + map.capacity(), populated_keys.begin(), key_used, stream);
 
-  // thrust::copy_if has a bug where it cannot iterate over int-max values
-  // so if map.capacity() > int-max we'll call thrust::copy_if in chunks instead
-  auto const copy_size =
-    std::min(map.capacity(), static_cast<std::size_t>(std::numeric_limits<int>::max()));
-  auto const key_end = key_itr + map.capacity();
-  auto pop_keys_itr  = populated_keys.begin();
-
-  std::size_t output_size = 0;
-  while (key_itr != key_end) {
-    auto const copy_end = static_cast<std::size_t>(std::distance(key_itr, key_end)) <= copy_size
-                            ? key_end
-                            : key_itr + copy_size;
-    auto const end_it =
-      thrust::copy_if(rmm::exec_policy(stream), key_itr, copy_end, pop_keys_itr, key_used);
-    auto const copied = std::distance(pop_keys_itr, end_it);
-    pop_keys_itr += copied;
-    output_size += copied;
-    key_itr = copy_end;
-  }
-
-  populated_keys.resize(output_size, stream);
+  populated_keys.resize(std::distance(populated_keys.begin(), end_it), stream);
   return populated_keys;
 }
 
