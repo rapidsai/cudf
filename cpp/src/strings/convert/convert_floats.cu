@@ -353,7 +353,7 @@ struct ftos_converter {
 template <typename FloatType>
 struct from_floats_fn {
   column_device_view d_floats;
-  int32_t* d_offsets;
+  size_type* d_offsets;
   char* d_chars;
 
   __device__ size_type compute_output_size(FloatType value)

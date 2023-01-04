@@ -316,7 +316,7 @@ namespace {
 template <typename IntegerType>
 struct from_integers_fn {
   column_device_view d_integers;
-  int32_t* d_offsets;
+  size_type* d_offsets;
   char* d_chars;
 
   /**
