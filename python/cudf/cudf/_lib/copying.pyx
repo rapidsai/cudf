@@ -78,32 +78,21 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-
-    cdef column_view input_column_view = input_column.view()
+    cdef pylibcudf.ColumnView cv
+    cdef pylibcudf.Column c
+    cdef column_view input_column_view
     cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(make_unique[column](input_column_view))
 
-    return Column.from_unique_ptr(move(c_result))
+    if cudf.get_option("_use_pylibcudf"):
+        cv = input_column.to_ColumnView()
+        c = pylibcudf.Column.from_ColumnView(cv)
+        return Column.from_Column(c)
+    else:
+        input_column_view = input_column.view()
+        with nogil:
+            c_result = move(make_unique[column](input_column_view))
 
-
-@acquire_spill_lock()
-def copy_column_new(Column input_column):
-    """
-    Deep copies a column
-
-    Parameters
-    ----------
-    input_columns : column to be copied
-
-    Returns
-    -------
-    Deep copied column
-    """
-
-    cdef pylibcudf.ColumnView cv = input_column.to_ColumnView()
-    cdef pylibcudf.Column c = pylibcudf.Column.from_ColumnView(cv)
-    return Column.from_Column(c)
+        return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()

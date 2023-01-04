@@ -329,7 +329,7 @@ _register_option(
 
 _register_option(
     "_use_pylibcudf",
-    False,
+    _env_get_bool("_CUDF_USE_PYLIBCUDF", False),
     "If true, use pylibcudf as a backend for operations.",
     _bool_validator,
 )
