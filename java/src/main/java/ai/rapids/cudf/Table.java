@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -855,6 +855,82 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  private static native void writeCSVToFile(long table,
+                                            String[] columnNames,
+                                            boolean includeHeader,
+                                            String rowDelimiter,
+                                            byte fieldDelimiter,
+                                            String nullValue,
+                                            String trueValue,
+                                            String falseValue,
+                                            String outputPath) throws CudfException;
+
+  public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
+    writeCSVToFile(nativeHandle,
+                   options.getColumnNames(),
+                   options.getIncludeHeader(),
+                   options.getRowDelimiter(),
+                   options.getFieldDelimiter(),
+                   options.getNullValue(),
+                   options.getTrueValue(),
+                   options.getFalseValue(),
+                   outputPath);
+  }
+
+  private static native long startWriteCSVToBuffer(String[] columnNames,
+                                                   boolean includeHeader,
+                                                   String rowDelimiter,
+                                                   byte fieldDelimiter,
+                                                   String nullValue,
+                                                   String trueValue,
+                                                   String falseValue,
+                                                   HostBufferConsumer buffer) throws CudfException;
+
+  private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
+
+  private static native void endWriteCSVToBuffer(long writerHandle);
+
+  private static class CSVTableWriter implements TableWriter {
+    private long writerHandle;
+    private HostBufferConsumer consumer;
+
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+      this.writerHandle = startWriteCSVToBuffer(options.getColumnNames(),
+                                                options.getIncludeHeader(),
+                                                options.getRowDelimiter(),
+                                                options.getFieldDelimiter(),
+                                                options.getNullValue(),
+                                                options.getTrueValue(),
+                                                options.getFalseValue(),
+                                                consumer);
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (writerHandle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeCSVChunkToBuffer(writerHandle, table.nativeHandle);
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (writerHandle != 0) {
+        endWriteCSVToBuffer(writerHandle);
+        writerHandle = 0;
+      }
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
+  }
+
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
+    return new CSVTableWriter(options, bufferConsumer);
   }
 
   /**
