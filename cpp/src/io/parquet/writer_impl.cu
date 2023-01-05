@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1210,7 +1210,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
                                 d_chunks_in_batch.data(),
                                 d_chunks_in_batch.flat_view().size_bytes(),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 }
@@ -1707,7 +1707,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
                                           dev_bfr,
                                           ck.ck_stat_size,
-                                          cudaMemcpyDeviceToHost,
+                                          cudaMemcpyDefault,
                                           stream.value()));
             stream.synchronize();
           }
@@ -1724,7 +1724,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
                                         dev_bfr,
                                         ck.ck_stat_size + ck.compressed_size,
-                                        cudaMemcpyDeviceToHost,
+                                        cudaMemcpyDefault,
                                         stream.value()));
           stream.synchronize();
           out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
@@ -1771,7 +1771,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
                                         ck.column_index_blob,
                                         ck.column_index_size,
-                                        cudaMemcpyDeviceToHost,
+                                        cudaMemcpyDefault,
                                         stream.value()));
 
           // calculate offsets while the column index is transferring

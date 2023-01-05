@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
                                 buffer.data(),
                                 buffer.size() * sizeof(decltype(buffer)::value_type),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return find_first_delimiter(d_data, delimiter, stream);
 }
@@ -90,7 +90,7 @@ size_type find_first_delimiter_in_chunk(host_span<unsigned char const> buffer,
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
                                 buffer.data(),
                                 buffer.size() * sizeof(decltype(buffer)::value_type),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return find_first_delimiter(d_data, delimiter, stream);
 }

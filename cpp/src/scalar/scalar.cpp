@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,8 +115,8 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result;
   result.resize(_data.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDefault, stream.value()));
   stream.synchronize();
   return result;
 }
