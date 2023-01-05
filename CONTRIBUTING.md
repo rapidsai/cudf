@@ -370,9 +370,6 @@ See `.pre-commit-config.yaml` for a full list.
 
 C++/CUDA is formatted with [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
 
-Additionally, many editors have plugins or extensions that you can set up to automatically run
-`clang-format` either manually or on file save.
-
 [`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
 In order to run doxygen as a linter on C++/CUDA code, run
 
