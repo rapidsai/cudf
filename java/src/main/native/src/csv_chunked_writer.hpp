@@ -25,8 +25,6 @@ namespace cudf::jni::io {
 
 /**
  * @brief Class to write multiple Tables into the jni_writer_data_sink.
- *
- * TODO: Consider moving to cpp/ in the future, if there is interest.
  */
 class csv_chunked_writer {
 

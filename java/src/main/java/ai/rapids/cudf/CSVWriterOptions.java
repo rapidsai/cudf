@@ -28,7 +28,7 @@ public class CSVWriterOptions {
   private Boolean includeHeader = false;
   private String rowDelimiter = "\n";
   private byte fieldDelimiter = ',';
-  private String nullValue = "\\N";
+  private String nullValue = "";
   private String falseValue = "false";
   private String trueValue = "true";
 
@@ -80,7 +80,7 @@ public class CSVWriterOptions {
     private Boolean includeHeader = false;
     private String rowDelimiter = "\n";
     private byte fieldDelimiter = ',';
-    private String nullValue = "\\N";
+    private String nullValue = "";
     private String falseValue = "false";
     private String trueValue = "true";
 

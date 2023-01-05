@@ -588,6 +588,7 @@ public class TableTest extends CudfTestBase {
                                                .withIncludeHeader(false)
                                                .withFieldDelimiter((byte)'\u0001')
                                                .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
                                                .withTrueValue("T")
                                                .withFalseValue("F")
                                                .build();
