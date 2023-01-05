@@ -40,8 +40,6 @@ class CopyOnWriteBuffer(Buffer):
     _zero_copied: bool
 
     def _finalize_init(self):
-        # the last step in initializing a `CopyOnWriteBuffer`
-        # is to track it in `_instances`:
         key = (self._ptr, self._size)
         self.__class__._instances[key].add(self)
         self._zero_copied = False
@@ -165,8 +163,7 @@ class CopyOnWriteBuffer(Buffer):
 
     def _unlink_shared_buffers(self, zero_copied=False):
         """
-        Unlinks a Buffer if it is shared with other buffers(i.e.,
-        weak references exist) by making a true deep-copy.
+        Unlinks a Buffer if it is shared with other buffers by making a true deep-copy.
         """
         if not self._zero_copied and self._is_shared:
             # make a deep copy of existing DeviceBuffer
