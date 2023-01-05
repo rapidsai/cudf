@@ -280,8 +280,10 @@ class GetAttrGetItemMixin:
 class NotIterable:
     def __iter__(self):
         """
-        Iteration is unsupported, See
-        :ref:`iteration <pandas-comparison/iteration>`
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
         """
         raise TypeError(
             f"{self.__class__.__name__} object is not iterable. "
