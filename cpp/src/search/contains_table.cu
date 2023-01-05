@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,12 +174,11 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
-  auto map =
-    static_map(compute_hash_table_size(haystack.num_rows()),
-               cuco::sentinel::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
-               cuco::sentinel::empty_value{detail::JoinNoneValue},
-               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-               stream.value());
+  auto map = static_map(compute_hash_table_size(haystack.num_rows()),
+                        cuco::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
+                        cuco::empty_value{detail::JoinNoneValue},
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value());
 
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
@@ -283,12 +282,11 @@ rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& hayst
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
 {
-  auto map =
-    static_map(compute_hash_table_size(haystack.num_rows()),
-               cuco::sentinel::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
-               cuco::sentinel::empty_value{detail::JoinNoneValue},
-               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-               stream.value());
+  auto map = static_map(compute_hash_table_size(haystack.num_rows()),
+                        cuco::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
+                        cuco::empty_value{detail::JoinNoneValue},
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value());
 
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
