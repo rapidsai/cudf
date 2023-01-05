@@ -6568,8 +6568,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def itertuples(self, index=True, name="Pandas"):
         """
-        Iteration is unsupported, See
-        :ref:`iteration <pandas-comparison/iteration>`
+        Iteration is unsupported.
+        
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
         """
         raise TypeError(
             "cuDF does not support iteration of DataFrame "
