@@ -130,20 +130,11 @@ __device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
  * @brief Writes the UTF-8 byte sequence to \p out_it and returns the number of bytes written to
  * \p out_it
  */
-template <typename utf8_char_t>
-__device__ __forceinline__ size_type write_utf8_char(utf8_char_t utf8_chars, char*& out_it)
+constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
 {
-  constexpr size_type MAX_UTF8_BYTES_PER_CODE_POINT = 4;
-  char char_bytes[MAX_UTF8_BYTES_PER_CODE_POINT];
-  auto const num_chars_written = strings::detail::from_char_utf8(utf8_chars, char_bytes);
-  size_type bytes              = 0;
-
-  for (size_type i = 0; i < MAX_UTF8_BYTES_PER_CODE_POINT; i++) {
-    if (i < num_chars_written) {
-      if (out_it) *out_it++ = char_bytes[i];
-      ++bytes;
-    }
-  }
+  auto const bytes = (out_it == nullptr) ? strings::detail::bytes_in_char_utf8(character)
+                                         : strings::detail::from_char_utf8(character, out_it);
+  out_it += bytes;
   return bytes;
 }
 
@@ -350,12 +341,10 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
       stream,
       mr);
 
+    auto null_count =
+      cudf::detail::null_count(static_cast<bitmask_type*>(null_mask.data()), 0, col_size, stream);
     return make_strings_column(
-      col_size,
-      std::move(offsets),
-      std::move(chars),
-      cudf::detail::null_count(static_cast<bitmask_type*>(null_mask.data()), 0, col_size, stream),
-      std::move(null_mask));
+      col_size, std::move(offsets), std::move(chars), null_count, std::move(null_mask));
   }
 
   auto out_col = make_fixed_width_column(
