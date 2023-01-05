@@ -1,8 +1,7 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import operator
-import re
 
 import cupy as cp
 import numpy as np
@@ -668,8 +667,6 @@ def test_to_datetime_errors(data):
         cudf.to_datetime,
         ([pd_data],),
         ([gd_data],),
-        compare_error_message=False,
-        expected_error_message="Given date string not likely a datetime.",
     )
 
 
@@ -867,9 +864,6 @@ def test_str_to_datetime_error():
         lfunc_args_and_kwargs=(["datetime64[s]"],),
         rfunc_args_and_kwargs=(["datetime64[s]"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "Could not convert `None` value to datetime"
-        ),
     )
 
 
@@ -989,7 +983,6 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
             rfunc=operator.sub,
             lfunc_args_and_kwargs=([other_scalars, psr],),
             rfunc_args_and_kwargs=([other_scalars, gsr],),
-            compare_error_message=False,
         )
 
 
@@ -1047,7 +1040,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1055,7 +1047,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1063,7 +1054,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1071,7 +1061,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1079,7 +1068,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1087,7 +1075,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1095,7 +1082,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1103,7 +1089,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.mul,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        compare_error_message=False,
     )
 
 
@@ -1287,10 +1272,6 @@ def test_datetime_to_datetime_error():
         lfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         rfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "errors parameter has to be either one of: ['ignore', 'raise', "
-            "'coerce', 'warn'], found: %d-%B-%Y %H:%M"
-        ),
     )
 
 
