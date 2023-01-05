@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@
  *   @defgroup strings_contains Searching
  *   @defgroup strings_convert Converting
  *   @defgroup strings_copy Copying
- *   @defgroup strings_substring Substring
+ *   @defgroup strings_slice Slicing
  *   @defgroup strings_find Finding
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
