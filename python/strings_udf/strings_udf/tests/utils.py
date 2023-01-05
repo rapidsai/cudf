@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2023, NVIDIA CORPORATION.
 import numba
 from numba.core.typing.templates import AbstractTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
