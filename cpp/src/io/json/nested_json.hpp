@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/io/detail/nested_json.hpp>
+#include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
