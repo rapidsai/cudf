@@ -122,8 +122,10 @@ def test_sum_of_squares(dtype, nelem):
     sr = Series(data)
     df = cudf.DataFrame(sr)
 
-    got = sr.sum_of_squares()
-    got_df = df.sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got = sr.sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got_df = df.sum_of_squares()
     expect = (data**2).sum()
 
     if cudf.dtype(dtype).kind in {"u", "i"}:
@@ -156,7 +158,8 @@ def test_sum_of_squares_decimal(dtype):
     data = [str(x) for x in gen_rand("int8", 3) / 10]
 
     expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
-    got = cudf.Series(data).astype(dtype).sum_of_squares()
+    with pytest.warns(FutureWarning):
+        got = cudf.Series(data).astype(dtype).sum_of_squares()
 
     assert_eq(expected, got)
 
