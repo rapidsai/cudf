@@ -86,16 +86,12 @@ std::string generate_row(
         it != _row_cache.end()) {
       s += it->second;
     } else {
-      if (i % 2 == 0) {
-        auto r =
-          generate_struct_of_structs(max_depth - 2, max_struct_size, elems[i % elems.size()]);
-        _row_cache[{i % 2, max_depth - 2, max_struct_size, i % elems.size()}] = r;
-        s += r;
-      } else {
-        auto r = generate_list_of_lists(max_depth - 2, max_struct_size, elems[i % elems.size()]);
-        _row_cache[{i % 2, max_depth - 2, max_struct_size, i % elems.size()}] = r;
-        s += r;
-      }
+      auto r =
+        (i % 2 == 0)
+          ? generate_struct_of_structs(max_depth - 2, max_struct_size, elems[i % elems.size()])
+          : generate_list_of_lists(max_depth - 2, max_struct_size, elems[i % elems.size()]);
+      _row_cache[{i % 2, max_depth - 2, max_struct_size, i % elems.size()}] = r;
+      s += r;
     }
     if (s.length() > max_bytes) break;
     if (i < num_columns - 1) s += ", ";
