@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import re
 from decimal import Decimal
@@ -1067,7 +1067,6 @@ def test_replace_df_error():
         rfunc=gdf.replace,
         lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
         rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
-        compare_error_message=False,
     )
 
 
@@ -1247,9 +1246,6 @@ def test_series_replace_errors():
         rfunc=gsr.replace,
         lfunc_args_and_kwargs=([[1, 2], [1]],),
         rfunc_args_and_kwargs=([[1, 2], [1]],),
-        expected_error_message=re.escape(
-            "Replacement lists must be of same length. " "Expected 2, got 1."
-        ),
     )
 
     assert_exceptions_equal(
