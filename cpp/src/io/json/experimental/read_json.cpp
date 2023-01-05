@@ -74,7 +74,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
 
   } else {
     auto buffer = std::vector<uint8_t>(total_source_size);
-    // only a single compressed source is supported
+    // Single read because only a single compressed source is supported
+    // Reading to host because decompression of a single block is much faster on the CPU
     sources[0]->host_read(range_offset, total_source_size, buffer.data());
     auto const uncomp_data = decompress(compression, buffer);
     return cudf::detail::make_device_uvector_sync(

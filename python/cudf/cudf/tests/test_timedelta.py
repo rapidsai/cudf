@@ -1,8 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import datetime
 import operator
-import re
 
 import cupy as cp
 import numpy as np
@@ -346,7 +345,6 @@ def test_timedelta_ops_datetime_inputs(
             rfunc=operator.sub,
             lfunc_args_and_kwargs=([psr_timedelta, psr_datetime],),
             rfunc_args_and_kwargs=([gsr_timedelta, gsr_datetime],),
-            compare_error_message=False,
         )
 
 
@@ -1260,7 +1258,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1268,7 +1265,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        compare_error_message=False,
     )
 
     dt_sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -1279,7 +1275,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mod,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1288,7 +1283,6 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
         check_exception_type=False,
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1296,7 +1290,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.gt,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1304,7 +1297,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.lt,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1312,7 +1304,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.ge,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1320,7 +1311,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.le,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1328,7 +1318,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1336,7 +1325,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1344,7 +1332,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mul,
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1353,7 +1340,6 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
         check_exception_type=False,
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1361,7 +1347,6 @@ def test_timedelta_invalid_ops():
         rfunc=operator.xor,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
 
@@ -1374,9 +1359,6 @@ def test_timedelta_datetime_cast_invalid():
         sr.astype,
         (["datetime64[ns]"],),
         (["datetime64[ns]"],),
-        expected_error_message=re.escape(
-            "cannot astype a timedelta from timedelta64[ns] to datetime64[ns]"
-        ),
     )
 
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -1387,10 +1369,6 @@ def test_timedelta_datetime_cast_invalid():
         sr.astype,
         (["timedelta64[ns]"],),
         (["timedelta64[ns]"],),
-        expected_error_message=re.escape(
-            "cannot astype a datetimelike from "
-            "datetime64[ns] to timedelta64[ns]"
-        ),
     )
 
 

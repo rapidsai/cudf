@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -892,13 +892,11 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
       CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
                                c.null_mask(),
                                num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
+                               cudaMemcpyDefault));
     } else {
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               mask.data(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
+      CUDF_CUDA_TRY(cudaMemcpy(
+        host_bitmask.data(), mask.data(), num_bitmasks * sizeof(bitmask_type), cudaMemcpyDefault));
     }
 
     return host_bitmask;

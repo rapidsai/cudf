@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -136,7 +136,6 @@ def test_categorical_compare_unordered():
         rfunc=operator.lt,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
 
@@ -182,7 +181,6 @@ def test_categorical_binary_add():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
 
@@ -260,7 +258,6 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["a"], pdf["b"]],),
         rfunc_args_and_kwargs=([df["a"], df["b"]],),
-        compare_error_message=False,
     )
 
     # lhs is numerical
@@ -269,7 +266,6 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdf["b"], pdf["a"]],),
         rfunc_args_and_kwargs=([df["b"], df["a"]],),
-        compare_error_message=False,
     )
 
 
@@ -539,7 +535,6 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
             rfunc=cd_sr.cat.remove_categories,
             lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
             rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
-            expected_error_message="removals must all be in old categories",
         )
 
 
@@ -783,7 +778,6 @@ def test_add_categories_error(data, add):
         gds.cat.add_categories,
         ([add],),
         ([add],),
-        compare_error_message=False,
     )
 
 
