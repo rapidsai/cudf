@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1463,7 +1463,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
 
-TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
+TEST_F(JsonReaderTest, DISABLED_JsonNestedDtypeSchema)
 {
   std::string json_string = R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}])";
 

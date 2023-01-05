@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,16 +128,22 @@ std::unique_ptr<column> scatter_impl(
                                                          stream,
                                                          mr);
 
+  std::vector<std::unique_ptr<column>> children;
+  children.emplace_back(std::move(offsets_column));
+  children.emplace_back(std::move(child_column));
   auto null_mask =
     target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
 
-  return cudf::make_lists_column(target.size(),
-                                 std::move(offsets_column),
-                                 std::move(child_column),
-                                 cudf::UNKNOWN_NULL_COUNT,
-                                 std::move(null_mask),
-                                 stream,
-                                 mr);
+  // The output column from this function only has null masks copied from the target columns.
+  // That is still not a correct final null mask for the scatter result.
+  // In addition, that null mask may overshadow the non-null rows (lists) scattered from the source
+  // column. Thus, avoid using `cudf::make_lists_column` since it calls `purge_nonempty_nulls`.
+  return std::make_unique<column>(data_type{type_id::LIST},
+                                  target.size(),
+                                  rmm::device_buffer{},
+                                  std::move(null_mask),
+                                  cudf::UNKNOWN_NULL_COUNT,
+                                  std::move(children));
 }
 
 /**
