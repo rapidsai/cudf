@@ -389,7 +389,13 @@ def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.pivot("index", "column")
+    # In pandas 2.0 this will be a failure because pandas will require all of
+    # these as keyword arguments. Matching that check in cudf is a bit
+    # cumbersome and not worth the effort to match the warning, so this code
+    # just catches pandas's warning (rather than updating the signature) so
+    # that when it starts failing we know to update our impl of pivot.
+    with pytest.warns(FutureWarning):
+        expect = pdf.pivot("index", "column")
     got = gdf.pivot("index", "column")
 
     check_index_and_columns = expect.shape != (0, 0)

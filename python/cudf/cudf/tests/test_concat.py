@@ -38,8 +38,8 @@ def make_frames(index=None, nulls="none"):
         mask = np.arange(10)
         np.random.shuffle(mask)
         mask = mask[:5]
-        df.y.loc[mask] = np.nan
-        df2.y.loc[mask] = np.nan
+        df.loc[mask, "y"] = np.nan
+        df2.loc[mask, "y"] = np.nan
     gdf = gd.DataFrame.from_pandas(df)
     gdf2 = gd.DataFrame.from_pandas(df2)
     if index:
@@ -376,12 +376,13 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=pd.concat,
-        rfunc=gd.concat,
-        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-    )
+    with pytest.warns(FutureWarning):
+        assert_exceptions_equal(
+            lfunc=pd.concat,
+            rfunc=gd.concat,
+            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+        )
 
 
 @pytest.mark.parametrize("name", [None, "a"])
@@ -1031,9 +1032,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
                 ),
                 None,
             ],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6821"
-            ),
         ),
     ],
 )
@@ -1793,3 +1791,50 @@ def test_concat_categorical_ordering():
     got = gd.concat([gdf, gdf, gdf])
 
     assert_eq(expect, got)
+
+
+@pytest.fixture(params=["rangeindex", "index"])
+def singleton_concat_index(request):
+    if request.param == "rangeindex":
+        return pd.RangeIndex(0, 4)
+    else:
+        return pd.Index(["a", "h", "g", "f"])
+
+
+@pytest.fixture(params=["dataframe", "series"])
+def singleton_concat_obj(request, singleton_concat_index):
+    if request.param == "dataframe":
+        return pd.DataFrame(
+            {
+                "b": [1, 2, 3, 4],
+                "d": [7, 8, 9, 10],
+                "a": [4, 5, 6, 7],
+                "c": [10, 11, 12, 13],
+            },
+            index=singleton_concat_index,
+        )
+    else:
+        return pd.Series([4, 5, 5, 6], index=singleton_concat_index)
+
+
+@pytest.mark.parametrize("axis", [0, 1, "columns", "index"])
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("ignore_index", [False, True])
+def test_concat_singleton_sorting(
+    axis, sort, ignore_index, singleton_concat_obj
+):
+    gobj = gd.from_pandas(singleton_concat_obj)
+    gconcat = gd.concat(
+        [gobj], axis=axis, sort=sort, ignore_index=ignore_index
+    )
+    pconcat = pd.concat(
+        [singleton_concat_obj], axis=axis, sort=sort, ignore_index=ignore_index
+    )
+    assert_eq(pconcat, gconcat)
+
+
+@pytest.mark.parametrize("axis", [2, "invalid"])
+def test_concat_invalid_axis(axis):
+    s = gd.Series([1, 2, 3])
+    with pytest.raises(ValueError):
+        gd.concat([s], axis=axis)

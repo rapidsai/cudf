@@ -339,10 +339,6 @@ def does_not_raise():
     yield
 
 
-def xfail_param(param, **kwargs):
-    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
-
-
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
@@ -387,3 +383,16 @@ parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
 )
+
+
+@contextmanager
+def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
+    """Catch a warning using pytest.warns if the expect_warning is True.
+
+    All arguments are forwarded to pytest.warns if expect_warning is True.
+    """
+    if condition:
+        with pytest.warns(warning, *args, **kwargs):
+            yield
+    else:
+        yield

@@ -1848,9 +1848,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             a default index.
         nullable : Boolean, Default False
             If ``nullable`` is ``True``, the resulting series will be
-            having a corresponding nullable Pandas dtype. If ``nullable``
-            is ``False``, the resulting series will either convert null
-            values to ``np.nan`` or ``None`` depending on the dtype.
+            having a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting series will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
 
         Returns
         -------
@@ -2228,18 +2231,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
@@ -2590,6 +2593,86 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self
 
     T = property(transpose, doc=transpose.__doc__)
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate Series values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        Series. Either all duplicates, all except the first or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            Method to handle dropping duplicates:
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series[bool]
+            Series indicating whether each value has occurred in the
+            preceding values.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on cudf.Index.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Series.drop_duplicates : Remove duplicate values from Series.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set on False and all others on True:
+
+        >>> import cudf
+        >>> animals = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> animals.duplicated()
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        which is equivalent to
+
+        >>> animals.duplicated(keep='first')
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set on False and all others on True:
+
+        >>> animals.duplicated(keep='last')
+        0     True
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        By setting keep on ``False``, all duplicates are True:
+
+        >>> animals.duplicated(keep=False)
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+        """
+        return super().duplicated(keep=keep)
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):

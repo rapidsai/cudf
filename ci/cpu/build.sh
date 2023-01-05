@@ -25,6 +25,9 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 # Workaround to keep Jenkins builds working
 # until we migrate fully to GitHub Actions
 export RAPIDS_CUDA_VERSION="${CUDA}"
+export SCCACHE_BUCKET=rapids-sccache
+export SCCACHE_REGION=us-west-2
+export SCCACHE_IDLE_TIMEOUT=32768
 
 # Use Ninja to build, setup Conda Build Dir
 export CMAKE_GENERATOR="Ninja"
@@ -75,7 +78,6 @@ conda config --set ssl_verify False
 
 # TODO: Move boa install to gpuci/rapidsai
 gpuci_mamba_retry install boa
-
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
