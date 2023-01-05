@@ -17,9 +17,6 @@ import cudf
 import dask_cudf as dgd
 
 
-@pytest.mark.skipif(
-    not dgd.core.DASK_BACKEND_SUPPORT, reason="No backend-dispatch support"
-)
 def test_from_dict_backend_dispatch():
     # Test ddf.from_dict cudf-backend dispatch
     np.random.seed(0)
@@ -363,11 +360,7 @@ def test_setitem_scalar_datetime():
 )
 def test_repr(func):
     pdf = func()
-    try:
-        gdf = cudf.from_pandas(pdf)
-    except Exception:
-        raise pytest.xfail()
-    # gddf = dd.from_pandas(gdf, npartitions=3, sort=False)  # TODO
+    gdf = cudf.from_pandas(pdf)
     gddf = dd.from_pandas(gdf, npartitions=3, sort=False)
 
     assert repr(gddf)

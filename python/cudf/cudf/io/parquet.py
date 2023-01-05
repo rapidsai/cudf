@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import shutil
@@ -6,7 +6,7 @@ import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from pyarrow import dataset as ds, parquet as pq
@@ -288,7 +288,7 @@ def _process_dataset(
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq._filters_to_expression(filters)
+        filters = pq.filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:
@@ -1010,9 +1010,13 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.path = tempfile.TemporaryDirectory().name
+            self.dir_: Optional[
+                tempfile.TemporaryDirectory
+            ] = tempfile.TemporaryDirectory()
+            self.path = self.dir_.name
         else:
             self.fs_meta = {}
+            self.dir_ = None
             self.path = path
 
         self.common_args = {
@@ -1193,6 +1197,9 @@ class ParquetDatasetWriter:
             )
             s3_file.put(local_path, s3_path, recursive=True)
             shutil.rmtree(self.path)
+
+        if self.dir_ is not None:
+            self.dir_.cleanup()
 
         if return_metadata:
             return (

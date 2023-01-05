@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,17 +361,14 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&first_row_len,
-                                  rec_starts.data() + 1,
-                                  sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &first_row_len, rec_starts.data() + 1, sizeof(uint64_t), cudaMemcpyDefault, stream.value()));
   }
   std::vector<char> first_row(first_row_len);
   CUDF_CUDA_TRY(cudaMemcpyAsync(first_row.data(),
                                 d_data.data(),
                                 first_row_len * sizeof(char),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
@@ -467,7 +464,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
         return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
         return type_id::TIMESTAMP_MILLISECONDS;
-      } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0) {
         return type_id::FLOAT64;
       } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
         return type_id::INT64;
@@ -555,7 +552,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream, mr);
+    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
@@ -601,7 +598,8 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
   }
 
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
-
+  CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,
+               "Multiple compressed inputs are not supported");
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
   auto parse_opts = parse_options{',', '\n', '\"', '.'};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -257,7 +258,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       cudaMemcpyAsync(&error_index,
                       token_indices.data() + thrust::distance(tokens.begin(), error_location),
                       sizeof(SymbolOffsetT),
-                      cudaMemcpyDeviceToHost,
+                      cudaMemcpyDefault,
                       stream.value()));
     stream.synchronize();
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +
@@ -279,12 +280,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     thrust::exclusive_scan(
       rmm::exec_policy(stream), push_pop_it, push_pop_it + num_tokens, token_levels.begin());
 
-    auto const node_levels_end = thrust::copy_if(rmm::exec_policy(stream),
-                                                 token_levels.begin(),
-                                                 token_levels.end(),
-                                                 tokens.begin(),
-                                                 node_levels.begin(),
-                                                 is_node);
+    auto const node_levels_end = cudf::detail::copy_if_safe(token_levels.begin(),
+                                                            token_levels.end(),
+                                                            tokens.begin(),
+                                                            node_levels.begin(),
+                                                            is_node,
+                                                            stream);
     CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
@@ -295,12 +296,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
     rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<NodeIndexT>(0),
-                    thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
-                    tokens.begin(),
-                    node_token_ids.begin(),
-                    is_node);
+    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
+                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+                               tokens.begin(),
+                               node_token_ids.begin(),
+                               is_node,
+                               stream);
 
     // previous push node_id
     // if previous node is a push, then i-1
@@ -349,8 +350,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
   auto const node_categories_it =
     thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
-  auto const node_categories_end = thrust::copy_if(
-    rmm::exec_policy(stream), tokens.begin(), tokens.end(), node_categories_it, is_node);
+  auto const node_categories_end =
+    cudf::detail::copy_if_safe(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
   CUDF_EXPECTS(node_categories_end - node_categories_it == num_nodes,
                "node category count mismatch");
 
@@ -365,14 +366,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   auto const node_range_out_it      = thrust::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
-  auto const node_range_out_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(0) + num_tokens,
-                    node_range_out_it,
-                    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
-                      return is_node(tokens_gpu[i]);
-                    });
+  auto const node_range_out_end = cudf::detail::copy_if_safe(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+    node_range_out_it,
+    [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
+      return is_node(tokens_gpu[i]);
+    },
+    stream);
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
   return {std::move(node_categories),
@@ -410,8 +411,8 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_fields, 40),  // 40% occupancy in hash map
-                        cuco::sentinel::empty_key{empty_node_index_sentinel},
-                        cuco::sentinel::empty_value{empty_node_index_sentinel},
+                        cuco::empty_key{empty_node_index_sentinel},
+                        cuco::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
   auto const d_hasher = [d_input          = d_input.data(),
@@ -499,9 +500,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                        cuco::sentinel::empty_key{empty_node_index_sentinel},
-                        cuco::sentinel::empty_value{empty_node_index_sentinel},
-                        cuco::sentinel::erased_key{-2},
+                        cuco::empty_key{empty_node_index_sentinel},
+                        cuco::empty_value{empty_node_index_sentinel},
+                        cuco::erased_key{-2},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
   // path compression is not used since extra writes make all map operations slow.

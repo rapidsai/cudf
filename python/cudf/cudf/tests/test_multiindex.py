@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -7,6 +7,7 @@ import itertools
 import operator
 import pickle
 import re
+from contextlib import contextmanager
 from io import BytesIO
 
 import cupy as cp
@@ -18,7 +19,22 @@ import cudf
 from cudf.core._compat import PANDAS_GE_130
 from cudf.core.column import as_column
 from cudf.core.index import as_index
-from cudf.testing._utils import assert_eq, assert_exceptions_equal, assert_neq
+from cudf.testing._utils import (
+    assert_eq,
+    assert_exceptions_equal,
+    assert_neq,
+    expect_warning_if,
+)
+
+
+@contextmanager
+def expect_pandas_performance_warning(idx):
+    with expect_warning_if(
+        (not isinstance(idx[0], tuple) and len(idx) > 2)
+        or (isinstance(idx[0], tuple) and len(idx[0]) > 2),
+        pd.errors.PerformanceWarning,
+    ):
+        yield
 
 
 def test_multiindex_levels_codes_validation():
@@ -30,7 +46,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [0, 1]],),
         rfunc_args_and_kwargs=([levels, [0, 1]],),
-        compare_error_message=False,
     )
 
     # Codes don't match levels
@@ -39,7 +54,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
         rfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
-        compare_error_message=False,
     )
 
     # Largest code greater than number of levels
@@ -48,7 +62,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
         rfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
-        compare_error_message=False,
     )
 
     # Unequal code lengths
@@ -57,12 +70,9 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
         rfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
-        compare_error_message=False,
     )
     # Didn't pass levels and codes
-    assert_exceptions_equal(
-        lfunc=pd.MultiIndex, rfunc=cudf.MultiIndex, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=pd.MultiIndex, rfunc=cudf.MultiIndex)
 
     # Didn't pass non zero levels and codes
     assert_exceptions_equal(
@@ -323,7 +333,11 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[key_tuple].sort_index(), gdf.loc[key_tuple].sort_index())
+    # The index is unsorted, which makes things slow but is fine for testing.
+    with expect_pandas_performance_warning(key_tuple):
+        expected = pdf.loc[key_tuple].sort_index()
+    got = gdf.loc[key_tuple].sort_index()
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -363,10 +377,11 @@ def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(
-        pdf.loc[("a", "store", "clouds", "fire"), :][0],
-        gdf.loc[("a", "store", "clouds", "fire"), :][0],
-    )
+    # The index is unsorted, which makes things slow but is fine for testing.
+    with pytest.warns(pd.errors.PerformanceWarning):
+        expected = pdf.loc[("a", "store", "clouds", "fire"), :][0]
+    got = gdf.loc[("a", "store", "clouds", "fire"), :][0]
+    assert_eq(expected, got)
 
 
 def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
@@ -435,7 +450,11 @@ def test_multiindex_columns(pdf, gdf, pdfIndex, query):
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    assert_eq(pdf[query], gdf[query])
+    # The index is unsorted, which makes things slow but is fine for testing.
+    with expect_pandas_performance_warning(query):
+        expected = pdf[query]
+    got = gdf[query]
+    assert_eq(expected, got)
 
 
 def test_multiindex_from_tuples():
@@ -698,10 +717,12 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    with expect_warning_if(levels is not None or codes is not None):
+        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
 
     pmi = pdf.index
-    pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    with expect_warning_if(levels is not None or codes is not None):
+        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
@@ -1003,35 +1024,39 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index())
-    assert_eq(
-        pdf.loc[(("a"), ("store")), :].sort_index(),
-        gdf.loc[(("a"), ("store")), :].sort_index(),
-    )
-    assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
-        gdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
-    )
-    assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
-        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
-    )
-    assert_eq(
-        pdf.loc[(slice(None), "store"), :].sort_index(),
-        gdf.loc[(slice(None), "store"), :].sort_index(),
-    )
-    assert_eq(
-        pdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
-        gdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
-    )
-    assert_eq(
-        pdf.loc[
-            (slice(None), slice(None), slice(None), "smoke"), :
-        ].sort_index(),
-        gdf.loc[
-            (slice(None), slice(None), slice(None), "smoke"), :
-        ].sort_index(),
-    )
+    # The index is unsorted, which makes things slow but is fine for testing.
+    with pytest.warns(pd.errors.PerformanceWarning):
+        assert_eq(
+            pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index()
+        )
+        assert_eq(
+            pdf.loc[(("a"), ("store")), :].sort_index(),
+            gdf.loc[(("a"), ("store")), :].sort_index(),
+        )
+        assert_eq(
+            pdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
+            gdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
+        )
+        assert_eq(
+            pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
+            gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
+        )
+        assert_eq(
+            pdf.loc[(slice(None), "store"), :].sort_index(),
+            gdf.loc[(slice(None), "store"), :].sort_index(),
+        )
+        assert_eq(
+            pdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+            gdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+        )
+        assert_eq(
+            pdf.loc[
+                (slice(None), slice(None), slice(None), "smoke"), :
+            ].sort_index(),
+            gdf.loc[
+                (slice(None), slice(None), slice(None), "smoke"), :
+            ].sort_index(),
+        )
 
 
 def test_multiindex_multicolumn_zero_row_slice():

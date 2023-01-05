@@ -320,6 +320,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         -------
         New RangeIndex instance with same range, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
 
@@ -342,6 +348,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
         return self
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        return cupy.zeros(len(self), dtype=bool)
 
     @_cudf_nvtx_annotate
     def __repr__(self):
@@ -519,6 +529,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         int
             Index of label.
         """
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.",
+                FutureWarning,
+            )
         if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
@@ -583,6 +599,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
+
         # Given an actual integer,
         idx = (key - self._start) / self._step
         idx_int_upper_bound = (self._stop - self._start) // self._step
@@ -1116,6 +1142,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         -------
         New index instance, casted to new dtype
         """
+        if dtype is not None:
+            warnings.warn(
+                "parameter dtype is deprecated and will be removed in a "
+                "future version. Use the astype method instead.",
+                FutureWarning,
+            )
 
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
@@ -1169,9 +1201,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         >>> numeric_unique_index.get_loc(3)
         2
         """
+        # We should not actually remove this code until we have implemented the
+        # get_indexers method as an alternative, see
+        # https://github.com/rapidsai/cudf/issues/12312
+        if method is not None:
+            warnings.warn(
+                f"Passing method to {self.__class__.__name__}.get_loc is "
+                "deprecated and will raise in a future version.",
+                FutureWarning,
+            )
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method not in {
             None,
@@ -1373,6 +1414,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def get_slice_bound(self, label, side, kind=None):
+        if kind is not None:
+            warnings.warn(
+                "'kind' argument in get_slice_bound is deprecated and will be "
+                "removed in a future version.",
+                FutureWarning,
+            )
         return self._values.get_slice_bound(label, side, kind)
 
     def is_numeric(self):
@@ -1555,6 +1602,12 @@ class NumericIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(self, data=None, dtype=None, copy=False, name=None):
+        warnings.warn(
+            f"cudf.{self.__class__.__name__} is deprecated and will be "
+            "removed from cudf in a future version. Use cudf.Index with the "
+            "appropriate dtype instead.",
+            FutureWarning,
+        )
 
         dtype = type(self)._dtype
         if copy:
@@ -2249,7 +2302,7 @@ class DatetimeIndex(GenericIndex):
         Int8Index([2, 4], dtype='int8')
         """
         res = extract_quarter(self._values)
-        return Int8Index(res, dtype="int8")
+        return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
     def isocalendar(self):
@@ -3016,7 +3069,10 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
         idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, ColumnBase):
-        return _index_from_data({kwargs.get("name", None): arbitrary})
+        res = _index_from_data({kwargs.get("name", None): arbitrary})
+        if (dtype := kwargs.get("dtype")) is not None:
+            res = res.astype(dtype)
+        return res
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):

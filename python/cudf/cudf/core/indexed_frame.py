@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
@@ -192,7 +193,7 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic is False
+        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -1705,7 +1706,7 @@ class IndexedFrame(Frame):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
+            gather_map = gather_map.astype(size_type_dtype)
 
         if not libcudf.copying._gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify
@@ -1762,18 +1763,7 @@ class IndexedFrame(Frame):
         ignore_index: bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
+        subset = self._preprocess_subset(subset)
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
@@ -1793,6 +1783,123 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if not ignore_index else None,
         )
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, subset=None, keep="first"):
+        """
+        Return boolean Series denoting duplicate rows.
+
+        Considering certain columns is optional.
+
+        Parameters
+        ----------
+        subset : column label or sequence of labels, optional
+            Only consider certain columns for identifying duplicates, by
+            default use all of the columns.
+        keep : {'first', 'last', False}, default 'first'
+            Determines which duplicates (if any) to mark.
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+                occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+                occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series
+            Boolean series indicating duplicated rows.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on index.
+        Series.duplicated : Equivalent method on Series.
+        Series.drop_duplicates : Remove duplicate values from Series.
+        DataFrame.drop_duplicates : Remove duplicate values from DataFrame.
+
+        Examples
+        --------
+        Consider a dataset containing ramen product ratings.
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...     'brand': ['Yum Yum', 'Yum Yum', 'Maggie', 'Maggie', 'Maggie'],
+        ...     'style': ['cup', 'cup', 'cup', 'pack', 'pack'],
+        ...     'rating': [4, 4, 3.5, 15, 5]
+        ... })
+        >>> df
+             brand style  rating
+        0  Yum Yum   cup     4.0
+        1  Yum Yum   cup     4.0
+        2   Maggie   cup     3.5
+        3   Maggie  pack    15.0
+        4   Maggie  pack     5.0
+
+        By default, for each set of duplicated values, the first occurrence
+        is set to False and all others to True.
+
+        >>> df.duplicated()
+        0    False
+        1     True
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set to False and all others to True.
+
+        >>> df.duplicated(keep='last')
+        0     True
+        1    False
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        By setting ``keep`` to False, all duplicates are True.
+
+        >>> df.duplicated(keep=False)
+        0     True
+        1     True
+        2    False
+        3    False
+        4    False
+        dtype: bool
+
+        To find duplicates on specific column(s), use ``subset``.
+
+        >>> df.duplicated(subset=['brand'])
+        0    False
+        1     True
+        2    False
+        3     True
+        4     True
+        dtype: bool
+        """
+        subset = self._preprocess_subset(subset)
+
+        if isinstance(self, cudf.Series):
+            df = self.to_frame(name="None")
+            subset = ["None"]
+        else:
+            df = self.copy(deep=False)
+        df._data["index"] = cudf.core.column.arange(
+            0, len(self), dtype=size_type_dtype
+        )
+
+        new_df = df.drop_duplicates(subset=subset, keep=keep)
+        idx = df.merge(new_df, how="inner")["index"]
+        s = cudf.Series._from_data(
+            {
+                None: cudf.core.column.full(
+                    size=len(self), fill_value=True, dtype="bool"
+                )
+            },
+            index=self.index,
+        )
+        s.iloc[idx] = False
+        return s
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True):
@@ -2695,18 +2802,7 @@ class IndexedFrame(Frame):
             If specified, then drops every row containing
             less than `thresh` non-null values.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
+        subset = self._preprocess_subset(subset)
 
         if len(subset) == 0:
             return self.copy(deep=True)
@@ -4628,6 +4724,21 @@ class IndexedFrame(Frame):
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
+
+    def _preprocess_subset(self, subset):
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+        return subset
 
     @_cudf_nvtx_annotate
     def rank(
