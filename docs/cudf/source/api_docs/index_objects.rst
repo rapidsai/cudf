@@ -23,6 +23,7 @@ Properties
 
    Index.empty
    Index.has_duplicates
+   Index.duplicated
    Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing

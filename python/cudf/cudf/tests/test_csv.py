@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -16,6 +16,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -834,10 +835,9 @@ def test_csv_reader_bools_NA():
     expected = pd.DataFrame(
         {
             "text": ["true", "false", "foo", "bar", "qux"],
-            "int": [1, 0, 1, 0, 0],
+            "int": [1.0, 0.0, 1.0, 0.0, np.nan],
         }
     )
-    # breaking behaviour is np.nan for qux
     assert_eq(df, expected)
 
 
@@ -1367,7 +1367,10 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/rapidsai/cudf/issues/10618",
+)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1647,7 +1650,7 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1664,7 +1667,7 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -2098,7 +2101,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": "abc"}),
         rfunc_args_and_kwargs=([], {"sep": "abc"}),
-        expected_error_message='"sep" must be a 1-character string',
     )
 
     assert_exceptions_equal(
@@ -2106,7 +2108,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": 1}),
         rfunc_args_and_kwargs=([], {"sep": 1}),
-        expected_error_message='"sep" must be string, not int',
     )
 
 

@@ -1,8 +1,9 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set, TypeVar
 
@@ -15,6 +16,7 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
+from cudf._lib.types import size_type_dtype
 from cudf._typing import DtypeObj
 from cudf.api.types import (
     is_bool_dtype,
@@ -197,6 +199,12 @@ class BaseIndex(Serializable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property
@@ -626,9 +634,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas Index.
+
+        Parameters
+        ----------
+        nullable : bool, Default False
+            If ``nullable`` is ``True``, the resulting index will have
+            a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting index will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
 
         Examples
         --------
@@ -1457,6 +1476,63 @@ class BaseIndex(Serializable):
             self._column_names,
         )
 
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate index values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        array. Either all duplicates, all except the first, or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            The value or values in a set of duplicates to mark as missing.
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        cupy.ndarray[bool]
+
+        See Also
+        --------
+        Series.duplicated : Equivalent method on cudf.Series.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Index.drop_duplicates : Remove duplicate values from Index.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set to False and all others to True:
+
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> idx.duplicated()
+        array([False, False,  True, False,  True])
+
+        which is equivalent to
+
+        >>> idx.duplicated(keep='first')
+        array([False, False,  True, False,  True])
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set to False and all others to True:
+
+        >>> idx.duplicated(keep='last')
+        array([ True, False,  True, False, False])
+
+        By setting keep to ``False``, all duplicates are True:
+
+        >>> idx.duplicated(keep=False)
+        array([ True, False,  True, False,  True])
+        """
+        return self.to_series().duplicated(keep=keep).to_cupy()
+
     def dropna(self, how="any"):
         """
         Drop null rows from Index.
@@ -1497,7 +1573,7 @@ class BaseIndex(Serializable):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
+            gather_map = gather_map.astype(size_type_dtype)
 
         if not _gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify

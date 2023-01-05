@@ -74,27 +74,14 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
-      auto const col_typeid = col->type().id();
-      col->set_null_mask(
-        cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset));
-
-      if (col_typeid == cudf::type_id::STRUCT) {
-        auto const null_mask  = col->view().null_mask();
-        auto const null_count = col->null_count();
-
-        for (cudf::size_type idx = 0; idx < col->num_children(); ++idx) {
-          cudf::structs::detail::superimpose_nulls(null_mask,
-                                                   null_count,
-                                                   col->child(idx),
-                                                   cudf::get_default_stream(),
-                                                   rmm::mr::get_current_device_resource());
-        }
-      }
-
-      if (col_typeid == cudf::type_id::LIST || col_typeid == cudf::type_id::STRUCT ||
-          col_typeid == cudf::type_id::STRING) {
-        col = cudf::purge_nonempty_nulls(col->view());
-      }
+      auto const null_mask_buff =
+        cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
+      col = cudf::structs::detail::superimpose_nulls(
+        static_cast<cudf::bitmask_type const*>(null_mask_buff.data()),
+        cudf::UNKNOWN_NULL_COUNT,
+        std::move(col),
+        cudf::get_default_stream(),
+        rmm::mr::get_current_device_resource());
     }
   }
 

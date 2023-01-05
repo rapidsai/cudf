@@ -32,6 +32,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <limits>
 #include <type_traits>
 
 namespace cudf::test::binop {
@@ -418,6 +419,50 @@ TYPED_TEST(BinaryOperationCompiledTest_IntPow, IntPow_SpecialCases)
 
   auto result = cudf::binary_operation(
     lhs, rhs, cudf::binary_operator::INT_POW, data_type(type_to_id<TypeOut>()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST(BinaryOperationCompiledTestFloorDivInt64, FloorDivInt64Positive)
+{
+  // This tests special values for which integer floor division is
+  // incorrect if round-tripped through casting to double precision.
+  // Double precision floating point does not have enough resolution
+  // to represent these integers distinctly, so if we were to cast to
+  // double, we would get three identical results (all wrong!).
+  auto lhs = fixed_width_column_wrapper<int64_t>({std::numeric_limits<int64_t>::max(),
+                                                  std::numeric_limits<int64_t>::max() - 10,
+                                                  std::numeric_limits<int64_t>::max() - 100});
+  auto rhs = fixed_width_column_wrapper<int64_t>({10, 10, 10});
+  auto expected =
+    fixed_width_column_wrapper<int64_t>({std::numeric_limits<int64_t>::max() / 10,
+                                         (std::numeric_limits<int64_t>::max() - 10) / 10,
+                                         (std::numeric_limits<int64_t>::max() - 100) / 10});
+
+  auto result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::FLOOR_DIV, data_type(type_to_id<int64_t>()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST(BinaryOperationCompiledTestFloorDivInt64, FloorDivInt64RoundNegativeInf)
+{
+  // Floor division should round towards negative infinity. Which is
+  // distinct from default integral division in C++ which rounds
+  // towards zero (truncation)
+  auto lhs = fixed_width_column_wrapper<int64_t>({std::numeric_limits<int64_t>::min(),
+                                                  std::numeric_limits<int64_t>::min() + 10,
+                                                  std::numeric_limits<int64_t>::min() + 100});
+  auto rhs = fixed_width_column_wrapper<int64_t>({10, 10, 10});
+  // int64_t::min() is not divisible by 10, so there is a non-zero
+  // remainder which should be rounded down.
+  auto expected =
+    fixed_width_column_wrapper<int64_t>({std::numeric_limits<int64_t>::min() / 10 - 1,
+                                         (std::numeric_limits<int64_t>::min() + 10) / 10 - 1,
+                                         (std::numeric_limits<int64_t>::min() + 100) / 10 - 1});
+
+  auto result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::FLOOR_DIV, data_type(type_to_id<int64_t>()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

@@ -482,7 +482,7 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyQuery)
 
 TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 {
-  // empty input -> null
+  // empty string input -> null
   {
     cudf::test::strings_column_wrapper input{""};
     std::string json_path("$");
@@ -505,6 +505,14 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
+}
+
+TEST_F(JsonPathTests, GetJsonObjectEmptyInput)
+{
+  cudf::test::strings_column_wrapper input{};
+  std::string json_path("$");
+  auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, input);
 }
 
 // badly formed JSONpath strings

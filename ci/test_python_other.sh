@@ -5,8 +5,8 @@
 source "$(dirname "$0")/test_python_common.sh"
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
   dask-cudf cudf_kafka custreamz
 
 rapids-logger "Check GPU usage"
@@ -56,8 +56,8 @@ popd
 
 set -e
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
   strings_udf
 set +e
 

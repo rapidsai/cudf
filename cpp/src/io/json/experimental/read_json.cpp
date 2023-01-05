@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
                                 buffer.data(),
                                 buffer.size() * sizeof(decltype(buffer)::value_type),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return find_first_delimiter(d_data, delimiter, stream);
 }
@@ -90,7 +90,7 @@ size_type find_first_delimiter_in_chunk(host_span<unsigned char const> buffer,
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.data(),
                                 buffer.data(),
                                 buffer.size() * sizeof(decltype(buffer)::value_type),
-                                cudaMemcpyHostToDevice,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return find_first_delimiter(d_data, delimiter, stream);
 }
@@ -158,7 +158,14 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   CUDF_FUNC_RANGE();
   if (not should_load_whole_source(reader_opts)) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "specifying a byte range is supported only for json lines");
+                 "specifying a byte range is supported only for JSON Lines");
+  }
+
+  if (sources.size() > 1) {
+    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
+                 "Multiple compressed inputs are not supported");
+    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
+                 "Multiple inputs are supported only for JSON Lines format");
   }
 
   auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
