@@ -61,22 +61,22 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   auto device_comparator =
     comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(total_size),
-                    all_encodings->mutable_view().begin<bool>(),
-                    [input_size = input.size(), device_comparator] __device__(size_type i) {
-                      auto element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
-                      auto category_index = cudf::experimental::row::rhs_index_type{i / input_size};
-                      return device_comparator(element_index, category_index);
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(total_size),
+    all_encodings->mutable_view().begin<bool>(),
+    [input_size = input.size(), device_comparator] __device__(size_type i) {
+      auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
+      auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
+      return device_comparator(element_index, category_index);
+    });
 
   auto split_iter =
     make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });
   std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
 
-  // TODO: use detail interface, gh9226
-  auto views = cudf::split(all_encodings->view(), split_indices);
+  auto views = split(all_encodings->view(), split_indices, stream);
   table_view encodings_view{views};
 
   return std::pair(std::move(all_encodings), encodings_view);
