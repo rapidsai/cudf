@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ struct get_data_ptr_functor {
     return static_cast<const void*>(view.template data<T>());
   }
 
-  // TODO: both the failing operators can be combined into single template
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   void const* operator()(column_view const& view)
   {
@@ -66,22 +65,6 @@ const void* get_data_ptr(column_view const& view)
 const void* get_data_ptr(scalar const& s)
 {
   return type_dispatcher<dispatch_storage_type>(s.type(), get_data_ptr_functor{}, s);
-}
-
-std::string get_type_name(data_type type)
-{
-  // TODO: Remove in JIT type utils PR
-  switch (type.id()) {
-    case type_id::LIST: return CUDF_STRINGIFY(List);
-    case type_id::STRUCT: return CUDF_STRINGIFY(Struct);
-    case type_id::DECIMAL32: return CUDF_STRINGIFY(int32_t);
-    case type_id::DECIMAL64: return CUDF_STRINGIFY(int64_t);
-    case type_id::DECIMAL128: return CUDF_STRINGIFY(__int128_t);
-
-    default: break;
-  }
-
-  return type_dispatcher(type, type_to_name{});
 }
 
 }  // namespace jit
