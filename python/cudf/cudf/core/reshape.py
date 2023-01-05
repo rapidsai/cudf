@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import itertools
 from collections import abc
@@ -9,6 +9,7 @@ import pandas as pd
 
 import cudf
 from cudf._lib.transform import one_hot_encode
+from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
@@ -1154,10 +1155,11 @@ def _one_hot_encode_column(
         else:
             column = column._get_decategorized_column()
 
-    if column.size * categories.size >= np.iinfo("int32").max:
+    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            "np.iinfo('int32').max. Consider reducing size of category"
+            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            "size of category"
         )
     data = one_hot_encode(column, categories)
 
