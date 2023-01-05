@@ -16,7 +16,10 @@ T = TypeVar("T", bound="CopyOnWriteBuffer")
 
 def _keys_cleanup(ptr, size):
     weak_set_values = CopyOnWriteBuffer._instances[(ptr, size)]
-    if len(weak_set_values) == 1 and list(weak_set_values.data)[0]() is None:
+    if (
+        len(weak_set_values) == 1
+        and next(iter(weak_set_values.data))() is None
+    ):
         # When the last remaining reference is being cleaned up we will still
         # have a dead weak-reference in `weak_set_values`, if that is the case
         # we are good to perform the key's cleanup
