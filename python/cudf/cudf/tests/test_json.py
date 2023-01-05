@@ -512,7 +512,8 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
 )
 def test_json_to_json_compare_contents(gdf, pdf):
     expected_json = pdf.to_json(lines=True, orient="records")
-    actual_json = gdf.to_json(lines=True, orient="records")
+    with pytest.warns(UserWarning):
+        actual_json = gdf.to_json(lines=True, orient="records")
 
     assert expected_json == actual_json
 
@@ -988,7 +989,8 @@ def test_json_round_trip_gzip():
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["abc", "def", "ghi"]})
     bytes = BytesIO()
     with gzip.open(bytes, mode="wb") as fo:
-        df.to_json(fo, orient="records", lines=True)
+        with pytest.warns(UserWarning):
+            df.to_json(fo, orient="records", lines=True)
     bytes.seek(0)
     with gzip.open(bytes, mode="rb") as fo:
         written_df = cudf.read_json(fo, orient="records", lines=True)
@@ -999,7 +1001,8 @@ def test_json_round_trip_gzip():
 
     with gzip.open(bytes, mode="wb") as fo:
         fo.seek(loc)
-        df.to_json(fo, orient="records", lines=True)
+        with pytest.warns(UserWarning):
+            df.to_json(fo, orient="records", lines=True)
     bytes.seek(loc)
     with gzip.open(bytes, mode="rb") as fo:
         fo.seek(loc)

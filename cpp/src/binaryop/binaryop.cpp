@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -23,7 +23,7 @@
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -39,6 +39,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -138,7 +139,7 @@ void binary_operation(mutable_column_view& out,
                       const std::string& ptx,
                       rmm::cuda_stream_view stream)
 {
-  std::string const output_type_name = cudf::jit::get_type_name(out.type());
+  std::string const output_type_name = cudf::type_to_name(out.type());
 
   std::string ptx_hash =
     "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
@@ -147,8 +148,8 @@ void binary_operation(mutable_column_view& out,
 
   std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
                               .instantiate(output_type_name,  // list of template arguments
-                                           cudf::jit::get_type_name(lhs.type()),
-                                           cudf::jit::get_type_name(rhs.type()),
+                                           cudf::type_to_name(lhs.type()),
+                                           cudf::type_to_name(rhs.type()),
                                            std::string("cudf::binops::jit::UserDefinedOp"));
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)

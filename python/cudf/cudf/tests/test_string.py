@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import json
 import re
@@ -1842,7 +1842,14 @@ def test_string_wrap(data, width):
     ps = pd.Series(data)
 
     assert_eq(
-        gs.str.wrap(width=width),
+        gs.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         ps.str.wrap(
             width=width,
             break_long_words=False,
@@ -1857,7 +1864,14 @@ def test_string_wrap(data, width):
     pi = pd.Index(data)
 
     assert_eq(
-        gi.str.wrap(width=width),
+        gi.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         pi.str.wrap(
             width=width,
             break_long_words=False,
@@ -2019,18 +2033,12 @@ def test_string_starts_ends(data, pat):
             rfunc=gs.str.startswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
         assert_exceptions_equal(
             lfunc=ps.str.endswith,
             rfunc=gs.str.endswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
     else:
         assert_eq(
@@ -2593,7 +2601,6 @@ def test_string_typecast_error(data, obj_type, dtype):
         rfunc=gsr.astype,
         lfunc_args_and_kwargs=([dtype],),
         rfunc_args_and_kwargs=([dtype],),
-        compare_error_message=False,
     )
 
 
@@ -2986,9 +2993,6 @@ def test_string_product():
     assert_exceptions_equal(
         lfunc=psr.product,
         rfunc=sr.product,
-        expected_error_message=re.escape(
-            f"cannot perform product with type {sr.dtype}"
-        ),
     )
 
 
@@ -2996,18 +3000,14 @@ def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.var, rfunc=sr.var)
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
 def test_string_slice_with_mask():

@@ -1,7 +1,7 @@
 name: test
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       branch:
         required: true
@@ -19,7 +19,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -28,7 +27,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -39,7 +37,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -49,7 +46,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -62,7 +58,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
