@@ -218,6 +218,29 @@ This way, when the bug is fixed, the test suite will fail at this
 point (and we will remember to update the test).
 
 
+### Testing code that throws warnings
+
+Some code may be expected to throw warnings.
+A common example is when a cudf API is deprecated for future removal, but many other possibilities exist as well.
+The cudf testing suite [surfaces all warnings as errors](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#controlling-warnings).
+This includes warnings raised from non-cudf code, such as calls to pandas or pyarrow.
+This setting forces developers to proactively deal with deprecations from other libraries,
+as well as preventing the internal use of deprecated cudf APIs in other parts of the library.
+Just as importantly, it can help catch real errors like integer overflow or division by zero.
+
+When testing code that is expected to throw a warnings, developers should use the
+[`pytest.warns`](https://docs.pytest.org/en/latest/how-to/capture-warnings.html#assertwarnings) context to catch the warning.
+For parametrized tests that raise warnings under specific conditions, use the `testing._utils.expect_warning_if` decorator instead of `pytest.warns`.
+
+```{warning}
+[`warnings.catch_warnings`](https://docs.python.org/3/library/warnings.html#warnings.catch_warnings)
+is a tempting alternative to `pytest.warns`.
+**Do not use this context manager in tests.**
+Unlike `pytest.warns`, which _requires_ that the expected warning be raised,
+`warnings.catch_warnings` simply catches warnings that appear without requiring them.
+The cudf testing suite should avoid such ambiguities.
+```
+
 ### Testing utility functions
 
 The `cudf.testing` subpackage provides a handful of utilities for testing the equality of objects.
