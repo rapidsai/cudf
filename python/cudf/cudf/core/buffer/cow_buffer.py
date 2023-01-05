@@ -88,7 +88,8 @@ class CopyOnWriteBuffer(Buffer):
     @property
     def ptr(self) -> int:
         """Device pointer to the start of the buffer."""
-        self._unlink_shared_buffers(zero_copied=True)
+        self._unlink_shared_buffers()
+        self._zero_copied = True
         return self._ptr
 
     @property
@@ -138,7 +139,7 @@ class CopyOnWriteBuffer(Buffer):
     @property
     def __cuda_array_interface__(self) -> dict:
         # Unlink if there are any weak-references.
-
+        self._unlink_shared_buffers()
         # Mark the Buffer as ``zero_copied=True``,
         # which will prevent any copy-on-write
         # mechanism post this operation.
@@ -146,8 +147,7 @@ class CopyOnWriteBuffer(Buffer):
         # control over knowing if a third-party library
         # has modified the data this Buffer is
         # pointing to.
-        self._unlink_shared_buffers(zero_copied=True)
-
+        self._zero_copied = True
         result = self._cuda_array_interface_readonly
         result["data"] = (self._ptr, False)
         return result
@@ -166,7 +166,7 @@ class CopyOnWriteBuffer(Buffer):
             "version": 0,
         }
 
-    def _unlink_shared_buffers(self, zero_copied=False):
+    def _unlink_shared_buffers(self):
         """
         Unlinks a Buffer if it is shared with other buffers(i.e.,
         weak references exist) by making a true deep-copy.
@@ -180,4 +180,3 @@ class CopyOnWriteBuffer(Buffer):
             self._size = new_buf.size
             self._owner = new_buf
             self._finalize_init()
-        self._zero_copied = zero_copied
