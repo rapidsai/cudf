@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -46,7 +46,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [0, 1]],),
         rfunc_args_and_kwargs=([levels, [0, 1]],),
-        compare_error_message=False,
     )
 
     # Codes don't match levels
@@ -55,7 +54,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
         rfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
-        compare_error_message=False,
     )
 
     # Largest code greater than number of levels
@@ -64,7 +62,6 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
         rfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
-        compare_error_message=False,
     )
 
     # Unequal code lengths
@@ -73,12 +70,9 @@ def test_multiindex_levels_codes_validation():
         rfunc=cudf.MultiIndex,
         lfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
         rfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
-        compare_error_message=False,
     )
     # Didn't pass levels and codes
-    assert_exceptions_equal(
-        lfunc=pd.MultiIndex, rfunc=cudf.MultiIndex, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=pd.MultiIndex, rfunc=cudf.MultiIndex)
 
     # Didn't pass non zero levels and codes
     assert_exceptions_equal(
