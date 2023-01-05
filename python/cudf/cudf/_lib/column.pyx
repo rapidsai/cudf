@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import inspect
 from types import SimpleNamespace
 
 import cupy as cp
@@ -206,16 +207,20 @@ cdef class Column:
             "The value for mask is smaller than expected, got {}  bytes, "
             "expected " + str(required_num_bytes) + " bytes."
         )
+
+        # Check for Buffer instance, because
+        # hasattr will trigger invocation of
+        # `__cuda_array_interface__` which could
+        # be expensive in CopyOnWriteBuffer case.
+        value_cai = inspect.getattr_static(
+            value,
+            "__cuda_array_interface__",
+            None
+        )
+
         if value is None:
             mask = None
-        elif (
-            isinstance(value, Buffer) or
-            # Check for Buffer instance, because
-            # hasattr will trigger invocation of
-            # `__cuda_array_interface__` which could
-            # be expensive.
-            hasattr(value, "__cuda_array_interface__")
-        ):
+        elif type(value_cai) is property:
             if isinstance(value, CopyOnWriteBuffer):
                 value = SimpleNamespace(
                     __cuda_array_interface__=(
@@ -223,7 +228,7 @@ cdef class Column:
                     ),
                     owner=value
                 )
-            if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
+            if value_cai.__get__(value)["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
