@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
 using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
-using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
