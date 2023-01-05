@@ -1733,10 +1733,7 @@ table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
-  std::vector<SymbolT> h_input;
-  h_input.resize(d_input.size());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    h_input.data(), d_input.data(), h_input.size(), cudaMemcpyDefault, stream.value()));
+  auto h_input = cudf::detail::make_std_vector_async(d_input, stream);
 
   auto const new_line_delimited_json = options.is_enabled_lines();
 
