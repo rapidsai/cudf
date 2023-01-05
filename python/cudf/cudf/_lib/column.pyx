@@ -208,8 +208,7 @@ cdef class Column:
             "expected " + str(required_num_bytes) + " bytes."
         )
 
-        # Check for Buffer instance, because
-        # hasattr will trigger invocation of
+        # Because hasattr will trigger invocation of
         # `__cuda_array_interface__` which could
         # be expensive in CopyOnWriteBuffer case.
         value_cai = inspect.getattr_static(
