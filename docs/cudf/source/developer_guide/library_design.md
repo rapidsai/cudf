@@ -324,7 +324,7 @@ However, for performance reasons they frequently access internal attributes and 
 Copy on write is designed to reduce memory footprint on GPUs. With this feature, a copy(`.copy(deep=False)`) is only really made whenever
 there is a write operation on a column.
 
-The core copy-on-write implementation relies in the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
+The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
 With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`,
 this is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
 means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr` & `.size`
