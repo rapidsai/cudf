@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,8 +130,8 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const has_null = nullate::DYNAMIC{cudf::has_nulls(keys)};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
-                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                        cuco::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                        cuco::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 

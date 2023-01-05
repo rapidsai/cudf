@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ import cudf.api.types
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     is_integer,
     is_list_dtype,
@@ -5232,7 +5233,7 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype="int32")
+            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)
