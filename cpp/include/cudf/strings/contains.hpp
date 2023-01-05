@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,7 +198,7 @@ std::unique_ptr<column> count_re(
  * match the given like pattern.
  *
  * The like pattern expects only 2 wildcard special characters:
- * - `%` any number of any character (including no characters)
+ * - `%` zero or more of any character
  * - `_` any single character
  *
  * @code{.pseudo}
@@ -235,6 +235,45 @@ std::unique_ptr<column> count_re(
 std::unique_ptr<column> like(
   strings_column_view const& input,
   string_scalar const& pattern,
+  string_scalar const& escape_character = string_scalar(""),
+  rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying rows which
+ * match the corresponding like pattern in the given patterns
+ *
+ * The like pattern expects only 2 wildcard special characters:
+ * - `%` zero or more of any character
+ * - `_` any single character
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["azaa", "ababaabba", "aaxa"]
+ * p = ["%a", "b%", "__x_"]
+ * r = like(s, p)
+ * r is now [1, 0, 1]
+ * @endcode
+ *
+ * Specify an escape character to include either `%` or `_` in the search.
+ * The `escape_character` is expected to be either 0 or 1 characters.
+ * If more than one character is specified only the first character is used.
+ * The escape character is applied to all patterns.
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * @throw cudf::logic_error if `patterns` contains nulls or `escape_character` is invalid
+ * @throw cudf::logic_error if `patterns.size() != input.size()`
+ *
+ * @param input Strings instance for this operation
+ * @param patterns Like patterns to match within each corresponding string
+ * @param escape_character Optional character specifies the escape prefix;
+ *                         default is no escape character
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New boolean column
+ */
+std::unique_ptr<column> like(
+  strings_column_view const& input,
+  strings_column_view const& patterns,
   string_scalar const& escape_character = string_scalar(""),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
 
