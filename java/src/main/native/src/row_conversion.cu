@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1530,7 +1530,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     // more global lookups are necessary.
     if (!all_fixed_width) {
       cudaMemcpy(batch_row_offsets.data() + last_row_end, output_batch_row_offsets.data(),
-                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDeviceToDevice);
+                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDefault);
     }
 
     batch_row_boundaries.push_back(row_end);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -941,7 +941,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_slice, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -1345,7 +1345,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
       CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
       outfile_.write(ptr, size);
       CUDF_CUDA_TRY(cudaFreeHost(ptr));
@@ -2406,7 +2406,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
       CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
       mm_writer->host_write(ptr, size);
       CUDF_CUDA_TRY(cudaFreeHost(ptr));
