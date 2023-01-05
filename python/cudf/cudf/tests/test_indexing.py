@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from itertools import combinations
 
@@ -1214,32 +1214,26 @@ def test_out_of_bounds_indexing():
     assert_exceptions_equal(
         lambda: psr[[0, 1, 9]],
         lambda: gsr[[0, 1, 9]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[[0, 1, -4]],
         lambda: gsr[[0, 1, -4]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, 9], 2),
         lambda: gsr.__setitem__([0, 1, 9], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, -4], 2),
         lambda: gsr.__setitem__([0, 1, -4], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(-1, 2),
         lambda: gsr[4:6].iloc.__setitem__(-1, 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(1, 2),
         lambda: gsr[4:6].iloc.__setitem__(1, 2),
-        compare_error_message=False,
     )
 
 
@@ -1679,10 +1673,6 @@ def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
                 [(slice(None, None, None), ["a", "b"]), array],
                 {},
             ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
         )
 
 
