@@ -89,6 +89,19 @@ foreach(target IN LISTS targets_using_dlpack)
   target_include_directories(${target} PRIVATE "${DLPACK_INCLUDE_DIR}")
 endforeach()
 
+find_package(Python 3.8 REQUIRED COMPONENTS Interpreter)
+
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"
+  OUTPUT_VARIABLE PYARROW_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(targets_using_arrow_headers interop avro csv orc json parquet)
+foreach(target IN LISTS targets_using_arrow_headers)
+  target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
+endforeach()
+
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(strings)

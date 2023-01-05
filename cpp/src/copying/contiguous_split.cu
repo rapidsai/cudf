@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1047,11 +1047,8 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
 
   // HtoD indices and source buf info to device
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_indices,
-                                h_indices,
-                                indices_size + src_buf_info_size,
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyDefault, stream.value()));
 
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
   std::size_t const buf_sizes_size =
@@ -1184,7 +1181,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
                                 d_buf_sizes,
                                 buf_sizes_size + dst_buf_info_size,
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
@@ -1226,14 +1223,14 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // HtoD src and dest buffers
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream.value()));
+    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyDefault, stream.value()));
 
   // perform the copy.
   copy_data(num_bufs, num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info, stream);
 
   // DtoH dst info (to retrieve null counts)
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDeviceToHost, stream.value()));
+    h_dst_buf_info, d_dst_buf_info, dst_buf_info_size, cudaMemcpyDefault, stream.value()));
 
   stream.synchronize();
 
