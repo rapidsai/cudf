@@ -49,7 +49,9 @@ class CopyOnWriteBuffer(Buffer):
         weakref.finalize(self, _keys_cleanup, self._ptr, self._size)
 
     @classmethod
-    def _from_device_memory(cls: Type[T], data: Any) -> T:
+    def _from_device_memory(
+        cls: Type[T], data: Any, *, exposed: bool = False
+    ) -> T:
         """Create a Buffer from an object exposing `__cuda_array_interface__`.
 
         No data is being copied.
@@ -68,6 +70,7 @@ class CopyOnWriteBuffer(Buffer):
         # Bypass `__init__` and initialize attributes manually
         ret = super()._from_device_memory(data)
         ret._finalize_init()
+        ret._zero_copied = exposed
         return ret
 
     @classmethod
@@ -166,7 +169,8 @@ class CopyOnWriteBuffer(Buffer):
 
     def _unlink_shared_buffers(self):
         """
-        Unlinks a Buffer if it is shared with other buffers by making a true deep-copy.
+        Unlinks a Buffer if it is shared with other buffers by
+        making a true deep-copy.
         """
         if not self._zero_copied and self._is_shared:
             # make a deep copy of existing DeviceBuffer

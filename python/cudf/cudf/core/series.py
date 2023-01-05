@@ -548,9 +548,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data,
                 nan_as_null=nan_as_null,
                 dtype=dtype,
-                copy=copy,
-                fastpath=True,
             )
+            if copy:
+                data = data.copy(deep=True)
         else:
             if dtype is not None:
                 data = data.astype(dtype)

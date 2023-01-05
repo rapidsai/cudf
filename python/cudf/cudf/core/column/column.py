@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, CopyOnWriteBuffer, as_buffer
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -1815,8 +1815,6 @@ def as_column(
     nan_as_null: bool = None,
     dtype: Dtype = None,
     length: int = None,
-    copy: bool = False,
-    fastpath: bool = False,
 ):
     """Create a Column from an arbitrary object
 
@@ -1901,14 +1899,6 @@ def as_column(
 
         data = as_buffer(arbitrary, exposed=True)
         col = build_column(data, dtype=current_dtype, mask=mask)
-        if copy:
-            col = col.copy(deep=True)
-        elif (
-            fastpath
-            and cudf.get_option("copy_on_write")
-            and isinstance(col.base_data, CopyOnWriteBuffer)
-        ):
-            col.base_data._zero_copied = True
 
         if dtype is not None:
             col = col.astype(dtype)

@@ -77,7 +77,9 @@ def as_buffer(
         if isinstance(data, Buffer) or hasattr(
             data, "__cuda_array_interface__"
         ):
-            return CopyOnWriteBuffer._from_device_memory(data)
+            return CopyOnWriteBuffer._from_device_memory(data, exposed=exposed)
+        if exposed:
+            raise ValueError("cannot created exposed host memory")
         return CopyOnWriteBuffer._from_host_memory(data)
     if get_global_manager() is not None:
         if hasattr(data, "__cuda_array_interface__"):
