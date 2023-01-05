@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,7 +218,7 @@ struct minmax_functor {
     using OutputType = minmax_pair<cudf::string_view>;
     OutputType host_result;
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
             std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
@@ -237,7 +237,7 @@ struct minmax_functor {
     using OutputType = minmax_pair<T>;
     OutputType host_result;
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
     return {get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
