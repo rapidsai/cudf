@@ -1702,6 +1702,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 (
                     cudf.core.column.DecimalBaseColumn,
                     cudf.core.column.StructColumn,
+                    cudf.core.column.ListColumn,
                 ),
             ):
                 out._data[name] = col._with_type_metadata(
