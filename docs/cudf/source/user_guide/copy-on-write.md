@@ -1,6 +1,6 @@
-# Copy on write
+# Copy-on-write
 
-Copy on write enables ability to save on GPU memory usage when copies(`.copy(deep=False)`) of a column
+Copy-on-write(COW) enables ability to save on GPU memory usage when copies(`.copy(deep=False)`) of a column
 are made.
 
 ## How to enable it
@@ -99,7 +99,7 @@ write operations on all of those copies. This will also increase the speed at wh
 ## How to disable it
 
 
-Copy on write can be disable by setting ``copy_on_write`` cudf option to ``False``:
+Copy-on-write can be disable by setting ``copy_on_write`` cudf option to ``False``:
 
 ```python
 >>> cudf.set_option("copy_on_write", False)

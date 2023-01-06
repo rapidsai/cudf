@@ -318,10 +318,10 @@ Internally, these objects typically interact with cuDF objects at the Frame laye
 However, for performance reasons they frequently access internal attributes and methods of `Frame` and its subclasses.
 
 
-## Copy on write
+## Copy-on-write
 
 
-Copy on write is designed to reduce memory footprint on GPUs. With this feature, a copy(`.copy(deep=False)`) is only really made whenever
+Copy-on-write(COW) is designed to reduce memory footprint on GPUs. With this feature, a copy(`.copy(deep=False)`) is only really made whenever
 there is a write operation on a column.
 
 The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.

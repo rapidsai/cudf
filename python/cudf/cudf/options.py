@@ -154,7 +154,7 @@ def _make_cow_validator(valid_options):
     def _validator(val):
         if get_option("spill") and val:
             raise ValueError(
-                "Copy on write is not supported when spilling is enabled. "
+                "Copy-on-write is not supported when spilling is enabled. "
                 "Please set `spill` to `False`"
             )
         if val not in valid_options:
@@ -171,7 +171,7 @@ def _make_spill_validator(valid_options):
         try:
             if get_option("copy_on_write") and val:
                 raise ValueError(
-                    "Spilling is not supported when copy on write is enabled. "
+                    "Spilling is not supported when Copy-on-write is enabled. "
                     "Please set `copy_on_write` to `False`"
                 )
         except KeyError:
