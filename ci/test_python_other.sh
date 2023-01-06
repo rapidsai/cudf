@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 source "$(dirname "$0")/test_python_common.sh"
@@ -11,9 +11,6 @@ rapids-mamba-retry install \
 
 rapids-logger "Check GPU usage"
 nvidia-smi
-
-rapids-logger "Check numba info"
-numba -s
 
 set +e
 
