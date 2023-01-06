@@ -23,8 +23,8 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/slice.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/substring.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
