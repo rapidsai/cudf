@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -29,6 +30,12 @@
 
 #include <tuple>
 #include <vector>
+
+using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
+using structs_col = cudf::test::structs_column_wrapper;
+
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
 
 namespace {
 void run_rank_test(cudf::table_view input,
@@ -449,4 +456,46 @@ TEST_F(RankLarge, average_large)
                            false);
   cudf::test::fixed_width_column_wrapper<double, int> expected(iter + 1, iter + 10559);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+// using input_arg_t = std::tuple<cudf::order, cudf::null_policy, cudf::null_order>;
+// input_arg_t asce_keep{cudf::order::ASCENDING, cudf::null_policy::EXCLUDE,
+// cudf::null_order::AFTER}; input_arg_t asce_top{cudf::order::ASCENDING,
+// cudf::null_policy::INCLUDE, cudf::null_order::BEFORE}; input_arg_t asce_bottom{
+//   cudf::order::ASCENDING, cudf::null_policy::INCLUDE, cudf::null_order::AFTER};
+
+// input_arg_t desc_keep{
+//   cudf::order::DESCENDING, cudf::null_policy::EXCLUDE, cudf::null_order::BEFORE};
+// input_arg_t desc_top{cudf::order::DESCENDING, cudf::null_policy::INCLUDE,
+// cudf::null_order::AFTER}; input_arg_t desc_bottom{
+//   cudf::order::DESCENDING, cudf::null_policy::INCLUDE, cudf::null_order::BEFORE};
+
+struct RankList : public cudf::test::BaseFixture {
+  lists_col col{{{}, {1}, {2, 2}, {2, 3}, {}, {} /*NULL*/, {2}, {} /*NULL*/}, nulls_at({5, 7})};
+
+  void run_all_tests(cudf::rank_method method,
+                     input_arg_t input_arg,
+                     cudf::column_view const col_rank,
+                     bool percentage = false)
+  {
+    auto const input  = cudf::table_view{{col}};
+    auto const output = cudf::table_view{{col_rank}};
+
+    run_rank_test(input,
+                  output,
+                  method,
+                  std::get<0>(input_arg),
+                  std::get<1>(input_arg),
+                  std::get<2>(input_arg),
+                  percentage,
+                  true);
+  }
+};
+
+TEST_F(RankList, first_asce_keep)
+{
+  // ASCENDING
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{1, 3, 5, 6, 2, -1, 4, -1},
+                                                                   nulls_at({5, 7})};
+  this->run_all_tests(cudf::rank_method::FIRST, asce_keep, col_rank);
 }

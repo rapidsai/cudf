@@ -47,40 +47,23 @@
 namespace cudf {
 namespace detail {
 namespace {
-// Functor to identify unique elements in a sorted order table/column
-// template <typename ReturnType, typename Iterator>
-// struct unique_comparator {
-//   unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
-//     : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
-//       permute(sorted_order)
-//   {
-//   }
-//   __device__ ReturnType operator()(size_type index) const noexcept
-//   {
-//     return index == 0 || not comparator(permute[index], permute[index - 1]);
-//   };
-
-//  private:
-//   row_equality_comparator<nullate::DYNAMIC> comparator;
-//   Iterator const permute;
-// };
 
 // Assign rank from 1 to n unique values. Equal values get same rank value.
 rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
                                                  column_view sorted_order_view,
                                                  rmm::cuda_stream_view stream)
 {
-  auto t_input           = table_view{{input_col}};
-  auto comparator        = cudf::experimental::row::equality::self_comparator{t_input, stream};
-  auto device_comparator = comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_input)});
+  auto const t_input    = table_view{{input_col}};
+  auto const comparator = cudf::experimental::row::equality::self_comparator{t_input, stream};
+  auto const device_comparator = comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_input)});
 
-  auto sorted_index_order = thrust::make_permutation_iterator(
+  auto const sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
   auto conv = [permute = sorted_index_order, device_comparator] __device__(size_type index) {
     return static_cast<size_type>(index == 0 ||
                                   not device_comparator(permute[index], permute[index - 1]));
   };
-  auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
+  auto const unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
   auto const input_size = input_col.size();
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
