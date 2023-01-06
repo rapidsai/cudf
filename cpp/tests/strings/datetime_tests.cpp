@@ -247,15 +247,32 @@ TEST_F(StringsDatetimeTest, ToTimestampWeeks)
   cudf::test::strings_column_wrapper input{
     "2012-01/3", "2012-04/4", "2023-01/1", "2012-52/5", "2020-44/2", "1960-20/0", "1986-04/6"};
 
-  auto const format = std::string("%Y-%W/%w");
-  auto results      = cudf::strings::to_timestamps(
+  auto format  = std::string("%Y-%W/%w");
+  auto results = cudf::strings::to_timestamps(
     cudf::strings_column_view(input), cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, format);
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected{
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
     15343, 15365, 19359, 15702, 18569, -3511, 5875};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  results = cudf::strings::is_timestamp(cudf::strings_column_view(input), format);
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1, 1});
+  results          = cudf::strings::is_timestamp(cudf::strings_column_view(input), format);
+  auto is_expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+
+  cudf::test::strings_column_wrapper input_iso{
+    "2012-01/3", "2012-04/4", "2023-01/1", "2012-52/5", "2020-44/2", "1960-20/7", "1986-04/6"};
+
+  format  = std::string("%Y-%U/%u");
+  results = cudf::strings::to_timestamps(
+    cudf::strings_column_view(input_iso), cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, format);
+  expected = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    15342, 15364, 19358, 15701, 18568, -3512, 5874};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::is_timestamp(cudf::strings_column_view(input_iso), format);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+
+  is_expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 0, 1});
+  results     = cudf::strings::is_timestamp(cudf::strings_column_view(input), format);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 

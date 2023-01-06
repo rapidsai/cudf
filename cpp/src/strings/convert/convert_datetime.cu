@@ -115,7 +115,7 @@ struct format_compiler {
   specifier_map specifiers = {
     {'Y', 4}, {'y', 2}, {'m', 2}, {'d', 2}, {'H', 2}, {'I', 2}, {'M', 2},
     {'S', 2}, {'f', 6}, {'z', 5}, {'Z', 3}, {'p', 2}, {'j', 3},
-    {'W', 2}, {'w', 1}};
+    {'W', 2}, {'w', 1}, {'U', 2}, {'u', 1}};
   // clang-format on
 
   format_compiler(std::string_view fmt,
@@ -211,6 +211,15 @@ struct parse_datetime {
     return powers_of_ten[exponent];
   }
 
+  __device__ bool format_contains(char specifier) const
+  {
+    return thrust::find_if(thrust::seq,
+                           d_format_items.begin(),
+                           d_format_items.end(),
+                           [specifier](auto const item) { return item.value == specifier; }) !=
+           d_format_items.end();
+  }
+
   // Walk the format_items to parse the string into date/time components
   [[nodiscard]] __device__ timestamp_components parse_into_parts(string_view const& d_string) const
   {
@@ -301,15 +310,18 @@ struct parse_datetime {
           timeparts.hour = hour;
           break;
         }
-        case 'W': {  // week of year
+        case 'U':    // week of year: Sunday based
+        case 'W': {  // week of year: Monday based
           auto const [weeks, left] = parse_int(ptr, item.length);
           timeparts.weeks          = static_cast<int8_t>(weeks + 1);
           bytes_read -= left;
           break;
         }
+        case 'u':    // day of week: Mon(1)-Sun(7)
         case 'w': {  // day of week; Mon(1)-Sat(6): 0 is mapped to Sun(7)
           auto const [weekday, left] = parse_int(ptr, item.length);
-          timeparts.weekday          = static_cast<int8_t>(weekday == 0 ? 7 : weekday);
+          timeparts.weekday =
+            static_cast<int8_t>((item.value == 'w' && weekday == 0) ? 7 : weekday);
           bytes_read -= left;
           break;
         }
@@ -336,17 +348,19 @@ struct parse_datetime {
 
   [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
-    auto const days = [timeparts] {
+    auto const days = [timeparts, this] {
       // weeks and weekday prioritize over month/day
       if ((timeparts.weeks > 0) && (timeparts.weekday > 0)) {
         auto const y = cuda::std::chrono::year{timeparts.year};
         // clang-format off
-        auto const days    =  // compute days from year, weeks and weekday
-          cuda::std::chrono::sys_days{cuda::std::chrono::Monday[1]/cuda::std::chrono::January/y} +
-          cuda::std::chrono::weeks(timeparts.weeks - 1) - cuda::std::chrono::weeks{1} +
+        auto const start = format_contains('U')
+          ? cuda::std::chrono::sys_days{cuda::std::chrono::Sunday[1]/cuda::std::chrono::January/y}
+          : cuda::std::chrono::sys_days{cuda::std::chrono::Monday[1]/cuda::std::chrono::January/y};
+        // clang-format on
+        auto const days =  // compute days from year, weeks and weekday
+          start + cuda::std::chrono::weeks(timeparts.weeks - 1) - cuda::std::chrono::weeks{1} +
           (cuda::std::chrono::weekday(timeparts.weekday) -
            cuda::std::chrono::weekday{1});  // cuda::std::chrono::Monday causes compile error here
-        // clang-format on
         return days.time_since_epoch().count();
       }
       auto const ymd =  // chrono class handles the leap year calculations for us
@@ -601,15 +615,18 @@ struct check_datetime_format {
           }
           break;
         }
+        case 'U':
         case 'W': {
           auto const cv = check_value(ptr, item.length, 0, 53);
           result        = cv.first;
           bytes_read -= cv.second;
           break;
         }
+        case 'u':
         case 'w': {
-          auto const cv = check_value(ptr, item.length, 0, 6);
-          result        = cv.first;
+          auto const first = item.value == 'w' ? 0 : 1;
+          auto const cv    = check_value(ptr, item.length, first, first + 6);
+          result           = cv.first;
           bytes_read -= cv.second;
           break;
         }
@@ -1122,8 +1139,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // This API supports a few more specifiers than to_timestamps.
   // clang-format off
   format_compiler compiler(format, stream,
-    specifier_map{{'u', 1}, {'U', 2}, {'V', 2}, {'G', 4},
-                  {'a', 3}, {'A', 3}, {'b', 3}, {'B', 3}});
+    specifier_map{{'V', 2}, {'G', 4}, {'a', 3}, {'A', 3}, {'b', 3}, {'B', 3}});
   // clang-format on
   auto const d_format_items = compiler.format_items();
   auto const d_timestamps   = column_device_view::create(timestamps, stream);
