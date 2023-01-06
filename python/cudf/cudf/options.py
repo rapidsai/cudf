@@ -255,7 +255,7 @@ _register_option(
 
 _register_option(
     "copy_on_write",
-    os.environ.get("CUDF_COPY_ON_WRITE", "0") == "1",
+    _env_get_bool("CUDF_COPY_ON_WRITE", False),
     textwrap.dedent(
         """
         Default behavior of performing shallow copies.

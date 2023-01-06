@@ -402,9 +402,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def force_deep_copy(self: T) -> T:
         """
-        A method to force create a deep-copy of
-        a Column irrespective of `copy-on-write`
-        is enable/disabled.
+        A method to create deep copy irrespective of whether
+        `copy-on-write` is enable.
         """
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))

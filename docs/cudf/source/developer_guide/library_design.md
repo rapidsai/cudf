@@ -325,14 +325,14 @@ Copy on write is designed to reduce memory footprint on GPUs. With this feature,
 there is a write operation on a column.
 
 The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`,
-this is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
+With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
+This is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
 means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr` & `.size`
 i.e., if they are all pointing to the same device memory.
 
 When the cudf option ``copy_on_write`` is ``True``, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
-mechanism to enable copy-on-write for all Buffers. When a `CopyOnWriteBuffer` is created, it's weak-reference is generated and added to the `WeakSet` which is inturn stored in the `defaultdict`. This will later serve as an indication whether or not to make a copy when a
-write operation is being performed on `Column`(more on that below).
+mechanisms to enable copy-on-write for all Buffers. When a `CopyOnWriteBuffer` is created, its weakref is generated and added to the `WeakSet` which is in turn stored in the `defaultdict`. This will later serve as an indication of whether or not to make a copy when a
+write operation is performed on `Column`(more on that below).
 
 
 There is a case when copy-on-write will be inactive and return true copies even though the cudf option `copy_on_write` is `True`:
@@ -348,7 +348,7 @@ rather than a copy-on-write shallow copy with weak-references.
 
 Notes:
 1. Weak-references are implemented only for fixed-width data types as these are only column
-types that can be mutated in-place.
+types that can be mutated in place.
 2. Deep copies of variable width data types return shallow-copies of the Columns, because these
 types don't support real in-place mutations to the data. We just mimic in such a way that it looks
 like an in-place operation.
@@ -356,9 +356,9 @@ like an in-place operation.
 
 ### Examples
 
-When copy-on-write is enabled, take a shallow copy of a `Series` or a `DataFrame` will not
-eagerly create a copy of the data. But instead, it produces a view which will be lazily
-copied when a write operation is performed on any of it's copies.
+When copy-on-write is enabled, taking a shallow copy of a `Series` or a `DataFrame` will not
+eagerly create a copy of the data. Instead, it will produce a view that will be lazily
+copied when a write operation is performed on any of its copies.
 
 Let's create a series:
 
@@ -407,7 +407,7 @@ dtype: int64
 139796315897856
 ```
 
-Now, when we perform a write operation on one of them, say on `s2`. A new copy is created
+Now, when we perform a write operation on one of them, say on `s2`, a new copy is created
 for `s2` on device and then modified:
 
 ```python
@@ -468,7 +468,7 @@ dtype: int64
 dtype: int64
 ```
 
-If we inspect the memory address of the data, `s2` & `s3` addresses will remain un-touched, but `s1` memory address will change because of a copy operation performed during the writing:
+If we inspect the memory address of the data, `s2` & `s3` addresses will remain untouched, but `s1` memory address will change because of a copy operation performed during the writing:
 
 ```python
 >>> s2.data.ptr
