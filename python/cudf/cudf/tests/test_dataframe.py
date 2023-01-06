@@ -10001,7 +10001,7 @@ def test_dataframe_duplicated(data, subset, keep):
     "data",
     [
         {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
-        {"a": [[{"b": 567}]] * 10},
+        {"a": [[{"b": 567}], None] * 10},
         {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
     ],
 )
