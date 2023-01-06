@@ -364,12 +364,12 @@ struct dispatch_from_integers_fn {
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
 
-    auto children =
+    auto [offsets, chars] =
       make_strings_children(from_integers_fn<IntegerType>{d_column}, strings_count, stream, mr);
 
     return make_strings_column(strings_count,
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets),
+                               std::move(chars),
                                integers.null_count(),
                                std::move(null_mask));
   }

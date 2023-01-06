@@ -140,12 +140,12 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
 
-  auto children =
+  auto [offsets, chars] =
     make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets),
+                             std::move(chars),
                              booleans.null_count(),
                              std::move(null_mask));
 }

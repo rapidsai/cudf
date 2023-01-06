@@ -415,15 +415,15 @@ struct dispatch_from_durations_fn {
     // copy null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
 
-    auto children =
+    auto [offsets, chars] =
       make_strings_children(from_durations_fn<T>{d_column, d_format_items, compiler.items_count()},
                             strings_count,
                             stream,
                             mr);
 
     return make_strings_column(strings_count,
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets),
+                               std::move(chars),
                                durations.null_count(),
                                std::move(null_mask));
   }

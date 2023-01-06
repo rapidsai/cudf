@@ -401,12 +401,12 @@ struct dispatch_from_floats_fn {
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
 
-    auto children =
+    auto [offsets, chars] =
       make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
 
     return make_strings_column(strings_count,
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets),
+                               std::move(chars),
                                floats.null_count(),
                                std::move(null_mask));
   }

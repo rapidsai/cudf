@@ -286,12 +286,12 @@ struct dispatch_from_fixed_point_fn {
 
     auto const d_column = column_device_view::create(input, stream);
 
-    auto children =
+    auto [offsets, chars] =
       make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets),
+                               std::move(chars),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input, stream, mr));
   }
