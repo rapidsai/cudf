@@ -337,10 +337,11 @@ struct parse_datetime {
   [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
     auto const days = [timeparts] {
-      if (timeparts.weeks > 0 && timeparts.weekday > 0) {
+      // weeks and weekday prioritize over month/day
+      if ((timeparts.weeks > 0) && (timeparts.weekday > 0)) {
         auto const y = cuda::std::chrono::year{timeparts.year};
         // clang-format off
-        auto days    =  // compute days from year, weeks and weekday
+        auto const days    =  // compute days from year, weeks and weekday
           cuda::std::chrono::sys_days{cuda::std::chrono::Monday[1]/cuda::std::chrono::January/y} +
           cuda::std::chrono::weeks(timeparts.weeks - 1) - cuda::std::chrono::weeks{1} +
           (cuda::std::chrono::weekday(timeparts.weekday) -

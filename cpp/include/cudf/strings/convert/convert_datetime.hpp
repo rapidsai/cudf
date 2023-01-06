@@ -70,8 +70,8 @@ namespace strings {
  * Although leap second is not supported for "%S", no checking is performed on the value.
  * The cudf::strings::is_timestamp can be used to verify the valid range of values.
  *
- * If "%W" and "%w" are specified, then "%m" and "%d" values are ignored when computing
- * the date part of the timestamp result.
+ * If "%W"/"%w" and "%m"/"%d" are both specified, the "%W" and "%w" values
+ * take precedent when computing the date part of the timestamp result.
  *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
