@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/rolling.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/aggregation.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/rolling.hpp>
 
 #include <gtest/gtest-typed-test.h>
 
@@ -33,81 +33,80 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-#include <initializer_list>
+// #include <initializer_list>
 #include <memory>
 #include <optional>
-
-namespace cudf::test::rolling {
 
 auto constexpr X = int32_t{0};  // Placeholder for null.
 
 template <typename T>
-using fwcw                 = fixed_width_column_wrapper<T>;
+using fwcw                 = cudf::test::fixed_width_column_wrapper<T>;
 using grouping_keys_column = fwcw<int32_t>;
 
 using namespace cudf::test::iterators;
 
 /// Rolling test executor with fluent interface.
 class rolling_exec {
-  size_type _preceding{1};
-  size_type _following{0};
-  size_type _min_periods{1};
-  column_view _grouping;
-  column_view _input;
-  null_policy _null_handling = null_policy::INCLUDE;
+  cudf::size_type _preceding{1};
+  cudf::size_type _following{0};
+  cudf::size_type _min_periods{1};
+  cudf::column_view _grouping;
+  cudf::column_view _input;
+  cudf::null_policy _null_handling = cudf::null_policy::INCLUDE;
 
  public:
-  rolling_exec& preceding(size_type preceding)
+  rolling_exec& preceding(cudf::size_type preceding)
   {
     _preceding = preceding;
     return *this;
   }
-  rolling_exec& following(size_type following)
+  rolling_exec& following(cudf::size_type following)
   {
     _following = following;
     return *this;
   }
-  rolling_exec& min_periods(size_type min_periods)
+  rolling_exec& min_periods(cudf::size_type min_periods)
   {
     _min_periods = min_periods;
     return *this;
   }
-  rolling_exec& grouping(column_view grouping)
+  rolling_exec& grouping(cudf::column_view grouping)
   {
     _grouping = grouping;
     return *this;
   }
-  rolling_exec& input(column_view input)
+  rolling_exec& input(cudf::column_view input)
   {
     _input = input;
     return *this;
   }
-  rolling_exec& null_handling(null_policy null_handling)
+  rolling_exec& null_handling(cudf::null_policy null_handling)
   {
     _null_handling = null_handling;
     return *this;
   }
 
-  std::unique_ptr<column> test_grouped_nth_element(
-    size_type n, std::optional<null_policy> null_handling = std::nullopt) const
+  std::unique_ptr<cudf::column> test_grouped_nth_element(
+    cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
-    return cudf::grouped_rolling_window(table_view{{_grouping}},
-                                        _input,
-                                        _preceding,
-                                        _following,
-                                        _min_periods,
-                                        *make_nth_element_aggregation<rolling_aggregation>(
-                                          n, null_handling.value_or(_null_handling)));
+    return cudf::grouped_rolling_window(
+      cudf::table_view{{_grouping}},
+      _input,
+      _preceding,
+      _following,
+      _min_periods,
+      *cudf::make_nth_element_aggregation<cudf::rolling_aggregation>(
+        n, null_handling.value_or(_null_handling)));
   }
 
-  std::unique_ptr<column> test_nth_element(
-    size_type n, std::optional<null_policy> null_handling = std::nullopt) const
+  std::unique_ptr<cudf::column> test_nth_element(
+    cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
     return cudf::rolling_window(_input,
                                 _preceding,
                                 _following,
                                 _min_periods,
-                                *make_nth_element_aggregation<rolling_aggregation>(
+                                *cudf::make_nth_element_aggregation<cudf::rolling_aggregation>(
                                   n, null_handling.value_or(_null_handling)));
   }
 };
@@ -194,7 +193,7 @@ TYPED_TEST(NthElementTypedTest, RollingWindowExcludeNulls)
 
   {
     // Window of 5 elements, min-periods == 2.
-    tester.preceding(3).following(2).min_periods(1).null_handling(null_policy::EXCLUDE);
+    tester.preceding(3).following(2).min_periods(1).null_handling(cudf::null_policy::EXCLUDE);
 
     auto const first_element = tester.test_nth_element(0);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*first_element,
@@ -211,7 +210,7 @@ TYPED_TEST(NthElementTypedTest, RollingWindowExcludeNulls)
   }
   {
     // Window of 3 elements, min-periods == 1.
-    tester.preceding(2).following(1).min_periods(1).null_handling(null_policy::EXCLUDE);
+    tester.preceding(2).following(1).min_periods(1).null_handling(cudf::null_policy::EXCLUDE);
 
     auto const first_element = tester.test_nth_element(0);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*first_element,
@@ -351,7 +350,7 @@ TYPED_TEST(NthElementTypedTest, GroupedRollingWindowExcludeNulls)
 
   {
     // Window of 5 elements, min-periods == 1.
-    tester.preceding(3).following(2).min_periods(1).null_handling(null_policy::EXCLUDE);
+    tester.preceding(3).following(2).min_periods(1).null_handling(cudf::null_policy::EXCLUDE);
     auto const first_element = tester.test_grouped_nth_element(0);
     // clang-format off
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*first_element,
@@ -446,7 +445,7 @@ TYPED_TEST(NthElementTypedTest, EmptyInput)
 
 TEST_F(NthElementTest, RollingWindowOnStrings)
 {
-  using strings = strings_column_wrapper;
+  using strings = cudf::test::strings_column_wrapper;
 
   auto constexpr X = "";  // Placeholder for null string.
 
@@ -522,7 +521,7 @@ TEST_F(NthElementTest, RollingWindowOnStrings)
 
 TEST_F(NthElementTest, GroupedRollingWindowForStrings)
 {
-  using strings    = strings_column_wrapper;
+  using strings    = cudf::test::strings_column_wrapper;
   auto constexpr X = "";  // Placeholder for null strings.
 
   // clang-format off
@@ -620,5 +619,3 @@ TEST_F(NthElementTest, GroupedRollingWindowForStrings)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*second_last_element, all_null_strings);
   }
 }
-
-}  // namespace cudf::test::rolling
