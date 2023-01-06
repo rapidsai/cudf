@@ -66,10 +66,10 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/reverse.hpp>
+#include <cudf/strings/slice.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strip.hpp>
-#include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/transform.hpp>
