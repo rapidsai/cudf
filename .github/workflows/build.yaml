@@ -20,12 +20,6 @@ on:
       build_type:
         type: string
         default: nightly
-      wheel_versioneer_override:
-        type: string
-        default: ''
-      wheel_build_tag:
-        type: string
-        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -69,7 +63,6 @@ jobs:
       date: ${{ inputs.date }}
       package-name: cudf
       package-dir: python/cudf
-      versioneer-override: ${{ inputs.wheel_versioneer_override }}
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
   wheel-publish-cudf:
     needs: wheel-build-cudf
@@ -82,7 +75,6 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: cudf
-      build-tag: ${{ inputs.wheel_build_tag }}
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
@@ -95,7 +87,6 @@ jobs:
       date: ${{ inputs.date }}
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      versioneer-override: ${{ inputs.wheel_versioneer_override }}
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -107,4 +98,3 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: dask_cudf
-      build-tag: ${{ inputs.wheel_build_tag }}
