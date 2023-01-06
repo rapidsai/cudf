@@ -55,10 +55,11 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   auto all_encodings =
     make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
 
-  auto t_lhs      = table_view{{input}};
-  auto t_rhs      = table_view{{categories}};
-  auto comparator = cudf::experimental::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
-  auto device_comparator =
+  auto const t_lhs = table_view{{input}};
+  auto const t_rhs = table_view{{categories}};
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
+  auto const d_equal =
     comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
 
   thrust::transform(
@@ -66,18 +67,17 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(total_size),
     all_encodings->mutable_view().begin<bool>(),
-    [input_size = input.size(), device_comparator] __device__(size_type i) {
+    [input_size = input.size(), d_equal] __device__(size_type i) {
       auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
       auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
-      return device_comparator(element_index, category_index);
+      return d_equal(element_index, category_index);
     });
 
-  auto split_iter =
+  auto const split_iter =
     make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });
   std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
 
-  auto views = split(all_encodings->view(), split_indices, stream);
-  table_view encodings_view{views};
+  auto const encodings_view = table_view{split(all_encodings->view(), split_indices, stream)};
 
   return std::pair(std::move(all_encodings), encodings_view);
 }

@@ -205,19 +205,19 @@ TEST_F(OneHotEncodingTest, MismatchTypes)
 
 TEST_F(OneHotEncodingTest, List)
 {
-  auto input =
+  auto const input =
     lists_col{{{}, {1}, {2, 2}, {2, 2}, {}, {2} /*NULL*/, {2}, {5} /*NULL*/}, nulls_at({5, 7})};
-  auto categories = lists_col{{{}, {1}, {2, 2}, {2}, {-1}}, null_at(4)};
+  auto const categories = lists_col{{{}, {1}, {2, 2}, {2}, {-1}}, null_at(4)};
 
-  auto col0 = bool_col{1, 0, 0, 0, 1, 0, 0, 0};
-  auto col1 = bool_col{0, 1, 0, 0, 0, 0, 0, 0};
-  auto col2 = bool_col{0, 0, 1, 1, 0, 0, 0, 0};
-  auto col3 = bool_col{0, 0, 0, 0, 0, 0, 1, 0};
-  auto col4 = bool_col{0, 0, 0, 0, 0, 1, 0, 1};
+  auto const col0 = bool_col{1, 0, 0, 0, 1, 0, 0, 0};
+  auto const col1 = bool_col{0, 1, 0, 0, 0, 0, 0, 0};
+  auto const col2 = bool_col{0, 0, 1, 1, 0, 0, 0, 0};
+  auto const col3 = bool_col{0, 0, 0, 0, 0, 0, 1, 0};
+  auto const col4 = bool_col{0, 0, 0, 0, 0, 1, 0, 1};
 
-  auto expected = cudf::table_view{{col0, col1, col2, col3, col4}};
+  auto const expected = cudf::table_view{{col0, col1, col2, col3, col4}};
 
-  [[maybe_unused]] auto [res_ptr, got] = cudf::one_hot_encode(input, categories);
+  [[maybe_unused]] auto const [res_ptr, got] = cudf::one_hot_encode(input, categories);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -235,7 +235,7 @@ TEST_F(OneHotEncodingTest, StructsOfStructs)
   // 5 |  { Null,   4}  |
   // 6 |  { {2, 1}, 5}  |
 
-  auto input = [&] {
+  auto const input = [&] {
     auto a  = cudf::test::fixed_width_column_wrapper<int32_t>{-1, 1, -1, -1, 2, -1, 2};
     auto b  = cudf::test::fixed_width_column_wrapper<int32_t>{-1, 2, -1, -1, 1, -1, 1};
     auto s2 = structs_col{{a, b}, nulls_at({2, 5})};
@@ -248,7 +248,7 @@ TEST_F(OneHotEncodingTest, StructsOfStructs)
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 7});
   }();
 
-  auto categories = [&] {
+  auto const categories = [&] {
     auto a  = cudf::test::fixed_width_column_wrapper<int32_t>{-1, 1, -1, 2};
     auto b  = cudf::test::fixed_width_column_wrapper<int32_t>{-1, 2, -1, 1};
     auto s2 = structs_col{{a, b}, null_at(2)};
@@ -261,14 +261,14 @@ TEST_F(OneHotEncodingTest, StructsOfStructs)
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 4});
   }();
 
-  auto col0 = bool_col{1, 0, 0, 1, 0, 0, 0};
-  auto col1 = bool_col{0, 1, 0, 0, 0, 0, 0};
-  auto col2 = bool_col{0, 0, 1, 0, 0, 1, 0};
-  auto col3 = bool_col{0, 0, 0, 0, 1, 0, 1};
+  auto const col0 = bool_col{1, 0, 0, 1, 0, 0, 0};
+  auto const col1 = bool_col{0, 1, 0, 0, 0, 0, 0};
+  auto const col2 = bool_col{0, 0, 1, 0, 0, 1, 0};
+  auto const col3 = bool_col{0, 0, 0, 0, 1, 0, 1};
 
-  auto expected = cudf::table_view{{col0, col1, col2, col3}};
+  auto const expected = cudf::table_view{{col0, col1, col2, col3}};
 
-  [[maybe_unused]] auto [res_ptr, got] = cudf::one_hot_encode(input, categories);
+  [[maybe_unused]] auto const [res_ptr, got] = cudf::one_hot_encode(input, categories);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
