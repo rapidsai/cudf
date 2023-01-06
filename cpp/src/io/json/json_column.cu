@@ -744,7 +744,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
-                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+                      std::vector<column_name_info>>{std::make_unique<column>(
+                                                       data_type{type_id::INT8},
+                                                       0,
+                                                       rmm::device_buffer{0, stream, mr}),
+                                                     {}}
           : device_json_column_to_cudf_column(
               json_col.child_columns.begin()->second,
               d_input,
