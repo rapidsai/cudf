@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,10 +43,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
@@ -1251,11 +1252,10 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   std::string cuda_source;
   switch (udf_agg.kind) {
     case aggregation::Kind::PTX:
-      cuda_source +=
-        cudf::jit::parse_single_function_ptx(udf_agg._source,
-                                             udf_agg._function_name,
-                                             cudf::jit::get_type_name(udf_agg._output_type),
-                                             {0, 5});  // args 0 and 5 are pointers.
+      cuda_source += cudf::jit::parse_single_function_ptx(udf_agg._source,
+                                                          udf_agg._function_name,
+                                                          cudf::type_to_name(udf_agg._output_type),
+                                                          {0, 5});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
       cuda_source += cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
@@ -1271,8 +1271,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   std::string kernel_name =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
-      .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
-                   cudf::jit::get_type_name(output->type()),
+      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
+                   cudf::type_to_name(output->type()),
                    udf_agg._operator_name,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());

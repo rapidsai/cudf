@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import shutil
@@ -288,7 +288,7 @@ def _process_dataset(
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq._filters_to_expression(filters)
+        filters = pq.filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:

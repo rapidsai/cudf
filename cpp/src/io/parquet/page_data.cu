@@ -39,22 +39,17 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-constexpr int block_size           = 128;
-constexpr int non_zero_buffer_size = block_size * 2;
-
-inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
-{
-  return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
-}
-
-inline __device__ int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
-
 namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
 
 namespace {
+
+constexpr int block_size           = 128;
+constexpr int non_zero_buffer_size = block_size * 2;
+
+constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
 struct page_state_s {
   const uint8_t* data_start;
@@ -280,8 +275,8 @@ __device__ void gpuDecodeStream(
       level_run -= batch_len * 2;
     }
     if (t < batch_len) {
-      int idx                                  = value_count + t;
-      output[idx & (non_zero_buffer_size - 1)] = level_val;
+      int idx                    = value_count + t;
+      output[rolling_index(idx)] = level_val;
     }
     batch_coded_count += batch_len;
     value_count += batch_len;
@@ -386,7 +381,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(volatile page_st
       }
 
       // if we're not computing sizes, store off the dictionary index
-      if constexpr (!sizes_only) { s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx; }
+      if constexpr (!sizes_only) { s->dict_idx[rolling_index(pos + t)] = dict_idx; }
     }
 
     // if we're computing sizes, add the length(s)
@@ -472,7 +467,7 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, in
       } else {
         dict_idx = s->dict_val;
       }
-      s->dict_idx[(pos + t) & (non_zero_buffer_size - 1)] = dict_idx;
+      s->dict_idx[rolling_index(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -509,8 +504,8 @@ __device__ size_type gpuInitStringDescriptors(volatile page_state_s* s, int targ
       } else {
         len = 0;
       }
-      s->dict_idx[pos & (non_zero_buffer_size - 1)] = k;
-      s->str_len[pos & (non_zero_buffer_size - 1)]  = len;
+      s->dict_idx[rolling_index(pos)] = k;
+      s->str_len[rolling_index(pos)]  = len;
       k += len;
       total_len += len;
       pos++;
@@ -538,9 +533,8 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile
 
   if (s->dict_base) {
     // String dictionary
-    uint32_t dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] *
-                                               sizeof(string_index_pair)
-                                           : 0;
+    uint32_t dict_pos =
+      (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] * sizeof(string_index_pair) : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
       const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
       ptr             = src->first;
@@ -548,10 +542,10 @@ inline __device__ cuda::std::pair<const char*, size_t> gpuGetStringData(volatile
     }
   } else {
     // Plain encoding
-    uint32_t dict_pos = s->dict_idx[src_pos & (non_zero_buffer_size - 1)];
+    uint32_t dict_pos = s->dict_idx[rolling_index(src_pos)];
     if (dict_pos <= (uint32_t)s->dict_size) {
       ptr = reinterpret_cast<const char*>(s->data_start + dict_pos);
-      len = s->str_len[src_pos & (non_zero_buffer_size - 1)];
+      len = s->str_len[rolling_index(src_pos)];
     }
   }
 
@@ -591,7 +585,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
  */
 inline __device__ void gpuOutputBoolean(volatile page_state_s* s, int src_pos, uint8_t* dst)
 {
-  *dst = s->dict_idx[src_pos & (non_zero_buffer_size - 1)];
+  *dst = s->dict_idx[rolling_index(src_pos)];
 }
 
 /**
@@ -670,7 +664,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -738,7 +732,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     src8     = s->dict_base;
   } else {
     // Plain
@@ -813,8 +807,7 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s, int sr
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
   uint32_t const pos =
-    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0)
-                  : src_pos) *
+    (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0) : src_pos) *
     dtype_len_in;
   uint32_t const dict_size = s->dict_size;
 
@@ -847,7 +840,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s, int src_pos, T* d
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain
@@ -876,7 +869,7 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
 
   if (s->dict_base) {
     // Dictionary
-    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[rolling_index(src_pos)] : 0;
     dict     = s->dict_base;
   } else {
     // Plain

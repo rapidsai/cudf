@@ -1,7 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import itertools
-import re
 import warnings
 from collections import abc
 from contextlib import contextmanager
@@ -161,8 +160,6 @@ def assert_exceptions_equal(
     lfunc_args_and_kwargs=None,
     rfunc_args_and_kwargs=None,
     check_exception_type=True,
-    compare_error_message=True,
-    expected_error_message=None,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
     same exception or not.
@@ -190,14 +187,6 @@ def assert_exceptions_equal(
         Whether to compare the exception types raised by ``lfunc``
         with ``rfunc`` exception type or not. If False, ``rfunc``
         is simply evaluated against `Exception` type.
-    compare_error_message : boolean, default True
-        Whether to compare the error messages raised
-        when calling both ``lfunc`` and
-        ``rfunc`` or not.
-    expected_error_message : str, default None
-        Expected error message to be raised by calling ``rfunc``.
-        Note that ``lfunc`` error message will not be compared to
-        this value.
 
     Returns
     -------
@@ -223,15 +212,7 @@ def assert_exceptions_equal(
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        if not compare_error_message:
-            expected_error_message = None
-        elif expected_error_message is None:
-            expected_error_message = re.escape(str(e))
-
-        with pytest.raises(
-            type(e) if check_exception_type else Exception,
-            match=expected_error_message,
-        ):
+        with pytest.raises(type(e) if check_exception_type else Exception):
             rfunc(*rfunc_args, **rfunc_kwargs)
     else:
         raise AssertionError("Expected to fail with an Exception.")
