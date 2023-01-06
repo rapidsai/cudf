@@ -63,7 +63,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
           CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
                                         h_buffer->data(),
                                         h_buffer->size(),
-                                        cudaMemcpyHostToDevice,
+                                        cudaMemcpyDefault,
                                         stream.value()));
           stream.synchronize();
           bytes_read += h_buffer->size();
