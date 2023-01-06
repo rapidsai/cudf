@@ -1766,6 +1766,48 @@ def test_concat_struct_column(s1, s2, expected):
     assert_eq(s, expected, check_index_type=True)
 
 
+@pytest.mark.parametrize(
+    "frame1, frame2, expected",
+    [
+        (
+            gd.Series([[{"b": 0}], [{"b": 1}], [{"b": 3}]]),
+            gd.Series([[{"b": 10}], [{"b": 12}], None]),
+            gd.Series(
+                [
+                    [{"b": 0}],
+                    [{"b": 1}],
+                    [{"b": 3}],
+                    [{"b": 10}],
+                    [{"b": 12}],
+                    None,
+                ],
+                index=[0, 1, 2, 0, 1, 2],
+            ),
+        ),
+        (
+            gd.DataFrame({"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}),
+            gd.DataFrame({"a": [[{"b": 10}], [{"b": 12}], None]}),
+            gd.DataFrame(
+                {
+                    "a": [
+                        [{"b": 0}],
+                        [{"b": 1}],
+                        [{"b": 3}],
+                        [{"b": 10}],
+                        [{"b": 12}],
+                        None,
+                    ]
+                },
+                index=[0, 1, 2, 0, 1, 2],
+            ),
+        ),
+    ],
+)
+def test_concat_list_column(frame1, frame2, expected):
+    actual = gd.concat([frame1, frame2])
+    assert_eq(actual, expected, check_index_type=True)
+
+
 def test_concat_categorical_ordering():
     # https://github.com/rapidsai/cudf/issues/11486
     sr = pd.Series(

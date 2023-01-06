@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include <nvtext/generate_ngrams.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_if.cuh>
-#include <cudf/detail/get_value.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -29,15 +29,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <nvtext/generate_ngrams.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 #include <thrust/transform_scan.h>
 
 namespace nvtext {
@@ -54,7 +50,7 @@ struct ngram_generator_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
   cudf::string_view const d_separator;
-  int32_t* d_offsets{};
+  cudf::size_type* d_offsets{};
   char* d_chars{};
 
   /**
@@ -160,7 +156,7 @@ struct character_ngram_generator_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
   int32_t const* d_ngram_offsets{};
-  int32_t* d_offsets{};
+  cudf::size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(cudf::size_type idx)
@@ -221,33 +217,9 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   CUDF_EXPECTS(total_ngrams > 0,
                "Insufficient number of characters in each string to generate ngrams");
 
-  // create output offsets column
-  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                  total_ngrams + 1,
-                                                  cudf::mask_state::UNALLOCATED,
-                                                  stream,
-                                                  mr);
-  auto d_offsets      = offsets_column->mutable_view().data<int32_t>();
-  // compute the size of each ngram -- output goes in d_offsets
-  character_ngram_generator_fn generator{d_strings, ngrams, ngram_offsets.data(), d_offsets};
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
-                     generator);
-
-  // convert sizes into offsets in-place
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + total_ngrams + 1, d_offsets);
-
-  // build the chars column
-  auto const chars_bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), total_ngrams, stream);
-  auto chars_column = cudf::strings::detail::create_chars_child_column(chars_bytes, stream, mr);
-  generator.d_chars = chars_column->mutable_view().data<char>();  // output chars
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
-                     strings_count,
-                     generator);
+  character_ngram_generator_fn generator{d_strings, ngrams, ngram_offsets.data()};
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+    generator, strings_count, total_ngrams, stream, mr);
 
   return cudf::make_strings_column(
     total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
