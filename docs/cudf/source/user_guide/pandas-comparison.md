@@ -65,6 +65,8 @@ Categories (2, int64): [1, 2]
 
 See the docs on [missing data](missing-data) for details.
 
+(pandas-comparison/iteration)=
+
 ## Iteration
 
 Iterating over a cuDF `Series`, `DataFrame` or `Index` is not

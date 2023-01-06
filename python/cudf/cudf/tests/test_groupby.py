@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import datetime
 import itertools
@@ -696,7 +696,6 @@ def test_advanced_groupby_levels():
         rfunc=gdg.groupby,
         lfunc_args_and_kwargs=([], {"level": 2}),
         rfunc_args_and_kwargs=([], {"level": 2}),
-        expected_error_message="Invalid level number",
     )
 
 
@@ -1397,7 +1396,6 @@ def test_raise_data_error():
     assert_exceptions_equal(
         pdf.groupby("a").mean,
         gdf.groupby("a").mean,
-        compare_error_message=False,
     )
 
 
@@ -1813,7 +1811,6 @@ def test_groupby_nonempty_no_keys(pdf):
     assert_exceptions_equal(
         lambda: pdf.groupby([]),
         lambda: gdf.groupby([]),
-        compare_error_message=False,
     )
 
 
