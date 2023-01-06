@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 using size_type = int;
 
-
 // double atomicAdd
 __device__ __forceinline__ double atomicAdds(double* address, double val)
 {
@@ -35,7 +34,6 @@ __device__ __forceinline__ double atomicAdds(double* address, double val)
 
   return __longlong_as_double(old);
 }
-
 
 // int64_t atomicAdd
 __device__ __forceinline__ int64_t atomicAdds(int64_t* address, int64_t val)
@@ -166,7 +164,6 @@ template <typename T>
 __device__ void device_min(
   T const* data, int const items_per_thread, size_type size, T init_val, T* smin)
 {
-
   T local_min = init_val;
 
 // Calculate local min for each thread
@@ -196,7 +193,6 @@ __device__ void device_idxmax(T const* data,
                               T* smax,
                               int64_t* sidx)
 {
-
   // Calculate how many elements each thread is working on
   T local_max       = init_val;
   int64_t local_idx = -1;
@@ -235,7 +231,6 @@ __device__ void device_idxmin(T const* data,
                               T* smin,
                               int64_t* sidx)
 {
-
   T local_min       = init_val;
   int64_t local_idx = -1;
 
