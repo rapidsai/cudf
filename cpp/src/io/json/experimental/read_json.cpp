@@ -60,11 +60,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
           bytes_read += source->device_read(range_offset, data_size, destination, stream);
         } else {
           auto const h_buffer = source->host_read(range_offset, data_size);
-          CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
-                                        h_buffer->data(),
-                                        h_buffer->size(),
-                                        cudaMemcpyDefault,
-                                        stream.value()));
+          CUDF_CUDA_TRY(cudaMemcpyAsync(
+            destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
           stream.synchronize();
           bytes_read += h_buffer->size();
         }
