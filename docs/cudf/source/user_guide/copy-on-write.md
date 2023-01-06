@@ -1,22 +1,22 @@
 # Copy-on-write
 
-Copy-on-write(COW) enables ability to save on GPU memory usage when copies(`.copy(deep=False)`) of a column
+Copy-on-write reduces GPU memory usage when copies(`.copy(deep=False)`) of a column
 are made.
 
 ## How to enable it
 
-i. Either by using `set_option` in `cudf`:
+i. Use `cudf.set_option`:
 
 ```python
 >>> import cudf
 >>> cudf.set_option("copy_on_write", True)
 ```
 
-ii. Or, by setting an environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
-launch of the python interpreter:
+ii. Set the environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
+launch of the Python interpreter:
 
 ```bash
-export CUDF_COPY_ON_WRITE="1"
+export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
 ```
 
 
@@ -28,7 +28,7 @@ There are no additional changes required in the code to make use of copy-on-writ
 >>> series = cudf.Series([1, 2, 3, 4])
 ```
 
-Performing a shallow copy will create a new series object but pointing to the
+Performing a shallow copy will create a new Series object pointing to the
 same underlying device memory:
 
 ```python
@@ -51,7 +51,7 @@ dtype: int64
 140102175031296
 ```
 
-But, when there is a write-operation being performed on either ``series`` or
+Then, when a write operation is performed on either ``series`` or
 ``copied_series``, a true physical copy of the data is created:
 
 ```python
