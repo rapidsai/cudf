@@ -1509,6 +1509,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             (
                 cudf.core.column.DecimalBaseColumn,
                 cudf.core.column.StructColumn,
+                cudf.core.column.ListColumn,
             ),
         ):
             col = col._with_type_metadata(objs[0].dtype)

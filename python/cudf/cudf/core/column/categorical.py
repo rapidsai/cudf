@@ -1269,7 +1269,7 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype("int32").fillna(0)
+        gather_map = self.codes.astype(libcudf.types.size_type_dtype).fillna(0)
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out

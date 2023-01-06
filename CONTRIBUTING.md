@@ -323,33 +323,12 @@ This will add the device debug symbols for this object file in `libcudf.so`.  Yo
 
 ## Code Formatting
 
-### C++/CUDA
+### Using pre-commit hooks
 
-cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
-
-In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
-
-```bash
-python3 ./cpp/scripts/run-clang-format.py -inplace
-```
-
-Additionally, many editors have plugins or extensions that you can set up to automatically run
-`clang-format` either manually or on file save.
-
-[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
-In order to run doxygen as linter on C++/CUDA code, run
-```bash
-./ci/checks/doxygen.sh
-```
-
-### Python / Pre-commit hooks
-
-cuDF uses [pre-commit](https://pre-commit.com/) to execute code linters and formatters such as
-[Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and
-[flake8](https://flake8.pycqa.org/en/latest/). These tools ensure a consistent code format
-throughout the project. Using pre-commit ensures that linter versions and options are aligned for
-all developers. Additionally, there is a CI check in place to enforce that committed code follows
-our standards.
+cuDF uses [pre-commit](https://pre-commit.com/) to execute all code linters and formatters. These
+tools ensure a consistent code format throughout the project. Using pre-commit ensures that linter
+versions and options are aligned for all developers. Additionally, there is a CI check in place to
+enforce that committed code follows our standards.
 
 To use `pre-commit`, install via `conda` or `pip`:
 
@@ -367,6 +346,13 @@ Then run pre-commit hooks before committing code:
 pre-commit run
 ```
 
+By default, pre-commit runs on staged files (only changes and additions that will be committed).
+To run pre-commit checks on all files, execute:
+
+```bash
+pre-commit run --all-files
+```
+
 Optionally, you may set up the pre-commit hooks to run automatically when you make a git commit. This can be done by running:
 
 ```bash
@@ -377,9 +363,26 @@ Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
 
+### Summary of pre-commit hooks
+
+The following section describes some of the core pre-commit hooks used by the repository.
+See `.pre-commit-config.yaml` for a full list.
+
+C++/CUDA is formatted with [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
+
+[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
+In order to run doxygen as a linter on C++/CUDA code, run
+
+```bash
+./ci/checks/doxygen.sh
+```
+
+Python code runs several linters including [Black](https://black.readthedocs.io/en/stable/),
+[isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/).
+
 cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
-mistakes, and this check is run as part of the pre-commit hook. To apply the suggested spelling
-fixes, you can run  `codespell -i 3 -w .` from the command-line in the cuDF root directory.
+mistakes, and this check is run as a pre-commit hook. To apply the suggested spelling fixes,
+you can run  `codespell -i 3 -w .` from the repository root directory.
 This will bring up an interactive prompt to select which spelling fixes to apply.
 
 ## Developer Guidelines
