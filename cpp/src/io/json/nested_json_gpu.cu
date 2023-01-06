@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -428,7 +428,7 @@ auto get_transition_table(bool newline_delimited_json)
   //  {       [       }       ]       "       \       ,       :     space   newline other
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOV)] = {
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON};
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -453,7 +453,7 @@ auto get_transition_table(bool newline_delimited_json)
   pda_tt[static_cast<StateT>(pda_state_t::PD_BFN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_FLN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -509,7 +509,7 @@ auto get_translation_table()
                                                         {StructBegin},  // OPENING_BRACE
                                                         {ListBegin},    // OPENING_BRACKET
                                                         {ErrorBegin},   // CLOSING_BRACE
-                                                        {ErrorBegin},   // CLOSING_BRACKET
+                                                        {ListEnd},      // CLOSING_BRACKET
                                                         {StringBegin},  // QUOTE
                                                         {ErrorBegin},   // ESCAPE
                                                         {ErrorBegin},   // COMMA
@@ -744,7 +744,7 @@ auto get_translation_table()
      /*STRUCT*/
      {ErrorBegin},                         // OPENING_BRACE
      {ErrorBegin},                         // OPENING_BRACKET
-     {ErrorBegin},                         // CLOSING_BRACE
+     {StructEnd},                          // CLOSING_BRACE
      {ErrorBegin},                         // CLOSING_BRACKET
      {StructMemberBegin, FieldNameBegin},  // QUOTE
      {ErrorBegin},                         // ESCAPE
