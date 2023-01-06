@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,8 +25,11 @@ include_guard(GLOBAL)
 # Generate a FindArrow module for the case where we need to search for arrow within a pip install
 # pyarrow.
 function(find_libarrow_in_python_wheel PYARROW_VERSION)
-  string(REPLACE "." "" PYARROW_SO_VER "${PYARROW_VERSION}")
-  set(PYARROW_LIB libarrow.so.${PYARROW_SO_VER})
+  string(REPLACE "." ";" PYARROW_VER_COMPONENTS "${PYARROW_VERSION}")
+  list(GET PYARROW_VER_COMPONENTS 0 PYARROW_SO_VER)
+  # Arrow does not seem to actually use the minor or patch versions in constructing the library's
+  # soname, just `${MAJOR_VERSION}00`
+  set(PYARROW_LIB "libarrow.so.${PYARROW_SO_VER}00")
 
   find_package(Python REQUIRED)
   execute_process(
