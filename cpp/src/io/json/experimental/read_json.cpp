@@ -52,6 +52,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
   if (compression == compression_type::NONE) {
     auto d_buffer     = rmm::device_uvector<char>(total_source_size, stream);
     size_t bytes_read = 0;
+    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
     for (const auto& source : sources) {
       if (!source->is_empty()) {
         auto data_size   = (range_size != 0) ? range_size : source->size();
@@ -59,14 +60,16 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
         if (source->is_device_read_preferred(data_size)) {
           bytes_read += source->device_read(range_offset, data_size, destination, stream);
         } else {
-          auto const h_buffer = source->host_read(range_offset, data_size);
+          h_buffers.emplace_back(source->host_read(range_offset, data_size));
+          auto const& h_buffer = h_buffers.back();
           CUDF_CUDA_TRY(cudaMemcpyAsync(
             destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
-          stream.synchronize();
           bytes_read += h_buffer->size();
         }
       }
     }
+
+    stream.synchronize();
     return d_buffer;
 
   } else {
