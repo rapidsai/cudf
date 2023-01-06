@@ -5,11 +5,8 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
 from tlz import partition_all
 
-import dask
-import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
@@ -29,12 +26,6 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _get_shuffle_type
-
-DASK_BACKEND_SUPPORT = parse_version(dask.__version__) >= parse_version(
-    "2022.10.0"
-)
-# TODO: Remove DASK_BACKEND_SUPPORT throughout codebase
-# when dask_cudf is pinned to dask>=2022.10.0
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):

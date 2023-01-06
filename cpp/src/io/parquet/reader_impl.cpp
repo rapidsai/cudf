@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
                       &offset,
                       sizeof(offset),
-                      cudaMemcpyHostToDevice,
+                      cudaMemcpyDefault,
                       _stream.value());
       out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
     }
@@ -287,9 +287,9 @@ table_with_metadata reader::impl::read_chunk_internal(bool uses_custom_row_bound
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info.emplace_back("");
-      out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream, _mr));
+      out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
-      out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream, _mr));
+      out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
 

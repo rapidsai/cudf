@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
+from packaging.version import Version
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
@@ -1162,7 +1163,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = pd.Series(mask)
+                # An explicit dtype is needed to avoid pandas warnings from
+                # empty sets of columns. This shouldn't be needed in pandas
+                # 2.0, we don't need to specify a dtype when we know we're not
+                # trying to match any columns so the default is fine.
+                dtype = None
+                if len(mask) == 0:
+                    assert Version(pd.__version__) < Version("2.0.0")
+                    dtype = "float64"
+                mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
@@ -5718,6 +5727,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         common_dtype = find_common_type(filtered.dtypes)
 
         if filtered._num_columns < self._num_columns:
+            # When we update our pandas compatibility target to 2.0, pandas
+            # will stop supporting numeric_only=None and users will have to
+            # specify True/False. At that time we should also top our implicit
+            # removal of non-numeric columns here.
+            assert Version(pd.__version__) < Version("2.0.0")
             msg = (
                 "Row-wise operations currently only support int, float "
                 "and bool dtypes. Non numeric columns are ignored."
@@ -6553,6 +6567,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._data.to_pandas_index()
 
     def itertuples(self, index=True, name="Pandas"):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             "cuDF does not support iteration of DataFrame "
             "via itertuples. Consider using "
@@ -6561,6 +6581,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     def iterrows(self):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             "cuDF does not support iteration of DataFrame "
             "via iterrows. Consider using "

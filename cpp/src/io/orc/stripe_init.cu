@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,12 +39,8 @@ struct compressed_stream_s {
 };
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8)
-  gpuParseCompressedStripeData(CompressedStreamInfo* strm_info,
-                               int32_t num_streams,
-                               uint32_t block_size,
-                               uint32_t log2maxcr,
-                               bool allow_block_size_estimate)
+__global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
+  CompressedStreamInfo* strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr)
 {
   __shared__ compressed_stream_s strm_g[4];
 
@@ -82,10 +78,9 @@ __global__ void __launch_bounds__(128, 8)
       // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
       // uncompressed size and avoid waste due to block size alignment For now, rely on the max
       // compression ratio to limit waste for the most extreme cases (small single-block streams)
-      uncompressed_size = (is_uncompressed) ? block_len
-                          : allow_block_size_estimate && (block_len < (block_size >> log2maxcr))
-                            ? block_len << log2maxcr
-                            : block_size;
+      uncompressed_size = (is_uncompressed)                         ? block_len
+                          : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr
+                                                                    : block_size;
       if (is_uncompressed) {
         if (uncompressed_size <= 32) {
           // For short blocks, copy the uncompressed data to output
@@ -532,13 +527,12 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                         int32_t num_streams,
                                         uint32_t compression_block_size,
                                         uint32_t log2maxcr,
-                                        bool allow_block_size_estimate,
                                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    strm_info, num_streams, compression_block_size, log2maxcr, allow_block_size_estimate);
+    strm_info, num_streams, compression_block_size, log2maxcr);
 }
 
 void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_ctx.device_ptr(),
                                   num_blocks * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -302,7 +302,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                     row_ctx.host_ptr(),
                                     num_blocks * sizeof(uint64_t),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
 
       // Pass 2: Output row offsets
@@ -323,7 +323,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
         CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                       row_ctx.device_ptr(),
                                       num_blocks * sizeof(uint64_t),
-                                      cudaMemcpyDeviceToHost,
+                                      cudaMemcpyDefault,
                                       stream.value()));
         stream.synchronize();
 
@@ -372,7 +372,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                   row_offsets.data() + header_row_index,
                                   2 * sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
 
@@ -578,13 +578,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
 
   for (int col = 0, active_col = 0; col < num_actual_columns; ++col) {
     if (column_flags[col] & column_parse::enabled) {
-      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
-      auto out_buffer =
-        column_buffer(column_types[active_col],
-                      num_records,
-                      true,
-                      stream,
-                      is_final_allocation ? mr : rmm::mr::get_current_device_resource());
+      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, mr);
 
       out_buffer.name         = column_names[col];
       out_buffer.null_count() = UNKNOWN_NULL_COUNT;
@@ -864,7 +858,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr));
       } else {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
     }
   } else {

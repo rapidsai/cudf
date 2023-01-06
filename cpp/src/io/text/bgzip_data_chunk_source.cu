@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     device.resize(host.size(), stream);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyHostToDevice, stream.value()));
+      device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
   }
 
   struct decompression_blocks {
@@ -304,7 +304,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         cudaMemcpyAsync(data.data(),
                         _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
                         read_size,
-                        cudaMemcpyDeviceToDevice,
+                        cudaMemcpyDefault,
                         stream.value()));
       // record the host-to-device copy, decompression and device copy
       CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
@@ -319,12 +319,12 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
                                   _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
                                   _prev_blocks.remaining_size(),
-                                  cudaMemcpyDeviceToDevice,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_blocks.remaining_size(),
                                   _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
                                   read_size - _prev_blocks.remaining_size(),
-                                  cudaMemcpyDeviceToDevice,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     // record the host-to-device copy, decompression and device copy
     CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
