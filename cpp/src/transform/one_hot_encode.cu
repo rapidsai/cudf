@@ -77,7 +77,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });
   std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
 
-  auto const encodings_view = table_view{split(all_encodings->view(), split_indices, stream)};
+  auto encodings_view = table_view{split(all_encodings->view(), split_indices, stream)};
 
   return std::pair(std::move(all_encodings), std::move(encodings_view));
 }
