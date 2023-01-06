@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.function.IntFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -573,6 +572,123 @@ public class TableTest extends CudfTestBase {
          Table table = Table.readCSV(schema, TEST_SIMPLE_CSV_FILE)) {
       assertTablesAreEqual(expected, table);
     }
+  }
+
+  private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader,
+                                      String trueValue, String falseValue) throws IOException {
+    File outputFile = File.createTempFile("testWriteCSVToFile", ".csv");
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)'\u0001')
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withTrueValue("T")
+                                               .withFalseValue("F")
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+              .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
+              .column(false, true, false, true, false, true, false, true, false, true)
+              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", "grey")
+              .build()) {
+      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("i")
+                                         .includeColumn("f")
+                                         .includeColumn("b")
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim('\u0001')
+                                         .withTrueValue("T")
+                                         .withFalseValue("F")
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
+        assertTablesAreEqual(inputTable, readTable);
+      }
+    } finally {
+      outputFile.delete();
+    }
+  }
+
+  @Test
+  void testWriteCSVToFile() throws IOException {
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testWriteCSVToFileImpl(',', INCLUDE_HEADER, "true", "false");
+    testWriteCSVToFileImpl(',', NO_HEADER, "TRUE", "FALSE");
+    testWriteCSVToFileImpl('\u0001', INCLUDE_HEADER, "T", "F");
+    testWriteCSVToFileImpl('\u0001', NO_HEADER, "True", "False");
+  }
+
+  private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader,
+                                        String trueValue, String falseValue) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.INT32, "i")
+                          .column(DType.FLOAT64, "f")
+                          .column(DType.BOOL8, "b")
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, null)
+              .column(0.0, 1.0, 2.0, 3.0, 4.0, null, 6.0, 7.0, 8.0, 9.0)
+              .column(false, true, null, true, false, true, null, true, false, true)
+              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", null)
+              .build();
+          MyBufferConsumer consumer = new MyBufferConsumer()) {
+
+      try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
+        writer.write(inputTable);
+        writer.write(inputTable);
+        writer.write(inputTable);
+      }
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("i")
+                                         .includeColumn("f")
+                                         .includeColumn("b")
+                                         .includeColumn("str")
+                                         .hasHeader(includeHeader)
+                                         .withDelim(fieldDelim)
+                                         .withNullValue("\\N")
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
+           Table expected  = Table.concatenate(inputTable, inputTable, inputTable)) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    }
+  }
+
+  @Test
+  void testChunkedCSVWriter() throws IOException {
+    final boolean INCLUDE_HEADER = true;
+    final boolean NO_HEADER = false;
+    testChunkedCSVWriterImpl(',', NO_HEADER, "true", "false");
+    testChunkedCSVWriterImpl(',', INCLUDE_HEADER, "TRUE", "FALSE");
+    testChunkedCSVWriterImpl('\u0001', NO_HEADER, "T", "F");
+    testChunkedCSVWriterImpl('\u0001', INCLUDE_HEADER, "True", "False");
   }
 
   @Test
