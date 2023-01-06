@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1332,7 +1332,7 @@ class csv_writer_options {
   size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // character to use for separating lines (default "\n")
   std::string _line_terminator = "\n";
-  // character to use for separating lines (default "\n")
+  // character to use for separating column values (default ",")
   char _inter_column_delimiter = ',';
   // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
@@ -1422,9 +1422,9 @@ class csv_writer_options {
   [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
 
   /**
-   * @brief Returns character used for separating lines.
+   * @brief Returns character used for separating column values.
    *
-   * @return Character used for separating lines
+   * @return Character used for separating column values.
    */
   [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
 
@@ -1479,9 +1479,9 @@ class csv_writer_options {
   void set_line_terminator(std::string term) { _line_terminator = term; }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    */
   void set_inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
 
@@ -1498,6 +1498,13 @@ class csv_writer_options {
    * @param val String to represent values == 0 in INT8 types
    */
   void set_false_value(std::string val) { _false_value = val; }
+
+  /**
+   * @brief (Re)sets the table being written.
+   *
+   * @param table Table to be written
+   */
+  void set_table(table_view const& table) { _table = table; }
 };
 
 /**
@@ -1586,9 +1593,9 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    * @return this for chaining
    */
   csv_writer_options_builder& inter_column_delimiter(char delim)
