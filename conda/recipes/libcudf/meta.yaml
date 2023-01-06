@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -149,6 +149,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/detail/avro.hpp
         - test -f $PREFIX/include/cudf/io/detail/csv.hpp
         - test -f $PREFIX/include/cudf/io/detail/json.hpp
+        - test -f $PREFIX/include/cudf/io/detail/tokenize_json.hpp
         - test -f $PREFIX/include/cudf/io/detail/orc.hpp
         - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
         - test -f $PREFIX/include/cudf/io/detail/utils.hpp
