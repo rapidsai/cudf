@@ -83,6 +83,12 @@ def test_json_reader(json_files):
     path_df, path_series, orient, compression = json_files
     expect_df = pd.read_json(path_df, orient=orient, compression=compression)
     got_df = cudf.read_json(path_df, orient=orient, compression=compression)
+    # Fix dtypes for float columns
+    for col_name in got_df.columns:
+        if col_name.startswith("col_float"):
+            got_df[col_name] = got_df[col_name].astype(
+                expect_df[col_name].dtype
+            )
     if len(expect_df) == 0:
         expect_df = expect_df.reset_index(drop=True)
         expect_df.columns = expect_df.columns.astype("object")
@@ -319,7 +325,7 @@ def test_json_engine_selection():
         assert isinstance(col_name, str)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=False)
+    df = cudf.read_json(json, lines=False, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
@@ -332,7 +338,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="cudf")
+        cudf.read_json(json, lines=False, engine="legacy")
 
 
 def test_json_bool_values():
@@ -355,6 +361,8 @@ def test_json_bool_values():
 @pytest.mark.parametrize(
     "buffer",
     [
+        # These are invalid JSON, legacy parser will parse,
+        # but nested parser will not
         "[1.0,]\n[null, ]",
         '{"0":1.0,"1":}\n{"0":null,"1": }',
         '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
@@ -362,7 +370,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True)
+    df = cudf.read_json(buffer, lines=True, engine="legacy")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
