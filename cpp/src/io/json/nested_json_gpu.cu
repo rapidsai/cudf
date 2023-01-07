@@ -1725,7 +1725,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
+table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
                                            cudf::io::json_reader_options const& options,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -1733,10 +1733,9 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
-  auto const new_line_delimited_json = options.is_enabled_lines();
+  auto const h_input = cudf::detail::make_std_vector_async(d_input, stream);
 
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
+  auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Get internal JSON column
   json_column root_column{};
@@ -1765,7 +1764,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
 
   make_json_column(
-    root_column, data_path, input, d_input, options, include_quote_chars, stream, mr);
+    root_column, data_path, h_input, d_input, options, include_quote_chars, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =
