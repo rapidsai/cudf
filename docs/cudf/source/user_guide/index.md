@@ -7,6 +7,7 @@
 pandas-comparison
 data-types
 io
+read-json
 missing-data
 groupby
 guide-to-udfs
