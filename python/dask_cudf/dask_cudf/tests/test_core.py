@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import random
 
@@ -351,11 +351,28 @@ def test_setitem_scalar_datetime():
 @pytest.mark.parametrize(
     "func",
     [
-        lambda: pd._testing.makeDataFrame().reset_index(),
-        pd._testing.makeDataFrame,
-        pd._testing.makeMixedDataFrame,
-        pd._testing.makeObjectSeries,
-        pd._testing.makeTimeSeries,
+        lambda: pd.DataFrame(
+            {"A": np.random.rand(10), "B": np.random.rand(10)},
+            index=list("abcdefghij"),
+        ),
+        lambda: pd.DataFrame(
+            {
+                "A": np.random.rand(10),
+                "B": list("a" * 10),
+                "C": pd.Series(
+                    [str(20090101 + i) for i in range(10)],
+                    dtype="datetime64[ns]",
+                ),
+            },
+            index=list("abcdefghij"),
+        ),
+        lambda: pd.Series(list("abcdefghijklmnop")),
+        lambda: pd.Series(
+            np.random.rand(10),
+            index=pd.Index(
+                [str(20090101 + i) for i in range(10)], dtype="datetime64[ns]"
+            ),
+        ),
     ],
 )
 def test_repr(func):
