@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -29,6 +29,8 @@ def read_json(
     **kwargs,
 ):
     """{docstring}"""
+    if engine == "cudf":
+        engine = "cudf_experimental"
 
     if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
         raise TypeError(
@@ -37,7 +39,7 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf" and not lines:
+    if engine == "legacy" and not lines:
         raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine != "cudf_experimental" and keep_quotes:
         raise ValueError(
@@ -45,10 +47,19 @@ def read_json(
             " engine='cudf_experimental'"
         )
     if engine == "auto":
-        engine = "cudf" if lines else "pandas"
-    if engine == "cudf" or engine == "cudf_experimental":
+        engine = (
+            "cudf_experimental"
+            if orient in (None, "records", "values")
+            and kwargs.get("typ", None) != "series"
+            and compression in (None, "infer", "gzip", "zip", "bz2")
+            else "pandas"
+        )
+
+    if engine == "cudf" or engine == "cudf_experimental" or engine == "legacy":
         if dtype is None:
             dtype = True
+
+        kwargs.pop("typ", None)
 
         if kwargs:
             raise ValueError(
@@ -97,7 +108,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf_experimental",
+            engine != "legacy",
             keep_quotes,
         )
     else:
