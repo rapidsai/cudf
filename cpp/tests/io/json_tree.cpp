@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -837,7 +837,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
   }
   // gpu tree traversal
   auto [gpu_col_id, gpu_row_offsets] =
-    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, stream);
+    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, false, json_lines, stream);
   // Print tree representation
   if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     printf("AFTER  traversal (gpu_tree):\n");
