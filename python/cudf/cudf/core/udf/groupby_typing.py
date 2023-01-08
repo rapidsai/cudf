@@ -112,8 +112,8 @@ def _register_cuda_idxreduction_caller(func, inputty):
     def caller(data, index, size):
         return cuda_func(data, index, size)
 
-    # idxmax and idxmin always return int64
-    type_key = (types.int64, inputty)
+    # only support default index type right now
+    type_key = (index_default_type, inputty)
     if call_cuda_functions.get(func.lower()) is None:
         call_cuda_functions[func.lower()] = {}
     call_cuda_functions[func.lower()][type_key] = caller

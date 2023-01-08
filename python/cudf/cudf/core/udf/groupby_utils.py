@@ -11,7 +11,7 @@ from numba.np import numpy_support
 from numba.types import Record
 
 import cudf.core.udf.utils
-from cudf.core.udf.groupby_function import (
+from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
     GroupType,
@@ -74,12 +74,8 @@ def _get_frame_groupby_type(dtype, index_dtype):
 
 def _groupby_apply_kernel_string_from_template(frame, args):
     """
-    Function to write numba kernels for `DataFrame.apply` as a string.
+    Function to write numba kernels for `Groupby.apply` as a string.
     Workaround until numba supports functions that use `*args`
-
-    Both the number of input columns as well as their nullability and any
-    scalar arguments may vary, so the kernels vary significantly. See
-    templates.py for the full row kernel template and more details.
     """
     # Create argument list for kernel
     frame = _supported_cols_from_frame(

@@ -296,13 +296,7 @@ def _get_ptx_file(path, prefix):
         cc = int("".join(str(x) for x in dev.compute_capability))
     files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
     if len(files) == 0:
-        raise RuntimeError(
-            "This strings_udf installation is missing the necessary PTX "
-            f"files for compute capability {cc}. "
-            "Please file an issue reporting this error and how you "
-            "installed cudf and strings_udf."
-            "https://github.com/rapidsai/cudf/issues"
-        )
+        raise RuntimeError(f"Missing PTX files for cc={cc}")
     regular_sms = []
 
     for f in files:

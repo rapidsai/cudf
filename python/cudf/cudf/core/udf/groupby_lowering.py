@@ -6,7 +6,7 @@ from numba.core.extending import lower_builtin
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import lower as cuda_lower
 
-from cudf.core.udf.groupby_function import (
+from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMBA_TYPES,
     Group,
     GroupType,

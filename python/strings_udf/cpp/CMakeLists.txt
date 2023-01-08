@@ -101,10 +101,6 @@ list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")
 list(SORT CMAKE_CUDA_ARCHITECTURES)
 list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
 
-message("\n\n\n")
-message("${CMAKE_CUDA_ARCHITECTURES}")
-message("\n\n\n")
-
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 

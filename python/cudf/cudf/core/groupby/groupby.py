@@ -216,7 +216,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         sort=False,
         as_index=True,
         dropna=True,
-        cache=True,
         group_keys=True,
     ):
         """
@@ -883,7 +882,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     index_data[None] = grouped_values.index._column
                     result.index = cudf.MultiIndex._from_data(index_data)
         else:
-            raise ValueError("Unsupported engine!.")
+            raise ValueError(f"Unsupported engine '{engine}'")
 
         if self._sort:
             result = result.sort_index()
