@@ -173,7 +173,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         func=kern_def._codelibrary.get_cufunc(),
         b2d_func=0,
         memsize=0,
-        blocksizelimit=blocklim,
+        blocksizelimit=int(blocklim),
     )
 
     stream = cuda.default_stream()
