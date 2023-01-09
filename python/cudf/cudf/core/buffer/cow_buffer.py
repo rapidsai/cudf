@@ -159,13 +159,14 @@ class CopyOnWriteBuffer(Buffer):
         Internal Implementation for the CUDA Array Interface which is
         read-only.
         """
-        return {
-            "data": (self._ptr, True),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
+        return cuda_array_interface_wrapper(
+            ptr=self._ptr,
+            size=self.size,
+            owner=self,
+            readonly=True,
+            typestr="|u1",
+            version=0,
+        )
 
     def _unlink_shared_buffers(self):
         """

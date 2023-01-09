@@ -806,8 +806,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         lchildren = reduce(operator.add, lchildren)
         rchildren = reduce(operator.add, rchildren)
 
-        lptrs = [child.base_data.ptr for child in lchildren]
-        rptrs = [child.base_data.ptr for child in rchildren]
+        lptrs = [child.base_data._ptr for child in lchildren]
+        rptrs = [child.base_data._ptr for child in rchildren]
 
         assert all((x == y) for x, y in zip(lptrs, rptrs))
 

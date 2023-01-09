@@ -5258,14 +5258,7 @@ class StringColumn(column.ColumnBase):
         device data and mask.
         """
 
-        return column.build_column(
-            self.base_data,
-            self.dtype,
-            mask=self.base_mask,
-            size=self.size,
-            offset=self.offset,
-            children=self.base_children,
-        )
+        return super().copy(deep=False)
 
     @property
     def start_offset(self) -> int:

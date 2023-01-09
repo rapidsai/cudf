@@ -204,14 +204,7 @@ class ListColumn(ColumnBase):
         and shallow copies share the underlying
         device data and mask.
         """
-        return column.build_column(
-            self.base_data,
-            self.dtype,
-            mask=self.base_mask,
-            size=self.size,
-            offset=self.offset,
-            children=self.base_children,
-        )
+        return super().copy(deep=False)
 
     def leaves(self):
         if isinstance(self.elements, ListColumn):

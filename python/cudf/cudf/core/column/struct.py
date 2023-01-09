@@ -101,14 +101,7 @@ class StructColumn(ColumnBase):
         device data and mask.
         """
 
-        result = cudf.core.column.build_column(
-            self.base_data,
-            self.dtype,
-            mask=self.base_mask,
-            size=self.size,
-            offset=self.offset,
-            children=self.base_children,
-        )
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result

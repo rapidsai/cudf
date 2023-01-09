@@ -237,13 +237,14 @@ class Buffer(Serializable):
         Internal Implementation for the CUDA Array Interface which is
         read-only.
         """
-        return {
-            "data": (self.ptr, True),
-            "shape": (self.size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0,
-        }
+        return cuda_array_interface_wrapper(
+            ptr=self.ptr,
+            size=self.size,
+            owner=self,
+            readonly=True,
+            typestr="|u1",
+            version=0,
+        )
 
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""

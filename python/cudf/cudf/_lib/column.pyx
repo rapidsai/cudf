@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import inspect
-from types import SimpleNamespace
 
 import cupy as cp
 import numpy as np
@@ -221,13 +220,8 @@ cdef class Column:
             mask = None
         elif type(value_cai) is property:
             if isinstance(value, CopyOnWriteBuffer):
-                value = SimpleNamespace(
-                    __cuda_array_interface__=(
-                        value._cuda_array_interface_readonly
-                    ),
-                    owner=value
-                )
-            if value_cai.__get__(value)["typestr"] not in ("|i1", "|u1"):
+                value = value._cuda_array_interface_readonly
+            if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view
                 value = cp.asarray(value).view('|u1')
