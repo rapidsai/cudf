@@ -93,8 +93,45 @@ the original object it was viewing and thus a separate copy is created and then 
 
 ## Advantages
 
-With copy-on-write enabled and by requesting `.copy(deep=False)`, the GPU memory usage can be reduced drastically if you are not performing
+1. With copy-on-write enabled and by requesting `.copy(deep=False)`, the GPU memory usage can be reduced drastically if you are not performing
 write operations on all of those copies. This will also increase the speed at which objects are created for execution of your ETL workflow.
+2. With the concept of views going away, every object is a copy of it's original object. This will bring consistency across operations and cudf closer to parity with
+pandas. Following is one of the inconsistency:
+
+```python
+
+>>> import pandas as pd
+>>> s = pd.Series([1, 2, 3, 4, 5])
+>>> s_view = s[0:2]
+>>> s_view[0] = 10
+>>> s_view
+0    10
+1     2
+dtype: int64
+>>> s
+0    10
+1     2
+2     3
+3     4
+4     5
+dtype: int64
+
+>>> import cudf
+>>> s = cudf.Series([1, 2, 3, 4, 5])
+>>> s_view = s[0:2]
+>>> s_view[0] = 10
+>>> s_view
+0    10
+1     2
+>>> s
+0    1
+1    2
+2    3
+3    4
+4    5
+dtype: int64
+```
+
 
 ## How to disable it
 
