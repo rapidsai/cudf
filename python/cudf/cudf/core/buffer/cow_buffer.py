@@ -101,12 +101,19 @@ class CopyOnWriteBuffer(Buffer):
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
-        Sub-classes can overwrite this to implement __getitem__
-        without having to handle non-slice inputs.
+        Helper for `__getitem__`
+
+        Returns the same underlying memory pointer if offset is 0
+        and size == self.size, else makes a copy to return the
+        slice.
         """
-        return self._from_device_memory(
+        if offset != 0 or self.size != size:
+            buf = self.copy(deep=True)
+        else:
+            buf = self
+        return buf._from_device_memory(
             cuda_array_interface_wrapper(
-                ptr=self._ptr + offset, size=size, owner=self.owner
+                ptr=buf._ptr + offset, size=size, owner=buf.owner
             )
         )
 
