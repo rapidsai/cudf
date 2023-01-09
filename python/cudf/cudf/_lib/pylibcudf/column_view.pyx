@@ -1,9 +1,10 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport bitmask_type, size_type
+from cudf._lib.cpp.types cimport UNKNOWN_NULL_COUNT, bitmask_type, size_type
 
 from .types cimport DataType
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
@@ -20,36 +21,54 @@ cdef class ColumnView:
     # elements. For fixed width types a mapping could be made based on the
     # number of bytes they occupy, but not for nested types. Not sure how
     # best to expose that in the API yet, but matching C++ for now and
-    # requesting the size from the user. The gpumemoryview may also help.
+    # requesting the size from the user. The gpumemoryview may also help, if it
+    # is typed then it would contain the necessary information (total buffer
+    # size and sizeof(type))
     # TODO: Should be using `not None` where possible.
     # TODO: I've temporarily defined __init__ instead of __cinit__ so that
     # factory functions can call __new__ without arguments. I'll need to think
     # more fully about what construction patterns we actually want to support.
     def __init__(
-        self, DataType dtype, size_type size, object data_buf, object mask_buf
+        self, DataType dtype, size_type size, object data_buf, object mask_buf,
+        # TODO: Not sure what the best input is, for now just using a
+        # List[ColumnView]
+        object children
     ):
         # TODO: Investigate cases where the data_buf is None. I'm not sure that
-        # this is a real use case that we should support.
+        # this is a real use case that we should support. EDIT: It looks like
+        # this is something that libcudf itself supports, so I guess it's fine
+        # but I would still like to better understand when it occurs.
         cdef const void * data = NULL
         if data_buf is not None:
             data = int_to_void_ptr(data_buf.ptr)
         cdef const bitmask_type * null_mask = NULL
         if mask_buf is not None:
             null_mask = int_to_bitmask_ptr(mask_buf.ptr)
+
         # TODO: At the moment libcudf does not expose APIs for counting the
         # nulls in a bitmask directly (those APIs are in detail/null_mask). If
         # we want to allow more flexibility in the Cython layer we'll need to
         # expose those eventually. This dovetails with our desire to expose
-        # other functionality too like bitmask_and.
-        cdef size_type null_count = 0
-        # TODO: offset and children not yet supported
+        # other functionality too like bitmask_and. The more temporary
+        # alternative would be accepting the null count as one of the
+        # arguments.
+        cdef size_type null_count = UNKNOWN_NULL_COUNT
+        # TODO: offset is not yet supported
         cdef size_type offset = 0
-        cdef const vector[column_view] children
+
+        cdef vector[column_view] c_children
+        cdef ColumnView child
+        if children is not None:
+            for child in children:
+                # Note that this operation will result in copying every child
+                # column_view. In theory this is fine though since by
+                # definition views should be cheap to copy.
+                c_children.push_back(dereference(child.get()))
 
         self.c_obj.reset(
             new column_view(
                 dtype.c_obj, size, data, null_mask, null_count, offset,
-                children
+                c_children
             )
         )
 

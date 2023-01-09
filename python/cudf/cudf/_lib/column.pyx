@@ -450,16 +450,13 @@ cdef class Column:
         # categoricals due to the ordering question.
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
-            data_dtype = col.dtype
         else:
             col = self
-            data_dtype = self.dtype
 
         # cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
-        type_id = dtype_to_pylibcudf_type(data_dtype)
+        type_id = dtype_to_pylibcudf_type(col.dtype)
         cdef pylibcudf.DataType dtype = pylibcudf.DataType(type_id)
         # cdef libcudf_types.size_type offset = self.offset
-        # cdef vector[column_view] children
         # cdef void* data
 
         # if col.base_data is None:
@@ -471,21 +468,18 @@ cdef class Column:
         # else:
         #     data = <void*><uintptr_t>(col.base_data.ptr)
 
-        # cdef Column child_column
-        # if col.base_children:
-        #     for child_column in col.base_children:
-        #         children.push_back(child_column.view())
-
-        # cdef libcudf_types.bitmask_type* mask
-        if self.nullable:
-            assert False, "Not yet supported."
-        # else:
-        #     mask = NULL
+        cdef Column child_column
+        children = []
+        if col.base_children:
+            for child_column in col.base_children:
+                children.append(child_column.to_ColumnView())
 
         # cdef libcudf_types.size_type c_null_count = null_count
 
-        mask = None
-        return pylibcudf.ColumnView(dtype, self.size, col.base_data, mask)
+        return pylibcudf.ColumnView(
+            dtype, self.size, col.base_data,
+            col.base_mask if self.nullable else None, children
+        )
         # return column_view(
         #     dtype,
         #     self.size,
