@@ -247,27 +247,42 @@ string_unary_funcs = ["upper", "lower"]
 string_return_attrs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
-    string_view_attr = create_binary_attrs(func, types.boolean)
-    setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attrs(func, types.boolean),
+    )
 
 
 for func in string_return_attrs:
-    string_view_attr = create_binary_attrs(func, udf_string)
-    setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attrs(func, udf_string),
+    )
 
 
 for func in int_binary_funcs:
-    string_view_attr = create_binary_attrs(func, size_type)
-    setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_binary_attrs(func, size_type),
+    )
 
 
 for func in id_unary_funcs:
-    string_view_attr = create_identifier_attrs(func, types.boolean)
-    setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attrs(func, types.boolean),
+    )
 
 for func in string_unary_funcs:
-    string_view_attr = create_identifier_attrs(func, udf_string)
-    setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
+    setattr(
+        StringViewAttrs,
+        f"resolve_{func}",
+        create_identifier_attrs(func, udf_string),
+    )
 
 
 @cuda_decl_registry.register_attr
