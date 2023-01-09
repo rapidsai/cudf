@@ -852,9 +852,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-            if len(result.index.names) == 1:
-                result = result.reset_index()
-                result[None] = result.pop(0)
+            # if len(result.index.names) == 1:
+            result = result.reset_index()
+            result[None] = result.pop(0)
         elif engine == "cudf":
             ngroups = len(offsets) - 1
             if ngroups > self._MAX_GROUPS_BEFORE_WARN:

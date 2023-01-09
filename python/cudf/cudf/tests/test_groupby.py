@@ -377,44 +377,6 @@ def test_groupby_apply_grouped():
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize(
-    "func",
-    [
-        lambda df: df["val1"].max() + df["val2"].min(),
-        lambda df: df["val1"].idxmax() + df["val2"].idxmin(),
-    ],
-)
-def test_groupby_apply_jit(func):
-    np.random.seed(0)
-    df = DataFrame()
-    nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
-
-    expect_grpby = df.to_pandas().groupby(["key1", "key2"], as_index=False)
-    got_grpby = df.groupby(["key1", "key2"])
-
-    expect = expect_grpby.apply(func)
-    # TODO: Due to some inconsistencies between how pandas and cudf handle the
-    # created index we get different columns in the index vs the data and a
-    # different name. For now I'm hacking around this to test the core
-    # functionality, but we'll need to update that eventually.
-    names = list(expect.columns)
-    names[2] = 0
-    expect.columns = names
-
-    got_jit = got_grpby.apply(func, engine="jit").reset_index()
-    # TODO: Shouldn't have to reset_index below
-    try:
-        got_nonjit = got_grpby.apply(func).reset_index()
-        assert_groupby_results_equal(expect, got_nonjit)
-        assert_groupby_results_equal(expect, got_jit)
-    except AttributeError:
-        assert_groupby_results_equal(expect, got_jit)
-
-
 @pytest.fixture(scope="module")
 def groupby_jit_data():
     np.random.seed(0)
@@ -431,9 +393,10 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
     got_groupby_obj = data.groupby(keys)
 
-    cudf_jit_result = got_groupby_obj.apply(func, engine="jit")
-    pandas_result = expect_groupby_obj.apply(func)
+    cudf_jit_result = got_groupby_obj.apply(func, *args, engine="jit")
+    pandas_result = expect_groupby_obj.apply(func, *args)
     # compare cuDF jit to pandas
+
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
@@ -458,6 +421,17 @@ def func(df):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df: df["val1"].max() + df["val2"].min(),
+        lambda df: df["val1"].idxmax() + df["val2"].idxmin(),
+    ],
+)
+def test_groupby_apply_jit(func, groupby_jit_data):
+    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"])
+
+
 def create_test_groupby_apply_jit_args_params():
     def f1(df, k):
         return df["val1"].max() + df["val2"].min() + k
@@ -475,13 +449,7 @@ def create_test_groupby_apply_jit_args_params():
     "func,args", create_test_groupby_apply_jit_args_params()
 )
 def test_groupby_apply_jit_args(func, args, groupby_jit_data):
-
-    expect_grpby = groupby_jit_data.to_pandas().groupby(["key1", "key2"])
-    got_grpby = groupby_jit_data.groupby(["key1", "key2"])
-
-    expect = expect_grpby.apply(func, *args)
-    got = got_grpby.apply(func, *args, engine="jit")
-    assert_groupby_results_equal(expect, got)
+    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"], *args)
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
