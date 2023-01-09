@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import os
 from glob import glob
@@ -86,8 +86,7 @@ def read_csv(path, blocksize="default", **kwargs):
 
 
 def _internal_read_csv(path, blocksize="256 MiB", **kwargs):
-    if isinstance(blocksize, str):
-        blocksize = parse_bytes(blocksize)
+    blocksize = parse_bytes(blocksize)
 
     if isinstance(path, list):
         filenames = path
