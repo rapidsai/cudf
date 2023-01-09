@@ -236,7 +236,7 @@ reduce_to_column_tree(tree_meta_t& tree,
  *
  */
 table_with_metadata device_parse_nested_json(
-  host_span<SymbolT const> input,
+  device_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -251,7 +251,7 @@ table_with_metadata device_parse_nested_json(
  * @return The data parsed from the given JSON input
  */
 table_with_metadata host_parse_nested_json(
-  host_span<SymbolT const> input,
+  device_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
