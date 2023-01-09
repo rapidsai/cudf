@@ -199,11 +199,8 @@ class ListColumn(ColumnBase):
         return self
 
     def copy(self, deep: bool = True):
-        """
-        List columns are immutable, so both deep
-        and shallow copies share the underlying
-        device data and mask.
-        """
+        # Since list columns are immutable, both deep and shallow copies share
+        # the underlying device data and mask.
         return super().copy(deep=False)
 
     def leaves(self):

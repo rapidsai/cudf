@@ -408,6 +408,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
+
+        Note : Only Fixed width columns are mutable i.e., which support
+        creation of a `mutable_view`.
         """
         if deep:
             return self.force_deep_copy()

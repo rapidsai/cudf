@@ -95,12 +95,8 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        """
-        Struct columns are immutable, so both deep
-        and shallow copies share the underlying
-        device data and mask.
-        """
-
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
         result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())

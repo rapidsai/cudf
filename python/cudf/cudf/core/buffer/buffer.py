@@ -220,9 +220,7 @@ class Buffer(Serializable):
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        """
-        Implementation for the CUDA Array Interface.
-        """
+        """Implementation for the CUDA Array Interface."""
         return {
             "data": (self.ptr, False),
             "shape": (self.size,),
