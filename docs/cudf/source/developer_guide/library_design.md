@@ -354,6 +354,12 @@ types don't support real in-place mutations to the data. We just mimic in such a
 like an in-place operation using `ColumnBase\Series\DataFrame._mimic_inplace`.
 
 
+|                     | Copy-on-Write is `ON`                                                                                                                                                                                          | Copy-on-Write is `OFF`                                                                               |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `.copy(deep=True)`  | A true physical copies are made and changes don't propagate to the original object.                                                                                                                            | A true physical copies are made and changes don't propagate to the original object.                  |
+| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy and then the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes done to one will propagate to the other object. |
+
+
 ### Examples
 
 When copy-on-write is enabled, taking a shallow copy of a `Series` or a `DataFrame` will not
