@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,8 +77,9 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                     });
 
   // Convert `sizes` to an offsets column, via inclusive_scan():
-  return strings::detail::make_offsets_child_column(
-    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
+  auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr));
+  return offsets_column;
 }
 
 /**

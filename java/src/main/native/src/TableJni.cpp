@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <algorithm>
 
 #include <arrow/io/api.h>
@@ -47,164 +46,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <thrust/iterator/counting_iterator.h>
 
+#include "csv_chunked_writer.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni_compiled_expr.hpp"
 #include "jni_utils.hpp"
+#include "jni_writer_data_sink.hpp"
 #include "row_conversion.hpp"
 
 namespace cudf {
 namespace jni {
-
-constexpr long MINIMUM_WRITE_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
-
-class jni_writer_data_sink final : public cudf::io::data_sink {
-public:
-  explicit jni_writer_data_sink(JNIEnv *env, jobject callback) {
-    if (env->GetJavaVM(&jvm) < 0) {
-      throw std::runtime_error("GetJavaVM failed");
-    }
-
-    jclass cls = env->GetObjectClass(callback);
-    if (cls == nullptr) {
-      throw cudf::jni::jni_exception("class not found");
-    }
-
-    handle_buffer_method =
-        env->GetMethodID(cls, "handleBuffer", "(Lai/rapids/cudf/HostMemoryBuffer;J)V");
-    if (handle_buffer_method == nullptr) {
-      throw cudf::jni::jni_exception("handleBuffer method");
-    }
-
-    this->callback = env->NewGlobalRef(callback);
-    if (this->callback == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
-  }
-
-  virtual ~jni_writer_data_sink() {
-    // This should normally be called by a JVM thread. If the JVM environment is missing then this
-    // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
-    // already be destroyed and this thread should not try to attach to get an environment.
-    JNIEnv *env = nullptr;
-    if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(callback);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
-    }
-    callback = nullptr;
-    current_buffer = nullptr;
-  }
-
-  void host_write(void const *data, size_t size) override {
-    JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    long left_to_copy = static_cast<long>(size);
-    const char *copy_from = static_cast<const char *>(data);
-    while (left_to_copy > 0) {
-      long buffer_amount_available = current_buffer_len - current_buffer_written;
-      if (buffer_amount_available <= 0) {
-        // should never be < 0, but just to be safe
-        rotate_buffer(env);
-        buffer_amount_available = current_buffer_len - current_buffer_written;
-      }
-      long amount_to_copy =
-          left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
-      char *copy_to = current_buffer_data + current_buffer_written;
-
-      std::memcpy(copy_to, copy_from, amount_to_copy);
-      copy_from = copy_from + amount_to_copy;
-      current_buffer_written += amount_to_copy;
-      total_written += amount_to_copy;
-      left_to_copy -= amount_to_copy;
-    }
-  }
-
-  bool supports_device_write() const override { return true; }
-
-  void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) override {
-    JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    long left_to_copy = static_cast<long>(size);
-    const char *copy_from = static_cast<const char *>(gpu_data);
-    while (left_to_copy > 0) {
-      long buffer_amount_available = current_buffer_len - current_buffer_written;
-      if (buffer_amount_available <= 0) {
-        // should never be < 0, but just to be safe
-        stream.synchronize();
-        rotate_buffer(env);
-        buffer_amount_available = current_buffer_len - current_buffer_written;
-      }
-      long amount_to_copy =
-          left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
-      char *copy_to = current_buffer_data + current_buffer_written;
-
-      CUDF_CUDA_TRY(
-          cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDefault, stream.value()));
-
-      copy_from = copy_from + amount_to_copy;
-      current_buffer_written += amount_to_copy;
-      total_written += amount_to_copy;
-      left_to_copy -= amount_to_copy;
-    }
-    stream.synchronize();
-  }
-
-  std::future<void> device_write_async(void const *gpu_data, size_t size,
-                                       rmm::cuda_stream_view stream) override {
-    // Call the sync version until figuring out how to write asynchronously.
-    device_write(gpu_data, size, stream);
-    return std::async(std::launch::deferred, [] {});
-  }
-
-  void flush() override {
-    if (current_buffer_written > 0) {
-      JNIEnv *env = cudf::jni::get_jni_env(jvm);
-      handle_buffer(env, current_buffer, current_buffer_written);
-      if (current_buffer != nullptr) {
-        env->DeleteGlobalRef(current_buffer);
-      }
-      current_buffer = nullptr;
-      current_buffer_len = 0;
-      current_buffer_data = nullptr;
-      current_buffer_written = 0;
-    }
-  }
-
-  size_t bytes_written() override { return total_written; }
-
-  void set_alloc_size(long size) { this->alloc_size = size; }
-
-private:
-  void rotate_buffer(JNIEnv *env) {
-    if (current_buffer != nullptr) {
-      handle_buffer(env, current_buffer, current_buffer_written);
-      env->DeleteGlobalRef(current_buffer);
-      current_buffer = nullptr;
-    }
-    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true);
-    current_buffer = env->NewGlobalRef(tmp_buffer);
-    current_buffer_len = get_host_buffer_length(env, current_buffer);
-    current_buffer_data = reinterpret_cast<char *>(get_host_buffer_address(env, current_buffer));
-    current_buffer_written = 0;
-  }
-
-  void handle_buffer(JNIEnv *env, jobject buffer, jlong len) {
-    env->CallVoidMethod(callback, handle_buffer_method, buffer, len);
-    if (env->ExceptionCheck()) {
-      throw std::runtime_error("handleBuffer threw an exception");
-    }
-  }
-
-  JavaVM *jvm;
-  jobject callback;
-  jmethodID handle_buffer_method;
-  jobject current_buffer = nullptr;
-  char *current_buffer_data = nullptr;
-  long current_buffer_len = 0;
-  long current_buffer_written = 0;
-  size_t total_written = 0;
-  long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
-};
 
 template <typename WRITER> class jni_table_writer_handle final {
 public:
@@ -1347,6 +1198,118 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     return convert_table_for_return(env, cudf::io::read_csv(opts).tbl);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
+    JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
+    jstring j_false_value, jstring j_output_path) {
+  JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
+  JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
+  JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
+  JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", );
+  JNI_NULL_CHECK(env, j_null_value, "null representation string cannot be itself null", );
+  JNI_NULL_CHECK(env, j_true_value, "representation string for `true` cannot be null", );
+  JNI_NULL_CHECK(env, j_false_value, "representation string for `false` cannot be null", );
+  JNI_NULL_CHECK(env, j_output_path, "output path cannot be null", );
+
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto const native_output_path = cudf::jni::native_jstring{env, j_output_path};
+    auto const output_path = native_output_path.get();
+
+    auto const table = reinterpret_cast<cudf::table_view *>(j_table_handle);
+    auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
+    auto const column_names = n_column_names.as_cpp_vector();
+
+    auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
+    auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
+    auto const true_value = cudf::jni::native_jstring{env, j_true_value};
+    auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+
+    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get())
+                       .true_value(true_value.get())
+                       .false_value(false_value.get());
+
+    cudf::io::write_csv(options.build());
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
+    JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
+    jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
+    jstring j_false_value, jobject j_buffer) {
+  JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
+  JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
+  JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
+  JNI_NULL_CHECK(env, j_null_value, "null representation string cannot be itself null", 0);
+  JNI_NULL_CHECK(env, j_buffer, "output buffer cannot be null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto data_sink = std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer);
+
+    auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
+    auto const column_names = n_column_names.as_cpp_vector();
+
+    auto const line_terminator = cudf::jni::native_jstring{env, j_row_delimiter};
+    auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
+    auto const true_value = cudf::jni::native_jstring{env, j_true_value};
+    auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+
+    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
+                                                         cudf::table_view{})
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get())
+                       .true_value(true_value.get())
+                       .false_value(false_value.get())
+                       .build();
+
+    return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVChunkToBuffer(JNIEnv *env, jclass,
+                                                                       jlong j_writer_handle,
+                                                                       jlong j_table_handle) {
+  JNI_NULL_CHECK(env, j_writer_handle, "writer handle cannot be null.", );
+  JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
+
+  auto const table = reinterpret_cast<cudf::table_view *>(j_table_handle);
+  auto writer = reinterpret_cast<cudf::jni::io::csv_chunked_writer *>(j_writer_handle);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    writer->write(*table);
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env, jclass,
+                                                                     jlong j_writer_handle) {
+  JNI_NULL_CHECK(env, j_writer_handle, "writer handle cannot be null.", );
+
+  using cudf::jni::io::csv_chunked_writer;
+  auto writer =
+      std::unique_ptr<csv_chunked_writer>{reinterpret_cast<csv_chunked_writer *>(j_writer_handle)};
+
+  try {
+    cudf::jni::auto_set_device(env);
+    writer->close();
+  }
+  CATCH_STD(env, );
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1497,6 +1497,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             (
                 cudf.core.column.DecimalBaseColumn,
                 cudf.core.column.StructColumn,
+                cudf.core.column.ListColumn,
             ),
         ):
             col = col._with_type_metadata(objs[0].dtype)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 
 #pragma once
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/scan.h>
 
 namespace cudf {
@@ -242,17 +245,18 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  *               "Size of output exceeds column size limit");
  * @endcode
  *
- * @tparam SizesIterator Iterator type for input and output of the scan using addition operation
+ * @tparam SizesIterator Iterator type for input of the scan using addition operation
+ * @tparam OffsetsIterator Iterator type for the output of the scan
  *
  * @param begin Input iterator for scan
  * @param end End of the input iterator
  * @param result Output iterator for scan result
  * @return The last element of the scan
  */
-template <typename SizesIterator>
+template <typename SizesIterator, typename OffsetsIterator>
 auto sizes_to_offsets(SizesIterator begin,
                       SizesIterator end,
-                      SizesIterator result,
+                      OffsetsIterator result,
                       rmm::cuda_stream_view stream)
 {
   using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
@@ -267,6 +271,56 @@ auto sizes_to_offsets(SizesIterator begin,
   // when computing the individual scan output elements.
   thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, LastType{0});
   return last_element.value(stream);
+}
+
+/**
+ * @brief Create an offsets column to be a child of a compound column
+ *
+ * This function sets the offsets values by executing scan over the sizes in the provided
+ * Iterator.
+ *
+ * The return also includes the total number of elements -- the last element value from the
+ * scan.
+ *
+ * @throw cudf::logic_error if the total size of the scan (last element) greater than maximum value
+ * of `size_type`
+ *
+ * @tparam InputIterator Used as input to scan to set the offset values
+ * @param begin The beginning of the input sequence
+ * @param end The end of the input sequence
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Offsets column and total elements
+ */
+template <typename InputIterator>
+std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
+  InputIterator begin,
+  InputIterator end,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto count          = static_cast<size_type>(std::distance(begin, end));
+  auto offsets_column = make_numeric_column(
+    data_type{type_to_id<offset_type>()}, count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view = offsets_column->mutable_view();
+  auto d_offsets    = offsets_view.template data<offset_type>();
+
+  // The number of offsets is count+1 so to build the offsets from the sizes
+  // using exclusive-scan technically requires count+1 input values even though
+  // the final input value is never used.
+  // The input iterator is wrapped here to allow the last value to be safely read.
+  auto map_fn = [begin, count] __device__(size_type idx) -> size_type {
+    return idx < count ? static_cast<size_type>(begin[idx]) : size_type{0};
+  };
+  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  // Use the sizes-to-offsets iterator to compute the total number of elements
+  auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
+  CUDF_EXPECTS(
+    total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
+    "Size of output exceeds column size limit");
+
+  offsets_column->set_null_count(0);
+  return std::pair(std::move(offsets_column), static_cast<size_type>(total_elements));
 }
 
 }  // namespace detail
