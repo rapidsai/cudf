@@ -20,6 +20,7 @@ from cudf.core._compat import (
     PANDAS_GE_150,
     PANDAS_LT_140,
 )
+from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -414,6 +415,49 @@ def test_groupby_apply_jit(func):
         assert_groupby_results_equal(expect, got_jit)
 
 
+@pytest.fixture(scope="module")
+def groupby_jit_data():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 20
+    df["key1"] = np.random.randint(0, 3, nelem)
+    df["key2"] = np.random.randint(0, 2, nelem)
+    df["val1"] = np.random.random(nelem)
+    df["val2"] = np.random.random(nelem)
+    return df
+
+
+def run_groupby_apply_jit_test(data, func, keys, *args):
+    expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
+    got_groupby_obj = data.groupby(keys)
+
+    cudf_jit_result = got_groupby_obj.apply(func, engine="jit")
+    pandas_result = expect_groupby_obj.apply(func)
+    # compare cuDF jit to pandas
+    assert_groupby_results_equal(cudf_jit_result, pandas_result)
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
+)
+def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
+    # dynamically generate to avoid pickling error
+
+    funcstr = f"""
+def func(df):
+    return df['val1'].{func}()
+    """
+    lcl = {}
+    exec(funcstr, lcl)
+    func = lcl["func"]
+
+    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+    groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
+
+    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
 def create_test_groupby_apply_jit_args_params():
     def f1(df, k):
         return df["val1"].max() + df["val2"].min() + k
@@ -430,23 +474,14 @@ def create_test_groupby_apply_jit_args_params():
 @pytest.mark.parametrize(
     "func,args", create_test_groupby_apply_jit_args_params()
 )
-def test_groupby_apply_jit_args(func, args):
-    np.random.seed(0)
-    df = DataFrame()
-    nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+def test_groupby_apply_jit_args(func, args, groupby_jit_data):
 
-    expect_grpby = df.to_pandas().groupby(["key1", "key2"])
-    got_grpby = df.groupby(["key1", "key2"])
+    expect_grpby = groupby_jit_data.to_pandas().groupby(["key1", "key2"])
+    got_grpby = groupby_jit_data.groupby(["key1", "key2"])
 
     expect = expect_grpby.apply(func, *args)
-    got_nonjit = got_grpby.apply(func, *args)
-    got_jit = got_grpby.apply(func, *args, engine="jit")
-    assert_groupby_results_equal(expect, got_nonjit)
-    assert_groupby_results_equal(expect, got_jit)
+    got = got_grpby.apply(func, *args, engine="jit")
+    assert_groupby_results_equal(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
