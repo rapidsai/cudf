@@ -150,39 +150,31 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     return _validator
 
 
-def _make_cow_validator(valid_options):
-    def _validator(val):
-        if get_option("spill") and val:
+def _cow_validator(val):
+    if get_option("spill") and val:
+        raise ValueError(
+            "Copy-on-write is not supported when spilling is enabled. "
+            "Please set `spill` to `False`"
+        )
+    if val not in {False, True}:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be one of {{False, True}}."
+        )
+
+
+def _spill_validator(val):
+    try:
+        if get_option("copy_on_write") and val:
             raise ValueError(
-                "Copy-on-write is not supported when spilling is enabled. "
-                "Please set `spill` to `False`"
+                "Spilling is not supported when Copy-on-write is enabled. "
+                "Please set `copy_on_write` to `False`"
             )
-        if val not in valid_options:
-            raise ValueError(
-                f"{val} is not a valid option. "
-                f"Must be one of {set(valid_options)}."
-            )
-
-    return _validator
-
-
-def _make_spill_validator(valid_options):
-    def _validator(val):
-        try:
-            if get_option("copy_on_write") and val:
-                raise ValueError(
-                    "Spilling is not supported when Copy-on-write is enabled. "
-                    "Please set `copy_on_write` to `False`"
-                )
-        except KeyError:
-            pass
-        if val not in valid_options:
-            raise ValueError(
-                f"{val} is not a valid option. "
-                f"Must be one of {set(valid_options)}."
-            )
-
-    return _validator
+    except KeyError:
+        pass
+    if val not in {False, True}:
+        raise ValueError(
+            f"{val} is not a valid option. " f"Must be one of {{False, True}}."
+        )
 
 
 def _integer_validator(val):
@@ -249,7 +241,7 @@ _register_option(
         \tValid values are True or False. Default is False.
         """
     ),
-    _make_spill_validator([False, True]),
+    _spill_validator,
 )
 
 
@@ -267,7 +259,7 @@ _register_option(
         \tValid values are True or False. Default is False.
     """
     ),
-    _make_cow_validator([False, True]),
+    _cow_validator,
 )
 
 
