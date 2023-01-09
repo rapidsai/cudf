@@ -351,6 +351,7 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
       scaled_num_chunks = util::div_rounding_up_safe(num_chunks, ++scale);
     }
   }
+  // unreachable, but the following line is needed by the compiler
   CUDF_FAIL("Cannot allocate temp buffer for compression");
 }
 
