@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,21 +195,20 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
 
 namespace detail {
 namespace {
-/**
- * @brief Calculate the size of the each string required for
- * converting each value in base-10 format.
- *
- * output format is [-]integer.fraction
- */
 template <typename DecimalType>
-struct decimal_to_string_size_fn {
-  column_device_view const d_column;
+struct from_fixed_point_fn {
+  column_device_view d_decimals;
+  offset_type* d_offsets{};
+  char* d_chars{};
 
-  __device__ int32_t operator()(size_type idx) const
+  /**
+   * @brief Calculates the size of the string required to convert the element, in base-10 format.
+   *
+   * Output format is [-]integer.fraction
+   */
+  __device__ int32_t compute_output_size(DecimalType value)
   {
-    if (d_column.is_null(idx)) return 0;
-    auto const value = d_column.element<DecimalType>(idx);
-    auto const scale = d_column.type().scale();
+    auto const scale = d_decimals.type().scale();
 
     if (scale >= 0) return count_digits(value) + scale;
 
@@ -223,25 +222,17 @@ struct decimal_to_string_size_fn {
            num_zeros +                          // zeros padding
            fraction;                            // size of fraction
   }
-};
 
-/**
- * @brief Convert each value into a string.
- *
- * The value is converted into base-10 digits [0-9]
- * plus the decimal point and a negative sign prefix.
- */
-template <typename DecimalType>
-struct decimal_to_string_fn {
-  column_device_view const d_column;
-  int32_t const* d_offsets;
-  char* d_chars;
-
-  __device__ void operator()(size_type idx)
+  /**
+   * @brief Converts a decimal element into a string.
+   *
+   * The value is converted into base-10 digits [0-9]
+   * plus the decimal point and a negative sign prefix.
+   */
+  __device__ void decimal_to_string(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    auto const value = d_column.element<DecimalType>(idx);
-    auto const scale = d_column.type().scale();
+    auto const value = d_decimals.element<DecimalType>(idx);
+    auto const scale = d_decimals.type().scale();
     char* d_buffer   = d_chars + d_offsets[idx];
 
     if (scale >= 0) {
@@ -267,6 +258,19 @@ struct decimal_to_string_fn {
 
     integer_to_string(abs_value % exp_ten, d_buffer);  // add the fraction part
   }
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_decimals.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+    if (d_chars != nullptr) {
+      decimal_to_string(idx);
+    } else {
+      d_offsets[idx] = compute_output_size(d_decimals.element<DecimalType>(idx));
+    }
+  }
 };
 
 /**
@@ -282,26 +286,12 @@ struct dispatch_from_fixed_point_fn {
 
     auto const d_column = column_device_view::create(input, stream);
 
-    // build offsets column
-    auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
-      0, decimal_to_string_size_fn<DecimalType>{*d_column});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + input.size(), stream, mr);
-    auto const d_offsets = offsets_column->view().template data<int32_t>();
-
-    // build chars column
-    auto const bytes =
-      cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
-    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
-    auto d_chars      = chars_column->mutable_view().template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       input.size(),
-                       decimal_to_string_fn<DecimalType>{*d_column, d_offsets, d_chars});
+    auto [offsets, chars] =
+      make_strings_children(from_fixed_point_fn<DecimalType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input, stream, mr));
   }

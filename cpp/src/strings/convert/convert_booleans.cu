@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ struct from_booleans_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
-      if (d_chars == nullptr) d_offsets[idx] = 0;
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
       return;
     }
 
@@ -140,12 +140,12 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
 
-  auto children =
+  auto [offsets, chars] =
     make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets),
+                             std::move(chars),
                              booleans.null_count(),
                              std::move(null_mask));
 }
