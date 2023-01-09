@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -80,13 +79,11 @@ std::unique_ptr<column> fill(strings_column_view const& strings,
   };
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-  auto offsets_column = detail::make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // create the chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = create_chars_child_column(bytes, stream, mr);
   // fill the chars column
   auto d_chars = chars_column->mutable_view().data<char>();
