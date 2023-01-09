@@ -221,5 +221,5 @@ void BM_NESTED_JSON_DEPTH(nvbench::state& state)
 
 NVBENCH_BENCH(BM_NESTED_JSON_DEPTH)
   .set_name("nested_json_gpu_parser_depth")
-  .add_int64_power_of_two_axis("depth", nvbench::range(1, 6, 1))
+  .add_int64_power_of_two_axis("depth", nvbench::range(1, 4, 1))
   .add_int64_power_of_two_axis("string_size", nvbench::range(20, 30, 2));
