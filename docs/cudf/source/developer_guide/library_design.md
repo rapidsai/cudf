@@ -325,7 +325,7 @@ Copy-on-write(COW) is designed to reduce memory footprint on GPUs. With this fea
 there is a write operation on a column.
 
 The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate weakreferences of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
+With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate [weakreferences](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
 This is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
 means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr` & `.size`
 i.e., if they are all pointing to the same device memory.
