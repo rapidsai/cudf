@@ -109,6 +109,7 @@ jobs:
       build_type: pull-request
       package-name: dask_cudf
       package-dir: python/dask_cudf
+      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
@@ -116,4 +117,6 @@ jobs:
     with:
       build_type: pull-request
       package-name: dask_cudf
+      test-before-amd64: "RAPIDS_PY_WHEEL_NAME=cudf rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
+      test-before-arm64: "RAPIDS_PY_WHEEL_NAME=cudf rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
       test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
