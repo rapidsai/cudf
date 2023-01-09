@@ -411,8 +411,8 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_fields, 40),  // 40% occupancy in hash map
-                        cuco::sentinel::empty_key{empty_node_index_sentinel},
-                        cuco::sentinel::empty_value{empty_node_index_sentinel},
+                        cuco::empty_key{empty_node_index_sentinel},
+                        cuco::empty_value{empty_node_index_sentinel},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
   auto const d_hasher = [d_input          = d_input.data(),
@@ -500,9 +500,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 
   constexpr size_type empty_node_index_sentinel = -1;
   hash_map_type key_map{compute_hash_table_size(num_nodes),  // TODO reduce oversubscription
-                        cuco::sentinel::empty_key{empty_node_index_sentinel},
-                        cuco::sentinel::empty_value{empty_node_index_sentinel},
-                        cuco::sentinel::erased_key{-2},
+                        cuco::empty_key{empty_node_index_sentinel},
+                        cuco::empty_value{empty_node_index_sentinel},
+                        cuco::erased_key{-2},
                         hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
   // path compression is not used since extra writes make all map operations slow.
