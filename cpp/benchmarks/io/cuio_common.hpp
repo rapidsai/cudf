@@ -22,6 +22,8 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 using cudf::io::io_type;
 
 #define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group)                          \
@@ -77,7 +79,8 @@ class cuio_source_sink_pair {
   static temp_directory const tmpdir;
 
   io_type const type;
-  std::vector<char> buffer;
+  std::vector<char> h_buffer;
+  rmm::device_uvector<char> d_buffer;
   std::string const file_name;
   bytes_written_only_sink void_sink;
 };

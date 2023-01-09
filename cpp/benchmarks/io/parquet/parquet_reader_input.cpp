@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,8 +126,9 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list =
-  nvbench::enum_type_list<cudf::io::io_type::FILEPATH, cudf::io::io_type::HOST_BUFFER>;
+using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
+                                        cudf::io::io_type::HOST_BUFFER,
+                                        cudf::io::io_type::DEVICE_BUFFER>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
