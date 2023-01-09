@@ -336,8 +336,10 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
                                                            size_t max_uncomp_chunk_size,
                                                            rmm::cuda_stream_view stream)
 {
-  auto scaled_num_chunks = num_chunks;
-  size_t scale           = 1;
+  // TODO: c++-20 adds constexpr sqrt2 in <numbers>
+  const double scale_factor = std::sqrt(2.0);
+  auto scaled_num_chunks    = num_chunks;
+  double scale              = 1.0;
   while (scaled_num_chunks > 0) {
     try {
       auto const temp_size =
@@ -348,7 +350,8 @@ std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type comp
       // don't loop forever...if scaled_num_chunks is already 1, the following divide will
       // also yield 1
       if (scaled_num_chunks == 1) { throw ba; }
-      scaled_num_chunks = util::div_rounding_up_safe(num_chunks, ++scale);
+      scale *= scale_factor;
+      scaled_num_chunks = (num_chunks + scale) / scale;
     }
   }
   // unreachable, but the following line is needed by the compiler
