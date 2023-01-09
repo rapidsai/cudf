@@ -351,7 +351,7 @@ Notes:
 types that can be mutated in place.
 2. Deep copies of variable width data types return shallow-copies of the Columns, because these
 types don't support real in-place mutations to the data. We just mimic in such a way that it looks
-like an in-place operation.
+like an in-place operation using `ColumnBase\Series\DataFrame._mimic_inplace`.
 
 
 ### Examples
