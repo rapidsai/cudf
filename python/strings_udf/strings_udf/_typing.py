@@ -177,16 +177,10 @@ def create_binary_attrs(attrname, retty):
         def generic(self, args, kws):
             return nb_signature(retty, string_view, recvr=self.this)
 
-    class UDFStringBinaryAttr(StringViewBinaryAttr):
-        key = f"UDFString.{attrname}"
-
     def string_view_attr(self, mod):
         return types.BoundFunction(StringViewBinaryAttr, string_view)
 
-    def udf_string_attr(self, mod):
-        return types.BoundFunction(UDFStringBinaryAttr, string_view)
-
-    return string_view_attr, udf_string_attr
+    return string_view_attr
 
 
 def create_identifier_attrs(attrname, retty):
@@ -202,16 +196,10 @@ def create_identifier_attrs(attrname, retty):
         def generic(self, args, kws):
             return nb_signature(retty, recvr=self.this)
 
-    class UDFStringIdentifierAttr(StringViewIdentifierAttr):
-        key = f"UDFString.{attrname}"
-
     def string_view_attr(self, mod):
         return types.BoundFunction(StringViewIdentifierAttr, string_view)
 
-    def udf_string_attr(self, mod):
-        return types.BoundFunction(UDFStringIdentifierAttr, string_view)
-
-    return string_view_attr, udf_string_attr
+    return string_view_attr
 
 
 class StringViewCount(AbstractTemplate):
@@ -241,25 +229,6 @@ class StringViewAttrs(AttributeTemplate):
         return types.BoundFunction(StringViewReplace, string_view)
 
 
-class UDFStringCount(StringViewCount):
-    key = "UDFString.count"
-
-
-class UDFStringReplace(StringViewReplace):
-    key = "UDFString.replace"
-
-
-@cuda_decl_registry.register_attr
-class UDFStringAttrs(AttributeTemplate):
-    key = udf_string
-
-    def resolve_count(self, mod):
-        return types.BoundFunction(UDFStringCount, string_view)
-
-    def resolve_replace(self, mod):
-        return types.BoundFunction(UDFStringReplace, string_view)
-
-
 # Build attributes for `MaskedType(string_view)`
 bool_binary_funcs = ["startswith", "endswith"]
 int_binary_funcs = ["find", "rfind"]
@@ -278,38 +247,32 @@ string_unary_funcs = ["upper", "lower"]
 string_return_attrs = ["strip", "lstrip", "rstrip"]
 
 for func in bool_binary_funcs:
-    string_view_attr, udf_string_attr = create_binary_attrs(
-        func, types.boolean
-    )
+    string_view_attr = create_binary_attrs(func, types.boolean)
     setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
-    setattr(UDFStringAttrs, f"resolve_{func}", udf_string_attr)
 
 
 for func in string_return_attrs:
-    string_view_attr, udf_string_attr = create_binary_attrs(func, udf_string)
+    string_view_attr = create_binary_attrs(func, udf_string)
     setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
-    setattr(UDFStringAttrs, f"resolve_{func}", udf_string_attr)
 
 
 for func in int_binary_funcs:
-    string_view_attr, udf_string_attr = create_binary_attrs(func, size_type)
+    string_view_attr = create_binary_attrs(func, size_type)
     setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
-    setattr(UDFStringAttrs, f"resolve_{func}", udf_string_attr)
 
 
 for func in id_unary_funcs:
-    string_view_attr, udf_string_attr = create_identifier_attrs(
-        func, types.boolean
-    )
+    string_view_attr = create_identifier_attrs(func, types.boolean)
     setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
-    setattr(UDFStringAttrs, f"resolve_{func}", udf_string_attr)
 
 for func in string_unary_funcs:
-    string_view_attr, udf_string_attr = create_identifier_attrs(
-        func, udf_string
-    )
+    string_view_attr = create_identifier_attrs(func, udf_string)
     setattr(StringViewAttrs, f"resolve_{func}", string_view_attr)
-    setattr(UDFStringAttrs, f"resolve_{func}", udf_string_attr)
+
+
+@cuda_decl_registry.register_attr
+class UDFStringAttrs(StringViewAttrs):
+    key = udf_string
 
 
 cuda_decl_registry.register_attr(StringViewAttrs)
