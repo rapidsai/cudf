@@ -158,7 +158,7 @@ def _cow_validator(val):
         )
     if val not in {False, True}:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be one of {{False, True}}."
+            f"{val} is not a valid option. Must be one of {{False, True}}."
         )
 
 
@@ -173,7 +173,7 @@ def _spill_validator(val):
         pass
     if val not in {False, True}:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be one of {{False, True}}."
+            f"{val} is not a valid option. Must be one of {{False, True}}."
         )
 
 
