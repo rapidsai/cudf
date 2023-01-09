@@ -208,7 +208,6 @@ class device_buffer_source final : public datasource {
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
     auto const count = std::min(size, this->size() - offset);
     cudaMemcpy(dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToHost);
     return count;
@@ -216,7 +215,10 @@ class device_buffer_source final : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
+    auto const count = std::min(size, this->size() - offset);
+    std::vector<uint8_t> h_data(count);
+    cudaMemcpy(h_data.data(), _d_buffer._data + offset, count, cudaMemcpyDeviceToHost);
+    return std::make_unique<owning_buffer<std::vector<uint8_t>>>(std::move(h_data));
   }
 
   [[nodiscard]] bool supports_device_read() const override { return true; }
@@ -228,7 +230,7 @@ class device_buffer_source final : public datasource {
   {
     auto const count = std::min(size, this->size() - offset);
     cudaMemcpyAsync(dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToDevice, stream.value());
-    return std::async(std::launch::async, [count]{ return count; });
+    return std::async(std::launch::async, [count] { return count; });
   }
 
   size_t device_read(size_t offset,
