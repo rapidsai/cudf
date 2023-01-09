@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,13 +202,16 @@ class direct_read_source : public file_source {
 /**
  * @brief Implementation class for reading from a device buffer source
  */
-class device_buffer_source : public datasource {
+class device_buffer_source final : public datasource {
  public:
   explicit device_buffer_source(device_buffer const& d_buffer) : _d_buffer{d_buffer} {}
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     CUDF_FAIL("Host read shouldn't be used with device_buffer_source");
+    auto const count = std::min(size, this->size() - offset);
+    cudaMemcpy(dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToHost);
+    return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -218,15 +221,22 @@ class device_buffer_source : public datasource {
 
   [[nodiscard]] bool supports_device_read() const override { return true; }
 
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    cudaMemcpyAsync(dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToDevice, stream.value());
+    return std::async(std::launch::async, [count]{ return count; });
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
                      rmm::cuda_stream_view stream) override
   {
-    CUDF_FAIL("TODO: should this be invoked?");
-    // TODO: to be finished with deep copy
-    dst = const_cast<uint8_t*>(_d_buffer._data) + offset;
-    return std::min(size, this->size() - offset);
+    return device_read_async(offset, size, dst, stream).get();
   }
 
   std::unique_ptr<buffer> device_read(size_t offset,
