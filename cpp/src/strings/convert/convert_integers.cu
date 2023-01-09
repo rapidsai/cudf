@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -313,41 +313,37 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
 
 namespace detail {
 namespace {
-/**
- * @brief Calculate the size of the each string required for
- * converting each integer in base-10 format.
- */
 template <typename IntegerType>
-struct integer_to_string_size_fn {
-  column_device_view d_column;
-
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_column.is_null(idx)) return 0;
-    IntegerType value = d_column.element<IntegerType>(idx);
-    return count_digits(value);
-  }
-};
-
-/**
- * @brief Convert each integer into a string.
- *
- * The integer is converted into base-10 using only characters [0-9].
- * No formatting is done for the string other than prepending the '-'
- * character for negative values.
- */
-template <typename IntegerType>
-struct integer_to_string_fn {
-  column_device_view d_column;
-  const int32_t* d_offsets;
+struct from_integers_fn {
+  column_device_view d_integers;
+  size_type* d_offsets;
   char* d_chars;
+
+  /**
+   * @brief Converts an integer element into a string.
+   *
+   * The integer is converted into base-10 using only characters [0-9].
+   * No formatting is done for the string other than prepending the '-'
+   * character for negative values.
+   */
+  __device__ void integer_element_to_string(size_type idx)
+  {
+    IntegerType value = d_integers.element<IntegerType>(idx);
+    char* d_buffer    = d_chars + d_offsets[idx];
+    integer_to_string(value, d_buffer);
+  }
 
   __device__ void operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    IntegerType value = d_column.element<IntegerType>(idx);
-    char* d_buffer    = d_chars + d_offsets[idx];
-    integer_to_string(value, d_buffer);
+    if (d_integers.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+    if (d_chars != nullptr) {
+      integer_element_to_string(idx);
+    } else {
+      d_offsets[idx] = count_digits(d_integers.element<IntegerType>(idx));
+    }
   }
 };
 
@@ -367,27 +363,13 @@ struct dispatch_from_integers_fn {
 
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
-    // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0), integer_to_string_size_fn<IntegerType>{d_column});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view  = offsets_column->view();
-    auto d_new_offsets = offsets_view.template data<int32_t>();
 
-    // build chars column
-    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
-    auto chars_view   = chars_column->mutable_view();
-    auto d_chars      = chars_view.template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       integer_to_string_fn<IntegerType>{d_column, d_new_offsets, d_chars});
+    auto [offsets, chars] =
+      make_strings_children(from_integers_fn<IntegerType>{d_column}, strings_count, stream, mr);
 
     return make_strings_column(strings_count,
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                integers.null_count(),
                                std::move(null_mask));
   }
