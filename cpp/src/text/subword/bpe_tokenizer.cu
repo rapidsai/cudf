@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -531,8 +531,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto const list_offsets = [d_strings = *d_strings, stream] {
     auto offsets_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<cudf::size_type>(0), list_offsets_fn{d_strings});
-    return cudf::strings::detail::make_offsets_child_column(
-      offsets_itr, offsets_itr + d_strings.size(), stream, rmm::mr::get_current_device_resource());
+    auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
+      offsets_itr, offsets_itr + d_strings.size(), stream, rmm::mr::get_current_device_resource()));
+    return offsets_column;
   }();
 
   // build a list column_view using the BPE output and the list_offsets
