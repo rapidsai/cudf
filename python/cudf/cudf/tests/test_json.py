@@ -1014,3 +1014,51 @@ def test_json_round_trip_gzip():
         fo.seek(loc)
         written_df = cudf.read_json(fo, orient="records", lines=True)
     assert_eq(written_df, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ## empty input failing due to missing index size information
+        # "",
+        # "[]",
+        # "[]\n[]\n[]",
+        # simple values
+        """[1]\n[2]\n[3]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nulls
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]\n[null, null, null]""",
+        """[1, 2, 3]\n[4, 5, null]\n[]""",
+        # missing
+        """[1, 2, 3]\n[4, 5   ]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9, 10]""",
+        """[1, 2, 3]\n[4, 5, 6, {}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, []]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, {"a": 10}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, [10]]\n[7, 8, 9]""",
+        # mixed
+        """[1, 2, 3]\n[4, 5, {}]\n[7, 8, 9]""",
+        """[1, 2, {}]\n[4, 5, 6]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, [6]]\n[7, 8, 9]""",
+        """[1, 2, [3]]\n[4, 5, 6]\n[7, 8, 9]""",
+    ],
+)
+@pytest.mark.parametrize("lines", [True, False])
+def test_json_array_of_arrays(data, lines):
+    data = data if lines == True else "[" + data.replace("\n", ",") + "]"
+    pdf = pd.read_json(data, orient="values", lines=lines)
+    df = cudf.read_json(
+        StringIO(data),
+        engine="cudf_experimental",
+        orient="values",
+        lines=lines,
+    )
+    # TODO: Replace string column names with integer column names for values orient
+    df.columns = cudf.RangeIndex(len(df.columns))
+    # if mixed with dict/list type, replace other types with None.
+    if 2 in pdf.columns and any(
+        pdf[2].apply(lambda x: isinstance(x, dict) or isinstance(x, list))
+    ):
+        pdf[2] = pdf[2].apply(lambda x: x if isinstance(x, dict) or isinstance(x, list) else None)
+    assert_eq(pdf, df)
