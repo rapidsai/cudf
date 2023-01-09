@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -413,12 +412,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
     valid_count);
 
-  std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
+  auto [offsets, bytes] = cudf::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
   auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
   // Allocate chars array and output null mask
   cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
