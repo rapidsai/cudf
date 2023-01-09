@@ -134,7 +134,7 @@ constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
 {
   auto const bytes = (out_it == nullptr) ? strings::detail::bytes_in_char_utf8(character)
                                          : strings::detail::from_char_utf8(character, out_it);
-  out_it += bytes;
+  if (out_it) out_it += bytes;
   return bytes;
 }
 
@@ -277,7 +277,7 @@ struct string_parse {
   str_tuple_it str_tuples;
   bitmask_type* null_mask;
   cudf::io::parse_options_view const options;
-  int32_t* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type idx)
