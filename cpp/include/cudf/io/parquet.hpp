@@ -490,7 +490,7 @@ class parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -950,7 +950,7 @@ class parquet_writer_options_builder {
    * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
    * the disabling of compression for columns that would otherwise be compressed.
    *
-   * The default value is dictionary_policy::ADAPTIVE.
+   * The default value is dictionary_policy::ALWAYS.
    *
    * @param val policy for dictionary use
    * @return this for chaining
@@ -1072,7 +1072,7 @@ class chunked_parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -1474,7 +1474,7 @@ class chunked_parquet_writer_options_builder {
    * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
    * the disabling of compression for columns that would otherwise be compressed.
    *
-   * The default value is dictionary_policy::ADAPTIVE.
+   * The default value is dictionary_policy::ALWAYS.
    *
    * @param val policy for dictionary use
    * @return this for chaining
