@@ -109,7 +109,7 @@ jobs:
       build_type: pull-request
       package-name: dask_cudf
       package-dir: python/dask_cudf
-      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
+      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
