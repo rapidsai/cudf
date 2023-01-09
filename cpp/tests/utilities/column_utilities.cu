@@ -35,8 +35,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/detail/column_utilities.hpp>
 
-#include <jit/type.hpp>
-
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
@@ -935,13 +933,13 @@ std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
+    return cudf::type_to_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
   }
 
   if (view.type().id() == cudf::type_id::STRUCT) {
     std::ostringstream out;
 
-    out << cudf::jit::get_type_name(view.type()) + "<";
+    out << cudf::type_to_name(view.type()) + "<";
     std::transform(view.child_begin(),
                    view.child_end(),
                    std::ostream_iterator<std::string>(out, ","),
@@ -950,7 +948,7 @@ std::string get_nested_type_str(cudf::column_view const& view)
     return out.str();
   }
 
-  return cudf::jit::get_type_name(view.type());
+  return cudf::type_to_name(view.type());
 }
 
 template <typename NestedColumnView>
