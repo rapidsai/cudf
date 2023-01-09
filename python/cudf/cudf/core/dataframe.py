@@ -3802,6 +3802,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 for codes in result_columns
             ]
+        elif isinstance(
+            source_dtype,
+            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
+        ):
+            result_columns = [
+                result_column._with_type_metadata(source_dtype)
+                for result_column in result_columns
+            ]
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
