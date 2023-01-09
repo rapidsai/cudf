@@ -45,9 +45,9 @@ dtype: int64
 2    3
 3    4
 dtype: int64
->>> series.data.ptr
+>>> series.data._ptr
 140102175031296
->>> copied_series.data.ptr
+>>> copied_series.data._ptr
 140102175031296
 ```
 
@@ -82,8 +82,8 @@ different device objects:
 
 ````{Warning}
 When ``copy_on_write`` is enabled, all of the shallow copies are constructed with
-weak-references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
-or `series.data.__cuda_array_interface__` which will then take care of unlinking any existing weak-references that a column contains.
+weak references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
+or `series.data.__cuda_array_interface__` which will then take care of unlinking any existing weak references that a column contains.
 ````
 
 ## Notes

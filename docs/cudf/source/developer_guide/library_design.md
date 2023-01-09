@@ -343,11 +343,11 @@ someone accesses `__cuda_array_interface__` of `Column` or a `CopyOnWriteBuffer`
 `Column/Buffer._unlink_shared_buffers` which will ensure a true copy of underlying device data is made and
 unlinks itself from pointing to the original device memory. We also mark the `Column`/`CopyOnWriteBuffer` as
 `obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
-rather than a copy-on-write shallow copy with weak-references.
+rather than a copy-on-write shallow copy with weak references.
 
 
 Notes:
-1. Weak-references are implemented only for fixed-width data types as these are only column
+1. Weak references are implemented only for fixed-width data types as these are only column
 types that can be mutated in place.
 2. Deep copies of variable width data types return shallow-copies of the Columns, because these
 types don't support real in-place mutations to the data. We just mimic in such a way that it looks

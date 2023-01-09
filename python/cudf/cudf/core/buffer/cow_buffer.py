@@ -139,7 +139,7 @@ class CopyOnWriteBuffer(Buffer):
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        # Unlink if there are any weak-references.
+        # Unlink if there are any weak references.
         self._unlink_shared_buffers()
         # Mark the Buffer as ``zero_copied=True``,
         # which will prevent any copy-on-write
