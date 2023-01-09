@@ -6,7 +6,7 @@
 10min
 pandas-comparison
 data-types
-io
+io/index
 read-json
 missing-data
 groupby
