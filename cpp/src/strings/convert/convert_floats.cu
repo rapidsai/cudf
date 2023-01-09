@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -351,30 +351,35 @@ struct ftos_converter {
 };
 
 template <typename FloatType>
-struct float_to_string_size_fn {
-  column_device_view d_column;
+struct from_floats_fn {
+  column_device_view d_floats;
+  size_type* d_offsets;
+  char* d_chars;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ size_type compute_output_size(FloatType value)
   {
-    if (d_column.is_null(idx)) return 0;
-    FloatType value = d_column.element<FloatType>(idx);
     ftos_converter fts;
     return static_cast<size_type>(fts.compute_ftos_size(static_cast<double>(value)));
   }
-};
 
-template <typename FloatType>
-struct float_to_string_fn {
-  const column_device_view d_column;
-  const int32_t* d_offsets;
-  char* d_chars;
+  __device__ void float_to_string(size_type idx)
+  {
+    FloatType value = d_floats.element<FloatType>(idx);
+    ftos_converter fts;
+    fts.float_to_string(static_cast<double>(value), d_chars + d_offsets[idx]);
+  }
 
   __device__ void operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    FloatType value = d_column.element<FloatType>(idx);
-    ftos_converter fts;
-    fts.float_to_string(static_cast<double>(value), d_chars + d_offsets[idx]);
+    if (d_floats.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+    if (d_chars != nullptr) {
+      float_to_string(idx);
+    } else {
+      d_offsets[idx] = compute_output_size(d_floats.element<FloatType>(idx));
+    }
   }
 };
 
@@ -395,27 +400,13 @@ struct dispatch_from_floats_fn {
 
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
-    // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0), float_to_string_size_fn<FloatType>{d_column});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets    = offsets_view.template data<int32_t>();
 
-    // build chars column
-    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
-    auto chars_view   = chars_column->mutable_view();
-    auto d_chars      = chars_view.template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       float_to_string_fn<FloatType>{d_column, d_offsets, d_chars});
-    //
+    auto [offsets, chars] =
+      make_strings_children(from_floats_fn<FloatType>{d_column}, strings_count, stream, mr);
+
     return make_strings_column(strings_count,
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                floats.null_count(),
                                std::move(null_mask));
   }
