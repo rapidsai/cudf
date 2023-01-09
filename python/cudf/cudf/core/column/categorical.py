@@ -733,7 +733,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @categories.setter
     def categories(self, value):
-        self.dtype = CategoricalDtype(
+        self._dtype = CategoricalDtype(
             categories=value, ordered=self.dtype.ordered
         )
 
@@ -1273,6 +1273,14 @@ class CategoricalColumn(column.ColumnBase):
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out
+
+    def copy(self, deep: bool = True) -> CategoricalColumn:
+        result_col = super().copy(deep=deep)
+        if deep:
+            result_col.categories = libcudf.copying.copy_column(
+                self.dtype._categories
+            )
+        return result_col
 
     @cached_property
     def memory_usage(self) -> int:

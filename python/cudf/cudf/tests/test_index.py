@@ -392,6 +392,7 @@ def test_index_copy_category(name, dtype, deep=True):
     with pytest.warns(FutureWarning):
         cidx_copy = cidx.copy(name=name, deep=deep, dtype=dtype)
 
+    assert_column_memory_ne(cidx._values, cidx_copy._values)
     assert_eq(pidx_copy, cidx_copy)
 
 
