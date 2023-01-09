@@ -70,7 +70,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -82,7 +81,6 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@main
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
