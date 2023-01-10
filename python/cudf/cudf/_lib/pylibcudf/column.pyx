@@ -73,7 +73,7 @@ cdef class Column:
 # Unfortunately we can't cpdef a staticmethod. Defining an external factory
 # separately is the best workaround for now.
 # https://github.com/cython/cython/issues/3327
-cpdef Column column_from_ColumnView(ColumnView cv):
+cpdef Column Column_from_ColumnView(ColumnView cv):
     cdef Column ret = Column.__new__(Column)
     cdef unique_ptr[column] c_result
     with nogil:

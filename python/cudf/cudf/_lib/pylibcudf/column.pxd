@@ -33,4 +33,4 @@ cdef class Column:
     cdef int _raise_if_released(self) except 1
 
 
-cpdef Column column_from_ColumnView(ColumnView cv)
+cpdef Column Column_from_ColumnView(ColumnView cv)

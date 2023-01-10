@@ -5,7 +5,7 @@
 # https://github.com/cython/cython/issues/3442
 # that is fixed in Cython 3
 # https://github.com/cython/cython/pull/4552
-from .pylibcudf.column cimport Column, ColumnContents, column_from_ColumnView
+from .pylibcudf.column cimport Column, Column_from_ColumnView, ColumnContents
 from .pylibcudf.column_view cimport ColumnView
 from .pylibcudf.gpumemoryview cimport gpumemoryview
 from .pylibcudf.types cimport DataType
@@ -15,6 +15,6 @@ __all__ = [
     "ColumnContents",
     "ColumnView",
     "DataType",
-    "column_from_ColumnView",
+    "Column_from_ColumnView",
     "gpumemoryview",
 ]
