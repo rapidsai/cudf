@@ -1,5 +1,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
+from cpython cimport PyErr_SetString
 from cython.operator cimport dereference
 from libcpp cimport bool as cbool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -15,6 +16,11 @@ from .column_view cimport ColumnView
 
 cdef class Column:
     """Wrapper around column."""
+    # Initialize released in __cinit__, not __init__, so that it is initialized
+    # unconditionally for every object.
+    def __cinit__(self):
+        self.released = False
+
     # Unfortunately we can't cpdef a staticmethod. Defining both methods
     # separately is the best workaround for now.
     # https://github.com/cython/cython/issues/3327
@@ -31,8 +37,9 @@ cdef class Column:
         ret.c_obj.swap(c_result)
         return ret
 
-    cdef column * get(self) nogil:
+    cdef column * get(self):
         """Get the underlying column object."""
+        self._raise_if_released()
         return self.c_obj.get()
 
     cpdef size_type size(self):
@@ -47,15 +54,18 @@ cdef class Column:
     cpdef ColumnView view(self):
         return ColumnView.from_column_view(self.get().view())
 
-    cpdef ColumnContents release(self):
-        """Release the data in this column.
+    cdef int _raise_if_released(self) except 1:
+        if self.released:
+            PyErr_SetString(
+                ValueError,
+                "Attempted to perform operations on a Column after its "
+                "contents have been released."
+            )
+            return 1
+        return 0
 
-        After this method is called, any usage of this object will lead to seg
-        faults.
-        """
-        # TODO: Consider implementing a safety flag to prevent performing any
-        # operations on a released Column. Using a c bool flag it should be
-        # basically free (although repetitive) to do.
+    cpdef ColumnContents release(self):
+        """Release the data in this column."""
         cdef column_contents contents = move(self.get().release())
         cdef ColumnContents ret = ColumnContents()
         ret.data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
@@ -72,4 +82,5 @@ cdef class Column:
             child.c_obj.swap(contents.children[i])
             ret.children.append(child)
 
+        self.released = True
         return ret

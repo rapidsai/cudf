@@ -19,8 +19,9 @@ cdef class ColumnContents:
 
 
 cdef class Column:
+    cdef cbool released
     cdef unique_ptr[column] c_obj
-    cdef column * get(self) nogil
+    cdef column * get(self)
     cpdef size_type size(self)
     cpdef size_type null_count(self)
     cpdef cbool has_nulls(self)
@@ -29,6 +30,7 @@ cdef class Column:
     # cpdef column_view view()
     # cpdef mutable_column_view mutable_view()
     cpdef ColumnContents release(self)
+    cdef int _raise_if_released(self) except 1
 
     @staticmethod
     cdef Column c_from_ColumnView(ColumnView cv)
