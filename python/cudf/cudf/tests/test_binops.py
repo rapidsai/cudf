@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -319,38 +319,37 @@ def test_series_compare_nulls(cmpop, dtypes):
     got = cmpop(lser, rser)
     utils.assert_eq(expect, got)
 
+
 def string_series_compare_test_cases():
     cases = []
-    pd_sr = pd.Series(["a", "b", None, "d", "e", None], dtype='string')
+    pd_sr = pd.Series(["a", "b", None, "d", "e", None], dtype="string")
     all_cmpop_cases = [
         (pd_sr, pd_sr),
-        (pd_sr, 'a'),
-        ('a', pd_sr),
+        (pd_sr, "a"),
+        ("a", pd_sr),
     ]
 
     for op in _cmpops:
         for case in all_cmpop_cases:
-            cases.append(
-                (*case, op)
-            )
-    
+            cases.append((*case, op))
+
     eq_neq_cases = (
         (pd_sr, 1),
         (1, pd_sr),
         (pd_sr, 1.5),
         (1.5, pd_sr),
         (pd_sr, True),
-        (True, pd_sr)
+        (True, pd_sr),
     )
     for case in eq_neq_cases:
-        cases += [
-            (*case, operator.eq),
-            (*case, operator.ne)
-        ]
+        cases += [(*case, operator.eq), (*case, operator.ne)]
 
     return cases
 
-@pytest.mark.parametrize('obj, cmp_obj, cmpop', string_series_compare_test_cases())
+
+@pytest.mark.parametrize(
+    "obj, cmp_obj, cmpop", string_series_compare_test_cases()
+)
 def test_string_series_compare(obj, cmpop, cmp_obj):
 
     g_obj = obj
@@ -366,6 +365,7 @@ def test_string_series_compare(obj, cmpop, cmp_obj):
         expected = cudf.from_pandas(expected)
 
     utils.assert_eq(expected, got)
+
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
