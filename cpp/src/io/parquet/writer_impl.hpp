@@ -218,7 +218,7 @@ class writer::impl {
   size_t max_page_size_bytes           = default_max_page_size_bytes;
   size_type max_page_size_rows         = default_max_page_size_rows;
   statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
-  dictionary_policy dict_policy_       = dictionary_policy::ADAPTIVE;
+  dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
   size_t max_dictionary_size_          = default_max_dictionary_size;
   size_type max_page_fragment_size_    = default_max_page_fragment_size;
   bool int96_timestamps                = false;
