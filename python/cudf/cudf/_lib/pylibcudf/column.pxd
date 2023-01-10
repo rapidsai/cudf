@@ -26,9 +26,6 @@ cdef class Column:
     cpdef size_type null_count(self)
     cpdef cbool has_nulls(self)
     cpdef ColumnView view(self)
-    # cpdef data_type type(self)
-    # cpdef column_view view()
-    # cpdef mutable_column_view mutable_view()
     cpdef ColumnContents release(self)
     cdef int _raise_if_released(self) except 1
 

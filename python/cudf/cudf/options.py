@@ -329,9 +329,10 @@ _register_option(
 
 _register_option(
     "_use_pylibcudf",
-    _env_get_bool("_CUDF_USE_PYLIBCUDF", False),
-    "If true, use pylibcudf as a backend for operations.",
-    _bool_validator,
+    _env_get_int("_CUDF_USE_PYLIBCUDF", 0),
+    "If 1, use pylibcudf in Python mode as a backend for operations. "
+    "If 2, use pylibcudf in Cython mode as a backend for operations.",
+    _make_contains_validator([0, 1, 2]),
 )
 
 class option_context(ContextDecorator):

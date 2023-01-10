@@ -83,10 +83,14 @@ def copy_column(Column input_column):
     cdef column_view input_column_view
     cdef unique_ptr[column] c_result
 
-    if cudf.get_option("_use_pylibcudf"):
+    if cudf.get_option("_use_pylibcudf") == 2:
         cv = input_column.to_ColumnView()
         c = pylibcudf.Column_from_ColumnView(cv)
         return Column.from_Column(c)
+    elif cudf.get_option("_use_pylibcudf") == 1:
+        cv_ = input_column.to_ColumnView()
+        c_ = pylibcudf.Column_from_ColumnView(cv_)
+        return Column.from_Column(c_)
     else:
         input_column_view = input_column.view()
         with nogil:
