@@ -18,6 +18,7 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
