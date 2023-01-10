@@ -5576,7 +5576,7 @@ class StringColumn(column.ColumnBase):
             and other.dtype == "object"
         ):
             return other
-        if isinstance(other, str):
+        if is_scalar(other):
             return cudf.Scalar(other)
         return NotImplemented
 
@@ -5614,11 +5614,13 @@ class StringColumn(column.ColumnBase):
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             if isinstance(other, cudf.Scalar) and other.dtype != "O":
                 if op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
-                    result = column.full(len(self), False, dtype="bool")
+                    val = False
                 elif op == "__ne__":
-                    result = column.full(len(self), True, dtype="bool")
-                result = result.set_mask(self.mask)
-                return result
+                    val = True
+                return column.full(len(self), val, dtype="bool").set_mask(
+                    self.mask
+                )
+
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
                     other = cast(
