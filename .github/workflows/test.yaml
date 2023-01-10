@@ -16,7 +16,7 @@ on:
 jobs:
   conda-cpp-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -24,7 +24,7 @@ jobs:
       sha: ${{ inputs.sha }}
   conda-python-cudf-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -34,7 +34,7 @@ jobs:
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -43,7 +43,7 @@ jobs:
       test_script: "ci/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -55,7 +55,7 @@ jobs:
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}

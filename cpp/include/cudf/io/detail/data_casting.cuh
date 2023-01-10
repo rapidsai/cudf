@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/types.hpp>
 
@@ -61,12 +63,9 @@ enum class data_casting_result { PARSING_SUCCESS, PARSED_TO_NULL, PARSING_FAILUR
 /**
  * @brief Providing additional information about the type casting result.
  */
-template <typename in_iterator_t, typename out_iterator_t>
 struct data_casting_result_info {
-  // One past the last input element that was parsed
-  in_iterator_t input_parsed_end;
-  // One past the last output element that was written
-  out_iterator_t output_processed_end;
+  // Number of bytes written to output
+  size_type bytes;
   // Whether parsing succeeded, item was parsed to null, or failed
   data_casting_result result;
 };
@@ -128,20 +127,15 @@ __device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
 }
 
 /**
- * @brief Writes the UTF-8 byte sequence to \p out_it and returns the iterator to one past the
- * last item that was written to \p out_it
+ * @brief Writes the UTF-8 byte sequence to \p out_it and returns the number of bytes written to
+ * \p out_it
  */
-template <typename utf8_char_t, typename out_it_t>
-__device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_it_t out_it)
+constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
 {
-  constexpr size_type MAX_UTF8_BYTES_PER_CODE_POINT = 4;
-  char char_bytes[MAX_UTF8_BYTES_PER_CODE_POINT];
-  auto const num_chars_written = strings::detail::from_char_utf8(utf8_chars, char_bytes);
-
-  for (size_type i = 0; i < MAX_UTF8_BYTES_PER_CODE_POINT; i++) {
-    if (i < num_chars_written) { *out_it++ = char_bytes[i]; }
-  }
-  return out_it;
+  auto const bytes = (out_it == nullptr) ? strings::detail::bytes_in_char_utf8(character)
+                                         : strings::detail::from_char_utf8(character, out_it);
+  if (out_it) out_it += bytes;
+  return bytes;
 }
 
 /**
@@ -150,47 +144,39 @@ __device__ __forceinline__ out_it_t write_utf8_char(utf8_char_t utf8_chars, out_
  *
  * @tparam in_iterator_t A bidirectional input iterator type whose value_type is convertible to
  * char
- * @tparam out_iterator_t A forward output iterator type
  * @param in_begin Iterator to the first item to process
  * @param in_end Iterator to one past the last item to process
- * @param out_it Iterator to the first item to write
+ * @param d_buffer Output character buffer to the first item to write
  * @param options Settings for controlling string processing behavior
- * @return A four-tuple of (in_it_end, out_it_end, set_null, is_invalid), where in_it_end is an
- * iterator to one past the last character from the input that was processed, out_it_end is an
- * iterator to one past the last character that was written, set_null is true if a null literal
- * was read or a parsing error occurred, and is_invalid is true if a parsing error was
- * encountered
+ * @return A struct of (num_bytes_written, parsing_success_result), where num_bytes_written is
+ * the number of bytes written to d_buffer, parsing_success_result is enum value indicating whether
+ * parsing succeeded, item was parsed to null, or failed.
  */
-template <typename in_iterator_t, typename out_iterator_t>
-__device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_t> process_string(
-  in_iterator_t in_begin,
-  in_iterator_t in_end,
-  out_iterator_t out_it,
-  cudf::io::parse_options_view const& options)
+template <typename in_iterator_t>
+__device__ __forceinline__ data_casting_result_info
+process_string(in_iterator_t in_begin,
+               in_iterator_t in_end,
+               char* d_buffer,
+               cudf::io::parse_options_view const& options)
 {
-  auto const num_in_chars = thrust::distance(in_begin, in_end);
-
-  // Check if the value corresponds to the null literal
-  auto const is_null_literal =
-    serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
-  if (is_null_literal) { return {in_begin, out_it, data_casting_result::PARSED_TO_NULL}; }
-
-  // Whether in the original JSON this was a string value enclosed in quotes
-  // ({"a":"foo"} vs. {"a":1.23})
-  char const quote_char     = '"';
-  char const backslash_char = '\\';
-
+  int32_t bytes           = 0;
+  const auto num_in_chars = thrust::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
-  bool const is_string_value =
-    num_in_chars >= 2LL && (*in_begin == quote_char) && (*thrust::prev(in_end) == quote_char);
+  bool const is_string_value = num_in_chars >= 2LL && (*in_begin == options.quotechar) &&
+                               (*thrust::prev(in_end) == options.quotechar);
 
   // Copy literal/numeric value
   if (not is_string_value) {
     while (in_begin != in_end) {
-      *out_it++ = *in_begin++;
+      if (d_buffer) *d_buffer++ = *in_begin;
+      ++in_begin;
+      ++bytes;
     }
-    return {in_begin, out_it, data_casting_result::PARSING_SUCCESS};
+    return {bytes, data_casting_result::PARSING_SUCCESS};
   }
+  // Whether in the original JSON this was a string value enclosed in quotes
+  // ({"a":"foo"} vs. {"a":1.23})
+  char const backslash_char = '\\';
 
   // Escape-flag, set after encountering a backslash character
   bool escape = false;
@@ -206,7 +192,10 @@ __device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_
     // Copy single character to output
     if (!escape) {
       escape = (*in_begin == backslash_char);
-      if (!escape) { *out_it++ = *in_begin; }
+      if (!escape) {
+        if (d_buffer) *d_buffer++ = *in_begin;
+        ++bytes;
+      }
       ++in_begin;
       continue;
     }
@@ -219,13 +208,12 @@ __device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_
     auto escaped_char = get_escape_char(*in_begin);
 
     // We escaped an invalid escape character -> "fail"/null for this item
-    if (escaped_char == NON_ESCAPE_CHAR) {
-      return {in_begin, out_it, data_casting_result::PARSING_FAILURE};
-    }
+    if (escaped_char == NON_ESCAPE_CHAR) { return {bytes, data_casting_result::PARSING_FAILURE}; }
 
     // Regular, single-character escape
     if (escaped_char != UNICODE_SEQ) {
-      *out_it++ = escaped_char;
+      if (d_buffer) *d_buffer++ = escaped_char;
+      ++bytes;
       ++in_begin;
       continue;
     }
@@ -238,13 +226,13 @@ __device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_
     // Make sure that there's at least 4 characters left from the
     // input, which are expected to be hex digits
     if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
-      return {in_begin, out_it, data_casting_result::PARSING_FAILURE};
+      return {bytes, data_casting_result::PARSING_FAILURE};
     }
 
     auto hex_val = parse_unicode_hex(in_begin);
 
     // Couldn't parse hex values from the four-character sequence -> "fail"/null for this item
-    if (hex_val < 0) { return {in_begin, out_it, data_casting_result::PARSING_FAILURE}; }
+    if (hex_val < 0) { return {bytes, data_casting_result::PARSING_FAILURE}; }
 
     // Skip over the four hex digits
     thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
@@ -269,21 +257,59 @@ __device__ __forceinline__ data_casting_result_info<in_iterator_t, out_iterator_
       uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
                                     (hex_low_val - UTF16_LOW_SURROGATE_BEGIN);
       auto utf8_chars = strings::detail::codepoint_to_utf8(unicode_code_point);
-      out_it          = write_utf8_char(utf8_chars, out_it);
+      bytes += write_utf8_char(utf8_chars, d_buffer);
     }
 
     // Just a single \uXXXX sequence
     else {
       auto utf8_chars = strings::detail::codepoint_to_utf8(hex_val);
-      out_it          = write_utf8_char(utf8_chars, out_it);
+      bytes += write_utf8_char(utf8_chars, d_buffer);
     }
   }
 
   // The last character of the input is a backslash -> "fail"/null for this item
-  if (escape) { return {in_begin, out_it, data_casting_result::PARSING_FAILURE}; }
-  return {in_begin, out_it, data_casting_result::PARSING_SUCCESS};
+  if (escape) { return {bytes, data_casting_result::PARSING_FAILURE}; }
+  return {bytes, data_casting_result::PARSING_SUCCESS};
 }
 
+template <typename str_tuple_it>
+struct string_parse {
+  str_tuple_it str_tuples;
+  bitmask_type* null_mask;
+  cudf::io::parse_options_view const options;
+  size_type* d_offsets{};
+  char* d_chars{};
+
+  __device__ void operator()(size_type idx)
+  {
+    if (not bit_is_set(null_mask, idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+    auto const in_begin     = str_tuples[idx].first;
+    auto const in_end       = in_begin + str_tuples[idx].second;
+    auto const num_in_chars = str_tuples[idx].second;
+
+    // Check if the value corresponds to the null literal
+    auto const is_null_literal =
+      (!d_chars) &&
+      serialized_trie_contains(options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
+    if (is_null_literal) {
+      clear_bit(null_mask, idx);
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
+    }
+
+    char* d_buffer        = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto str_process_info = process_string(in_begin, in_end, d_buffer, options);
+    if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
+      clear_bit(null_mask, idx);
+      if (!d_chars) d_offsets[idx] = 0;
+    } else {
+      if (!d_chars) d_offsets[idx] = str_process_info.bytes;
+    }
+  }
+};
 /**
  * @brief Parses the data from an iterator of string views, casting it to the given target data type
  *
@@ -307,67 +333,18 @@ std::unique_ptr<column> parse_data(str_tuple_it str_tuples,
 {
   CUDF_FUNC_RANGE();
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    rmm::device_uvector<size_type> offsets(col_size + 1, stream);
+    // this utility calls the functor to build the offsets and chars columns
+    auto [offsets, chars] = cudf::strings::detail::make_strings_children(
+      string_parse<decltype(str_tuples)>{
+        str_tuples, static_cast<bitmask_type*>(null_mask.data()), options},
+      col_size,
+      stream,
+      mr);
 
-    // Compute string sizes of the post-processed strings
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       col_size,
-                       [str_tuples,
-                        sizes     = device_span<size_type>{offsets},
-                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
-                        options] __device__(size_type row) {
-                         // String at current offset is null, e.g., due to omissions
-                         // ([{"b":"foo"},{"a":"foo"}])
-                         if (not bit_is_set(null_mask, row)) {
-                           sizes[row] = 0;
-                           return;
-                         }
-
-                         auto const in_begin = str_tuples[row].first;
-                         auto const in_end   = in_begin + str_tuples[row].second;
-                         auto out_it         = cub::DiscardOutputIterator<>{};
-                         auto const str_process_info =
-                           process_string(in_begin, in_end, out_it, options);
-
-                         // The total number of characters that we're supposed to copy out
-                         auto const num_chars_copied_out =
-                           thrust::distance(out_it, str_process_info.output_processed_end);
-
-                         // If, during parsing, an error occurred or we parsed the null literal ->
-                         // set to null
-                         if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
-                           sizes[row] = 0;
-                           clear_bit(null_mask, row);
-                         } else {
-                           sizes[row] = num_chars_copied_out;
-                         }
-                       });
-
-    // Compute offsets for the post-processed strings
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
-
-    // Write out post-processed strings (stripping off quotes, replacing escape sequences)
-    rmm::device_uvector<char> chars(offsets.back_element(stream), stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       col_size,
-                       [str_tuples,
-                        chars     = device_span<char>{chars},
-                        offsets   = device_span<size_type>{offsets},
-                        null_mask = static_cast<bitmask_type*>(null_mask.data()),
-                        options] __device__(size_type row) {
-                         if (not bit_is_set(null_mask, row)) { return; }
-
-                         auto const in_begin = str_tuples[row].first;
-                         auto const in_end   = in_begin + str_tuples[row].second;
-                         auto out_it         = &chars[offsets[row]];
-                         process_string(in_begin, in_end, out_it, options);
-                       });
-
+    auto null_count =
+      cudf::detail::null_count(static_cast<bitmask_type*>(null_mask.data()), 0, col_size, stream);
     return make_strings_column(
-      col_size, std::move(offsets), std::move(chars), std::move(null_mask));
+      col_size, std::move(offsets), std::move(chars), null_count, std::move(null_mask));
   }
 
   auto out_col = make_fixed_width_column(
