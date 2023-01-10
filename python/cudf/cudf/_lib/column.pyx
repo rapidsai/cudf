@@ -603,18 +603,10 @@ cdef class Column:
         if null_count > 0:
             mask = as_buffer(contents.null_mask, exposed=data_ptr_exposed)
 
-        # TODO: Support for children
-        # cdef vector[unique_ptr[column]] c_children = move(contents.children)
-        # children = []
-        # if c_children.size() != 0:
-        #     # Because of a bug in Cython, we cannot set the optional
-        #     # `data_ptr_exposed` argument within a comprehension.
-        #     for i in range(c_children.size()):
-        #         child = Column.from_unique_ptr(
-        #             move(c_children[i]),
-        #             data_ptr_exposed=data_ptr_exposed
-        #         )
-        #         children.append(child)
+        children = []
+        cdef pylibcudf.Column child
+        for child in contents.children:
+            children.append(Column.from_Column(child))
 
         return cudf.core.column.build_column(
             data,
@@ -622,7 +614,7 @@ cdef class Column:
             mask=mask,
             size=size,
             null_count=null_count,
-            # children=tuple(children)
+            children=tuple(children)
         )
 
     @staticmethod

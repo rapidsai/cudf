@@ -81,6 +81,22 @@ cdef class Column:
                 contents.null_mask
             )
         )
-        # TODO: Implement for children (currently they are discarded).
-        # cdef
+
+        cdef int i
+        children = []
+
+        for i in range(contents.children.size()):
+            # TODO: Maybe need to worry about spilling here? Not in the
+            # long run when pylibcudf is truly separate from cuDF, but
+            # during the interim phase it might be necessary.
+            child = Column()
+            child.c_obj.swap(contents.children[i])
+            # child = Column.from_unique_ptr(
+            #     move(c_children[i]),
+            #     data_ptr_exposed=data_ptr_exposed
+            # )
+            children.append(child)
+
+        ret.children = children
+
         return ret
