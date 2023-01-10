@@ -266,7 +266,7 @@ if buildAll || hasArg libcudf || hasArg cudfjar; then
             echo "Building for the GPU architecture(s) $CUDF_CMAKE_CUDA_ARCHITECTURES ..."
         fi
     else
-        CUDF_CMAKE_CUDA_ARCHITECTURES="ALL"
+        CUDF_CMAKE_CUDA_ARCHITECTURES="RAPIDS"
         echo "Building for *ALL* supported GPU architectures..."
     fi
 fi
