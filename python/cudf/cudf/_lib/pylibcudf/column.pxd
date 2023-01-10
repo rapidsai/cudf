@@ -29,3 +29,6 @@ cdef class Column:
     # cpdef column_view view()
     # cpdef mutable_column_view mutable_view()
     cpdef ColumnContents release(self)
+
+    @staticmethod
+    cdef Column c_from_ColumnView(ColumnView cv)

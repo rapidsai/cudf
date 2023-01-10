@@ -13,38 +13,21 @@ from cudf._lib.cpp.types cimport size_type
 from .column_view cimport ColumnView
 
 
-cdef class ColumnContents:
-    # TODO: Currently treating this like a C POD struct, should consider giving
-    # it more real structure.
-    pass
-
-
 cdef class Column:
     """Wrapper around column."""
-
-    # TODO: Would be nice to have this cpdefed, but static cpdef methods are
-    # not yet supported. Best option for now may be to have a separate cdef
-    # function that is called by the def function.
+    # Unfortunately we can't cpdef a staticmethod. Defining both methods
+    # separately is the best workaround for now.
+    # https://github.com/cython/cython/issues/3327
     @staticmethod
     def from_ColumnView(ColumnView cv):
-        """Deep copies a column view's data.
+        return Column.c_from_ColumnView(cv)
 
-        Parameters
-        ----------
-        cv : ColumnView
-            The column to be copied.
-
-        Returns
-        -------
-        Column
-            A deep copy of the input column.
-        """
-        ret = Column()
-
+    @staticmethod
+    cdef Column c_from_ColumnView(ColumnView cv):
+        cdef Column ret = Column.__new__(Column)
         cdef unique_ptr[column] c_result
         with nogil:
             c_result = move(make_unique[column](dereference(cv.get())))
-
         ret.c_obj.swap(c_result)
         return ret
 
@@ -77,26 +60,16 @@ cdef class Column:
         cdef ColumnContents ret = ColumnContents()
         ret.data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
         ret.null_mask = DeviceBuffer.c_from_unique_ptr(
-            move(
-                contents.null_mask
-            )
+            move(contents.null_mask)
         )
 
+        cdef Column child
         cdef int i
-        children = []
+        ret.children = []
 
         for i in range(contents.children.size()):
-            # TODO: Maybe need to worry about spilling here? Not in the
-            # long run when pylibcudf is truly separate from cuDF, but
-            # during the interim phase it might be necessary.
             child = Column()
             child.c_obj.swap(contents.children[i])
-            # child = Column.from_unique_ptr(
-            #     move(c_children[i]),
-            #     data_ptr_exposed=data_ptr_exposed
-            # )
-            children.append(child)
-
-        ret.children = children
+            ret.children.append(child)
 
         return ret

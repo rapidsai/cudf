@@ -570,16 +570,15 @@ cdef class Column:
         as well.
         """
         cdef pylibcudf.ColumnView view = col.view()
-        # cdef libcudf_types.type_id tid = view.type().id()
-        # cdef libcudf_types.data_type c_dtype
         cdef size_type size = view.size()
         cdef size_type null_count = view.null_count()
-        # cdef libcudf_types.mask_state mask_state
 
         # TODO: Not sure why the below special cases exist, and this definitely
         # doesn't seem like the best way to handle it in any case. Will revisit
         # later.
-
+        # cdef libcudf_types.type_id tid = view.type().id()
+        # cdef libcudf_types.mask_state mask_state
+        # cdef libcudf_types.data_type c_dtype
         # if tid == libcudf_types.type_id.TIMESTAMP_DAYS:
         #     c_dtype = libcudf_types.data_type(
         #         libcudf_types.type_id.TIMESTAMP_SECONDS
@@ -592,9 +591,6 @@ cdef class Column:
         #     with nogil:
         #         c_col = move(make_numeric_column(c_dtype, size, mask_state))
 
-        # size = c_col.get()[0].size()
-        dtype = dtype_from_column_view(dereference(view.c_obj.get()))
-
         cdef pylibcudf.ColumnContents contents = col.release()
 
         data = as_buffer(contents.data, exposed=data_ptr_exposed)
@@ -603,14 +599,16 @@ cdef class Column:
         if null_count > 0:
             mask = as_buffer(contents.null_mask, exposed=data_ptr_exposed)
 
+        # Because of a bug in Cython, we cannot set the optional
+        # `data_ptr_exposed` argument within a comprehension.
         children = []
         cdef pylibcudf.Column child
         for child in contents.children:
-            children.append(Column.from_Column(child))
+            children.append(Column.from_Column(child, data_ptr_exposed))
 
         return cudf.core.column.build_column(
             data,
-            dtype=dtype,
+            dtype=dtype_from_column_view(dereference(view.c_obj.get())),
             mask=mask,
             size=size,
             null_count=null_count,

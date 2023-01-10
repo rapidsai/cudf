@@ -16,7 +16,8 @@ cdef class ColumnView:
     # define a new gpumemoryview type to handle this. For that object it should
     # be possible to access all attributes via fast cdef functions (no Python
     # overhead for querying size etc).
-    # TODO: Not currently supporting SpillableBuffers.
+    # TODO: Not currently supporting SpillableBuffers. In order to do so we
+    # will need to check the buffer types and access the pointer accordingly.
     # TODO: Need a way to map the data buffer size to the number of
     # elements. For fixed width types a mapping could be made based on the
     # number of bytes they occupy, but not for nested types. Not sure how
@@ -76,8 +77,6 @@ cdef class ColumnView:
         """Get the underlying column_view object."""
         return self.c_obj.get()
 
-    # TODO: Unclear if this needs to be exposed in the Python API or if Cython
-    # is sufficient.
     @staticmethod
     cdef from_column_view(column_view cv):
         cdef ColumnView ret = ColumnView.__new__(ColumnView)
