@@ -168,7 +168,7 @@ latex_documents = [
         master_doc,
         "cudf.tex",
         "cudf Documentation",
-        "Continuum Analytics",
+        "NVIDIA Corporation",
         "manual",
     )
 ]
