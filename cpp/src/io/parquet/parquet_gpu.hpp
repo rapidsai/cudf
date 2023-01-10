@@ -168,7 +168,7 @@ struct PageInfo {
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
-  // mappings between the two.  the length of the array, nesting_info_size is
+  // mappings between the two. the length of the array, nesting_info_size is
   // max(num_output_nesting_levels, max_definition_levels + 1)
   int num_output_nesting_levels;
   int nesting_info_size;

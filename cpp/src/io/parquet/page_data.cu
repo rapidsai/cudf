@@ -104,11 +104,11 @@ struct page_state_s {
  */
 inline __device__ bool is_bounds_page(page_state_s* const s, size_t min_row, size_t num_rows)
 {
-  size_t const page_min_row = s->col.start_row + s->page.chunk_row;
-  size_t const page_max_row = page_min_row + s->page.num_rows;
-  size_t const max_row      = min_row + num_rows;
-  return ((page_min_row <= min_row && page_max_row >= min_row) ||
-          (page_min_row <= max_row && page_max_row >= max_row));
+  size_t const page_begin = s->col.start_row + s->page.chunk_row;
+  size_t const page_end   = page_begin + s->page.num_rows;
+  size_t const begin      = min_row;
+  size_t const end        = min_row + num_rows;
+  return ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end));
 }
 
 /**
@@ -1692,7 +1692,9 @@ __global__ void __launch_bounds__(block_size)
     while (d < s->page.num_output_nesting_levels) {
       auto const i = d + t;
       if (i < s->page.num_output_nesting_levels) {
-        // if we're not a bounding page, we're either fully within the readable region or not
+        // if we are not a bounding page (as checked above) then we are either
+        // returning 0 rows from the page (completely outside the bounds) or all
+        // rows in the page (completely within the bounds)
         pp->nesting[i].batch_size = s->num_rows == 0 ? 0 : pp->nesting[i].size;
       }
       d += blockDim.x;
