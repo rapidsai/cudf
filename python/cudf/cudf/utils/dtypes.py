@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -571,6 +571,21 @@ def find_common_type(dtypes):
                 ]
             )
         else:
+            return cudf.dtype("O")
+    if any(
+        cudf.api.types.is_list_dtype(dtype)
+        or cudf.api.types.is_struct_dtype(dtype)
+        for dtype in dtypes
+    ):
+        if len(dtypes) == 1:
+            return dtypes[0]
+        else:
+            # TODO: As list & struct dtypes allow casting
+            # to identical types, improve this logic of returning a
+            # common dtype, for example:
+            # ListDtype(int64) & ListDtype(int32) common
+            # dtype could be ListDtype(int64). Same holds
+            # for StructDtype too.
             return cudf.dtype("O")
 
     # Corner case 1:
