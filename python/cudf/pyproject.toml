@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 [build-system]
 
@@ -10,6 +10,7 @@ requires = [
     "cmake>=3.23.1,!=3.25.0",
     "ninja",
     "numpy",
+    # Hard pin the patch version used during the build.
     "pyarrow==10.0.1",
     "protoc-wheel",
     "versioneer",
