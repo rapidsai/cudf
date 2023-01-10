@@ -480,7 +480,14 @@ cdef class Column:
 
         # cdef libcudf_types.size_type c_null_count = null_count
 
-        return pylibcudf.ColumnView(dtype, self.size, data, mask, children)
+        return pylibcudf.ColumnView(
+            dtype,
+            self.size,
+            data,
+            mask,
+            self.offset,
+            children,
+        )
 
     @staticmethod
     cdef Column from_unique_ptr(

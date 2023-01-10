@@ -28,7 +28,7 @@ cdef class ColumnView:
         self, DataType dtype, size_type size, gpumemoryview data_buf,
         # TODO: Not sure what the best input is for children, for now just
         # using a List[ColumnView]
-        gpumemoryview mask_buf, object children
+        gpumemoryview mask_buf, size_type offset, object children
     ):
         # TODO: Investigate cases where the data_buf is None. I'm not sure that
         # this is a real use case that we should support. EDIT: It looks like
@@ -49,8 +49,6 @@ cdef class ColumnView:
         # alternative would be accepting the null count as one of the
         # arguments.
         cdef size_type null_count = UNKNOWN_NULL_COUNT
-        # TODO: offset is not yet supported
-        cdef size_type offset = 0
 
         cdef vector[column_view] c_children
         cdef ColumnView child
