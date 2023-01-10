@@ -567,10 +567,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto make_validity =
-    [stream](device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
+  auto validity_size_check = [](device_json_column& json_col) {
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
+  };
+  auto make_validity = [stream, validity_size_check](
+                         device_json_column& json_col) -> std::pair<rmm::device_buffer, size_type> {
+    validity_size_check(json_col);
     auto null_count =
       cudf::detail::null_count(json_col.validity.data(), 0, json_col.num_rows, stream);
     // full null_mask is always required for parse_data
@@ -626,11 +629,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         target_type = cudf::io::detail::infer_data_type(
           options.json_view(), d_input, string_ranges_it, col_size, stream);
       }
+      validity_size_check(json_col);
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
-                                                  make_validity(json_col).first,
+                                                  json_col.validity.release(),
                                                   options.view(),
                                                   stream,
                                                   mr);
