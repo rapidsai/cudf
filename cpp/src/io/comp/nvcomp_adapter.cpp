@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #include "nvcomp_adapter.hpp"
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <io/utilities/config_utils.hpp>
 
@@ -257,8 +256,6 @@ size_t compress_max_output_chunk_size(compression_type compression,
   return max_comp_chunk_size;
 }
 
-namespace {
-
 // Dispatcher for nvcompBatched<format>CompressAsync
 static void batched_compress_async(compression_type compression,
                                    const void* const* device_uncompressed_ptrs,
@@ -324,41 +321,10 @@ static void batched_compress_async(compression_type compression,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
 }
 
-constexpr bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
+bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 {
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
-
-// since some compressors have extreme temp memory requirements, scale back the number
-// of chunks to process until the request for temp memory succeeds.
-std::pair<rmm::device_buffer, size_t> compress_temp_buffer(compression_type compression,
-                                                           size_t num_chunks,
-                                                           size_t max_uncomp_chunk_size,
-                                                           rmm::cuda_stream_view stream)
-{
-  // TODO: c++-20 adds constexpr sqrt2 in <numbers>
-  const double scale_factor = std::sqrt(2.0);
-  auto scaled_num_chunks    = num_chunks;
-  double scale              = 1.0;
-  while (scaled_num_chunks > 0) {
-    try {
-      auto const temp_size =
-        batched_compress_temp_size(compression, scaled_num_chunks, max_uncomp_chunk_size);
-      rmm::device_buffer buf(temp_size, stream);
-      return std::pair(std::move(buf), scaled_num_chunks);
-    } catch (rmm::bad_alloc& ba) {
-      // don't loop forever...if scaled_num_chunks is already 1, the following divide will
-      // also yield 1
-      if (scaled_num_chunks == 1) { throw ba; }
-      scale *= scale_factor;
-      scaled_num_chunks = (num_chunks + scale) / scale;
-    }
-  }
-  // unreachable, but the following line is needed by the compiler
-  CUDF_FAIL("Cannot allocate temp buffer for compression");
-}
-
-}  // namespace
 
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
@@ -366,30 +332,29 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream)
 {
-  auto nvcomp_args                 = create_batched_nvcomp_args(inputs, outputs, stream);
+  auto const num_chunks = inputs.size();
+
+  auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
+
   auto const max_uncomp_chunk_size = skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
-  auto [scratch, num_chunks] =
-    compress_temp_buffer(compression, inputs.size(), max_uncomp_chunk_size, stream);
+  auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
+  rmm::device_buffer scratch(temp_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
-  rmm::device_uvector<size_t> actual_compressed_data_sizes(inputs.size(), stream);
 
-  size_t chunks_processed = 0;
-  while (chunks_processed < inputs.size()) {
-    auto const num_this_pass = std::min(num_chunks, inputs.size() - chunks_processed);
-    batched_compress_async(compression,
-                           nvcomp_args.input_data_ptrs.data() + chunks_processed,
-                           nvcomp_args.input_data_sizes.data() + chunks_processed,
-                           max_uncomp_chunk_size,
-                           num_this_pass,
-                           scratch.data(),
-                           scratch.size(),
-                           nvcomp_args.output_data_ptrs.data() + chunks_processed,
-                           actual_compressed_data_sizes.data() + chunks_processed,
-                           stream.value());
-    chunks_processed += num_chunks;
-  }
+  rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
+
+  batched_compress_async(compression,
+                         nvcomp_args.input_data_ptrs.data(),
+                         nvcomp_args.input_data_sizes.data(),
+                         max_uncomp_chunk_size,
+                         num_chunks,
+                         scratch.data(),
+                         scratch.size(),
+                         nvcomp_args.output_data_ptrs.data(),
+                         actual_compressed_data_sizes.data(),
+                         stream.value());
 
   update_compression_results(actual_compressed_data_sizes, results, stream);
 }

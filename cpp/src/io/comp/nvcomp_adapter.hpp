@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,8 +133,6 @@ void batched_decompress(compression_type compression,
 
 /**
  * @brief Device batch compression of given type.
- *
- * @throws rmm::bad_alloc if temporary space for compression cannot be allocated
  *
  * @param[in] compression Compression type
  * @param[in] inputs List of input buffers
