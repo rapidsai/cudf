@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -859,7 +859,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
         ):
             return df[row_tuple]
-        if isinstance(row_tuple, slice):
+        if isinstance(row_tuple, str):
+            row_tuple = (row_tuple,)
+        elif isinstance(row_tuple, slice):
             if row_tuple.start is None:
                 row_tuple = slice(self[0], row_tuple.stop, row_tuple.step)
             if row_tuple.stop is None:
