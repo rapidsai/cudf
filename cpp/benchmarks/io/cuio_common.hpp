@@ -80,7 +80,7 @@ class cuio_source_sink_pair {
 
   io_type const type;
   std::vector<char> h_buffer;
-  rmm::device_uvector<char> d_buffer;
+  rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
   bytes_written_only_sink void_sink;
 };

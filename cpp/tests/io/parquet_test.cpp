@@ -1122,8 +1122,8 @@ TEST_F(ParquetWriterTest, BufferSource)
       cudf::host_span<uint8_t const>{reinterpret_cast<uint8_t const*>(out_buffer.data()),
                                      out_buffer.size()},
       cudf::get_default_stream());
-    auto const d_buffer = cudf::io::device_buffer(reinterpret_cast<uint8_t const*>(d_input.data()),
-                                                  static_cast<std::size_t>(d_input.size()));
+    auto const d_buffer = cudf::device_span<std::byte const>(
+      reinterpret_cast<std::byte const*>(d_input.data()), d_input.size());
     cudf::io::parquet_reader_options in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info(d_buffer));
     const auto result = cudf::io::read_parquet(in_opts);

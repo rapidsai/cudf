@@ -204,22 +204,24 @@ class direct_read_source : public file_source {
  */
 class device_buffer_source final : public datasource {
  public:
-  explicit device_buffer_source(device_buffer const& d_buffer) : _d_buffer{d_buffer} {}
+  explicit device_buffer_source(cudf::device_span<std::byte const> d_buffer) : _d_buffer{d_buffer}
+  {
+  }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count = std::min(size, this->size() - offset);
-    CUDF_CUDA_TRY(cudaMemcpy(dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToHost));
+    CUDF_CUDA_TRY(cudaMemcpy(dst, _d_buffer.data() + offset, count, cudaMemcpyDeviceToHost));
     return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     auto const count = std::min(size, this->size() - offset);
-    std::vector<uint8_t> h_data(count);
+    std::vector<std::byte> h_data(count);
     CUDF_CUDA_TRY(
-      cudaMemcpy(h_data.data(), _d_buffer._data + offset, count, cudaMemcpyDeviceToHost));
-    return std::make_unique<owning_buffer<std::vector<uint8_t>>>(std::move(h_data));
+      cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDeviceToHost));
+    return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
   }
 
   [[nodiscard]] bool supports_device_read() const override { return true; }
@@ -231,7 +233,7 @@ class device_buffer_source final : public datasource {
   {
     auto const count = std::min(size, this->size() - offset);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      dst, _d_buffer._data + offset, count, cudaMemcpyDeviceToDevice, stream.value()));
+      dst, _d_buffer.data() + offset, count, cudaMemcpyDeviceToDevice, stream.value()));
     return std::async(std::launch::async, [count] { return count; });
   }
 
@@ -247,14 +249,15 @@ class device_buffer_source final : public datasource {
                                       size_t size,
                                       rmm::cuda_stream_view stream) override
   {
-    return std::make_unique<non_owning_buffer>(const_cast<uint8_t*>(_d_buffer._data) + offset,
-                                               size);
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t*>(const_cast<std::byte*>(_d_buffer.data() + offset)), size);
   }
 
-  [[nodiscard]] size_t size() const override { return _d_buffer._size; }
+  [[nodiscard]] size_t size() const override { return _d_buffer.size(); }
 
  private:
-  device_buffer _d_buffer;  ///< A non-owning buffer to the existing device data
+  cudf::device_span<std::byte const>
+    _d_buffer;  ///< A non-owning buffer to the existing device data
 };
 
 /**
@@ -327,7 +330,7 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
     reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
 }
 
-std::unique_ptr<datasource> datasource::create(device_buffer const& buffer)
+std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
 {
   return std::make_unique<device_buffer_source>(buffer);
 }

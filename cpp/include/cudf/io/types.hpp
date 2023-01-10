@@ -172,25 +172,6 @@ struct host_buffer {
 };
 
 /**
- * @brief Non-owning view of a device memory buffer
- *
- * Used to describe buffer input in `source_info` objects.
- */
-// TODO: to be replaced by `device_span`?
-struct device_buffer {
-  uint8_t const* _data = nullptr;  //!< Pointer to the buffer
-  std::size_t _size    = 0;        //!< Size of the buffer
-  device_buffer()      = default;
-  /**
-   * @brief Construct a new device buffer object
-   *
-   * @param data Pointer to the buffer
-   * @param size Size of the buffer
-   */
-  device_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
-};
-
-/**
  * @brief Source information for read interfaces
  */
 struct source_info {
@@ -238,7 +219,7 @@ struct source_info {
    *
    * @param d_buffer Input buffer in device memory
    */
-  explicit source_info(device_buffer const& d_buffer)
+  explicit source_info(cudf::device_span<std::byte const> d_buffer)
     : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer}})
   {
   }
@@ -304,7 +285,7 @@ struct source_info {
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
   std::vector<host_buffer> _host_buffers;
-  std::vector<device_buffer> _device_buffers;
+  std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 

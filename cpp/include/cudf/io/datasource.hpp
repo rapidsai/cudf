@@ -18,6 +18,7 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -122,7 +123,7 @@ class datasource {
    * @param buffer Device buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(device_buffer const& buffer);
+  static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
