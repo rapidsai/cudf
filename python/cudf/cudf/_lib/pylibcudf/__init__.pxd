@@ -7,6 +7,13 @@
 # https://github.com/cython/cython/pull/4552
 from .pylibcudf.column cimport Column, ColumnContents
 from .pylibcudf.column_view cimport ColumnView
+from .pylibcudf.gpumemoryview cimport gpumemoryview
 from .pylibcudf.types cimport DataType
 
-__all__ = ["Column", "ColumnContents", "ColumnView", "DataType"]
+__all__ = [
+    "Column",
+    "ColumnContents",
+    "ColumnView",
+    "DataType",
+    "gpumemoryview",
+]
