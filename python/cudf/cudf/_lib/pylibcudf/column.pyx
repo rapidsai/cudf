@@ -21,22 +21,6 @@ cdef class Column:
     def __cinit__(self):
         self.released = False
 
-    # Unfortunately we can't cpdef a staticmethod. Defining both methods
-    # separately is the best workaround for now.
-    # https://github.com/cython/cython/issues/3327
-    @staticmethod
-    def from_ColumnView(ColumnView cv):
-        return Column.c_from_ColumnView(cv)
-
-    @staticmethod
-    cdef Column c_from_ColumnView(ColumnView cv):
-        cdef Column ret = Column.__new__(Column)
-        cdef unique_ptr[column] c_result
-        with nogil:
-            c_result = move(make_unique[column](dereference(cv.get())))
-        ret.c_obj.swap(c_result)
-        return ret
-
     cdef column * get(self):
         """Get the underlying column object."""
         self._raise_if_released()
@@ -84,3 +68,15 @@ cdef class Column:
 
         self.released = True
         return ret
+
+
+# Unfortunately we can't cpdef a staticmethod. Defining an external factory
+# separately is the best workaround for now.
+# https://github.com/cython/cython/issues/3327
+cpdef Column column_from_ColumnView(ColumnView cv):
+    cdef Column ret = Column.__new__(Column)
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(make_unique[column](dereference(cv.get())))
+    ret.c_obj.swap(c_result)
+    return ret

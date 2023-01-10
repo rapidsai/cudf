@@ -32,5 +32,5 @@ cdef class Column:
     cpdef ColumnContents release(self)
     cdef int _raise_if_released(self) except 1
 
-    @staticmethod
-    cdef Column c_from_ColumnView(ColumnView cv)
+
+cpdef Column column_from_ColumnView(ColumnView cv)

@@ -85,7 +85,7 @@ def copy_column(Column input_column):
 
     if cudf.get_option("_use_pylibcudf"):
         cv = input_column.to_ColumnView()
-        c = pylibcudf.Column.from_ColumnView(cv)
+        c = pylibcudf.column_from_ColumnView(cv)
         return Column.from_Column(c)
     else:
         input_column_view = input_column.view()
