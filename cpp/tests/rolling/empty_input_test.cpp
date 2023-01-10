@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/utilities/traits.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -24,6 +25,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <gtest/gtest.h>
 
 namespace {
 // Helper functions to construct rolling window operators.
@@ -187,22 +189,32 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
 
   /// `SUM` returns 64-bit promoted types for integral/decimal input.
   /// For other fixed-width input types, the same type is returned.
+  /// Timestamp types are not supported.
   {
     auto aggs = agg_vector_t{};
     aggs.emplace_back(sum());
 
     using expected_type = cudf::detail::target_type_t<InputType, aggregation::SUM>;
-    rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
+    if constexpr (cudf::is_timestamp<InputType>())
+      EXPECT_THROW(rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>()),
+                   cudf::logic_error);
+    else
+      rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
   }
 
   /// `MEAN` returns float64 for all numeric types,
-  /// except for chrono-types, which yield the same chrono-type.
+  /// except for duration-types, which yield the same duration-type.
+  /// Timestamp types are not supported.
   {
     auto aggs = agg_vector_t{};
     aggs.emplace_back(mean());
 
     using expected_type = cudf::detail::target_type_t<InputType, aggregation::MEAN>;
-    rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
+    if constexpr (cudf::is_timestamp<InputType>())
+      EXPECT_THROW(rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>()),
+                   cudf::logic_error);
+    else
+      rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
