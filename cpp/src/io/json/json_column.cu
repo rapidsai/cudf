@@ -664,9 +664,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         column_names.emplace_back(col->first);
         auto& child_col            = col->second;
         auto [child_column, names] = device_json_column_to_cudf_column(
-          child_col, d_input, 
-          
-          , get_child_schema(col_name), stream, mr);
+          child_col, d_input, options, get_child_schema(col_name), stream, mr);
         CUDF_EXPECTS(num_rows == child_column->size(),
                      "All children columns must have the same size");
         child_columns.push_back(std::move(child_column));
