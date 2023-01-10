@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 import glob
 import os
 
@@ -15,7 +15,7 @@ __version__ = _version.get_versions()["version"]
 logger = get_logger()
 
 # tracks the version of CUDA used to build the c++ and PTX components
-STRINGS_UDF_PTX_VERSION = (11, 5)
+STRINGS_UDF_PTX_VERSION = (11, 8)
 
 
 def _get_appropriate_file(sms, cc):

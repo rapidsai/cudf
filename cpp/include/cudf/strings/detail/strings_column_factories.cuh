@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
-#include <thrust/transform_reduce.h>
 #include <thrust/tuple.h>
 
 namespace cudf {
@@ -79,22 +78,14 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   size_type strings_count = thrust::distance(begin, end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  // check total size is not too large for cudf column
-  auto size_checker = [] __device__(string_index_pair const& item) {
-    return (item.first != nullptr) ? item.second : 0;
-  };
-  size_t const bytes = thrust::transform_reduce(
-    rmm::exec_policy(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
-  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings is too large for cudf column");
-
   // build offsets column from the strings sizes
-  auto offsets_transformer = [] __device__(string_index_pair item) {
-    return (item.first != nullptr ? static_cast<int32_t>(item.second) : 0);
+  auto offsets_transformer = [] __device__(string_index_pair item) -> size_type {
+    return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
   };
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
-  auto offsets_column          = strings::detail::make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
+  auto offsets_view = offsets_column->view();
 
   // create null mask
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
@@ -103,42 +94,43 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   auto null_mask =
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
-  auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
   // build chars column
-  std::unique_ptr<column> chars_column = [&] {
-    // use a character-parallel kernel for long string lengths
-    if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-      auto const d_offsets =
-        device_span<size_type const>{offsets_column->view().template data<int32_t>(),
-                                     static_cast<std::size_t>(offsets_column->size())};
-      auto const str_begin = thrust::make_transform_iterator(begin, [] __device__(auto ip) {
-        return string_view{ip.first, ip.second};
-      });
+  std::unique_ptr<column> chars_column =
+    [offsets_view, bytes = bytes, begin, strings_count, null_count, stream, mr] {
+      auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+      // use a character-parallel kernel for long string lengths
+      if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
+        auto const d_data = offsets_view.template data<size_type>();
+        auto const d_offsets =
+          device_span<size_type const>{d_data, static_cast<std::size_t>(offsets_view.size())};
+        auto const str_begin = thrust::make_transform_iterator(begin, [] __device__(auto ip) {
+          return string_view{ip.first, ip.second};
+        });
 
-      return gather_chars(str_begin,
-                          thrust::make_counting_iterator<size_type>(0),
-                          thrust::make_counting_iterator<size_type>(strings_count),
-                          d_offsets,
-                          static_cast<size_type>(bytes),
-                          stream,
-                          mr);
-    } else {
-      // this approach is 2-3x faster for a large number of smaller string lengths
-      auto chars_column = create_chars_child_column(bytes, stream, mr);
-      auto d_chars      = chars_column->mutable_view().template data<char>();
-      auto copy_chars   = [d_chars] __device__(auto item) {
-        string_index_pair const str = thrust::get<0>(item);
-        size_type const offset      = thrust::get<1>(item);
-        if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-      };
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_zip_iterator(thrust::make_tuple(
-                           begin, offsets_column->view().template begin<int32_t>())),
-                         strings_count,
-                         copy_chars);
-      return chars_column;
-    }
-  }();
+        return gather_chars(str_begin,
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(strings_count),
+                            d_offsets,
+                            bytes,
+                            stream,
+                            mr);
+      } else {
+        // this approach is 2-3x faster for a large number of smaller string lengths
+        auto chars_column = create_chars_child_column(bytes, stream, mr);
+        auto d_chars      = chars_column->mutable_view().template data<char>();
+        auto copy_chars   = [d_chars] __device__(auto item) {
+          string_index_pair const str = thrust::get<0>(item);
+          size_type const offset      = thrust::get<1>(item);
+          if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+        };
+        thrust::for_each_n(rmm::exec_policy(stream),
+                           thrust::make_zip_iterator(
+                             thrust::make_tuple(begin, offsets_view.template begin<int32_t>())),
+                           strings_count,
+                           copy_chars);
+        return chars_column;
+      }
+    }();
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

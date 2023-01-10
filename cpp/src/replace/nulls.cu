@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -250,13 +249,10 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     nullptr,
     valid_count);
 
-  std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
+  auto [offsets, bytes] = cudf::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
 
   auto offsets_view = offsets->mutable_view();
-
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
   // Allocate chars array and output null mask
   std::unique_ptr<cudf::column> output_chars =

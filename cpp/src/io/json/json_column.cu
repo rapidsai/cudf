@@ -673,7 +673,7 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
   device_json_column& json_col,
   device_span<SymbolT const> d_input,
-  cudf::io::json_reader_options const& options,
+  cudf::io::parse_options const& options,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -736,14 +736,14 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // Infer column type, if we don't have an explicit type for it
       else {
         target_type = cudf::io::detail::infer_data_type(
-          parsing_options(options).json_view(), d_input, string_ranges_it, col_size, stream);
+          options.json_view(), d_input, string_ranges_it, col_size, stream);
       }
       // Convert strings to the inferred data type
       auto col = experimental::detail::parse_data(string_spans_it,
                                                   col_size,
                                                   target_type,
                                                   make_validity(json_col).first,
-                                                  parsing_options(options).view(),
+                                                  options.view(),
                                                   stream,
                                                   mr);
 
@@ -779,10 +779,11 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         column_names.back().children = names;
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {
-        make_structs_column(
-          num_rows, std::move(child_columns), null_count, std::move(result_bitmask), stream, mr),
-        column_names};
+      // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
+      // null validation applied in make_structs_column factory, which is not needed for json
+      auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
+      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
       size_type num_rows = json_col.child_offsets.size() - 1;
@@ -916,6 +917,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   // Initialize meta data to be populated while recursing through the tree of columns
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
+  auto parse_opt = parsing_options(options);
 
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;
@@ -967,7 +969,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
     // Get this JSON column's cudf column and schema info, (modifies json_col)
     auto [cudf_col, col_name_info] = device_json_column_to_cudf_column(
-      json_col, d_input, options, child_schema_element, stream, mr);
+      json_col, d_input, parse_opt, child_schema_element, stream, mr);
     // TODO: RangeIndex as DataFrame.columns names for array of arrays
     // if (is_array_of_arrays) {
     //   col_name_info.back().name = "";
