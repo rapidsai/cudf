@@ -5612,6 +5612,13 @@ class StringColumn(column.ColumnBase):
             return NotImplemented
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
+            if isinstance(other, cudf.Scalar) and other.dtype != "O":
+                if op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                    result = column.full(len(self), False, dtype="bool")
+                elif op == "__ne__":
+                    result = column.full(len(self), True, dtype="bool")
+                result = result.set_mask(self.mask)
+                return result
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
                     other = cast(
