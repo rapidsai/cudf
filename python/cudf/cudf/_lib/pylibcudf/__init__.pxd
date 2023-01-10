@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2023, NVIDIA CORPORATION.
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
 # Relative Cython imports always look one level too high. This is a known bug
