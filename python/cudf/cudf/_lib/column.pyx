@@ -453,20 +453,24 @@ cdef class Column:
         else:
             col = self
 
-        # cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         type_id = dtype_to_pylibcudf_type(col.dtype)
         cdef pylibcudf.DataType dtype = pylibcudf.DataType(type_id)
         # cdef libcudf_types.size_type offset = self.offset
-        # cdef void* data
 
-        # if col.base_data is None:
-        #     data = NULL
-        # elif isinstance(col.base_data, SpillableBuffer):
-        #     data = <void*><uintptr_t>(col.base_data).get_ptr(
-        #         spill_lock=get_spill_lock()
-        #     )
-        # else:
-        #     data = <void*><uintptr_t>(col.base_data.ptr)
+        cdef pylibcudf.gpumemoryview data = None
+        if col.base_data is not None:
+            if isinstance(col.base_data, SpillableBuffer):
+                data = pylibcudf.gpumemoryview(
+                    col.base_data.get_ptr(
+                        spill_lock=get_spill_lock()
+                    )
+                )
+            else:
+                data = pylibcudf.gpumemoryview(col.base_data.ptr)
+
+        cdef pylibcudf.gpumemoryview mask = None
+        if self.nullable:
+            mask = pylibcudf.gpumemoryview(col.base_mask.ptr)
 
         cdef Column child_column
         children = []
@@ -476,18 +480,7 @@ cdef class Column:
 
         # cdef libcudf_types.size_type c_null_count = null_count
 
-        return pylibcudf.ColumnView(
-            dtype, self.size, col.base_data,
-            col.base_mask if self.nullable else None, children
-        )
-        # return column_view(
-        #     dtype,
-        #     self.size,
-        #     data,
-        #     mask,
-        #     c_null_count,
-        #     offset,
-        #     children)
+        return pylibcudf.ColumnView(dtype, self.size, data, mask, children)
 
     @staticmethod
     cdef Column from_unique_ptr(

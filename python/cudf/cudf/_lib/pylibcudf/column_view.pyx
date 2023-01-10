@@ -6,18 +6,13 @@ from libcpp.vector cimport vector
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport UNKNOWN_NULL_COUNT, bitmask_type, size_type
 
+from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
 cdef class ColumnView:
     """Wrapper around column_view."""
-    # TODO: For now assuming data and mask are Buffers, but eventually need to
-    # define a new gpumemoryview type to handle this. For that object it should
-    # be possible to access all attributes via fast cdef functions (no Python
-    # overhead for querying size etc).
-    # TODO: Not currently supporting SpillableBuffers. In order to do so we
-    # will need to check the buffer types and access the pointer accordingly.
     # TODO: Need a way to map the data buffer size to the number of
     # elements. For fixed width types a mapping could be made based on the
     # number of bytes they occupy, but not for nested types. Not sure how
@@ -30,10 +25,10 @@ cdef class ColumnView:
     # factory functions can call __new__ without arguments. I'll need to think
     # more fully about what construction patterns we actually want to support.
     def __init__(
-        self, DataType dtype, size_type size, object data_buf, object mask_buf,
-        # TODO: Not sure what the best input is, for now just using a
-        # List[ColumnView]
-        object children
+        self, DataType dtype, size_type size, gpumemoryview data_buf,
+        # TODO: Not sure what the best input is for children, for now just
+        # using a List[ColumnView]
+        gpumemoryview mask_buf, object children
     ):
         # TODO: Investigate cases where the data_buf is None. I'm not sure that
         # this is a real use case that we should support. EDIT: It looks like
@@ -61,9 +56,6 @@ cdef class ColumnView:
         cdef ColumnView child
         if children is not None:
             for child in children:
-                # Note that this operation will result in copying every child
-                # column_view. In theory this is fine though since by
-                # definition views should be cheap to copy.
                 c_children.push_back(dereference(child.get()))
 
         self.c_obj.reset(

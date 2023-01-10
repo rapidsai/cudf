@@ -3,6 +3,5 @@
 
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer."""
-    def __init__(self, Py_ssize_t ptr, Py_ssize_t size):
+    def __init__(self, Py_ssize_t ptr):
         self.ptr = ptr
-        self.size = size
