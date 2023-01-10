@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -93,6 +93,11 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
         fi
         echo "Running gtest $test_name"
         ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${RAPIDS_TESTS_DIR}${test_name}.cs.log"
+        exitcode=$?
+        if (( ${exitcode} != 0 )); then
+            SUITEERROR=${exitcode}
+            echo "FAILED: GTest ${gt}"
+        fi
     done
     unset GTEST_CUDF_RMM_MODE
     # TODO: test-results/*.cs.log are processed in gpuci
