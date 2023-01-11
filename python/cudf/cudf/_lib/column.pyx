@@ -485,7 +485,12 @@ cdef class Column:
             mask,
             # TODO: Determine whether there is a good reason why the `view`
             # method above does extra handling to determine whether null_count
-            # is None.
+            # is None. I think that in the past we were using `_null_count`
+            # directly rather than the property, and when it's set to None we
+            # would avoid computing the null count and instead pass
+            # UNKNOWN_NULL_COUNT to C++. We should probably stop doing that
+            # though since in the long run we plan to require null counts to be
+            # known on construction.
             self.null_count,
             self.offset,
             children,
