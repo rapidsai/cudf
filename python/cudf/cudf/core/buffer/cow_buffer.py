@@ -61,6 +61,8 @@ class CopyOnWriteBuffer(Buffer):
         ----------
         data : device-buffer-like
             An object implementing the CUDA Array Interface.
+        exposed : bool, optional
+            Mark the buffer as zero copied.
 
         Returns
         -------
