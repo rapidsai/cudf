@@ -178,8 +178,8 @@ class Buffer(Serializable):
         Parameters
         ----------
         deep : bool, default True
-            If True, returns a deep-copy of the underlying Buffer data.
-            If False, returns a shallow-copy of the Buffer pointing to
+            If True, returns a deep copy of the underlying Buffer data.
+            If False, returns a shallow copy of the Buffer pointing to
             the same underlying data.
 
         Returns
@@ -222,7 +222,7 @@ class Buffer(Serializable):
     def __cuda_array_interface__(self) -> dict:
         """Implementation for the CUDA Array Interface."""
         return {
-            "data": (self.ptr, False),
+            "data": (self.ptr, True),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
