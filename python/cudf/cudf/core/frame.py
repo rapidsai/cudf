@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -484,6 +484,20 @@ class Frame(BinaryOperand, Scannable):
             )
 
         if dtype is None:
+            dtypes = [col.dtype for col in self._data.values()]
+            for dtype in dtypes:
+                if isinstance(
+                    dtype,
+                    (
+                        cudf.ListDtype,
+                        cudf.core.dtypes.DecimalDtype,
+                        cudf.StructDtype,
+                    ),
+                ):
+                    raise NotImplementedError(
+                        f"{dtype} are not yet supported via "
+                        "`__cuda_array_interface__`"
+                    )
             dtype = find_common_type(
                 [col.dtype for col in self._data.values()]
             )
