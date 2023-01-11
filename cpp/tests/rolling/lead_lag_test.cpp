@@ -36,8 +36,6 @@
 #include <memory>
 #include <string>
 
-using namespace cudf::test::iterators;
-
 struct LeadLagWindowTest : public cudf::test::BaseFixture {
 };
 
@@ -552,7 +550,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
   using T   = TypeParam;
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto null_at_2       = null_at(2);
+  auto null_at_2       = cudf::test::iterators::null_at(2);
   auto const input_col = lcw{{{0, 0},
                               {1, 1},
                               {2, 2},
@@ -597,7 +595,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
                                            {},
                                            {},
                                            {}},
-                                          nulls_at({3, 4, 5, 9, 10, 11})}
+                                          cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})}
                                         .release()
                                         ->view());
 
@@ -622,7 +620,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
                                            {20, 20},
                                            {30, 30, 30},
                                            {40, 40, 40, 40}},
-                                          nulls_at({0, 3, 6})}
+                                          cudf::test::iterators::nulls_at({0, 3, 6})}
                                         .release()
                                         ->view());
 }
@@ -632,7 +630,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
   using T   = TypeParam;
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto null_at_2       = null_at(2);
+  auto null_at_2       = cudf::test::iterators::null_at(2);
   auto const input_col = lcw{{{0, 0},
                               {1, 1},
                               {2, 2},
@@ -696,7 +694,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
                                            {},
                                            {},
                                            {}},
-                                          nulls_at({3, 4, 5, 9, 10, 11})}
+                                          cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})}
                                         .release()
                                         ->view());
 
@@ -721,7 +719,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
                                            {20, 20},
                                            {30, 30, 30},
                                            {40, 40, 40, 40}},
-                                          nulls_at({0, 3, 6})}
+                                          cudf::test::iterators::nulls_at({0, 3, 6})}
                                         .release()
                                         ->view());
 }
@@ -731,7 +729,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
   using T   = TypeParam;
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto null_at_2 = null_at(2);
+  auto null_at_2 = cudf::test::iterators::null_at(2);
   auto lists_col = lcw{{{0, 0},
                         {1, 1},
                         {2, 2},
@@ -758,7 +756,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                                          "303030",
                                                          "40404040",
                                                          "5050505050"},
-                                                        null_at(9)};
+                                                        cudf::test::iterators::null_at(9)};
 
   auto structs_col = cudf::test::structs_column_wrapper{lists_col, strings_col}.release();
 
@@ -791,14 +789,14 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                    {},
                                    {},
                                    {}},
-                                  nulls_at({3, 4, 5, 9, 10, 11})};
+                                  cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})};
     auto expected_strings_col = cudf::test::strings_column_wrapper{
       {"333", "4444", "55555", "", "", "", "", "40404040", "5050505050", "", "", ""},
-      nulls_at({3, 4, 5, 6, 9, 10, 11})};
+      cudf::test::iterators::nulls_at({3, 4, 5, 6, 9, 10, 11})};
 
     auto expected_structs_col =
       cudf::test::structs_column_wrapper{{expected_lists_col, expected_strings_col},
-                                         nulls_at({3, 4, 5, 9, 10, 11})}
+                                         cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})}
         .release();
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_3_output_col->view(), expected_structs_col->view());
@@ -813,7 +811,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                    following,
                                    min_periods,
                                    *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
-    auto expected_lists_col   = lcw{{{},  // null.
+    auto expected_lists_col = lcw{{{},  // null.
                                    {0, 0},
                                    {1, 1},
                                    {},  // null.
@@ -825,24 +823,25 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                    {20, 20},
                                    {30, 30, 30},
                                    {40, 40, 40, 40}},
-                                  nulls_at({0, 3, 6})};
-    auto expected_strings_col = cudf::test::strings_column_wrapper{{"",  // null.
-                                                                    "00",
-                                                                    "11",
-                                                                    "22",
-                                                                    "333",
-                                                                    "4444",
-                                                                    "",  // null.
-                                                                    "00",
-                                                                    "1010",
-                                                                    "2020",
-                                                                    "",  // null.
-                                                                    "40404040"},
-                                                                   nulls_at({0, 6, 10})};
+                                  cudf::test::iterators::nulls_at({0, 3, 6})};
+    auto expected_strings_col =
+      cudf::test::strings_column_wrapper{{"",  // null.
+                                          "00",
+                                          "11",
+                                          "22",
+                                          "333",
+                                          "4444",
+                                          "",  // null.
+                                          "00",
+                                          "1010",
+                                          "2020",
+                                          "",  // null.
+                                          "40404040"},
+                                         cudf::test::iterators::nulls_at({0, 6, 10})};
 
     auto expected_structs_col =
       cudf::test::structs_column_wrapper{{expected_lists_col, expected_strings_col},
-                                         nulls_at({0, 6})}
+                                         cudf::test::iterators::nulls_at({0, 6})}
         .release();
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1_output_col->view(), expected_structs_col->view());
@@ -854,20 +853,21 @@ struct LeadLagNonFixedWidthTest : cudf::test::BaseFixture {
 
 TEST_F(LeadLagNonFixedWidthTest, StringsNoDefaults)
 {
-  auto input_col = cudf::test::strings_column_wrapper{{"",
-                                                       "A_1",
-                                                       "A_22",
-                                                       "A_333",
-                                                       "A_4444",
-                                                       "A_55555",
-                                                       "B_0",
-                                                       "",
-                                                       "B_22",
-                                                       "B_333",
-                                                       "B_4444",
-                                                       "B_55555"},
-                                                      nulls_at(std::vector{0, 7})}
-                     .release();
+  auto input_col =
+    cudf::test::strings_column_wrapper{{"",
+                                        "A_1",
+                                        "A_22",
+                                        "A_333",
+                                        "A_4444",
+                                        "A_55555",
+                                        "B_0",
+                                        "",
+                                        "B_22",
+                                        "B_333",
+                                        "B_4444",
+                                        "B_55555"},
+                                       cudf::test::iterators::nulls_at(std::vector{0, 7})}
+      .release();
 
   auto const grouping_key =
     cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
@@ -887,7 +887,7 @@ TEST_F(LeadLagNonFixedWidthTest, StringsNoDefaults)
     lead_2->view(),
     cudf::test::strings_column_wrapper{
       {"A_22", "A_333", "A_4444", "A_55555", "", "", "B_22", "B_333", "B_4444", "B_55555", "", ""},
-      nulls_at(std::vector{4, 5, 10, 11})});
+      cudf::test::iterators::nulls_at(std::vector{4, 5, 10, 11})});
 
   auto lag_1 = grouped_rolling_window(grouping_keys,
                                       input_col->view(),
@@ -900,25 +900,26 @@ TEST_F(LeadLagNonFixedWidthTest, StringsNoDefaults)
     lag_1->view(),
     cudf::test::strings_column_wrapper{
       {"", "", "A_1", "A_22", "A_333", "A_4444", "", "B_0", "", "B_22", "B_333", "B_4444"},
-      nulls_at(std::vector{0, 1, 6, 8})});
+      cudf::test::iterators::nulls_at(std::vector{0, 1, 6, 8})});
 }
 
 TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaults)
 {
-  auto input_col = cudf::test::strings_column_wrapper{{"",
-                                                       "A_1",
-                                                       "A_22",
-                                                       "A_333",
-                                                       "A_4444",
-                                                       "A_55555",
-                                                       "B_0",
-                                                       "",
-                                                       "B_22",
-                                                       "B_333",
-                                                       "B_4444",
-                                                       "B_55555"},
-                                                      nulls_at(std::vector{0, 7})}
-                     .release();
+  auto input_col =
+    cudf::test::strings_column_wrapper{{"",
+                                        "A_1",
+                                        "A_22",
+                                        "A_333",
+                                        "A_4444",
+                                        "A_55555",
+                                        "B_0",
+                                        "",
+                                        "B_22",
+                                        "B_333",
+                                        "B_4444",
+                                        "B_55555"},
+                                       cudf::test::iterators::nulls_at(std::vector{0, 7})}
+      .release();
 
   auto defaults_col = cudf::test::strings_column_wrapper{"9999",
                                                          "9999",
@@ -975,25 +976,26 @@ TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaults)
     lag_1->view(),
     cudf::test::strings_column_wrapper{
       {"9999", "", "A_1", "A_22", "A_333", "A_4444", "9999", "B_0", "", "B_22", "B_333", "B_4444"},
-      nulls_at(std::vector{1, 8})});
+      cudf::test::iterators::nulls_at(std::vector{1, 8})});
 }
 
 TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaultsNoGroups)
 {
-  auto input_col = cudf::test::strings_column_wrapper{{"",
-                                                       "A_1",
-                                                       "A_22",
-                                                       "A_333",
-                                                       "A_4444",
-                                                       "A_55555",
-                                                       "B_0",
-                                                       "",
-                                                       "B_22",
-                                                       "B_333",
-                                                       "B_4444",
-                                                       "B_55555"},
-                                                      nulls_at(std::vector{0, 7})}
-                     .release();
+  auto input_col =
+    cudf::test::strings_column_wrapper{{"",
+                                        "A_1",
+                                        "A_22",
+                                        "A_333",
+                                        "A_4444",
+                                        "A_55555",
+                                        "B_0",
+                                        "",
+                                        "B_22",
+                                        "B_333",
+                                        "B_4444",
+                                        "B_55555"},
+                                       cudf::test::iterators::nulls_at(std::vector{0, 7})}
+      .release();
 
   auto defaults_col = cudf::test::strings_column_wrapper{"9999",
                                                          "9999",
@@ -1024,20 +1026,21 @@ TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaultsNoGroups)
                                        following,
                                        min_periods,
                                        *cudf::make_lead_aggregation<cudf::rolling_aggregation>(2));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_2->view(),
-                                      cudf::test::strings_column_wrapper{{"A_22",
-                                                                          "A_333",
-                                                                          "A_4444",
-                                                                          "A_55555",
-                                                                          "B_0",
-                                                                          "",
-                                                                          "B_22",
-                                                                          "B_333",
-                                                                          "B_4444",
-                                                                          "B_55555",
-                                                                          "9999",
-                                                                          "9999"},
-                                                                         null_at(5)});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lead_2->view(),
+    cudf::test::strings_column_wrapper{{"A_22",
+                                        "A_333",
+                                        "A_4444",
+                                        "A_55555",
+                                        "B_0",
+                                        "",
+                                        "B_22",
+                                        "B_333",
+                                        "B_4444",
+                                        "B_55555",
+                                        "9999",
+                                        "9999"},
+                                       cudf::test::iterators::null_at(5)});
 
   auto lag_1 = grouped_rolling_window(grouping_keys,
                                       input_col->view(),
@@ -1061,7 +1064,7 @@ TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaultsNoGroups)
                                         "B_22",
                                         "B_333",
                                         "B_4444"},
-                                       nulls_at(std::vector{1, 8})});
+                                       cudf::test::iterators::nulls_at(std::vector{1, 8})});
 }
 
 TEST_F(LeadLagNonFixedWidthTest, Dictionary)
@@ -1101,8 +1104,9 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{{2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
-                                                       nulls_at(std::vector{4, 5, 10, 11})}
+      cudf::test::fixed_width_column_wrapper<uint32_t>{
+        {2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
+        cudf::test::iterators::nulls_at(std::vector{4, 5, 10, 11})}
         .release();
     auto expected_output =
       make_dictionary_column(expected_keys->view(), expected_values->view()).release();
@@ -1120,8 +1124,8 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{{0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9},
-                                                       nulls_at(std::vector{0, 6})}
+      cudf::test::fixed_width_column_wrapper<uint32_t>{
+        {0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9}, cudf::test::iterators::nulls_at(std::vector{0, 6})}
         .release();
     auto expected_output =
       make_dictionary_column(expected_keys->view(), expected_values->view()).release();

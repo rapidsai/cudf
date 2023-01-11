@@ -2452,8 +2452,6 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
 {
   // Test that grouping on STRUCT keys produces is possible.
 
-  using cudf::test::iterators::no_nulls;
-  using cudf::test::iterators::nulls_at;
   using T        = TypeParam;
   using numerics = cudf::test::fixed_width_column_wrapper<T>;
   using result_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
@@ -2463,7 +2461,8 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
     return cudf::test::structs_column_wrapper{{grp_col_inner}};
   }();
 
-  auto const agg_col = numerics{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nulls_at({0, 3, 5})};
+  auto const agg_col =
+    numerics{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, cudf::test::iterators::nulls_at({0, 3, 5})};
 
   auto const grouping_keys       = cudf::table_view{{grp_col}};
   auto const unbounded_preceding = cudf::window_bounds::unbounded();
@@ -2477,6 +2476,6 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
                                  min_periods,
                                  *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
-                                 result_t{{3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, no_nulls()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    output->view(), result_t{{3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, cudf::test::iterators::no_nulls()});
 }

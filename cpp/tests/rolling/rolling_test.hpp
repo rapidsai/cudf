@@ -20,8 +20,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/traits.hpp>
 
-// return true if the cudf::aggregation is valid for the specified ColumnType
-// valid cudf::aggregations may still be further specialized (eg, is_string_specialized)
+// return true if the aggregation is valid for the specified ColumnType
+// valid aggregations may still be further specialized (eg, is_string_specialized)
 template <typename ColumnType, cudf::aggregation::Kind op>
 static constexpr bool is_rolling_supported()
 {

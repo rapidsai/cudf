@@ -169,7 +169,6 @@ class RollingStructTest : public cudf::test::BaseFixture {
 
 TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -179,17 +178,18 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
       auto child1 = strings_col{
         "This", "This", "being", "being", "being", "being", "column", "column", "column"};
       auto child2 = ints_col{1, 1, 5, 5, 5, 5, 9, 9, 9};
-      return structs_col{{child1, child2}, no_nulls()};
+      return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
     }();
 
     auto const expected_max = [] {
       auto child1 = strings_col{
         "rolling", "test", "test", "test", "test", "string", "string", "string", "string"};
       auto child2 = ints_col{3, 4, 4, 4, 4, 8, 8, 8, 8};
-      return structs_col{{child1, child2}, no_nulls()};
+      return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
     }();
 
-    auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
+    auto const expected_count =
+      ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
     auto constexpr preceding  = 2;
     auto constexpr following  = 2;
     auto constexpr min_period = 1;
@@ -261,7 +261,6 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 
 TEST_F(RollingStructTest, NullChildrenMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -269,7 +268,7 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
   auto const input = [] {
     auto child1 = strings_col{
       {"This", "" /*NULL*/, "" /*NULL*/, "test", "" /*NULL*/, "operated", "on", "string", "column"},
-      nulls_at({1, 2, 4})};
+      cudf::test::iterators::nulls_at({1, 2, 4})};
     auto child2 = ints_col{1, 2, 3, 4, 5, 6, 7, 8, 9};
     return structs_col{{child1, child2}};
   }();
@@ -284,19 +283,20 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
                                "column",
                                "column",
                                "column"},
-                              nulls_at({0, 1, 2, 3, 4, 5})};
+                              cudf::test::iterators::nulls_at({0, 1, 2, 3, 4, 5})};
     auto child2 = ints_col{2, 2, 2, 3, 5, 5, 9, 9, 9};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
   auto const expected_max = [] {
     auto child1 =
       strings_col{"This", "test", "test", "test", "test", "string", "string", "string", "string"};
     auto child2 = ints_col{1, 4, 4, 4, 4, 8, 8, 8, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
-  auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
+  auto const expected_count =
+    ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
   auto constexpr preceding  = 2;
   auto constexpr following  = 2;
   auto constexpr min_period = 1;
@@ -336,7 +336,6 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
 
 TEST_F(RollingStructTest, NullParentMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -353,27 +352,29 @@ TEST_F(RollingStructTest, NullParentMinMaxCount)
                               "string",
                               "" /*NULL*/};
     auto child2 = ints_col{1, null, null, 4, null, 6, 7, 8, null};
-    return structs_col{{child1, child2}, nulls_at({1, 2, 4, 8})};
+    return structs_col{{child1, child2}, cudf::test::iterators::nulls_at({1, 2, 4, 8})};
   }();
 
   auto const expected_min = [] {
     auto child1 = strings_col{"This", "This", "test", "operated", "on", "on", "on", "on", "string"};
     auto child2 = ints_col{1, 1, 4, 6, 7, 7, 7, 7, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
   auto const expected_max = [] {
     auto child1 =
       strings_col{"This", "test", "test", "test", "test", "string", "string", "string", "string"};
     auto child2 = ints_col{1, 4, 4, 4, 4, 8, 8, 8, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
-  auto const expected_count_valid = ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, no_nulls()};
-  auto const expected_count_all   = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceding        = 2;
-  auto constexpr following        = 2;
-  auto constexpr min_period       = 1;
+  auto const expected_count_valid =
+    ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, cudf::test::iterators::no_nulls()};
+  auto const expected_count_all =
+    ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
+  auto constexpr preceding  = 2;
+  auto constexpr following  = 2;
+  auto constexpr min_period = 1;
 
   auto const result_min =
     cudf::rolling_window(input,
