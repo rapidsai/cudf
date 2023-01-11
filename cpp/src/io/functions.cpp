@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -661,6 +661,24 @@ void parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes
   _column_index_truncate_length = size_bytes;
 }
 
+void parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
+{
+  _dictionary_policy = policy;
+}
+
+void parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum dictionary size cannot exceed 2GB.");
+  _max_dictionary_size = size_bytes;
+}
+
+void parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+  _max_page_fragment_size = size_rows;
+}
+
 parquet_writer_options_builder& parquet_writer_options_builder::partitions(
   std::vector<partition_info> partitions)
 {
@@ -679,6 +697,26 @@ parquet_writer_options_builder& parquet_writer_options_builder::column_chunks_fi
   std::vector<std::string> file_paths)
 {
   options.set_column_chunks_file_paths(std::move(file_paths));
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::dictionary_policy(
+  enum dictionary_policy val)
+{
+  options.set_dictionary_policy(val);
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::max_dictionary_size(size_t val)
+{
+  options.set_max_dictionary_size(val);
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::max_page_fragment_size(
+  size_type val)
+{
+  options.set_max_page_fragment_size(val);
   return *this;
 }
 
@@ -724,10 +762,49 @@ void chunked_parquet_writer_options::set_column_index_truncate_length(int32_t si
   _column_index_truncate_length = size_bytes;
 }
 
+void chunked_parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
+{
+  _dictionary_policy = policy;
+}
+
+void chunked_parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum dictionary size cannot exceed 2GB.");
+  _max_dictionary_size = size_bytes;
+}
+
+void chunked_parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+  _max_page_fragment_size = size_rows;
+}
+
 chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
   options.set_key_value_metadata(std::move(metadata));
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::dictionary_policy(
+  enum dictionary_policy val)
+{
+  options.set_dictionary_policy(val);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::max_dictionary_size(
+  size_t val)
+{
+  options.set_max_dictionary_size(val);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder&
+chunked_parquet_writer_options_builder::max_page_fragment_size(size_type val)
+{
+  options.set_max_page_fragment_size(val);
   return *this;
 }
 
