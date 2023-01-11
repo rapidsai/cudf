@@ -29,8 +29,8 @@ def read_json(
     **kwargs,
 ):
     """{docstring}"""
-    if engine == "cudf":
-        engine = "cudf_experimental"
+    if engine == "cudf_experimental":
+        engine = "cudf"
 
     if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
         raise TypeError(
@@ -39,23 +39,22 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "legacy" and not lines:
+    if engine == "cudf_legacy" and not lines:
         raise ValueError(f"{engine} engine only supports JSON Lines format")
-    if engine != "cudf_experimental" and keep_quotes:
+    if engine != "cudf" and keep_quotes:
         raise ValueError(
-            "keep_quotes='True' is supported only with"
-            " engine='cudf_experimental'"
+            "keep_quotes='True' is supported only with engine='cudf'"
         )
     if engine == "auto":
         engine = (
-            "cudf_experimental"
+            "cudf"
             if orient in (None, "records", "values")
             and kwargs.get("typ", None) != "series"
             and compression in (None, "infer", "gzip", "zip", "bz2")
             else "pandas"
         )
 
-    if engine == "cudf" or engine == "cudf_experimental" or engine == "legacy":
+    if engine == "cudf_legacy" or engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -108,7 +107,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine != "legacy",
+            engine == "cudf",
             keep_quotes,
         )
     else:

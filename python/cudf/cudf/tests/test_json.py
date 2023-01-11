@@ -338,7 +338,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="legacy")
+        cudf.read_json(json, lines=False, engine="cudf_legacy")
 
 
 def test_json_bool_values():
@@ -370,7 +370,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True, engine="legacy")
+    df = cudf.read_json(buffer, lines=True, engine="cudf_legacy")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -1019,7 +1019,7 @@ def test_json_round_trip_gzip():
 @pytest.mark.parametrize(
     "data",
     [
-        ## empty input failing due to missing index size information
+        # # empty input failing due to missing index size information
         # "",
         # "[]",
         # "[]\n[]\n[]",
@@ -1046,7 +1046,7 @@ def test_json_round_trip_gzip():
 )
 @pytest.mark.parametrize("lines", [True, False])
 def test_json_array_of_arrays(data, lines):
-    data = data if lines == True else "[" + data.replace("\n", ",") + "]"
+    data = data if lines else "[" + data.replace("\n", ",") + "]"
     pdf = pd.read_json(data, orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
@@ -1054,11 +1054,14 @@ def test_json_array_of_arrays(data, lines):
         orient="values",
         lines=lines,
     )
-    # TODO: Replace string column names with integer column names for values orient
+    # TODO: Replace string column names with integer column names
+    # for values orient
     df.columns = cudf.RangeIndex(len(df.columns))
     # if mixed with dict/list type, replace other types with None.
     if 2 in pdf.columns and any(
         pdf[2].apply(lambda x: isinstance(x, dict) or isinstance(x, list))
     ):
-        pdf[2] = pdf[2].apply(lambda x: x if isinstance(x, dict) or isinstance(x, list) else None)
+        pdf[2] = pdf[2].apply(
+            lambda x: x if isinstance(x, dict) or isinstance(x, list) else None
+        )
     assert_eq(pdf, df)
