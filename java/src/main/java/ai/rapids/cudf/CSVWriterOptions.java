@@ -22,6 +22,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Options for writing a CSV file
+ */
 public class CSVWriterOptions {
 
   private String[] columnNames;
@@ -31,6 +34,8 @@ public class CSVWriterOptions {
   private String nullValue = "";
   private String falseValue = "false";
   private String trueValue = "true";
+  // Whether to quote strings that contain delimiters or quote characters.
+  private boolean quoteStrings = true;
 
   private CSVWriterOptions(Builder builder) {
     this.columnNames = builder.columnNames.toArray(new String[builder.columnNames.size()]);
@@ -70,6 +75,13 @@ public class CSVWriterOptions {
     return falseValue;
   }
 
+  /**
+   * Whether or not quoting is enabled for strings containing special characters
+   */
+  public boolean isQuotingEnabled() {
+    return quoteStrings;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -83,6 +95,7 @@ public class CSVWriterOptions {
     private String nullValue = "";
     private String falseValue = "false";
     private String trueValue = "true";
+    private Boolean quoteStrings = true;
 
     public CSVWriterOptions build() {
       return new CSVWriterOptions(this);
@@ -128,6 +141,17 @@ public class CSVWriterOptions {
 
     public Builder withFalseValue(String falseValue) {
       this.falseValue = falseValue;
+      return this;
+    }
+
+    /**
+     * Whether to quote strings that contain the following special characters:
+     * 1. Field delimiter
+     * 2. Row delimiter
+     * 3. Double quotes
+     */
+    public Builder withQuotingEnabled(boolean quoteStrings) {
+      this.quoteStrings = quoteStrings;
       return this;
     }
   }
