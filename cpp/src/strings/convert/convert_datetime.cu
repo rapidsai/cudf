@@ -64,8 +64,8 @@ struct timestamp_components {
   int8_t hour;
   int8_t minute;
   int8_t second;
-  int8_t weeks;
-  int8_t weekday;
+  int8_t week;     ///< week of the year
+  int8_t weekday;  ///< day of the week
   int32_t subsecond;
   int32_t tz_minutes;
 };
@@ -311,13 +311,13 @@ struct parse_datetime {
         }
         case 'U':    // week of year: Sunday based
         case 'W': {  // week of year: Monday based
-          auto const [weeks, left] = parse_int(ptr, item.length);
-          timeparts.weeks          = static_cast<int8_t>(weeks + 1);
+          auto const [week, left] = parse_int(ptr, item.length);
+          timeparts.week          = static_cast<int8_t>(week + 1);
           bytes_read -= left;
           break;
         }
         case 'u':    // day of week: Mon(1)-Sun(7)
-        case 'w': {  // day of week; Mon(1)-Sat(6): 0 is mapped to Sun(7)
+        case 'w': {  // day of week; Sun(0)-Sat(6): 0 is mapped to 7 for chrono
           auto const [weekday, left] = parse_int(ptr, item.length);
           timeparts.weekday =
             static_cast<int8_t>((item.value == 'w' && weekday == 0) ? 7 : weekday);
@@ -347,9 +347,10 @@ struct parse_datetime {
 
   [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
+    // Reference: https://howardhinnant.github.io/date/date.html#Reference
     auto const days = [timeparts, this] {
-      // weeks and weekday prioritize over month/day
-      if ((timeparts.weeks > 0) && (timeparts.weekday > 0)) {
+      // week and weekday prioritize over month/day
+      if ((timeparts.week > 0) && (timeparts.weekday > 0)) {
         auto const y = cuda::std::chrono::year{timeparts.year};
         // clang-format off
         auto const start = format_contains('U')
@@ -357,7 +358,7 @@ struct parse_datetime {
           : cuda::std::chrono::sys_days{cuda::std::chrono::Monday[1]/cuda::std::chrono::January/y};
         // clang-format on
         auto const days =  // compute days from year, weeks and weekday
-          start + cuda::std::chrono::weeks(timeparts.weeks - 1) - cuda::std::chrono::weeks{1} +
+          start + cuda::std::chrono::weeks(timeparts.week - 1) - cuda::std::chrono::weeks{1} +
           (cuda::std::chrono::weekday(timeparts.weekday) -
            cuda::std::chrono::weekday{1});  // cuda::std::chrono::Monday causes compile error here
         return days.time_since_epoch().count();
