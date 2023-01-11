@@ -280,7 +280,8 @@ cpdef pylibcudf.DataType dtype_to_pylibcudf_type(dtype):
             tid = pylibcudf.TypeId.DECIMAL128
         elif cudf.api.types.is_decimal64_dtype(dtype):
             tid = pylibcudf.TypeId.DECIMAL64
-        tid = pylibcudf.TypeId.DECIMAL32
+        else:
+            tid = pylibcudf.TypeId.DECIMAL32
         return pylibcudf.DataType(tid, -dtype.scale)
     return pylibcudf.DataType(
         SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]
