@@ -19,18 +19,17 @@
  * @brief cuDF-IO JSON writer class implementation
  */
 
-#include "cudf/structs/struct_view.hpp"
 #include "io/csv/durations.hpp"
-#include "thrust/iterator/counting_iterator.h"
-#include "thrust/iterator/zip_iterator.h"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -40,6 +39,7 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -51,6 +51,8 @@
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -311,6 +313,14 @@ struct column_to_strings_fn {
   {
   }
 
+  // unsupported type of column:
+  template <typename column_type>
+  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const&) const
+  {
+    CUDF_FAIL("Unsupported column type.");
+  }
+
   // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster.
 
@@ -404,7 +414,54 @@ struct column_to_strings_fn {
     return cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
   }
 
-  // TODO add support for structs, lists.
+  // lists:
+  template <typename column_type>
+  std::enable_if_t<std::is_same_v<column_type, cudf::list_view>, std::unique_ptr<column>>
+  operator()(column_view const& column, std::vector<column_name_info> const& children_names) const
+  {
+    auto child_view  = lists_column_view(column).get_sliced_child(stream_);
+    auto list_string = [&]() {
+      auto child_string = [&]() {
+        if (child_view.type().id() == type_id::STRUCT) {
+          return (*this).template operator()<cudf::struct_view>(
+            child_view,
+            children_names.empty() ? std::vector<column_name_info>{} : children_names[0].children);
+        } else if (child_view.type().id() == type_id::LIST) {
+          return (*this).template operator()<cudf::list_view>(
+            child_view,
+            children_names.empty() ? std::vector<column_name_info>{} : children_names[0].children);
+        } else {
+          return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        }
+      }();
+      auto const list_child_string =
+        column_view(column.type(),
+                    column.size(),
+                    column.head(),
+                    column.null_mask(),
+                    column.null_count(),
+                    column.offset(),
+                    {lists_column_view(column).offsets(), child_string->view()});
+      return strings::detail::join_list_elements(lists_column_view(list_child_string),
+                                                 cudf::string_scalar{", "},
+                                                 narep,
+                                                 strings::separator_on_nulls::YES,
+                                                 strings::output_if_empty_list::EMPTY_STRING,
+                                                 stream_,
+                                                 mr_);
+    }();
+    // create column with "[", "]" to wrap around list string
+    auto prepend = make_column_from_scalar(cudf::string_scalar{"["}, column.size(), stream_, mr_);
+    auto append  = make_column_from_scalar(cudf::string_scalar{"]"}, column.size(), stream_, mr_);
+    return cudf::strings::detail::concatenate(
+      table_view{{prepend->view(), list_string->view(), append->view()}},
+      string_scalar(""),
+      string_scalar("", false),
+      strings::separator_on_nulls::YES,
+      stream_,
+      mr_);
+  }
+
   // structs:
   template <typename column_type>
   std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
@@ -440,6 +497,10 @@ struct column_to_strings_fn {
           return (*this).template operator()<cudf::struct_view>(
             current_col,
             children_names.empty() ? std::vector<column_name_info>{} : children_names[i].children);
+        } else if (current_col.type().id() == type_id::LIST) {
+          return (*this).template operator()<cudf::list_view>(
+            current_col,
+            children_names.empty() ? std::vector<column_name_info>{} : children_names[0].children);
         } else {
           return cudf::type_dispatcher(current_col.type(), *this, current_col);
         }
@@ -468,14 +529,6 @@ struct column_to_strings_fn {
       // return cudf::strings::detail::replace_nulls(
       //   str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
     }();
-  }
-
-  // unsupported type of column:
-  template <typename column_type>
-  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const&) const
-  {
-    CUDF_FAIL("Unsupported column type.");
   }
 
  private:

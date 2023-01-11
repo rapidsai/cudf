@@ -55,10 +55,10 @@ TEST_F(JsonWriterTest, PlainTable)
 TEST_F(JsonWriterTest, JsonToJson)
 {
   std::string const data = R"(
-{"a": 1, "b": 2, "c": {"d": 3        }, "f": 5.5}
-{"a": 6, "b": 7, "c": {"d": 8        }, "f": 10.5}
-{"a": 1, "b": 2, "c": {        "e": 4}, "f": 5.5}
-{"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5} )";
+{"a": 1, "b": 2, "c": {"d": 3        }, "f": 5.5,  "g": [1]}
+{"a": 6, "b": 7, "c": {"d": 8        }, "f": 10.5, "g": null}
+{"a": 1, "b": 2, "c": {        "e": 4}, "f": 5.5,  "g": [2, null]}
+{"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [3, 4, 5]} )";
   std::cout << data << std::endl;
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
