@@ -598,7 +598,7 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.DataFrame(data)
     pdf.to_json(fname, orient="records")
 
-    df = cudf.read_json(fname, engine="cudf_experimental", orient="records")
+    df = cudf.read_json(fname, engine="cudf", orient="records")
     pdf = pd.read_json(fname, orient="records")
 
     assert_eq(pdf, df)
@@ -626,9 +626,7 @@ def test_json_nested_lines(data, lines):
     pdf = pd.DataFrame(data)
     pdf.to_json(bytes, orient="records", lines=lines)
     bytes.seek(0)
-    df = cudf.read_json(
-        bytes, engine="cudf_experimental", orient="records", lines=lines
-    )
+    df = cudf.read_json(bytes, engine="cudf", orient="records", lines=lines)
     bytes.seek(0)
     pdf = pd.read_json(bytes, orient="records", lines=lines)
     # In the second test-case we need to take a detour via pyarrow
@@ -647,9 +645,7 @@ def test_json_nested_data():
         '[{"0":{},"2":{}},{"1":[[""],[]],"2":{"2":""}},'
         '{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
     )
-    df = cudf.read_json(
-        StringIO(json_str), engine="cudf_experimental", orient="records"
-    )
+    df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
@@ -668,7 +664,7 @@ def test_json_empty_types():
     """
     df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         lines=True,
     )
@@ -685,9 +681,7 @@ def test_json_types_data():
         '{"1":[123],"0":{"0":"foo","1":123.4},"2":{"0":false}},'
         '{"0":{},"1":[],"2":{"0":null}}]'
     )
-    df = cudf.read_json(
-        StringIO(json_str), engine="cudf_experimental", orient="records"
-    )
+    df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
@@ -734,7 +728,7 @@ def test_json_types_data():
 def test_json_quoted_values_with_schema(col_type, json_str):
     experimental_df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         dtype={"k": col_type},
     )
@@ -776,7 +770,7 @@ def test_json_quoted_values_with_schema(col_type, json_str):
 def test_json_quoted_values(col_type, json_str, expected):
     experimental_df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         dtype={"k": col_type},
     )
@@ -827,7 +821,7 @@ def test_json_keep_quotes(keep_quotes, result):
 
     actual = cudf.read_json(
         bytes_file,
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         lines=True,
         keep_quotes=keep_quotes,
@@ -884,7 +878,7 @@ def test_json_dtypes_nested_data():
 
     df = cudf.read_json(
         StringIO(actual_json_str),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         lines=True,
         dtype={
@@ -956,9 +950,7 @@ def test_json_dtypes_nested_data():
 class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
-        expected = cudf.read_json(
-            StringIO(data), engine="cudf_experimental", lines=True
-        )
+        expected = cudf.read_json(StringIO(data), engine="cudf", lines=True)
 
         source_size = len(data)
         chunks = []
@@ -966,7 +958,7 @@ class TestNestedJsonReaderCommon:
             chunks.append(
                 cudf.read_json(
                     StringIO(data),
-                    engine="cudf_experimental",
+                    engine="cudf",
                     byte_range=[chunk_start, chunk_size],
                     lines=True,
                 )
@@ -976,9 +968,7 @@ class TestNestedJsonReaderCommon:
 
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
-        target = cudf.read_json(
-            StringIO(data), engine="cudf_experimental", lines=True
-        )
+        target = cudf.read_json(StringIO(data), engine="cudf", lines=True)
         if tag == "dtype_mismatch":
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation
@@ -1051,7 +1041,7 @@ def test_json_array_of_arrays(data, lines):
     pdf = pd.read_json(data, orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="values",
         lines=lines,
     )

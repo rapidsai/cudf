@@ -29,8 +29,8 @@ def read_json(
     **kwargs,
 ):
     """{docstring}"""
-    if engine == "cudf_experimental":
-        engine = "cudf"
+    # if engine == "cudf_experimental":
+    #     engine = "cudf"
 
     if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
         raise TypeError(
