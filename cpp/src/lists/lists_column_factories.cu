@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -104,15 +105,25 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
   CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
+  // Save type_id of the child column for later use.
+  auto const child_type_id = child_column->type().id();
+
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
-  return std::make_unique<column>(cudf::data_type{type_id::LIST},
-                                  num_rows,
-                                  rmm::device_buffer{},
-                                  std::move(null_mask),
-                                  null_count,
-                                  std::move(children));
+
+  auto output = std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                         num_rows,
+                                         rmm::device_buffer{},
+                                         std::move(null_mask),
+                                         null_count,
+                                         std::move(children));
+
+  // We need to enforce all null lists to be empty.
+  // Checking `null_count==0` is not enough as it can be `UNKNOWN_NULL_COUNT` for nullable column.
+  return null_count == 0 || !output->nullable() || child_type_id == type_id::EMPTY
+           ? std::move(output)
+           : detail::purge_nonempty_nulls(output->view(), stream, mr);
 }
 
 }  // namespace cudf
