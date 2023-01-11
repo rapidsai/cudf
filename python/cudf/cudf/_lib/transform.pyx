@@ -53,6 +53,7 @@ def bools_to_mask(Column col):
     return buf
 
 
+@acquire_spill_lock()
 def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     """
     Given a mask buffer, returns a boolean column representng bit 0 -> False
