@@ -64,12 +64,18 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
 
 /**
  * @brief Mark unsupported input chunks for skipping.
+ */
+void skip_unsupported_inputs(device_span<size_t> input_sizes,
+                             device_span<compression_result> results,
+                             std::optional<size_t> max_valid_input_size,
+                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Mark unsupported input chunks for skipping.
  *
  * Returns the size of the largest remaining input chunk.
  */
-size_t skip_unsupported_inputs(device_span<size_t> input_sizes,
-                               device_span<compression_result> results,
-                               std::optional<size_t> max_valid_input_size,
-                               rmm::cuda_stream_view stream);
+std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
+                                                         rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::nvcomp

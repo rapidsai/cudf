@@ -391,11 +391,14 @@ void batched_compress(compression_type compression,
 
   auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
-  auto const max_uncomp_chunk_size = skip_unsupported_inputs(
+  skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
-  auto const temp_size = batched_compress_temp_size(
-    compression, num_chunks, max_uncomp_chunk_size, max_uncomp_chunk_size * num_chunks);
+  auto [max_uncomp_chunk_size, total_uncomp_size] =
+    max_chunk_and_total_input_size(nvcomp_args.input_data_sizes, stream);
+
+  auto const temp_size =
+    batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size, total_uncomp_size);
 
   rmm::device_buffer scratch(temp_size, stream);
   CUDF_EXPECTS(is_aligned(scratch.data(), 8), "Compression failed, misaligned scratch buffer");
