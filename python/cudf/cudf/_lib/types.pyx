@@ -17,6 +17,7 @@ from cudf._lib.types cimport (
 
 import cudf
 from cudf._lib import pylibcudf
+from cudf._lib cimport pylibcudf
 
 size_type_dtype = np.dtype("int32")
 
@@ -269,30 +270,21 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     else:
         return libcudf_types.data_type(tid)
 
-# TODO: Should this function be available in pylibcudf?
-# TODO: Should this function be cpdefed? I think so, it needs to be visible in
-# Python code not just Cython. Does it even need to be a non-def function?
-cdef dtype_to_pylibcudf_type(dtype):
+cpdef pylibcudf.DataType dtype_to_pylibcudf_type(dtype):
     if cudf.api.types.is_list_dtype(dtype):
-        tid = pylibcudf.TypeId.LIST
+        return pylibcudf.DataType(pylibcudf.TypeId.LIST)
     elif cudf.api.types.is_struct_dtype(dtype):
-        tid = pylibcudf.TypeId.STRUCT
+        return pylibcudf.DataType(pylibcudf.TypeId.STRUCT)
     elif cudf.api.types.is_decimal_dtype(dtype):
-        assert False, "Not yet supported"
-    # elif cudf.api.types.is_decimal128_dtype(dtype):
-    #     tid = pylibcudf.TypeId.DECIMAL128
-    # elif cudf.api.types.is_decimal64_dtype(dtype):
-    #     tid = pylibcudf.TypeId.DECIMAL64
-    # elif cudf.api.types.is_decimal32_dtype(dtype):
-    #     tid = pylibcudf.TypeId.DECIMAL32
-    else:
-        tid = <libcudf_types.type_id> (
-            <underlying_type_t_type_id> (
-                SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]))
-
-    # if is_decimal_type_id(tid):
-    #     return libcudf_types.data_type(tid, -dtype.scale)
-    return tid
+        if cudf.api.types.is_decimal128_dtype(dtype):
+            tid = pylibcudf.TypeId.DECIMAL128
+        elif cudf.api.types.is_decimal64_dtype(dtype):
+            tid = pylibcudf.TypeId.DECIMAL64
+        tid = pylibcudf.TypeId.DECIMAL32
+        return pylibcudf.DataType(tid, -dtype.scale)
+    return pylibcudf.DataType(
+        SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]
+    )
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (

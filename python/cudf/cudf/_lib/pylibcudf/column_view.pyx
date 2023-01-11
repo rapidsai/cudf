@@ -4,7 +4,7 @@ from cython.operator cimport dereference
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport UNKNOWN_NULL_COUNT, bitmask_type, size_type
+from cudf._lib.cpp.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -24,11 +24,16 @@ cdef class ColumnView:
     # TODO: I've temporarily defined __init__ instead of __cinit__ so that
     # factory functions can call __new__ without arguments. I'll need to think
     # more fully about what construction patterns we actually want to support.
+    # TODO: At the moment libcudf does not expose APIs for counting the nulls
+    # in a bitmask directly (those APIs are in detail/null_mask). We'll need to
+    # expose those eventually once UNKNOWN_NULL_COUNT goes away. This dovetails
+    # with our desire to expose other functionality too like bitmask_and.
     def __init__(
         self, DataType dtype, size_type size, gpumemoryview data_buf,
+        gpumemoryview mask_buf, size_type null_count, size_type offset,
         # TODO: Not sure what the best input is for children, for now just
         # using a List[ColumnView]
-        gpumemoryview mask_buf, size_type offset, object children
+        object children
     ):
         # TODO: Investigate cases where the data_buf is None. I'm not sure that
         # this is a real use case that we should support. EDIT: It looks like
@@ -40,15 +45,6 @@ cdef class ColumnView:
         cdef const bitmask_type * null_mask = NULL
         if mask_buf is not None:
             null_mask = int_to_bitmask_ptr(mask_buf.ptr)
-
-        # TODO: At the moment libcudf does not expose APIs for counting the
-        # nulls in a bitmask directly (those APIs are in detail/null_mask). If
-        # we want to allow more flexibility in the Cython layer we'll need to
-        # expose those eventually. This dovetails with our desire to expose
-        # other functionality too like bitmask_and. The more temporary
-        # alternative would be accepting the null count as one of the
-        # arguments.
-        cdef size_type null_count = UNKNOWN_NULL_COUNT
 
         cdef vector[column_view] c_children
         cdef ColumnView child

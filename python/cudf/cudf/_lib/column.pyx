@@ -453,9 +453,7 @@ cdef class Column:
         else:
             col = self
 
-        type_id = dtype_to_pylibcudf_type(col.dtype)
-        cdef pylibcudf.DataType dtype = pylibcudf.DataType(type_id)
-        # cdef libcudf_types.size_type offset = self.offset
+        cdef pylibcudf.DataType dtype = dtype_to_pylibcudf_type(col.dtype)
 
         cdef pylibcudf.gpumemoryview data = None
         if col.base_data is not None:
@@ -470,7 +468,9 @@ cdef class Column:
 
         cdef pylibcudf.gpumemoryview mask = None
         if self.nullable:
-            mask = pylibcudf.gpumemoryview(col.base_mask.ptr)
+            # TODO: Are we intentionally use self's mask instead of col's?
+            # Where is the mask stored for categoricals?
+            mask = pylibcudf.gpumemoryview(self.base_mask.ptr)
 
         cdef Column child_column
         children = []
@@ -478,13 +478,15 @@ cdef class Column:
             for child_column in col.base_children:
                 children.append(child_column.to_ColumnView())
 
-        # cdef libcudf_types.size_type c_null_count = null_count
-
         return pylibcudf.ColumnView(
             dtype,
             self.size,
             data,
             mask,
+            # TODO: Determine whether there is a good reason why the `view`
+            # method above does extra handling to determine whether null_count
+            # is None.
+            self.null_count,
             self.offset,
             children,
         )
