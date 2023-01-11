@@ -498,9 +498,7 @@ class Frame(BinaryOperand, Scannable):
                         f"{dtype} are not yet supported via "
                         "`__cuda_array_interface__`"
                     )
-            dtype = find_common_type(
-                [col.dtype for col in self._data.values()]
-            )
+            dtype = find_common_type(dtypes)
 
         matrix = make_empty_matrix(
             shape=(len(self), ncol), dtype=dtype, order="F"
