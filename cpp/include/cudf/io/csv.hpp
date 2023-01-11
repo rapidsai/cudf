@@ -1444,6 +1444,14 @@ class csv_writer_options {
    */
   [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
+  /**
+   * @brief Whether or not string rows containing the delimiter, quote, or newline
+   * are to be quoted.
+   * 
+   * @return true If string rows should be quoted
+   * @return false If string rows should not be quoted, even if they have special 
+   *         characters.
+   */
   [[nodiscard]] bool is_enabled_quote_strings() const { return _quote_strings; }
 
   // Setter
@@ -1511,9 +1519,10 @@ class csv_writer_options {
   void set_table(table_view const& table) { _table = table; }
 
   /**
-   * @brief 
+   * @brief Whether string rows containing the delimiter, quote, or newline
+   * should be quoted
    * 
-   * @param is_enabled_quoting 
+   * @param is_enabled_quoting Set to `true` to enable quoting, `false` otherwise
    */
   void enable_quote_strings(bool is_enabled_quoting) { _quote_strings = is_enabled_quoting; }
 };
@@ -1639,6 +1648,12 @@ class csv_writer_options_builder {
     return *this;
   }
 
+  /**
+   * @brief Whether string rows containing the delimiter, quote, or newline
+   * should be quoted
+   * 
+   * @param is_enabled_quoting Set to `true` to enable quoting, `false` otherwise
+   */
   csv_writer_options_builder& enable_quote_strings(bool is_enabled_quoting)
   {
     options._quote_strings = is_enabled_quoting;
