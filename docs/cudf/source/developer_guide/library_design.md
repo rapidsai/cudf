@@ -321,27 +321,26 @@ However, for performance reasons they frequently access internal attributes and 
 ## Copy-on-write
 
 
-Copy-on-write(COW) is designed to reduce memory footprint on GPUs. With this feature, a copy(`.copy(deep=False)`) is only really made whenever
+Copy-on-write (COW) is designed to reduce memory footprint on GPUs. With this feature, a copy (`.copy(deep=False)`) is only really made whenever
 there is a write operation on a column.
 
 The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate [weakreferences](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
-This is a defaultdict whose key-value pairs consist of `(ptr, size)` as key and `WeakSet` as value containing weakreferences to `CopyOnWriteBuffer`. This
+With the help of `CopyOnWriteBuffer.ptr` and `CopyOnWriteBuffer.size` we generate [weak references](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
+This is a mapping from `(ptr, size)` keys to `WeakSet`s containing references to `CopyOnWriterBuffer` objects. This
 means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr` & `.size`
 i.e., if they are all pointing to the same device memory.
 
-When the cudf option ``copy_on_write`` is ``True``, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
-mechanisms to enable copy-on-write for all Buffers. When a `CopyOnWriteBuffer` is created, its weakref is generated and added to the `WeakSet` which is in turn stored in the `defaultdict`. This will later serve as an indication of whether or not to make a copy when a
-write operation is performed on `Column`(more on that below).
+When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
+mechanisms to enable copy-on-write for all buffers. When a `CopyOnWriteBuffer` is created, its weakref is generated and added to the `WeakSet` which is in turn stored in `CopyOnWriterBuffer._instances`. This will later serve as an indication of whether or not to make a copy when a
+when write operation is performed on a `Column` (see below).
 
 
-There is a case when copy-on-write will be inactive and return true copies even though the cudf option `copy_on_write` is `True`:
+### Eager copies when exposing to third-party libraries
 
-Whenever a `Column`/`CopyOnWriteBuffer` are zero-copied to a third-party library via `__cuda_array_interface__`, it
-is technically not possible to know if the device data is modified without introspection. Hence whenever
-someone accesses `__cuda_array_interface__` of `Column` or a `CopyOnWriteBuffer`, we trigger
-`Column/Buffer._unlink_shared_buffers` which will ensure a true copy of underlying device data is made and
-unlinks itself from pointing to the original device memory. We also mark the `Column`/`CopyOnWriteBuffer` as
+If `Column`/`CopyOnWriteBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred without introspection. Hence whenever
+someone accesses data through the `__cuda_array_interface__`, we eagerly trigger the copy by calling 
+`_unlink_shared_buffers` which ensures a true copy of underlying device data is made and
+unlinks the buffer from any shared "weak" references. Any future shallow-copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object), to handle this we also mark the `Column`/`CopyOnWriteBuffer` as
 `obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
 rather than a copy-on-write shallow copy with weak references.
 
@@ -351,19 +350,19 @@ Notes:
 types that can be mutated in place.
 2. Deep copies of variable width data types return shallow-copies of the Columns, because these
 types don't support real in-place mutations to the data. We just mimic in such a way that it looks
-like an in-place operation using `ColumnBase\Series\DataFrame._mimic_inplace`.
+like an in-place operation using `_mimic_inplace`.
 
 
-|                     | Copy-on-Write is `ON`                                                                                                                                                                                          | Copy-on-Write is `OFF`                                                                               |
+|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
 |---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `.copy(deep=True)`  | A true physical copies are made and changes don't propagate to the original object.                                                                                                                            | A true physical copies are made and changes don't propagate to the original object.                  |
-| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy and then the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes done to one will propagate to the other object. |
+| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
+| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
 
 
 ### Examples
 
-When copy-on-write is enabled, taking a shallow copy of a `Series` or a `DataFrame` will not
-eagerly create a copy of the data. Instead, it will produce a view that will be lazily
+When copy-on-write is enabled, taking a shallow copy of a `Series` or a `DataFrame` does not
+eagerly create a copy of the data. Instead, it produces a view that will be lazily
 copied when a write operation is performed on any of its copies.
 
 Let's create a series:
@@ -384,7 +383,7 @@ Make another copy, but of `s2`:
 >>> s3 = s2.copy(deep=False)
 ```
 
-Viewing the data & memory addresses show that they all point to the same device memory:
+Viewing the data and memory addresses show that they all point to the same device memory:
 ```python
 >>> s1
 0    1
@@ -438,7 +437,7 @@ dtype: int64
 dtype: int64
 ```
 
-If we inspect the memory address of the data, `s1` & `s3` will still share the same address but `s2` will have a new one:
+If we inspect the memory address of the data, `s1` and `s3` still share the same address but `s2` has a new one:
 
 ```python
 >>> s1.data.ptr
@@ -450,7 +449,7 @@ If we inspect the memory address of the data, `s1` & `s3` will still share the s
 ```
 
 Now, performing write operation on `s1` will trigger a new copy on device memory as there
-is a weakreference being shared in `s3`:
+is a weak reference being shared in `s3`:
 
 ```python
 >>> s1[0:2] = 11
@@ -474,7 +473,7 @@ dtype: int64
 dtype: int64
 ```
 
-If we inspect the memory address of the data, `s2` & `s3` addresses will remain untouched, but `s1` memory address will change because of a copy operation performed during the writing:
+If we inspect the memory address of the data, the addresses of `s2` and `s3` remain unchanged, but `s1`'s memory address has changed because of a copy operation performed during the writing:
 
 ```python
 >>> s2.data.ptr
