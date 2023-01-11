@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import glob
@@ -68,16 +68,17 @@ def simple_pdf(request):
         "float32",
         "float64",
     ]
-    renamer = {
-        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
-    }
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd._testing.makeCustomDataframe(
-        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    test_pdf = pd.DataFrame(
+        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
+        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        # Need to ensure that this index is not a RangeIndex to get the
+        # expected round-tripping behavior from Parquet reader/writer.
+        index=pd.Index(list(range(nrows))),
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
@@ -85,7 +86,7 @@ def simple_pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -113,16 +114,17 @@ def build_pdf(num_columns, day_resolution_timestamps):
         "datetime64[us]",
         "str",
     ]
-    renamer = {
-        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
-    }
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = num_columns.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd._testing.makeCustomDataframe(
-        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    test_pdf = pd.DataFrame(
+        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
+        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        # Need to ensure that this index is not a RangeIndex to get the
+        # expected round-tripping behavior from Parquet reader/writer.
+        index=pd.Index(list(range(nrows))),
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
@@ -130,7 +132,7 @@ def build_pdf(num_columns, day_resolution_timestamps):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.astype(typer)
 
     # make datetime64's a little more interesting by increasing the range of
     # dates note that pandas will convert these to ns timestamps, so care is
@@ -204,12 +206,12 @@ def rdg_seed():
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
-    test_pdf = pd._testing.makeCustomDataframe(
-        nrows=nrows,
-        ncols=1,
-        data_gen_f=lambda r, c: r,
-        dtype=dtype,
-        r_idx_type="i",
+    test_pdf = pd.DataFrame(
+        [list(range(ncolumns * i, ncolumns * (i + 1))) for i in range(nrows)],
+        columns=pd.Index(["foo"], name="bar"),
+        # Need to ensure that this index is not a RangeIndex to get the
+        # expected round-tripping behavior from Parquet reader/writer.
+        index=pd.Index(list(range(nrows))),
     )
     test_pdf.columns.name = None
 
@@ -1585,7 +1587,9 @@ def test_parquet_writer_gpu_chunked_context(tmpdir, simple_pdf, simple_gdf):
         writer.write_table(simple_gdf)
         writer.write_table(simple_gdf)
 
-    assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
+    got = pd.read_parquet(gdf_fname)
+    expect = pd.concat([simple_pdf, simple_pdf])
+    assert_eq(got, expect)
 
 
 def test_parquet_write_bytes_io(simple_gdf):

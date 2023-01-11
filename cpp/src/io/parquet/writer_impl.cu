@@ -1018,10 +1018,28 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   return comp_page_sizes;
 }
 
-auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                              host_span<gpu::parquet_column_device_view const> col_desc,
-                              device_2dspan<gpu::PageFragment const> frags,
-                              rmm::cuda_stream_view stream)
+size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
+{
+  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
+
+  auto const ncomp_type   = to_nvcomp_compression_type(compression);
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
+
+  auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  // page size must fit in a 32-bit signed integer
+  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
+}
+
+std::pair<std::vector<rmm::device_uvector<size_type>>, std::vector<rmm::device_uvector<size_type>>>
+build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                         host_span<gpu::parquet_column_device_view const> col_desc,
+                         device_2dspan<gpu::PageFragment const> frags,
+                         Compression compression,
+                         dictionary_policy dict_policy,
+                         size_t max_dict_size,
+                         rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
   // chunk that can have dictionary
@@ -1032,6 +1050,13 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_index;
 
   if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
+
+  if (dict_policy == dictionary_policy::NEVER) {
+    thrust::for_each(
+      h_chunks.begin(), h_chunks.end(), [](auto& chunk) { chunk.use_dictionary = false; });
+    chunks.host_to_device(stream);
+    return std::pair(std::move(dict_data), std::move(dict_index));
+  }
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
@@ -1076,6 +1101,12 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * nbits, 8);
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
       if (ck.plain_data_size <= dict_enc_size) { return {false, 0}; }
+
+      // don't use dictionary if it gets too large for the given compression codec
+      if (dict_policy == dictionary_policy::ADAPTIVE) {
+        auto const unique_size = static_cast<size_t>(ck.uniq_data_size);
+        if (unique_size > max_page_bytes(compression, max_dict_size)) { return {false, 0}; }
+      }
 
       return {true, nbits};
     }();
@@ -1244,20 +1275,6 @@ size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
   return ck->ck_stat_size * ck->num_pages + column_index_truncate_length + padding;
 }
 
-size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
-{
-  if (compression == parquet::Compression::UNCOMPRESSED) { return max_page_size_bytes; }
-
-  auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
-                              ? std::nullopt
-                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
-
-  auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
-  // page size must fit in a 32-bit signed integer
-  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
-}
-
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
@@ -1271,6 +1288,9 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
     stats_granularity_(options.get_stats_level()),
+    dict_policy_(options.get_dictionary_policy()),
+    max_dictionary_size_(options.get_max_dictionary_size()),
+    max_page_fragment_size_(options.get_max_page_fragment_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1296,6 +1316,9 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     max_page_size_bytes(max_page_bytes(compression_, options.get_max_page_size_bytes())),
     max_page_size_rows(options.get_max_page_size_rows()),
     stats_granularity_(options.get_stats_level()),
+    dict_policy_(options.get_dictionary_policy()),
+    max_dictionary_size_(options.get_max_dictionary_size()),
+    max_page_fragment_size_(options.get_max_page_fragment_size()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     column_index_truncate_length(options.get_column_index_truncate_length()),
     kv_md(options.get_key_value_metadata()),
@@ -1389,16 +1412,18 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
-  auto max_page_fragment_size =
-    (cudf::io::parquet::gpu::max_page_fragment_size * max_page_size_bytes) /
-    default_max_page_size_bytes;
+  // If using the default fragment size, scale it up or down depending on the requested page size.
+  if (max_page_fragment_size_ == cudf::io::default_max_page_fragment_size) {
+    max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
+                              cudf::io::default_max_page_size_bytes;
+  }
 
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [max_page_fragment_size](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                 [this](auto const& part) {
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size_);
                  });
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
@@ -1419,7 +1444,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
+      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size_);
   }
 
   std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
@@ -1491,7 +1516,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = md->file(p).row_groups[global_r];
       uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size_);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1533,7 +1558,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   fragments.host_to_device(stream);
-  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, stream);
+  auto dict_info_owner = build_chunk_dictionaries(
+    chunks, col_desc, fragments, compression_, dict_policy_, max_dictionary_size_, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
       size_t global_rg = global_rowgroup_base[p] + rg;
