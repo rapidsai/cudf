@@ -20,7 +20,6 @@ cdef class ColumnView:
     # requesting the size from the user. The gpumemoryview may also help, if it
     # is typed then it would contain the necessary information (total buffer
     # size and sizeof(type))
-    # TODO: Should be using `not None` where possible.
     # TODO: I've temporarily defined __init__ instead of __cinit__ so that
     # factory functions can call __new__ without arguments. I'll need to think
     # more fully about what construction patterns we actually want to support.
@@ -29,7 +28,7 @@ cdef class ColumnView:
     # expose those eventually once UNKNOWN_NULL_COUNT goes away. This dovetails
     # with our desire to expose other functionality too like bitmask_and.
     def __init__(
-        self, DataType dtype, size_type size, gpumemoryview data_buf,
+        self, DataType dtype not None, size_type size, gpumemoryview data_buf,
         gpumemoryview mask_buf, size_type null_count, size_type offset,
         # TODO: Not sure what the best input is for children, for now just
         # using a List[ColumnView]
