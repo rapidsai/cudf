@@ -127,7 +127,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         without triggering a deep-copy.
         """
         return cuda.as_cuda_array(
-            self.data._cuda_array_interface_readonly
+            self.data._get_readonly_proxy_obj
             if self.data is not None
             else None
         ).view(self.dtype)
@@ -139,7 +139,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         without triggering a deep-copy.
         """
         return cuda.as_cuda_array(
-            self.mask._cuda_array_interface_readonly
+            self.mask._get_readonly_proxy_obj
             if self.mask is not None
             else None
         ).view(mask_dtype)

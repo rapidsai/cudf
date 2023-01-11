@@ -159,12 +159,19 @@ class CopyOnWriteBuffer(Buffer):
         # has modified the data this Buffer is
         # pointing to.
         self._zero_copied = True
-        result = self._cuda_array_interface_readonly
-        result["data"] = (self._ptr, False)
-        return result
+        return self._get_cuda_array_interface(readonly=False)
+
+    def _get_cuda_array_interface(self, readonly=False):
+        return {
+            "data": (self._ptr, readonly),
+            "shape": (self.size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0,
+        }
 
     @property
-    def _cuda_array_interface_readonly(self) -> dict:
+    def _get_readonly_proxy_obj(self) -> dict:
         """
         Internal Implementation for the CUDA Array Interface which is
         read-only.

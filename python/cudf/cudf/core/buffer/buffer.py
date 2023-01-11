@@ -221,8 +221,11 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> dict:
         """Implementation for the CUDA Array Interface."""
+        return self._get_cuda_array_interface(readonly=False)
+
+    def _get_cuda_array_interface(self, readonly=False):
         return {
-            "data": (self.ptr, True),
+            "data": (self.ptr, readonly),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
@@ -230,7 +233,7 @@ class Buffer(Serializable):
         }
 
     @property
-    def _cuda_array_interface_readonly(self) -> dict:
+    def _get_readonly_proxy_obj(self) -> dict:
         """
         Internal Implementation for the CUDA Array Interface which is
         read-only.
