@@ -1341,7 +1341,7 @@ class csv_writer_options {
   // Names of all columns; if empty, writer will generate column names
   std::vector<std::string> _names;
   // Quote string rows, if value contains delimiter/double-quote/newline.
-  bool _quote_tricky_strings = true;
+  bool _quote_strings = true;
 
   /**
    * @brief Constructor from sink and table.
@@ -1444,7 +1444,7 @@ class csv_writer_options {
    */
   [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
-  [[nodiscard]] bool is_enabled_quote_tricky_strings() const { return _quote_tricky_strings; }
+  [[nodiscard]] bool is_enabled_quote_strings() const { return _quote_strings; }
 
   // Setter
   /**
@@ -1510,7 +1510,12 @@ class csv_writer_options {
    */
   void set_table(table_view const& table) { _table = table; }
 
-  void quote_tricky_strings(bool is_enabled_quoting) { _quote_tricky_strings = is_enabled_quoting; }
+  /**
+   * @brief 
+   * 
+   * @param is_enabled_quoting 
+   */
+  void enable_quote_strings(bool is_enabled_quoting) { _quote_strings = is_enabled_quoting; }
 };
 
 /**
@@ -1634,9 +1639,9 @@ class csv_writer_options_builder {
     return *this;
   }
 
-  csv_writer_options_builder& quote_tricky_strings(bool is_enabled_quoting)
+  csv_writer_options_builder& enable_quote_strings(bool is_enabled_quoting)
   {
-    options._quote_tricky_strings = is_enabled_quoting;
+    options._quote_strings = is_enabled_quoting;
     return *this;
   }
 

@@ -464,7 +464,7 @@ TEST_F(CsvWriterTest, QuotingDisabled)
   auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath},
                                                          input_table)
                                                 .include_header(false)
-                                                .quote_tricky_strings(false);
+                                                .enable_quote_strings(false);
   cudf::io::write_csv(w_options.build());
 
   auto r_options = cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
