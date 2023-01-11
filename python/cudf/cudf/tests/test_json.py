@@ -1012,6 +1012,7 @@ def test_json_round_trip_gzip():
     "jsonl_string",
     [
         # simple list with mixed types
+        """{"a":[123, {}], "b":1.1}""",
         """{"a":[123, {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[{"0": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[123, {"0": 123}, 12.3], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
@@ -1046,6 +1047,10 @@ def test_json_round_trip_gzip():
            {"a":[[[[[[]]], [[[]]]]]]}
            {"a":[[[[[[]], [[]]]]]]}
            {"a":[[[[[[], 123, []]]]]]}""",
+        # mixed elements in multiple columns
+        """{"a":[123, {"0": 123}], "b":1.0}
+           {"c": ["abc"], "b":1.1}
+           {"c": ["abc", []] }""",
     ],
 )
 def test_json_nested_mixed_types_in_list(jsonl_string):
@@ -1076,7 +1081,10 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     pdf = pd.read_json(jsonl_string, orient="records", lines=True)
     pdf2 = pd.read_json(json_string, orient="records", lines=False)
     assert_eq(pdf, pdf2)
-    pdf = _replace_with_nulls(pdf, [123, "123", 12.3])
+    # replace list elements with None if it has dict and non-dict
+    # in above test cases, these items are mixed with dict/list items
+    # so, replace them with None.
+    pdf = _replace_with_nulls(pdf, [123, "123", 12.3, "abc"])
     gdf = cudf.read_json(
         StringIO(jsonl_string),
         engine="cudf_experimental",

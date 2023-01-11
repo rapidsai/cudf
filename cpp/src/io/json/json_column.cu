@@ -579,10 +579,12 @@ void make_device_json_column(device_span<SymbolT const> input,
      num_list_children] __device__(size_type i) {
       auto const node_id        = node_ids[i];
       auto const parent_node_id = parent_node_ids[node_id];
+      // scatter to list_offset
       if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
         d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
           row_offsets[node_id];
       }
+      // last value of list child_offset is its size.
       if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
         d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
           row_offsets[node_id] + 1;
@@ -745,6 +747,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
+                      // EMPTY type could not used because gather throws exception on EMPTY type.
                       std::vector<column_name_info>>{std::make_unique<column>(
                                                        data_type{type_id::INT8},
                                                        0,
@@ -759,14 +762,18 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
               mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {make_lists_column(num_rows,
-                                std::move(offsets_column),
-                                std::move(child_column),
-                                null_count,
-                                std::move(result_bitmask),
-                                stream,
-                                mr),
-              std::move(column_names)};
+      auto ret_col                      = make_lists_column(num_rows,
+                                       std::move(offsets_column),
+                                       std::move(child_column),
+                                       0,
+                                       rmm::device_buffer{0, stream, mr},
+                                       stream,
+                                       mr);
+      // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
+      // null validation applied in make_lists_column factory, which is not needed for json
+      // parent column cannot be null when its children is non-empty in JSON
+      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;
   }
