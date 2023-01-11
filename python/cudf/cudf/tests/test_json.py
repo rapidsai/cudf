@@ -188,7 +188,7 @@ def json_input(request, tmp_path_factory):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf", "pandas"])
 def test_json_lines_basic(json_input, engine):
     cu_df = cudf.read_json(json_input, engine=engine, lines=True)
     pd_df = pd.read_json(json_input, lines=True)
@@ -200,7 +200,7 @@ def test_json_lines_basic(json_input, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["auto", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf"])
 def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file1 = tmpdir.join("MultiInputs1.json")
     tmp_file2 = tmpdir.join("MultiInputs2.json")
@@ -218,7 +218,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
-@pytest.mark.parametrize("engine", ["auto", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf"])
 def test_json_read_directory(tmpdir, json_input, engine):
     pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
@@ -399,7 +399,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
         {
             "a": ['ab"cd', "\\\b", "\r\\", "'"],
             "b": ["a\tb\t", "\\", '\\"', "\t"],
-            "c": ["aeiou", "try", "json", "cudf"],
+            "c": ["aeiou", "try", "json", "rand"],
         }
     )
     pdf.to_json(fname, compression="infer", lines=True, orient="records")
@@ -419,7 +419,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
         """{"a":"ab\\"cd","b":"a\\tb\\t","c":"aeiou"}
            {"a":"\\\\\\b","b":"\\\\","c":"try"}
            {"a":"\\r\\\\","b":"\\\\\\"","c":"json"}
-           {"a":"\'","b":"\\t","c":"cudf"}"""
+           {"a":"\'","b":"\\t","c":"rand"}"""
     )
 
     df = cudf.read_json(
@@ -429,7 +429,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
     expected = {
         "a": ['ab"cd', "\\\b", "\r\\", "'"],
         "b": ["a\tb\t", "\\", '\\"', "\t"],
-        "c": ["aeiou", "try", "json", "cudf"],
+        "c": ["aeiou", "try", "json", "rand"],
     }
 
     num_rows = df.shape[0]
@@ -525,7 +525,7 @@ def test_json_to_json_compare_contents(gdf, pdf):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf_legacy", "cudf", "pandas"])
 def test_default_integer_bitwidth(default_integer_bitwidth, engine):
     buf = BytesIO()
     pd.DataFrame({"a": range(10)}).to_json(buf, lines=True, orient="records")
@@ -539,8 +539,9 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
 @pytest.mark.parametrize(
     "engine",
     [
+        "cudf",
         pytest.param(
-            "cudf",
+            "cudf_legacy",
             marks=pytest.mark.skip(
                 reason="cannot partially set dtypes for cudf json engine"
             ),
@@ -563,7 +564,7 @@ def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf_legacy", "cudf", "pandas"])
 def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
     # Test that integer columns in json are _inferred_ as 32 bit columns.
     buf = StringIO(
@@ -739,7 +740,7 @@ def test_json_quoted_values_with_schema(col_type, json_str):
     )
     cudf_df = cudf.read_json(
         StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf",
+        engine="cudf_legacy",
         orient="records",
         lines=True,
         dtype={"k": col_type},
@@ -781,7 +782,7 @@ def test_json_quoted_values(col_type, json_str, expected):
     )
     cudf_df = cudf.read_json(
         StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf",
+        engine="cudf_legacy",
         orient="records",
         lines=True,
         dtype={"k": col_type},
