@@ -1106,3 +1106,35 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     )
     assert gdf.to_arrow().equals(pa_table_pdf)
     assert gdf2.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "jsonl_string",
+    [
+        # mixed type in list (in different order)
+        """{"a":[[{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        """{"a":[{"1": 321}, [{"0": 123}, {}], ], "b":1.0}""",
+        """{"a":[123, [{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        """{"a":[null, [{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        # mixed type in struct (in different order)
+        """{"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": null}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": 123}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+    ],
+)
+def test_json_nested_mixed_types_error(jsonl_string):
+    # mixing list and struct should raise an exception
+    with pytest.raises(RuntimeError):
+        cudf.read_json(
+            StringIO(jsonl_string),
+            engine="cudf_experimental",
+            orient="records",
+            lines=True,
+        )
