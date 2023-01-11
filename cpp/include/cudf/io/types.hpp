@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,6 +97,15 @@ enum statistics_freq {
   STATISTICS_ROWGROUP = 1,  ///< Per-Rowgroup column statistics
   STATISTICS_PAGE     = 2,  ///< Per-page column statistics
   STATISTICS_COLUMN   = 3,  ///< Full column and offset indices. Implies STATISTICS_ROWGROUP
+};
+
+/**
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum dictionary_policy {
+  NEVER,     ///< Never use dictionary encoding
+  ADAPTIVE,  ///< Use dictionary when it will not impact compression
+  ALWAYS     ///< Use dictionary reqardless of impact on compression
 };
 
 /**

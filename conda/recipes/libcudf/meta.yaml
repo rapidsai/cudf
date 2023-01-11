@@ -149,6 +149,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/detail/avro.hpp
         - test -f $PREFIX/include/cudf/io/detail/csv.hpp
         - test -f $PREFIX/include/cudf/io/detail/json.hpp
+        - test -f $PREFIX/include/cudf/io/detail/tokenize_json.hpp
         - test -f $PREFIX/include/cudf/io/detail/orc.hpp
         - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
         - test -f $PREFIX/include/cudf/io/detail/utils.hpp
@@ -336,6 +337,7 @@ outputs:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
+        - {{ compiler('cuda') }} {{ cuda_version }}
         - ninja
         - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:

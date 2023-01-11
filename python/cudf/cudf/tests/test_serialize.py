@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import pickle
 
@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -16,6 +15,8 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize(
     "df",
     [
+        lambda: cudf.Index([1, 2, 3]),
+        lambda: cudf.Index([1.0, 2.0, 3.0]),
         lambda: cudf.Series([1, 2, 3]),
         lambda: cudf.Series([1, 2, 3], index=[4, 5, 6]),
         lambda: cudf.Series([1, None, 3]),
@@ -53,48 +54,66 @@ from cudf.testing._utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd._testing.makeBoolIndex,
-        pd._testing.makeCategoricalIndex,
-        lambda: pd._testing.makeCustomDataframe(3, 4),
-        lambda: pd._testing.makeCustomIndex(2, 5),
-        pd._testing.makeDataFrame,
-        pd._testing.makeDateIndex,
-        pd._testing.makeFloatIndex,
-        pd._testing.makeFloatSeries,
-        pd._testing.makeIntIndex,
-        pd._testing.makeIntervalIndex,
-        pd._testing.makeMissingDataframe,
-        pd._testing.makeMixedDataFrame,
-        pd._testing.makeMultiIndex,
-        lambda: pd._testing.makeNumericIndex(dtype=np.float64),
-        pd._testing.makeObjectSeries,
-        pytest.param(
-            pd._testing.makePeriodFrame,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
+        lambda: pd.Index([True, False] * 5),
+        lambda: pd.CategoricalIndex(["a", "b", "a", "b"], ["a", "b", "c"]),
+        lambda: (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, 3],
+                    "b": ["c", "e", "g"],
+                    "d": [True, False, True],
+                },
+                index=cudf.MultiIndex.from_tuples(
+                    [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
+                    names=["foo", "bar"],
+                ),
+            )
+        ),
+        lambda: cudf.Index(
+            cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
+        ),
+        lambda: cudf.Index([1.2, 3.4, 5.6]),
+        lambda: cudf.Series([1.2, 3.4, 5.6]),
+        lambda: pd.IntervalIndex.from_breaks(range(10)),
+        lambda: cudf.MultiIndex.from_tuples(
+            [("i1", "i2"), ("i3", "i4"), ("i5", "i6")], names=["foo", "bar"]
+        ),
+        lambda: cudf.RangeIndex(10),
+        lambda: cudf.DataFrame(
+            {"a": list(range(13)), "b": [float(x) for x in range(13)]},
+            index=cudf.Index(
+                cudf.date_range(
+                    start="2011-01-01", end="2012-01-01", periods=13
+                )
             ),
         ),
-        pytest.param(
-            pd._testing.makePeriodIndex,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
+        lambda: cudf.Series(
+            list(range(13)),
+            index=cudf.Index(
+                cudf.date_range(
+                    start="2011-01-01", end="2012-01-01", periods=13
+                )
             ),
         ),
-        pytest.param(
-            pd._testing.makePeriodSeries,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
-            ),
+        lambda: cudf.TimedeltaIndex(
+            [1132223, 2023232, 342234324, 4234324],
+            dtype="timedelta64[ns]",
+            name="foo",
         ),
-        pd._testing.makeRangeIndex,
-        pd._testing.makeStringSeries,
-        pd._testing.makeTimeDataFrame,
-        pd._testing.makeTimeSeries,
-        pd._testing.makeTimedeltaIndex,
-        pd._testing.makeUIntIndex,
-        pd._testing.makeUnicodeIndex
-        if not PANDAS_GE_150
-        else pd._testing.makeStringIndex,
+        lambda: cudf.Index(
+            [
+                "y7ssMP1PWJ",
+                "rZDLbzIQsX",
+                "NrPwYMsxNw",
+                "4zja1Vw9Rq",
+                "Y9TNDhjXgR",
+                "Ryjt7up2hT",
+                "dxYKtRGHkb",
+                "nMCWj5yhMu",
+                "Rt7S362FNX",
+                "OGbssOJLUI",
+            ]
+        ),
     ],
 )
 @pytest.mark.parametrize("to_host", [True, False])

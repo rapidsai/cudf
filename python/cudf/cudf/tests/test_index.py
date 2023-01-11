@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -676,7 +676,6 @@ def test_index_where(data, condition, other, error):
             rfunc=gs.where,
             lfunc_args_and_kwargs=([ps_condition], {"other": ps_other}),
             rfunc_args_and_kwargs=([gs_condition], {"other": gs_other}),
-            compare_error_message=False,
         )
 
 
@@ -1116,7 +1115,6 @@ def test_index_append_error(data, other):
         rfunc=gd_data.append,
         lfunc_args_and_kwargs=([[sr.to_pandas()]],),
         rfunc_args_and_kwargs=([[sr]],),
-        expected_error_message=r"all inputs must be Index",
     )
 
 
@@ -1993,7 +1991,6 @@ def test_get_loc_single_unique_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2026,7 +2023,6 @@ def test_get_loc_rangeindex(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2056,7 +2052,6 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2090,7 +2085,6 @@ def test_get_loc_single_unique_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2116,7 +2110,6 @@ def test_get_loc_single_duplicate_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2153,7 +2146,6 @@ def test_get_loc_multi_numeric(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2201,7 +2193,6 @@ def test_get_loc_multi_numeric_deviate(idx, key, result, method):
                 rfunc=gi.get_loc,
                 lfunc_args_and_kwargs=([], {"key": key, "method": method}),
                 rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-                compare_error_message=False,
             )
     else:
         expected = result
@@ -2280,7 +2271,6 @@ def test_get_loc_multi_string(idx, key, method):
             rfunc=gi.get_loc,
             lfunc_args_and_kwargs=([], {"key": key, "method": method}),
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
-            compare_error_message=False,
         )
     else:
         with expect_warning_if(method is not None):
@@ -2571,10 +2561,6 @@ def test_isin_multiindex(data, values, level, err):
             lfunc_args_and_kwargs=([values], {"level": level}),
             rfunc_args_and_kwargs=([values], {"level": level}),
             check_exception_type=False,
-            expected_error_message=re.escape(
-                "values need to be a Multi-Index or set/list-like tuple "
-                "squences  when `level=None`."
-            ),
         )
 
 

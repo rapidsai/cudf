@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -685,7 +685,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
-            indices = indices.astype("int32")
+            indices = indices.astype(libcudf.types.size_type_dtype)
         if not libcudf.copying._gather_map_is_valid(
             indices, len(self), check_bounds, nullify
         ):
@@ -1344,7 +1344,7 @@ def column_empty(
     elif is_list_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
@@ -1353,16 +1353,17 @@ def column_empty(
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype("int32").itemsize
+                        size=row_count
+                        * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
-                dtype="int32",
+                dtype=libcudf.types.size_type_dtype,
             ),
         )
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(

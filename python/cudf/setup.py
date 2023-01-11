@@ -19,6 +19,7 @@ install_requires = [
     "pandas>=1.0,<1.6.0dev0",
     "protobuf==4.21",
     "typing_extensions",
+    # Allow floating minor versions for Arrow.
     "pyarrow==10",
     f"rmm{cuda_suffix}",
     f"ptxcompiler{cuda_suffix}",
@@ -69,6 +70,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     cmdclass=versioneer.get_cmdclass(),
     include_package_data=True,
