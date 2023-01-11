@@ -153,7 +153,7 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST
+  REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
@@ -190,7 +190,7 @@ ConfigureTest(ROUND_TEST round/round_tests.cpp)
 # ##################################################################################################
 # * binary tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  BINARY_TEST
+  BINARYOP_TEST
   binaryop/binop-verify-input-test.cpp
   binaryop/binop-null-test.cpp
   binaryop/binop-compiled-test.cpp
