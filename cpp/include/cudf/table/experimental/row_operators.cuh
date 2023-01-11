@@ -446,17 +446,17 @@ class device_row_comparator {
       for (int l_dremel_index = l_start, r_dremel_index = r_start, element_index = 0;
            l_dremel_index < l_end and r_dremel_index < r_end;
            ++l_dremel_index, ++r_dremel_index) {
-        // First early exit: the definition levels do not match.
-        if (l_def_levels[l_dremel_index] != r_def_levels[r_dremel_index]) {
-          state = (l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index])
+        // Second early exit: the repetition levels do not match.
+        if (l_rep_levels[l_dremel_index] != r_rep_levels[r_dremel_index]) {
+          state = (l_rep_levels[l_dremel_index] < r_rep_levels[r_dremel_index])
                     ? weak_ordering::LESS
                     : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);
         }
 
-        // Second early exit: the repetition levels do not match.
-        if (l_rep_levels[l_dremel_index] != r_rep_levels[r_dremel_index]) {
-          state = (l_rep_levels[l_dremel_index] < r_rep_levels[r_dremel_index])
+        // First early exit: the definition levels do not match.
+        if (l_def_levels[l_dremel_index] != r_def_levels[r_dremel_index]) {
+          state = (l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index])
                     ? weak_ordering::LESS
                     : weak_ordering::GREATER;
           return cuda::std::pair(state, _depth);

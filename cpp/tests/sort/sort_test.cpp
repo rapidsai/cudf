@@ -53,6 +53,29 @@ void run_sort_test(cudf::table_view input,
 using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integers, floats and bool
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
 
+struct SortSpark : public cudf::test::BaseFixture {
+};
+
+TEST_F(SortSpark, TestExamples)
+{
+  using lcw = cudf::test::lists_column_wrapper<int32_t, int32_t>;
+  using cudf::test::iterators::nulls_at;
+  lcw col1{
+    lcw{lcw{{0}, nulls_at({0})}, lcw{-21827}},  // 0
+    lcw{lcw{{0, 0}, nulls_at({0, 1})}}          // 1
+  };
+  cudf::test::fixed_width_column_wrapper<int32_t> expected1{{0, 1}};
+  auto result1 = cudf::sorted_order(cudf::table_view({col1}));
+  cudf::test::print(*result1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, *result1);
+
+  auto const col2 = lcw{lcw{lcw{1}, lcw{2}}, lcw{lcw{{1, 0}, nulls_at({1})}, lcw{2, 3}}};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected2{{0, 1}};
+  auto result2 = cudf::sorted_order(cudf::table_view({col2}), {});
+  cudf::test::print(*result2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, *result2);
+}
+
 template <typename T>
 struct Sort : public cudf::test::BaseFixture {
 };
