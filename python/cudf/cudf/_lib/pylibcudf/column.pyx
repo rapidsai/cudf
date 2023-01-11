@@ -1,6 +1,5 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from cpython cimport PyErr_SetString
 from cython.operator cimport dereference
 from libcpp cimport bool as cbool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -21,18 +20,20 @@ cdef class Column:
     def __cinit__(self):
         self.released = False
 
-    cdef column * get(self):
+    cdef column * get(self) noexcept:
         """Get the underlying column object."""
-        self._raise_if_released()
         return self.c_obj.get()
 
-    cpdef size_type size(self):
+    cpdef size_type size(self) except -1:
+        self._raise_if_released()
         return self.get().size()
 
-    cpdef size_type null_count(self):
+    cpdef size_type null_count(self) except -1:
+        self._raise_if_released()
         return self.get().null_count()
 
-    cpdef cbool has_nulls(self):
+    cpdef cbool has_nulls(self) except *:
+        self._raise_if_released()
         return self.get().has_nulls()
 
     cpdef ColumnView view(self):
@@ -40,12 +41,10 @@ cdef class Column:
 
     cdef int _raise_if_released(self) except 1:
         if self.released:
-            PyErr_SetString(
-                ValueError,
+            raise ValueError(
                 "Attempted to perform operations on a Column after its "
                 "contents have been released."
             )
-            return 1
         return 0
 
     cpdef ColumnContents release(self):

@@ -21,10 +21,10 @@ cdef class ColumnContents:
 cdef class Column:
     cdef cbool released
     cdef unique_ptr[column] c_obj
-    cdef column * get(self)
-    cpdef size_type size(self)
-    cpdef size_type null_count(self)
-    cpdef cbool has_nulls(self)
+    cdef column * get(self) noexcept
+    cpdef size_type size(self) except -1
+    cpdef size_type null_count(self) except -1
+    cpdef cbool has_nulls(self) except *
     cpdef ColumnView view(self)
     cpdef ColumnContents release(self)
     cdef int _raise_if_released(self) except 1
