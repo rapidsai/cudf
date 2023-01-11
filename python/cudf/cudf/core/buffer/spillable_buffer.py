@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -13,7 +13,11 @@ import numpy
 
 import rmm
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.buffer import (
+    Buffer,
+    cuda_array_interface_wrapper,
+    host_memory_allocation,
+)
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
@@ -205,7 +209,7 @@ class SpillableBuffer(Buffer):
                 )
 
             if (ptr_type, target) == ("gpu", "cpu"):
-                host_mem = memoryview(bytearray(self.size))
+                host_mem = host_memory_allocation(self.size)
                 rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
                 self._ptr_desc["memoryview"] = host_mem
                 self._ptr = 0
@@ -339,7 +343,7 @@ class SpillableBuffer(Buffer):
                 return self._ptr_desc["memoryview"][offset : offset + size]
             else:
                 assert self._ptr_desc["type"] == "gpu"
-                ret = memoryview(bytearray(size))
+                ret = host_memory_allocation(size)
                 rmm._lib.device_buffer.copy_ptr_to_host(
                     self._ptr + offset, ret
                 )
