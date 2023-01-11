@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,8 +292,6 @@ struct parquet_column_device_view : stats_column_desc {
                                //!< col.nullable() in case of chunked writing.
   bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
 };
-
-constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
 struct EncColumnChunk;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,6 @@ std::unique_ptr<column> simple_segmented_reduction(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Rewrites this function to accept a pair of iterators for start/end indices
-  // to enable `2N` type offset input.
   // reduction by iterator
   auto dcol               = cudf::column_device_view::create(col, stream);
   auto simple_op          = Op{};
@@ -99,7 +97,6 @@ std::unique_ptr<column> simple_segmented_reduction(
     make_fixed_width_column(result_type, num_segments, mask_state::UNALLOCATED, stream, mr);
   auto outit = result->mutable_view().template begin<ResultType>();
 
-  // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
   if (col.has_nulls()) {
     auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
     auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
