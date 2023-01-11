@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,6 +185,8 @@ class writer {
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
