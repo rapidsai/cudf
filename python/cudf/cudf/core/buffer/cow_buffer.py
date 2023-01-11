@@ -45,6 +45,7 @@ class CopyOnWriteBuffer(Buffer):
     def _finalize_init(self):
         key = (self._ptr, self._size)
         self.__class__._instances[key].add(self)
+        self._instances = self.__class__._instances[key]
         self._zero_copied = False
         weakref.finalize(self, _keys_cleanup, self._ptr, self._size)
 
@@ -84,7 +85,7 @@ class CopyOnWriteBuffer(Buffer):
         """
         Return `True` if `self`'s memory is shared with other columns.
         """
-        return len(self.__class__._instances[(self._ptr, self._size)]) > 1
+        return len(self._instances) > 1
 
     @property
     def ptr(self) -> int:
