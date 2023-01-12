@@ -409,6 +409,10 @@ cdef class Column:
                 spill_lock=get_spill_lock()
             )
         else:
+            # Shouldn't access `.ptr`, because in case
+            # of `CopyOnWriteBuffer` that could trigger
+            # a copy, which isn't required to create a
+            # view that is read only.
             data = <void*><uintptr_t>(col.base_data._ptr)
 
         cdef Column child_column
