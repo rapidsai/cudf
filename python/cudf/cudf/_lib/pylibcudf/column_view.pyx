@@ -27,6 +27,12 @@ cdef class ColumnView:
     # in a bitmask directly (those APIs are in detail/null_mask). We'll need to
     # expose those eventually once UNKNOWN_NULL_COUNT goes away. This dovetails
     # with our desire to expose other functionality too like bitmask_and.
+    # TODO: The nature of view types in libcudf is antithetical to how Python
+    # users expect to interact with anything. The idea that an object could
+    # become invalidated and then just seg fault (if the memory owner goes out
+    # of scope) is pretty terrible in Python. We need the gpumemoryview to
+    # maintain a reference to the owner so that it isn't destroyed to avoid
+    # this problem (probably should just have it use __cuda_array_interface__).
     def __init__(
         self, DataType dtype not None, size_type size, gpumemoryview data_buf,
         gpumemoryview mask_buf, size_type null_count, size_type offset,

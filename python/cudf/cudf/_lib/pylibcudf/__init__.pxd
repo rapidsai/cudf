@@ -8,13 +8,15 @@
 from .pylibcudf.column cimport Column, Column_from_ColumnView, ColumnContents
 from .pylibcudf.column_view cimport ColumnView
 from .pylibcudf.gpumemoryview cimport gpumemoryview
+from .pylibcudf.table_view cimport TableView
 from .pylibcudf.types cimport DataType
 
 __all__ = [
     "Column",
     "ColumnContents",
     "ColumnView",
-    "DataType",
     "Column_from_ColumnView",
+    "DataType",
+    "TableView",
     "gpumemoryview",
 ]
