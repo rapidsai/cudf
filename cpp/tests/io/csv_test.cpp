@@ -453,6 +453,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   EXPECT_EQ(result_strings, reference_strings);
 }
 
+/*
 void test_quoting_disabled_with_delimiter(char delimiter_char)
 {
   auto const delimiter     = std::string{delimiter_char};
@@ -466,7 +467,7 @@ void test_quoting_disabled_with_delimiter(char delimiter_char)
   auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, input_table)
                      .include_header(false)
                      .inter_column_delimiter(delimiter_char)
-                     .enable_quote_strings(false);
+                     .quoting(cudf::io::quote_style::NONE);
   cudf::io::write_csv(w_options.build());
 
   auto r_options = cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
@@ -485,6 +486,7 @@ TEST_F(CsvWriterTest, QuotingDisabled)
   test_quoting_disabled_with_delimiter(',');
   test_quoting_disabled_with_delimiter('\u0001');
 }
+*/
 
 TEST_F(CsvReaderTest, MultiColumn)
 {

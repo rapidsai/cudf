@@ -1340,8 +1340,8 @@ class csv_writer_options {
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
   std::vector<std::string> _names;
-  // Quote string rows, if value contains delimiter/double-quote/newline.
-  bool _quote_strings = true;
+  // Quote style. Currently only MINIMAL and NONE are supported.
+  quote_style _quoting = quote_style::MINIMAL;
 
   /**
    * @brief Constructor from sink and table.
@@ -1445,14 +1445,16 @@ class csv_writer_options {
   [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
   /**
-   * @brief Whether or not string rows containing the delimiter, quote, or newline
-   * are to be quoted.
+   * @brief Returns the quote style for the writer.
    *
-   * @return true If string rows should be quoted
-   * @return false If string rows should not be quoted, even if they have special
-   *         characters.
+   * Note: Only MINIMAL and NONE are supported.
+   *   1. MINIMAL: String columns containing special characters like row-delimiters
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @return quote_style The quote style for the writer
    */
-  [[nodiscard]] bool is_enabled_quote_strings() const { return _quote_strings; }
+  [[nodiscard]] quote_style get_quoting() const { return _quoting; }
 
   // Setter
   /**
@@ -1519,12 +1521,21 @@ class csv_writer_options {
   void set_table(table_view const& table) { _table = table; }
 
   /**
-   * @brief Whether string rows containing the delimiter, quote, or newline
-   * should be quoted
+   * @brief Sets the quote style for the writer.
    *
-   * @param is_enabled_quoting Set to `true` to enable quoting, `false` otherwise
+   * Note: Only MINIMAL and NONE are supported.
+   *   1. MINIMAL: String columns containing special characters like row-delimiters/
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @param quoting The new quote_style for the writer.
    */
-  void enable_quote_strings(bool is_enabled_quoting) { _quote_strings = is_enabled_quoting; }
+  void set_quoting(quote_style quoting)
+  {
+    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::NONE,
+                 "Only MINIMAL and NONE are supported for quoting.");
+    _quoting = quoting;
+  }
 };
 
 /**
@@ -1649,15 +1660,16 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Whether string rows containing the delimiter, quote, or newline
-   * should be quoted
+   * @brief Sets the quote style for the writer.
    *
-   * @param is_enabled_quoting Set to `true` to enable quoting, `false` otherwise
+   * Only MINIMAL and NONE are supported.
+   *
+   * @param quoting The new quote style for the writer.
    * @return this for chaining
    */
-  csv_writer_options_builder& enable_quote_strings(bool is_enabled_quoting)
+  csv_writer_options_builder& quoting(quote_style quoting)
   {
-    options._quote_strings = is_enabled_quoting;
+    options.set_quoting(quoting);
     return *this;
   }
 

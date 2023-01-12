@@ -170,7 +170,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
-    if (not options_.is_enabled_quote_strings()) {
+    if (options_.get_quoting() == cudf::io::quote_style::NONE) {
       return std::make_unique<column>(column_v, stream_, mr_);
     }
 
