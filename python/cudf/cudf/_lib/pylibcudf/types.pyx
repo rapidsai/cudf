@@ -12,6 +12,8 @@ from cudf._lib.cpp.types cimport type_id
 # IntEnum and adding a new staticmethod for constructing from a value rather
 # than the call operator of the Enum metaclass. That won't work with a cdef
 # class though.
+# CONSIDER USING A cpdef enum. NEED TO FIGURE OUT how the APIs will look for
+# that though (do cdef APIs accept both?)
 class TypeId(IntEnum):
     EMPTY = type_id.EMPTY
     INT8 = type_id.INT8

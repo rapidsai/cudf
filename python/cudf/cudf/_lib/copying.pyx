@@ -2,7 +2,6 @@
 
 import pickle
 
-from cython.operator cimport dereference
 from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
@@ -182,25 +181,6 @@ def copy_range(Column source_column,
                            source_begin, source_end, target_begin)
 
 
-# TODO: This should be cpdefed and moved to a pylibcudf/ module, but cpdefing
-# will require creating a Cython mirror for out_of_bounds_policy.
-cdef pylibcudf.Table cy_gather(
-    pylibcudf.TableView source_table,
-    pylibcudf.ColumnView gather_map,
-    cpp_copying.out_of_bounds_policy bounds_policy
-):
-    cdef unique_ptr[table] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.gather(
-                dereference(source_table.get()),
-                dereference(gather_map.get()),
-                bounds_policy
-            )
-        )
-    return pylibcudf.Table.from_table(move(c_result))
-
-
 @acquire_spill_lock()
 def gather(
     list columns,
@@ -217,7 +197,7 @@ def gather(
     cdef pylibcudf.Table tbl
     cdef column_view gather_map_view
     if cudf.get_option("_use_pylibcudf") > 0:
-        tbl = cy_gather(
+        tbl = pylibcudf.copying.gather(
             pylibcudf.TableView([col.to_ColumnView() for col in columns]),
             gather_map.to_ColumnView(),
             policy

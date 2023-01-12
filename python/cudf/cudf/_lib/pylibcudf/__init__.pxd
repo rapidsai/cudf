@@ -5,6 +5,7 @@
 # https://github.com/cython/cython/issues/3442
 # that is fixed in Cython 3
 # https://github.com/cython/cython/pull/4552
+from .pylibcudf cimport copying
 from .pylibcudf.column cimport Column, Column_from_ColumnView, ColumnContents
 from .pylibcudf.column_view cimport ColumnView
 from .pylibcudf.gpumemoryview cimport gpumemoryview
@@ -20,5 +21,6 @@ __all__ = [
     "DataType",
     "Table",
     "TableView",
+    "copying",
     "gpumemoryview",
 ]
