@@ -585,12 +585,12 @@ public class TableTest extends CudfTestBase {
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
                                                .withColumnNames(schema.getColumnNames())
-                                               .withIncludeHeader(false)
-                                               .withFieldDelimiter((byte)'\u0001')
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
-                                               .withTrueValue("T")
-                                               .withFalseValue("F")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
@@ -607,10 +607,10 @@ public class TableTest extends CudfTestBase {
                                          .includeColumn("f")
                                          .includeColumn("b")
                                          .includeColumn("str")
-                                         .hasHeader(false)
-                                         .withDelim('\u0001')
-                                         .withTrueValue("T")
-                                         .withFalseValue("F")
+                                         .hasHeader(includeHeader)
+                                         .withDelim(fieldDelim)
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
         assertTablesAreEqual(inputTable, readTable);
