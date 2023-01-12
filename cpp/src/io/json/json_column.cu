@@ -463,16 +463,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                           is_array_of_arrays,
                           row_array_parent_col_id,
                           stream);
-  {
-#ifdef NJP_DEBUG_PRINT
-    auto h_input = cudf::detail::make_host_vector_async(input, stream);
-    print_tree(h_input, d_column_tree, stream);
-    print_vec(
-      cudf::detail::make_std_vector_async(d_unique_col_ids, stream), "d_unique_col_ids", to_int);
-    print_vec(
-      cudf::detail::make_std_vector_async(d_max_row_offsets, stream), "d_max_row_offsets", to_int);
-#endif
-  }
   auto num_columns    = d_unique_col_ids.size();
   auto unique_col_ids = cudf::detail::make_std_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -501,9 +491,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                               ? std::to_string(h_values_column_indices[col_id])
                               : name;
                    });
-#ifdef NJP_DEBUG_PRINT
-    print_vec(column_names, "column_names", [](auto const& s) { return s; });
-#endif
   }
 
   auto to_json_col_type = [](auto category) {
@@ -915,17 +902,12 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 {
   CUDF_FUNC_RANGE();
 
-#ifdef NJP_DEBUG_PRINT
-  auto h_input2 = cudf::detail::make_host_vector_async(d_input, stream);
-  std::cout << "h_input:" << std::string_view{h_input2.data(), h_input2.size()} << std::endl;
-#endif
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
     const auto [tokens_gpu, token_indices_gpu] = get_token_stream(d_input, options, stream);
     // gpu tree generation
     return get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   }();  // IILE used to free memory of token data.
-// #define NJP_DEBUG_PRINT
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
@@ -947,12 +929,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   auto [gpu_col_id, gpu_row_offsets] = records_orient_tree_traversal(
     d_input, gpu_tree, is_array_of_arrays, options.is_enabled_lines(), stream);
-
-#ifdef NJP_DEBUG_PRINT
-  print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
-  print_vec(
-    cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
-#endif
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;

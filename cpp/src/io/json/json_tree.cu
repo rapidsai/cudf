@@ -59,12 +59,6 @@
 
 namespace cudf::io::json {
 namespace detail {
-auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
-auto print_vec = [](auto const& cpu, auto const name, auto converter) {
-  for (auto const& v : cpu)
-    printf("%3s,", converter(v).c_str());
-  std::cout << name << std::endl;
-};
 
 // The node that a token represents
 struct token_to_node {
@@ -544,9 +538,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                     level2_indices.end(),
                     level2_nodes.begin(),
                     list_indices.begin());
-#ifdef NJP_DEBUG_PRINT
-    print_vec(cudf::detail::make_std_vector_async(list_indices, stream), "list_indices", to_int);
-#endif
   }
 
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
