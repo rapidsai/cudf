@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,9 +71,7 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
                              rmm::cuda_stream_view stream);
 
 /**
- * @brief Mark unsupported input chunks for skipping.
- *
- * Returns the size of the largest remaining input chunk.
+ * @brief Returns the size of the largest input chunk and the total input size.
  */
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream);
