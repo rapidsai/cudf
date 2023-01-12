@@ -117,7 +117,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> ordered_node_ids,
                       device_span<size_type> row_offsets,
                       bool const is_array_of_arrays,
-                      bool const is_enabled_lines,
+                      NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -200,7 +200,6 @@ reduce_to_column_tree(tree_meta_t& tree,
                                                     : col_ids[parent_node_id];
     });
 
-  NodeIndexT const row_array_parent_col_id = is_enabled_lines ? 0 : 1;
   // condition is true if parent is not a list, or sentinel/root
   // Special case to return true if parent is a list and is_array_of_arrays is true
   auto is_non_list_parent = [column_categories = column_categories.begin(),
@@ -437,6 +436,19 @@ void make_device_json_column(device_span<SymbolT const> input,
   thrust::stable_sort_by_key(
     rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
+  NodeIndexT const row_array_parent_col_id = [&]() {
+    if (!is_array_of_arrays) return parent_node_sentinel;
+    auto const list_node_index = is_enabled_lines ? 0 : 1;
+    NodeIndexT value;
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
+                                  col_ids.data() + list_node_index,
+                                  sizeof(NodeIndexT),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
+    stream.synchronize();
+    return value;
+  }();
+
   // 1. gather column information.
   auto [d_column_tree, d_unique_col_ids, d_max_row_offsets] =
     reduce_to_column_tree(tree,
@@ -445,7 +457,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                           node_ids,
                           row_offsets,
                           is_array_of_arrays,
-                          is_enabled_lines,
+                          row_array_parent_col_id,
                           stream);
   {
 #ifdef NJP_DEBUG_PRINT
@@ -469,7 +481,6 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<std::string> column_names = copy_strings_to_host(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   // array of arrays column names
-  NodeIndexT const row_array_parent_id = is_enabled_lines ? 0 : 1;
   if (is_array_of_arrays) {
     NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
     auto values_column_indices =
@@ -480,9 +491,9 @@ void make_device_json_column(device_span<SymbolT const> input,
                    unique_col_ids.end(),
                    column_names.begin(),
                    column_names.begin(),
-                   [&h_values_column_indices, &column_parent_ids, row_array_parent_id](
+                   [&h_values_column_indices, &column_parent_ids, row_array_parent_col_id](
                      auto col_id, auto name) mutable {
-                     return column_parent_ids[col_id] == row_array_parent_id
+                     return column_parent_ids[col_id] == row_array_parent_col_id
                               ? std::to_string(h_values_column_indices[col_id])
                               : name;
                    });
@@ -546,7 +557,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
     if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
-      if (is_array_of_arrays && parent_col_id == row_array_parent_id) {
+      if (is_array_of_arrays && parent_col_id == row_array_parent_col_id) {
         name = column_names[this_col_id];
       } else {
         name = list_child_name;
