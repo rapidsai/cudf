@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -71,8 +71,6 @@ cpdef read_json(object filepaths_or_buffers,
             c_compression = cudf_io_types.compression_type.GZIP
         elif compression == 'bz2':
             c_compression = cudf_io_types.compression_type.BZIP2
-        elif compression == 'zip':
-            c_compression = cudf_io_types.compression_type.ZIP
         else:
             c_compression = cudf_io_types.compression_type.AUTO
     else:

@@ -83,12 +83,6 @@ def test_json_reader(json_files):
     path_df, path_series, orient, compression = json_files
     expect_df = pd.read_json(path_df, orient=orient, compression=compression)
     got_df = cudf.read_json(path_df, orient=orient, compression=compression)
-    # Fix dtypes for float columns
-    for col_name in got_df.columns:
-        if col_name.startswith("col_float"):
-            got_df[col_name] = got_df[col_name].astype(
-                expect_df[col_name].dtype
-            )
     if len(expect_df) == 0:
         expect_df = expect_df.reset_index(drop=True)
         expect_df.columns = expect_df.columns.astype("object")
@@ -188,7 +182,7 @@ def json_input(request, tmp_path_factory):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
 def test_json_lines_basic(json_input, engine):
     cu_df = cudf.read_json(json_input, engine=engine, lines=True)
     pd_df = pd.read_json(json_input, lines=True)
@@ -200,7 +194,7 @@ def test_json_lines_basic(json_input, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file1 = tmpdir.join("MultiInputs1.json")
     tmp_file2 = tmpdir.join("MultiInputs2.json")
@@ -218,7 +212,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
-@pytest.mark.parametrize("engine", ["auto", "cudf_legacy", "cudf"])
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_read_directory(tmpdir, json_input, engine):
     pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
@@ -325,7 +319,7 @@ def test_json_engine_selection():
         assert isinstance(col_name, str)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=False, engine="pandas")
+    df = cudf.read_json(json, lines=False)
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
@@ -338,7 +332,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="cudf_legacy")
+        cudf.read_json(json, lines=False, engine="cudf")
 
 
 def test_json_bool_values():
@@ -361,8 +355,6 @@ def test_json_bool_values():
 @pytest.mark.parametrize(
     "buffer",
     [
-        # These are invalid JSON, legacy parser will parse,
-        # but nested parser will not
         "[1.0,]\n[null, ]",
         '{"0":1.0,"1":}\n{"0":null,"1": }',
         '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
@@ -370,7 +362,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True, engine="cudf_legacy")
+    df = cudf.read_json(buffer, lines=True)
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -399,7 +391,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
         {
             "a": ['ab"cd', "\\\b", "\r\\", "'"],
             "b": ["a\tb\t", "\\", '\\"', "\t"],
-            "c": ["aeiou", "try", "json", "rand"],
+            "c": ["aeiou", "try", "json", "cudf"],
         }
     )
     pdf.to_json(fname, compression="infer", lines=True, orient="records")
@@ -419,7 +411,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
         """{"a":"ab\\"cd","b":"a\\tb\\t","c":"aeiou"}
            {"a":"\\\\\\b","b":"\\\\","c":"try"}
            {"a":"\\r\\\\","b":"\\\\\\"","c":"json"}
-           {"a":"\'","b":"\\t","c":"rand"}"""
+           {"a":"\'","b":"\\t","c":"cudf"}"""
     )
 
     df = cudf.read_json(
@@ -429,7 +421,7 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
     expected = {
         "a": ['ab"cd', "\\\b", "\r\\", "'"],
         "b": ["a\tb\t", "\\", '\\"', "\t"],
-        "c": ["aeiou", "try", "json", "rand"],
+        "c": ["aeiou", "try", "json", "cudf"],
     }
 
     num_rows = df.shape[0]
@@ -525,7 +517,7 @@ def test_json_to_json_compare_contents(gdf, pdf):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf_legacy", "cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf", "pandas"])
 def test_default_integer_bitwidth(default_integer_bitwidth, engine):
     buf = BytesIO()
     pd.DataFrame({"a": range(10)}).to_json(buf, lines=True, orient="records")
@@ -539,9 +531,8 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
 @pytest.mark.parametrize(
     "engine",
     [
-        "cudf",
         pytest.param(
-            "cudf_legacy",
+            "cudf",
             marks=pytest.mark.skip(
                 reason="cannot partially set dtypes for cudf json engine"
             ),
@@ -564,7 +555,7 @@ def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["cudf_legacy", "cudf", "pandas"])
+@pytest.mark.parametrize("engine", ["cudf", "pandas"])
 def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
     # Test that integer columns in json are _inferred_ as 32 bit columns.
     buf = StringIO(
@@ -598,7 +589,7 @@ def test_json_nested_basic(tmpdir):
     pdf = pd.DataFrame(data)
     pdf.to_json(fname, orient="records")
 
-    df = cudf.read_json(fname, engine="cudf", orient="records")
+    df = cudf.read_json(fname, engine="cudf_experimental", orient="records")
     pdf = pd.read_json(fname, orient="records")
 
     assert_eq(pdf, df)
@@ -626,7 +617,9 @@ def test_json_nested_lines(data, lines):
     pdf = pd.DataFrame(data)
     pdf.to_json(bytes, orient="records", lines=lines)
     bytes.seek(0)
-    df = cudf.read_json(bytes, engine="cudf", orient="records", lines=lines)
+    df = cudf.read_json(
+        bytes, engine="cudf_experimental", orient="records", lines=lines
+    )
     bytes.seek(0)
     pdf = pd.read_json(bytes, orient="records", lines=lines)
     # In the second test-case we need to take a detour via pyarrow
@@ -645,7 +638,9 @@ def test_json_nested_data():
         '[{"0":{},"2":{}},{"1":[[""],[]],"2":{"2":""}},'
         '{"0":{"a":"1"},"2":{"0":"W&RR=+I","1":""}}]'
     )
-    df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
@@ -664,7 +659,7 @@ def test_json_empty_types():
     """
     df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         lines=True,
     )
@@ -681,7 +676,9 @@ def test_json_types_data():
         '{"1":[123],"0":{"0":"foo","1":123.4},"2":{"0":false}},'
         '{"0":{},"1":[],"2":{"0":null}}]'
     )
-    df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
+    df = cudf.read_json(
+        StringIO(json_str), engine="cudf_experimental", orient="records"
+    )
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
     pa_table_pdf = pa.Table.from_pandas(
@@ -728,13 +725,13 @@ def test_json_types_data():
 def test_json_quoted_values_with_schema(col_type, json_str):
     experimental_df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         dtype={"k": col_type},
     )
     cudf_df = cudf.read_json(
         StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf_legacy",
+        engine="cudf",
         orient="records",
         lines=True,
         dtype={"k": col_type},
@@ -770,13 +767,13 @@ def test_json_quoted_values_with_schema(col_type, json_str):
 def test_json_quoted_values(col_type, json_str, expected):
     experimental_df = cudf.read_json(
         StringIO(json_str),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         dtype={"k": col_type},
     )
     cudf_df = cudf.read_json(
         StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf_legacy",
+        engine="cudf",
         orient="records",
         lines=True,
         dtype={"k": col_type},
@@ -821,7 +818,7 @@ def test_json_keep_quotes(keep_quotes, result):
 
     actual = cudf.read_json(
         bytes_file,
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         lines=True,
         keep_quotes=keep_quotes,
@@ -878,7 +875,7 @@ def test_json_dtypes_nested_data():
 
     df = cudf.read_json(
         StringIO(actual_json_str),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         lines=True,
         dtype={
@@ -950,7 +947,9 @@ def test_json_dtypes_nested_data():
 class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
-        expected = cudf.read_json(StringIO(data), engine="cudf", lines=True)
+        expected = cudf.read_json(
+            StringIO(data), engine="cudf_experimental", lines=True
+        )
 
         source_size = len(data)
         chunks = []
@@ -958,7 +957,7 @@ class TestNestedJsonReaderCommon:
             chunks.append(
                 cudf.read_json(
                     StringIO(data),
-                    engine="cudf",
+                    engine="cudf_experimental",
                     byte_range=[chunk_start, chunk_size],
                     lines=True,
                 )
@@ -968,7 +967,9 @@ class TestNestedJsonReaderCommon:
 
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
-        target = cudf.read_json(StringIO(data), engine="cudf", lines=True)
+        target = cudf.read_json(
+            StringIO(data), engine="cudf_experimental", lines=True
+        )
         if tag == "dtype_mismatch":
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation
@@ -1054,7 +1055,7 @@ def test_json_array_of_arrays(data, lines):
     pdf = pd.read_json(data, orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="values",
         lines=lines,
     )
@@ -1154,13 +1155,13 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     pdf = _replace_with_nulls(pdf, [123, "123", 12.3, "abc"])
     gdf = cudf.read_json(
         StringIO(jsonl_string),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         lines=True,
     )
     gdf2 = cudf.read_json(
         StringIO(json_string),
-        engine="cudf",
+        engine="cudf_experimental",
         orient="records",
         lines=False,
     )
@@ -1201,7 +1202,7 @@ def test_json_nested_mixed_types_error(jsonl_string):
     with pytest.raises(RuntimeError):
         cudf.read_json(
             StringIO(jsonl_string),
-            engine="cudf",
+            engine="cudf_experimental",
             orient="records",
             lines=True,
         )
