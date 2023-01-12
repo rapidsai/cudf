@@ -31,12 +31,12 @@
 
 #include <limits>
 
-class StringSubstring : public cudf::benchmark {
+class StringSlice : public cudf::benchmark {
 };
 
-enum substring_type { position, multi_position, delimiter, multi_delimiter };
+enum slice_type { position, multi_position, delimiter, multi_delimiter };
 
-static void BM_substring(benchmark::State& state, substring_type rt)
+static void BM_slice(benchmark::State& state, slice_type rt)
 {
   cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
   cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
@@ -77,12 +77,12 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                                  \
-  BENCHMARK_DEFINE_F(StringSubstring, name)                             \
-  (::benchmark::State & st) { BM_substring(st, substring_type::name); } \
-  BENCHMARK_REGISTER_F(StringSubstring, name)                           \
-    ->Apply(generate_bench_args)                                        \
-    ->UseManualTime()                                                   \
+#define STRINGS_BENCHMARK_DEFINE(name)                          \
+  BENCHMARK_DEFINE_F(StringSlice, name)                         \
+  (::benchmark::State & st) { BM_slice(st, slice_type::name); } \
+  BENCHMARK_REGISTER_F(StringSlice, name)                       \
+    ->Apply(generate_bench_args)                                \
+    ->UseManualTime()                                           \
     ->Unit(benchmark::kMillisecond);
 
 STRINGS_BENCHMARK_DEFINE(position)
