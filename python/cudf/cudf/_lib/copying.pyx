@@ -182,6 +182,25 @@ def copy_range(Column source_column,
                            source_begin, source_end, target_begin)
 
 
+# TODO: This should be cpdefed and moved to a pylibcudf/ module, but cpdefing
+# will require creating a Cython mirror for out_of_bounds_policy.
+cdef pylibcudf.Table cy_gather(
+    pylibcudf.TableView source_table,
+    pylibcudf.ColumnView gather_map,
+    cpp_copying.out_of_bounds_policy bounds_policy
+):
+    cdef unique_ptr[table] c_result
+    with nogil:
+        c_result = move(
+            cpp_copying.gather(
+                dereference(source_table.get()),
+                dereference(gather_map.get()),
+                bounds_policy
+            )
+        )
+    return pylibcudf.Table.from_table(move(c_result))
+
+
 @acquire_spill_lock()
 def gather(
     list columns,
@@ -195,25 +214,14 @@ def gather(
     )
 
     cdef table_view source_table_view
-    cdef pylibcudf.TableView cy_table_view
     cdef pylibcudf.Table tbl
-    cdef pylibcudf.ColumnView cv
-    cdef column_view gather_map_view = gather_map.view()
+    cdef column_view gather_map_view
     if cudf.get_option("_use_pylibcudf") > 0:
-        cy_table_view = pylibcudf.TableView(
-            [col.to_ColumnView() for col in columns]
+        tbl = cy_gather(
+            pylibcudf.TableView([col.to_ColumnView() for col in columns]),
+            gather_map.to_ColumnView(),
+            policy
         )
-        cv = gather_map.to_ColumnView()
-
-        with nogil:
-            c_result = move(
-                cpp_copying.gather(
-                    dereference(cy_table_view.get()),
-                    dereference(cv.get()),
-                    policy
-                )
-            )
-        tbl = pylibcudf.Table.from_table(move(c_result))
         return columns_from_unique_ptr(move(tbl.c_obj))
     else:
         source_table_view = table_view_from_columns(columns)
