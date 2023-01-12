@@ -156,5 +156,5 @@ versions = safe_get_versions()
 if versions != NO_DRIVER:
     driver_version, runtime_version = versions
     ptxpath = _get_ptx_file()
-    strings_udf_ptx_version = get_cuda_version_from_ptx_file(ptxpath)
+    strings_udf_ptx_version = _get_cuda_version_from_ptx_file(ptxpath)
     maybe_patch_numba_linker(driver_version, strings_udf_ptx_version)
