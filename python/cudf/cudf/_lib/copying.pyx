@@ -2,6 +2,7 @@
 
 import pickle
 
+from cython.operator cimport dereference
 from libc.stdint cimport int32_t, uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
@@ -188,12 +189,21 @@ def gather(
     bool nullify=False
 ):
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
         cpp_copying.out_of_bounds_policy.NULLIFY if nullify
         else cpp_copying.out_of_bounds_policy.DONT_CHECK
     )
+
+    cdef table_view source_table_view
+    cdef pylibcudf.TableView cy_table_view
+    if cudf.get_option("_use_pylibcudf") > 0:
+        cy_table_view = pylibcudf.TableView(
+            [col.to_ColumnView() for col in columns]
+        )
+        source_table_view = dereference(cy_table_view.get())
+    else:
+        source_table_view = table_view_from_columns(columns)
 
     with nogil:
         c_result = move(
