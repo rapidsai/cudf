@@ -135,17 +135,17 @@ class CopyOnWriteBuffer(Buffer):
         -------
         Buffer
         """
-        if not deep and not self._zero_copied:
+        if deep or self._zero_copied:
+            return self._from_device_memory(
+                rmm.DeviceBuffer(ptr=self._ptr, size=self.size)
+            )
+        else:
             copied_buf = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
             copied_buf._ptr = self._ptr
             copied_buf._size = self._size
             copied_buf._owner = self._owner
             copied_buf._finalize_init()
             return copied_buf
-        else:
-            return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self._ptr, size=self.size)
-            )
 
     @property
     def __cuda_array_interface__(self) -> dict:
