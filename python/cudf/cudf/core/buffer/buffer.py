@@ -256,8 +256,7 @@ class Buffer(Serializable):
     @property
     def _get_readonly_proxy_obj(self) -> dict:
         """
-        Internal Implementation for the CUDA Array Interface which is
-        read-only.
+        Returns a proxy object with a read-only CUDA Array Interface.
         """
         return cuda_array_interface_wrapper(
             ptr=self.ptr,

@@ -27,9 +27,16 @@ def _keys_cleanup(ptr, size):
 
 
 class CopyOnWriteBuffer(Buffer):
-    """A Buffer represents device memory.
+    """A Copy-on-write buffer that implements Buffer.
 
-    Use the factory function `as_buffer` to create a Buffer instance.
+    This buffer enables making copies of data only when there
+    is a write operation being performed.
+
+    See `Copy-on-write` section in `library_design.md` for
+    detailed information on `CopyOnWriteBuffer`.
+
+    Use the factory function `as_buffer` to create a CopyOnWriteBuffer
+    instance.
     """
 
     # This dict keeps track of all instances that have the same `ptr`
@@ -183,8 +190,10 @@ class CopyOnWriteBuffer(Buffer):
     @property
     def _get_readonly_proxy_obj(self) -> dict:
         """
-        Internal Implementation for the CUDA Array Interface which is
-        read-only.
+        Returns a proxy object with a read-only CUDA Array Interface.
+
+        See `Copy-on-write` section in `library_design.md` for
+        more information on this API.
         """
         return cuda_array_interface_wrapper(
             ptr=self._ptr,

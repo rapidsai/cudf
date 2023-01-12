@@ -346,6 +346,16 @@ unlinks the buffer from any shared "weak" references. Any future shallow-copy re
 `obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
 rather than a copy-on-write shallow copy with weak references.
 
+### How to obtain read-only object?
+
+A read-only object can be quite useful for operations that will not
+mutate the data. This can be achieved by calling `._get_readonly_proxy_obj`
+API, this API will return a proxy object that has `__cuda_array_interface__`
+implemented and will not trigger a deep copy even if the `CopyOnWriteBuffer`
+has weak references. It is only recommended to use this API as long as
+the objects/arrays created with this proxy object gets cleaned up during
+the developer code execution. We currently use this API for device to host
+copies like in `ColumnBase._data_array_view` which is used for `Column.values_host`.
 
 Notes:
 1. Weak references are implemented only for fixed-width data types as these are only column
