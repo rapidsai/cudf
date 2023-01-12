@@ -197,6 +197,7 @@ def gather(
 
     cdef table_view source_table_view
     cdef pylibcudf.TableView cy_table_view
+    cdef pylibcudf.Table tbl
     if cudf.get_option("_use_pylibcudf") > 0:
         cy_table_view = pylibcudf.TableView(
             [col.to_ColumnView() for col in columns]
@@ -214,7 +215,11 @@ def gather(
             )
         )
 
-    return columns_from_unique_ptr(move(c_result))
+    if cudf.get_option("_use_pylibcudf") > 0:
+        tbl = pylibcudf.Table.from_table(move(c_result))
+        return columns_from_unique_ptr(move(tbl.c_obj))
+    else:
+        return columns_from_unique_ptr(move(c_result))
 
 
 cdef scatter_scalar(list source_device_slrs,

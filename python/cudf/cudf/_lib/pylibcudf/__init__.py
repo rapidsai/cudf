@@ -3,6 +3,7 @@
 from .column import Column, Column_from_ColumnView, ColumnContents
 from .column_view import ColumnView
 from .gpumemoryview import gpumemoryview
+from .table import Table
 from .table_view import TableView
 from .types import DataType, TypeId
 
@@ -12,6 +13,7 @@ __all__ = [
     "ColumnView",
     "Column_from_ColumnView",
     "DataType",
+    "Table",
     "TableView",
     "TypeId",
     "gpumemoryview",
