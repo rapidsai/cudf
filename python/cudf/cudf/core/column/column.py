@@ -405,12 +405,22 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return cast(T, result._with_type_metadata(self.dtype))
 
     def copy(self: T, deep: bool = True) -> T:
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        Makes a copy of the Column.
 
-        Note : Only Fixed width columns are mutable i.e., which support
-        creation of a `mutable_view`.
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, a true physical copy of the column
+            is made.
+            If False and `copy_on_write` is False, the same
+            memory is shared between the buffers of the Column
+            and changes made to one Column will propagate to
+            it's copy and vice-versa.
+            If False and `copy_on_write` is True, the same
+            memory is shared between the buffers of the Column
+            until there is a write operation being performed on
+            them.
         """
         if deep:
             return self.force_deep_copy()
