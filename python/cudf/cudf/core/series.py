@@ -544,12 +544,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
+            has_cai = (
+                type(
+                    inspect.getattr_static(
+                        data, "__cuda_array_interface__", None
+                    )
+                )
+                is property
+            )
             data = column.as_column(
                 data,
                 nan_as_null=nan_as_null,
                 dtype=dtype,
             )
-            if copy:
+            if copy and has_cai:
                 data = data.copy(deep=True)
         else:
             if dtype is not None:
