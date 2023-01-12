@@ -227,6 +227,13 @@ def test_series_zero_copy(copy_on_write):
     else:
         assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
 
+    s4 = cudf.Series([10, 20, 30, 40, 50])
+    s5 = cudf.Series(s4)
+    assert_eq(s5, cudf.Series([10, 20, 30, 40, 50]))
+    s5[0:2] = 1
+    assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
+    assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
+
 
 @pytest.mark.parametrize("copy_on_write", [True, False])
 def test_series_str_copy(copy_on_write):
