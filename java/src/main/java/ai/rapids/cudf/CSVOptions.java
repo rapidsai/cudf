@@ -35,6 +35,7 @@ public class CSVOptions extends ColumnFilterOptions {
   private final String[] nullValues;
   private final String[] trueValues;
   private final String[] falseValues;
+  private final boolean quoteStrings;
 
   private CSVOptions(Builder builder) {
     super(builder);
@@ -48,6 +49,7 @@ public class CSVOptions extends ColumnFilterOptions {
         new String[builder.trueValues.size()]);
     falseValues = builder.falseValues.toArray(
         new String[builder.falseValues.size()]);
+    quoteStrings = builder.quoteStrings;
   }
 
   String[] getNullValues() {
@@ -78,6 +80,10 @@ public class CSVOptions extends ColumnFilterOptions {
     return comment;
   }
 
+  boolean isQuotingEnabled() {
+    return quoteStrings;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -91,6 +97,7 @@ public class CSVOptions extends ColumnFilterOptions {
     private int headerRow = NO_HEADER_ROW;
     private byte delim = ',';
     private byte quote = '"';
+    private boolean quoteStrings = true;
 
     /**
      * Row of the header data (0 based counting).  Negative is no header.
@@ -134,6 +141,14 @@ public class CSVOptions extends ColumnFilterOptions {
         throw new IllegalArgumentException("Only ASCII characters are currently supported");
       }
       this.quote = (byte) quote;
+      return this;
+    }
+
+    /**
+     * Whether input strings containing special characters might be quoted.
+     */
+    public Builder withQuotingEnabled(boolean quoteStrings) {
+      this.quoteStrings = quoteStrings;
       return this;
     }
 

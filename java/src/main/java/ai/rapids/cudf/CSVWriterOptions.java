@@ -35,6 +35,7 @@ public class CSVWriterOptions {
   private String falseValue = "false";
   private String trueValue = "true";
   // Whether to quote strings that contain delimiters or quote characters.
+  // Currently, `true` corresponds to `MINIMAL`, `false` to `NONE`.
   private boolean quoteStrings = true;
 
   private CSVWriterOptions(Builder builder) {
@@ -45,6 +46,7 @@ public class CSVWriterOptions {
     this.rowDelimiter = builder.rowDelimiter;
     this.falseValue = builder.falseValue;
     this.trueValue = builder.trueValue;
+    this.quoteStrings = builder.quoteStrings;
   }
 
   public String[] getColumnNames() {

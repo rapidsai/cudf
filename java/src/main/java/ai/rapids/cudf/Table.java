@@ -221,6 +221,7 @@ public final class Table implements AutoCloseable {
    * @param headerRow         the 0 based index row of the header can be -1
    * @param delim             character deliminator (must be ASCII).
    * @param quote             character quote (must be ASCII).
+   * @param quoteStrings      whether or not to quote strings containing special characters.
    * @param comment           character that starts a comment line (must be ASCII) use '\0'
    * @param nullValues        values that should be treated as nulls
    * @param trueValues        values that should be treated as boolean true
@@ -230,7 +231,7 @@ public final class Table implements AutoCloseable {
                                        int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       int headerRow, byte delim, byte quote,
+                                       int headerRow, byte delim, boolean quoteStrings, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
@@ -777,6 +778,7 @@ public final class Table implements AutoCloseable {
             0, 0,
             opts.getHeaderRow(),
             opts.getDelim(),
+            opts.isQuotingEnabled(),
             opts.getQuote(),
             opts.getComment(),
             opts.getNullValues(),
@@ -850,6 +852,7 @@ public final class Table implements AutoCloseable {
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
+        opts.isQuotingEnabled(),
         opts.getQuote(),
         opts.getComment(),
         opts.getNullValues(),

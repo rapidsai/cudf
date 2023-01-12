@@ -1127,8 +1127,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length,
-    jint header_row, jbyte delim, jbyte quote, jbyte comment, jobjectArray null_values,
-    jobjectArray true_values, jobjectArray false_values) {
+    jint header_row, jbyte delim, jboolean quote_strings, jbyte quote, jbyte comment, 
+    jobjectArray null_values, jobjectArray true_values, jobjectArray false_values) {
   JNI_NULL_CHECK(env, null_values, "null_values must be supplied, even if it is empty", NULL);
 
   bool read_buffer = true;
@@ -1191,6 +1191,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                             .na_values(n_null_values.as_cpp_vector())
                                             .keep_default_na(false)
                                             .na_filter(n_null_values.size() > 0)
+                                            .quoting(quote_strings? cudf::io::quote_style::MINIMAL :
+                                                                    cudf::io::quote_style::NONE)
                                             .quotechar(quote)
                                             .comment(comment)
                                             .build();
