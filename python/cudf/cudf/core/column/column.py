@@ -415,38 +415,25 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if deep:
             return self.force_deep_copy()
         else:
-            if cudf.get_option("copy_on_write"):
-
-                copied_col = cast(
-                    T,
-                    build_column(
-                        data=self.base_data
-                        if self.base_data is None
-                        else self.base_data.copy(deep=deep),
-                        dtype=self.dtype,
-                        mask=self.base_mask
-                        if self.base_mask is None
-                        else self.base_mask.copy(deep=deep),
-                        size=self.size,
-                        offset=self.offset,
-                        children=tuple(
-                            col.copy(deep=False) for col in self.base_children
-                        ),
-                    ),
-                )
-                return copied_col
-            else:
-                return cast(
-                    T,
-                    build_column(
-                        self.base_data,
-                        self.dtype,
-                        mask=self.base_mask,
-                        size=self.size,
-                        offset=self.offset,
-                        children=self.base_children,
-                    ),
-                )
+            return cast(
+                T,
+                build_column(
+                    data=self.base_data
+                    if self.base_data is None
+                    else self.base_data.copy(deep=False),
+                    dtype=self.dtype,
+                    mask=self.base_mask
+                    if self.base_mask is None
+                    else self.base_mask.copy(deep=False),
+                    size=self.size,
+                    offset=self.offset,
+                    children=tuple(
+                        col.copy(deep=False) for col in self.base_children
+                    )
+                    if cudf.get_option("copy_on_write")
+                    else self.base_children,
+                ),
+            )
 
     def view(self, dtype: Dtype) -> ColumnBase:
         """
