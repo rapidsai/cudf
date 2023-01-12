@@ -15,7 +15,7 @@ __version__ = _version.get_versions()["version"]
 logger = get_logger()
 
 
-def get_cuda_version_from_ptx_file(path):
+def _get_cuda_version_from_ptx_file(path):
     """
     https://docs.nvidia.com/cuda/parallel-thread-execution/
     Each PTX module must begin with a .version
@@ -35,27 +35,26 @@ def get_cuda_version_from_ptx_file(path):
     .address_size 64
 
     """
-    with open(path, "r") as f:
-        lines = f.readlines()
-    ver_line = None
-    for line in lines:
-        if ".version" in line:
-            ver_line = line
-            break
-    if ver_line is None:
-        raise ValueError("Could not read cuda version " "from ptx file")
+    with open(path) as ptx_file:
+        for line in ptx_file:
+            if line.startswith(".version"):
+                ver_line = line
+                break
+        else:
+            raise ValueError("Could not read CUDA version from ptx file.")
     version = ver_line.strip("\n").split(" ")[-1]
-    ptx_major, ptx_minor = version.split(".")
+    ptx_major = version.split(".")[0]
+    ptx_minor = version.split(".")[1]
 
     # from ptx_docs/release_notes above:
     maj_ver_map = {"7": "11", "8": "12"}
     cuda_major = maj_ver_map.get(ptx_major)
     if cuda_major is None:
         raise ValueError(
-            "Could not map major PTX version " f"{ptx_major} to a CUDA version"
+            f"Could not map major PTX version {ptx_major} to a CUDA version"
         )
 
-    return (int(cuda_major), int(ptx_minor))
+    return int(cuda_major), int(ptx_minor)
 
 
 def _get_appropriate_file(sms, cc):
