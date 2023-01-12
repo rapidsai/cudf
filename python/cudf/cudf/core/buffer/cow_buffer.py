@@ -91,14 +91,24 @@ class CopyOnWriteBuffer(Buffer):
 
     @property
     def ptr(self) -> int:
-        """Device pointer to the start of the buffer."""
+        """Device pointer to the start of the buffer.
+
+        This will trigger a deep copy if there are any weak references.
+        The Buffer would be marked as zero copied.
+        """
         self._unlink_shared_buffers()
         self._zero_copied = True
         return self._ptr
 
     @property
     def mutable_ptr(self) -> int:
-        """Device pointer to the start of the buffer."""
+        """Device pointer to the start of the buffer.
+
+        This will trigger a deep copy if there are any weak references.
+        """
+        # Shouldn't need to mark the Buffer as zero copied,
+        # because this API is used by libcudf only to create
+        # mutable views.
         self._unlink_shared_buffers()
         return self._ptr
 
