@@ -645,8 +645,8 @@ public class TableTest extends CudfTestBase {
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
-              .column("All" + fieldDelim + "the" + fieldDelim + "leaves", 
-                      "are\"brown", 
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
                       "and\nthe\nsky\nis\ngrey")
               .build()) {
       inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
@@ -689,8 +689,8 @@ public class TableTest extends CudfTestBase {
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
-              .column("All" + fieldDelim + "the" + fieldDelim + "leaves", 
-                      "are\"brown", 
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
                       "and\nthe\nsky\nis\ngrey")
               .build();
           MyBufferConsumer consumer = new MyBufferConsumer()) {
