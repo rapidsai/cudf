@@ -785,6 +785,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         func : function
           The python transformation function that will be applied
           on the grouped chunk.
+        engine: {'cudf', 'jit'}, default 'cudf'
+          Selects the GroupBy.apply implementation. Use `jit` to
+          select the numba JIT pipeline.
+          For more information, see the `cuDF guide to user defined functions
+          <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Examples
         --------
@@ -852,7 +857,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
-            # if len(result.index.names) == 1:
             result = result.reset_index()
             result[None] = result.pop(0)
         elif engine == "cudf":
