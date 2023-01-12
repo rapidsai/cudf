@@ -201,7 +201,9 @@ reduce_to_column_tree(tree_meta_t& tree,
     });
 
   NodeIndexT const row_array_parent_col_id = is_enabled_lines ? 0 : 1;
-  auto is_non_list_parent                  = [column_categories = column_categories.begin(),
+  // condition is true if parent is not a list, or sentinel/root
+  // Special case to return true if parent is a list and is_array_of_arrays is true
+  auto is_non_list_parent = [column_categories = column_categories.begin(),
                              is_array_of_arrays,
                              row_array_parent_col_id] __device__(auto parent_col_id) -> bool {
     return !(parent_col_id == parent_node_sentinel ||
@@ -259,8 +261,7 @@ reduce_to_column_tree(tree_meta_t& tree,
      parent_col_ids  = parent_col_ids.begin(),
      max_row_offsets = max_row_offsets.begin()] __device__(size_type col_id) {
       auto parent_col_id = parent_col_ids[col_id];
-      // while (parent_col_id != parent_node_sentinel and
-      //        column_categories[parent_col_id] != node_t::NC_LIST) {
+      // condition is true if parent is not a list, or sentinel/root
       while (is_non_list_parent(parent_col_id)) {
         col_id        = parent_col_id;
         parent_col_id = parent_col_ids[parent_col_id];
@@ -271,10 +272,8 @@ reduce_to_column_tree(tree_meta_t& tree,
      is_non_list_parent,
      parent_col_ids = parent_col_ids.begin()] __device__(size_type col_id) {
       auto parent_col_id = parent_col_ids[col_id];
+      // condition is true if parent is not a list, or sentinel/root
       return is_non_list_parent(parent_col_id);
-      // return parent_col_id != parent_node_sentinel and
-      //        (column_categories[parent_col_id] != node_t::NC_LIST);
-      // Parent is not a list, or sentinel/root
     });
 
   return std::tuple{tree_meta_t{std::move(column_categories),
@@ -319,8 +318,7 @@ rmm::device_uvector<NodeIndexT> get_values_column_indices(NodeIndexT const row_a
                                       return level == row_array_children_level;
                                     });
   // copy nodes of level 1 children. (level 2) and their parent_node_id
-  // exclusive scan by key -> get their indices
-  // put in a hashmap? or just use a vector? TBD.
+  // exclusive scan by key -> get their indices and scatter them to the correct column
   auto level2_parent_nodes =
     thrust::make_permutation_iterator(d_tree.parent_node_ids.begin(), level2_nodes.begin());
   thrust::exclusive_scan_by_key(rmm::exec_policy(stream),

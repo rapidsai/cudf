@@ -503,11 +503,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   auto const num_nodes = parent_node_ids.size();
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
-  // if level 1 is a list, then it should take its list index as key! (level 1 for records, level 0
-  // for lines?) copy_if parent_node is list and level is 1 (parent_node_id) (should be stable
-  // sorted already) exclusive scan by key -> get their indices put in a hashmap? or just use a
-  // vector? TBD. use this index for hashing records format: check first 2 nodes are list. JSON
-  // lines: check first 1 is list or struct
+  // if level 1 is a list, then it should take its list index as key!
+  // (level 1 for records, level 0 for lines)
+  // copy nodes of level 1 children. (level 2) and their parent_node_id
+  // exclusive scan by key -> get their indices and scatter to their node id
+  // use this index for hashing at level 2
 
   // array of arrays
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -527,9 +527,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                                       [row_array_children_level] __device__(auto level) {
                                         return level == row_array_children_level;
                                       });
-    // copy nodes of level 1 children. (level 2) and their parent_node_id
-    // exclusive scan by key -> get their indices
-    // put in a hashmap? or just use a vector? TBD.
+    // memory usage could be reduced by using different data structure (hashmap)
+    // or alternate method to hash it at node_type
     auto level2_parent_nodes = thrust::make_transform_iterator(
       level2_nodes.begin(), [parent_node_ids = parent_node_ids.data()] __device__(auto node_id) {
         return parent_node_ids[node_id];
@@ -746,7 +745,9 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 
   // array of arrays
   NodeIndexT const row_array_parent_level = is_enabled_lines ? 0 : 1;
-  auto is_non_list_parent                 = [node_categories = d_tree.node_categories.begin(),
+  // condition is true if parent is not a list, or sentinel/root
+  // Special case to return true if parent is a list and is_array_of_arrays is true
+  auto is_non_list_parent = [node_categories = d_tree.node_categories.begin(),
                              node_levels     = d_tree.node_levels.begin(),
                              is_array_of_arrays,
                              row_array_parent_level] __device__(auto pnid) {
