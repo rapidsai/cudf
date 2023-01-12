@@ -455,31 +455,28 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
 
 void test_quoting_disabled_with_delimiter(char delimiter_char)
 {
-  auto const delimiter = std::string{delimiter_char};
+  auto const delimiter     = std::string{delimiter_char};
   auto const input_strings = cudf::test::strings_column_wrapper{
     std::string{"All"} + delimiter + "the" + delimiter + "leaves",
-    "are\"brown", 
-    "and\nthe\nsky\nis\ngrey"
-  };
+    "are\"brown",
+    "and\nthe\nsky\nis\ngrey"};
   auto const input_table = table_view{{input_strings}};
 
   auto const filepath = temp_env->get_temp_dir() + "unquoted.csv";
-  auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath},
-                                                         input_table)
-                                                .include_header(false)
-                                                .inter_column_delimiter(delimiter_char)
-                                                .enable_quote_strings(false);
+  auto w_options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{filepath}, input_table)
+                     .include_header(false)
+                     .inter_column_delimiter(delimiter_char)
+                     .enable_quote_strings(false);
   cudf::io::write_csv(w_options.build());
 
   auto r_options = cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
-                                                .header(-1)
-                                                .delimiter(delimiter_char)
-                                                .quoting(cudf::io::quote_style::NONE);
+                     .header(-1)
+                     .delimiter(delimiter_char)
+                     .quoting(cudf::io::quote_style::NONE);
   auto r_table = cudf::io::read_csv(r_options.build());
 
-  auto const expected = cudf::test::strings_column_wrapper{
-    "All", "are\"brown", "and", "the", "sky", "is", "grey"
-  };
+  auto const expected =
+    cudf::test::strings_column_wrapper{"All", "are\"brown", "and", "the", "sky", "is", "grey"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(r_table.tbl->view().column(0), expected);
 }
 
