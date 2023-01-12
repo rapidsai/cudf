@@ -180,7 +180,7 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
-// Dispatcher for nvcompBatched<format>CompressGetTempSize
+// Wrapper for nvcompBatched<format>CompressGetTempSize
 auto batched_compress_get_temp_size(compression_type compression,
                                     size_t batch_size,
                                     size_t max_uncompressed_chunk_bytes)
@@ -218,7 +218,8 @@ auto batched_compress_get_temp_size(compression_type compression,
   return temp_size;
 }
 
-// Dispatcher for nvcompBatched<format>CompressGetTempSizeEx
+#if NVCOMP_HAS_COMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
+// Wrapper for nvcompBatched<format>CompressGetTempSizeEx
 auto batched_compress_get_temp_size_ex(compression_type compression,
                                        size_t batch_size,
                                        size_t max_uncompressed_chunk_bytes,
@@ -255,19 +256,22 @@ auto batched_compress_get_temp_size_ex(compression_type compression,
                "Unable to get scratch size for compression");
   return temp_size;
 }
+#endif
 
 size_t batched_compress_temp_size(compression_type compression,
                                   size_t num_chunks,
                                   size_t max_uncomp_chunk_size,
                                   size_t max_total_uncomp_size)
 {
-  try {
 #if NVCOMP_HAS_COMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
+  // Ignore errors in the expanded version; fall back to the old API in case of failure
+  try {
     return batched_compress_get_temp_size_ex(
       compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
-#endif
   } catch (...) {
   }
+#endif
+
   return batched_compress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size);
 }
 
