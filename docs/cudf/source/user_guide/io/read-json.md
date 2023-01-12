@@ -13,7 +13,6 @@ by new line characters (`\n`), and each object corresponds to a
 row.
 
 ```python
-# JSON data with orient="records"
 >>> j = '''[
     {"a": "v1", "b": 12},
     {"a": "v2", "b": 7},
@@ -21,13 +20,11 @@ row.
 ]'''
 >>> df_records = cudf.read_json(j)
 
-
-# JSON Lines data
 >>> j = '\n'.join([
-    '{"a": "v1", "b": 12}',
-    '{"a": "v2", "b": 7}',
-    '{"a": "v3", "b": 5}'
-])
+...     '{"a": "v1", "b": 12}',
+...     '{"a": "v2", "b": 7}',
+...     '{"a": "v3", "b": 5}'
+... ])
 >>> df_lines = cudf.read_json(j, lines=True)
 
 >>> df_lines
@@ -35,12 +32,8 @@ row.
 0  v1  12
 1  v2   7
 2  v3   5
->>> df_records
-# the two dataframes are equal
-    a   b
-0  v1  12
-1  v2   7
-2  v3   5
+>>> df_records.equals(df_lines)
+True
 ```
 
 The cuDF JSON reader also supports arbitrarily-nested combinations
@@ -64,9 +57,9 @@ reading nested JSON data.
 # Example with columns types:
 # list<struct<k:int>> and struct<k:list<int>, m:int>
 >>> j = '\n'.join([
-    '{"a": [{"k": 0}], "b": {"k": [0, 1], "m": 5}}',
-    '{"a": [{"k": 1}, {"k": 2}], "b": {"k": [2, 3], "m": 6}}',
-])
+...     '{"a": [{"k": 0}], "b": {"k": [0, 1], "m": 5}}',
+...     '{"a": [{"k": 1}, {"k": 2}], "b": {"k": [2, 3], "m": 6}}',
+... ])
 >>> df = cudf.read_json(j, lines=True)
 >>> df
                       a                      b
@@ -91,9 +84,9 @@ should be adjacent, as shown in the following example.
 ```python
 >>> num_rows = 10
 >>> j = '\n'.join([
-    '{"id":%s, "distance": %s, "unit": "m/s"}' % x \
-    for x in zip(range(num_rows), cupy.random.rand(num_rows))
-])
+...     '{"id":%s, "distance": %s, "unit": "m/s"}' % x \
+...     for x in zip(range(num_rows), cupy.random.rand(num_rows))
+... ])
 
 >>> chunk_count = 4
 >>> chunk_size = len(j) // chunk_count + 1
