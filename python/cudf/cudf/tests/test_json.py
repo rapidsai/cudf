@@ -1010,10 +1010,11 @@ def test_json_round_trip_gzip():
 @pytest.mark.parametrize(
     "data",
     [
-        # # empty input failing due to missing index size information
-        # "",
-        # "[]",
-        # "[]\n[]\n[]",
+        # # empty input
+        # assert failing due to missing index size information
+        "",
+        "[]",
+        "[]\n[]\n[]",
         # simple values
         """[1]\n[2]\n[3]""",
         """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]""",
@@ -1033,6 +1034,18 @@ def test_json_round_trip_gzip():
         """[1, 2, {}]\n[4, 5, 6]\n[7, 8, 9]""",
         """[1, 2, 3]\n[4, 5, [6]]\n[7, 8, 9]""",
         """[1, 2, [3]]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nested
+        """[1, 2, [3]]\n[4, 5, [6]]\n[7, 8, [9]]""",
+        """[1, 2, {"a": 3}]\n[4, 5, {"b": 6}]\n[7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": 3}]]
+           [4, 5, [{"b": 6}, {"b": 6}, {}, {"b": 6}]]
+           [7, 8, [{}]]""",
+        """[1, 2, {"a": [3, 3, 3]}]
+           [4, 5, {"b": [6, 6]}]
+           [7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": null}]]
+           [4, 5, [{"b": [6.0, 6, 06]}, {"b": [6]}, {}, {"b": null}]]
+           [7, 8, [{}]]""",
     ],
 )
 @pytest.mark.parametrize("lines", [True, False])
@@ -1045,9 +1058,6 @@ def test_json_array_of_arrays(data, lines):
         orient="values",
         lines=lines,
     )
-    # TODO: Replace string column names with integer column names
-    # for values orient
-    df.columns = cudf.RangeIndex(len(df.columns))
     # if mixed with dict/list type, replace other types with None.
     if 2 in pdf.columns and any(
         pdf[2].apply(lambda x: isinstance(x, dict) or isinstance(x, list))
@@ -1055,7 +1065,14 @@ def test_json_array_of_arrays(data, lines):
         pdf[2] = pdf[2].apply(
             lambda x: x if isinstance(x, dict) or isinstance(x, list) else None
         )
-    assert_eq(pdf, df)
+    # TODO: Replace string column names with integer column names
+    # for values orient in cudf json reader
+    pdf.rename(columns={name: str(name) for name in pdf.columns}, inplace=True)
+    # assert_eq(pdf, df)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
 
 
 @pytest.mark.parametrize(
