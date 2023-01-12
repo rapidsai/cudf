@@ -1653,6 +1653,7 @@ class csv_writer_options_builder {
    * should be quoted
    *
    * @param is_enabled_quoting Set to `true` to enable quoting, `false` otherwise
+   * @return this for chaining
    */
   csv_writer_options_builder& enable_quote_strings(bool is_enabled_quoting)
   {
