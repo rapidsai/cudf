@@ -615,7 +615,7 @@ cdef class Column:
 
         return cudf.core.column.build_column(
             data,
-            dtype=dtype_from_column_view(dereference(view.c_obj.get())),
+            dtype=dtype_from_column_view(dereference(view.get())),
             mask=mask,
             size=size,
             null_count=null_count,

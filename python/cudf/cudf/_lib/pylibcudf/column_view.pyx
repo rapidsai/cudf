@@ -65,7 +65,15 @@ cdef class ColumnView:
         )
 
     cdef column_view * get(self) nogil:
-        """Get the underlying column_view object."""
+        """Get the underlying column_view object.
+
+        Note that calling libcudf algorithms will require dereferencing this
+        pointer since they accept references as arguments. Ideally we would
+        define a cdef function returning a reference, but Cython does not
+        support this, and returning by value from get() would result in a copy
+        of the underlying column_view being made every time, an unnecessary
+        expense.
+        """
         return self.c_obj.get()
 
     @staticmethod
