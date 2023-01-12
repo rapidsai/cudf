@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -32,6 +32,7 @@
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 
+#include <limits>
 #include <optional>
 
 namespace cudf::lists {
@@ -165,14 +166,15 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
 
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
-  auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
+  auto const n_elements = cudf::detail::sizes_to_offsets(
+    sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
+  CUDF_EXPECTS(n_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds column size limit");
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},
                                n_lists,
-                               n_elements,
+                               static_cast<size_type>(n_elements),
                                starts,
                                steps,
                                offsets_begin,
