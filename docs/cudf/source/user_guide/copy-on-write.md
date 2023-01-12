@@ -1,7 +1,14 @@
+(copy-on-write-user-doc)=
+
 # Copy-on-write
 
 Copy-on-write reduces GPU memory usage when copies(`.copy(deep=False)`) of a column
 are made.
+
+|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
+| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
 
 ## How to enable it
 
@@ -45,13 +52,9 @@ dtype: int64
 2    3
 3    4
 dtype: int64
->>> series.data._ptr
-140102175031296
->>> copied_series.data._ptr
-140102175031296
 ```
 
-Then, when a write operation is performed on either ``series`` or
+When a write operation is performed on either ``series`` or
 ``copied_series``, a true physical copy of the data is created:
 
 ```python
@@ -70,21 +73,6 @@ dtype: int64
 dtype: int64
 ```
 
-Notice the underlying data these both series objects now point to completely
-different device objects:
-
-```python
->>> series.data.ptr
-140102175032832
->>> copied_series.data.ptr
-140102175031296
-```
-
-````{Warning}
-When ``copy_on_write`` is enabled, all of the shallow copies are constructed with
-weak references, and it is recommended to not hand-construct the contents of `__cuda_array_interface__`, instead please use the `series.__cuda_array_interface__`
-or `series.data.__cuda_array_interface__` which will then take care of unlinking any existing weak references that a column contains.
-````
 
 ## Notes
 
@@ -102,9 +90,9 @@ pandas. Following is one of the inconsistency:
 
 >>> import pandas as pd
 >>> s = pd.Series([1, 2, 3, 4, 5])
->>> s_view = s[0:2]
->>> s_view[0] = 10
->>> s_view
+>>> s1 = s[0:2]
+>>> s1[0] = 10
+>>> s1
 0    10
 1     2
 dtype: int64
@@ -118,9 +106,9 @@ dtype: int64
 
 >>> import cudf
 >>> s = cudf.Series([1, 2, 3, 4, 5])
->>> s_view = s[0:2]
->>> s_view[0] = 10
->>> s_view
+>>> s1 = s[0:2]
+>>> s1[0] = 10
+>>> s1
 0    10
 1     2
 >>> s
@@ -132,6 +120,44 @@ dtype: int64
 dtype: int64
 ```
 
+The above inconsistency is solved when Copy-on-write is enabled:
+
+```python
+>>> import pandas as pd
+>>> pd.set_option("mode.copy_on_write", True)
+>>> s = pd.Series([1, 2, 3, 4, 5])
+>>> s1 = s[0:2]
+>>> s1[0] = 10
+>>> s1
+0    10
+1     2
+dtype: int64
+>>> s
+0    1
+1    2
+2    3
+3    4
+4    5
+dtype: int64
+
+
+>>> import cudf
+>>> cudf.set_option("copy_on_write", True)
+>>> s = cudf.Series([1, 2, 3, 4, 5])
+>>> s1 = s[0:2]
+>>> s1[0] = 10
+>>> s1
+0    10
+1     2
+dtype: int64
+>>> s
+0    1
+1    2
+2    3
+3    4
+4    5
+dtype: int64
+```
 
 ## How to disable it
 
