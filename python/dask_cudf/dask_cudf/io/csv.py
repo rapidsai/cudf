@@ -86,7 +86,8 @@ def read_csv(path, blocksize="default", **kwargs):
 
 
 def _internal_read_csv(path, blocksize="256 MiB", **kwargs):
-    blocksize = parse_bytes(blocksize)
+    if isinstance(blocksize, str):
+        blocksize = parse_bytes(blocksize)
 
     if isinstance(path, list):
         filenames = path
