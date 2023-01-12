@@ -21,8 +21,8 @@ def _keys_cleanup(ptr, size):
         and next(iter(weak_set_values.data))() is None
     ):
         # When the last remaining reference is being cleaned up we will still
-        # have a dead weak-reference in `weak_set_values`, if that is the case
-        # we are good to perform the key's cleanup
+        # have a dead reference in `weak_set_values`. If that is the case, then
+        # we can safely clean up the key
         del CopyOnWriteBuffer._instances[(ptr, size)]
 
 
