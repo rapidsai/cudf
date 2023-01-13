@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -16,6 +16,27 @@ from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
 T = TypeVar("T", bound="Buffer")
+
+
+def host_memory_allocation(nbytes: int) -> memoryview:
+    """Allocate host memory using NumPy
+
+    This is an alternative to `bytearray` to avoid memory initialization cost.
+    A `bytearray` is zero-initialized using `calloc`, which we don't need.
+    Additionally, `numpy.empty` both skips the zero-initialization and uses
+    hugepages when available <https://github.com/numpy/numpy/pull/14216>.
+
+    Parameters
+    ----------
+    nbytes : int
+        Size of the new host allocation in bytes.
+
+    Return
+    ------
+    memoryview
+        The new host allocation.
+    """
+    return numpy.empty((nbytes,), dtype="u1").data
 
 
 def cuda_array_interface_wrapper(
@@ -204,7 +225,7 @@ class Buffer(Serializable):
 
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
-        host_buf = bytearray(self.size)
+        host_buf = host_memory_allocation(self.size)
         rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, host_buf)
         return memoryview(host_buf).toreadonly()
 

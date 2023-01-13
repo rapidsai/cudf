@@ -1463,7 +1463,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
 
-TEST_F(JsonReaderTest, DISABLED_JsonNestedDtypeSchema)
+TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
 {
   std::string json_string = R"( [{"a":[123, {"0": 123}], "b":1.0}, {"b":1.1}, {"b":2.1}])";
 
@@ -1512,10 +1512,21 @@ TEST_F(JsonReaderTest, DISABLED_JsonNestedDtypeSchema)
   // Verify column "b" is an int column
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT32);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(0), int_wrapper{{0, 2, 2, 2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(1).child(0),
                                  float_wrapper{{0.0, 123.0}, {false, true}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
                                  int_wrapper{{1, 1, 2}, {true, true, true}});
+  // List column expected
+  auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
+  auto const validity = {1, 0, 0};
+  auto expected       = cudf::make_lists_column(
+    3,
+    int_wrapper{{0, 2, 2, 2}}.release(),
+    cudf::test::structs_column_wrapper{{leaf_child}, {false, true}}.release(),
+    2,
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), *expected);
 }
 
 TEST_P(JsonReaderParamTest, JsonDtypeParsing)
