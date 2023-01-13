@@ -66,8 +66,10 @@ class cuio_source_sink_pair {
   /**
    * @brief Created a sink info of the set type
    *
-   * The `data_sink` created using the returned `source_info` will write data to the same location
+   * The `data_sink` created using the returned `sink_info` will write data to the same location
    * that the result of a @ref `make_source_info` call reads from.
+   *
+   * `io_type::DEVICE_BUFFER` source/sink is an exception where a host buffer sink will be created.
    *
    * @return The description of the data sink
    */
