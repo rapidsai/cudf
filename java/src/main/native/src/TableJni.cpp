@@ -1127,7 +1127,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv *env, jclass
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
     jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length,
-    jint header_row, jbyte delim, jboolean quote_strings, jbyte quote, jbyte comment,
+    jint header_row, jbyte delim, jint j_quote_style, jbyte quote, jbyte comment,
     jobjectArray null_values, jobjectArray true_values, jobjectArray false_values) {
   JNI_NULL_CHECK(env, null_values, "null_values must be supplied, even if it is empty", NULL);
 
@@ -1180,22 +1180,28 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
 
-    cudf::io::csv_reader_options opts =
-        cudf::io::csv_reader_options::builder(source)
-            .delimiter(delim)
-            .header(header_row)
-            .names(n_col_names.as_cpp_vector())
-            .dtypes(data_types)
-            .use_cols_names(n_filter_col_names.as_cpp_vector())
-            .true_values(n_true_values.as_cpp_vector())
-            .false_values(n_false_values.as_cpp_vector())
-            .na_values(n_null_values.as_cpp_vector())
-            .keep_default_na(false)
-            .na_filter(n_null_values.size() > 0)
-            .quoting(quote_strings ? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE)
-            .quotechar(quote)
-            .comment(comment)
-            .build();
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
+    if (quote_style != cudf::io::quote_style::MINIMAL &&
+        quote_style != cudf::io::quote_style::NONE) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "Only NONE and MINIMAL quoting styles are supported when reading CSV.", NULL);
+    }
+
+    cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(source)
+                                            .delimiter(delim)
+                                            .header(header_row)
+                                            .names(n_col_names.as_cpp_vector())
+                                            .dtypes(data_types)
+                                            .use_cols_names(n_filter_col_names.as_cpp_vector())
+                                            .true_values(n_true_values.as_cpp_vector())
+                                            .false_values(n_false_values.as_cpp_vector())
+                                            .na_values(n_null_values.as_cpp_vector())
+                                            .keep_default_na(false)
+                                            .na_filter(n_null_values.size() > 0)
+                                            .quoting(quote_style)
+                                            .quotechar(quote)
+                                            .comment(comment)
+                                            .build();
 
     return convert_table_for_return(env, cudf::io::read_csv(opts).tbl);
   }
@@ -1205,7 +1211,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     JNIEnv *env, jclass, jlong j_table_handle, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
-    jstring j_false_value, jboolean j_quote_strings, jstring j_output_path) {
+    jstring j_false_value, jint j_quote_style, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_table_handle, "table handle cannot be null.", );
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", );
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", );
@@ -1229,6 +1235,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
+    if (quote_style != cudf::io::quote_style::MINIMAL &&
+        quote_style != cudf::io::quote_style::NONE) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "Only NONE and MINIMAL quoting styles are supported when writing CSV.", );
+    }
 
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
                        .names(column_names)
@@ -1238,8 +1250,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
                        .false_value(false_value.get())
-                       .quoting(j_quote_strings ? cudf::io::quote_style::MINIMAL :
-                                                  cudf::io::quote_style::NONE);
+                       .quoting(quote_style);
 
     cudf::io::write_csv(options.build());
   }
@@ -1249,7 +1260,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     JNIEnv *env, jclass, jobjectArray j_column_names, jboolean include_header,
     jstring j_row_delimiter, jbyte j_field_delimiter, jstring j_null_value, jstring j_true_value,
-    jstring j_false_value, jboolean j_quote_strings, jobject j_buffer) {
+    jstring j_false_value, jint j_quote_style, jobject j_buffer) {
   JNI_NULL_CHECK(env, j_column_names, "column name array cannot be null", 0);
   JNI_NULL_CHECK(env, j_row_delimiter, "row delimiter cannot be null", 0);
   JNI_NULL_CHECK(env, j_field_delimiter, "field delimiter cannot be null", 0);
@@ -1268,19 +1279,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     auto const na_rep = cudf::jni::native_jstring{env, j_null_value};
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
+    auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
+    if (quote_style != cudf::io::quote_style::MINIMAL &&
+        quote_style != cudf::io::quote_style::NONE) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "Only NONE and MINIMAL quoting styles are supported when writing CSV.", 0);
+    }
 
-    auto options =
-        cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
-                                              cudf::table_view{})
-            .names(column_names)
-            .include_header(static_cast<bool>(include_header))
-            .line_terminator(line_terminator.get())
-            .inter_column_delimiter(j_field_delimiter)
-            .na_rep(na_rep.get())
-            .true_value(true_value.get())
-            .false_value(false_value.get())
-            .quoting(j_quote_strings ? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE)
-            .build();
+    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
+                                                         cudf::table_view{})
+                       .names(column_names)
+                       .include_header(static_cast<bool>(include_header))
+                       .line_terminator(line_terminator.get())
+                       .inter_column_delimiter(j_field_delimiter)
+                       .na_rep(na_rep.get())
+                       .true_value(true_value.get())
+                       .false_value(false_value.get())
+                       .quoting(quote_style)
+                       .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
   }

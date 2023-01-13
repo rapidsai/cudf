@@ -641,7 +641,7 @@ public class TableTest extends CudfTestBase {
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
-                                               .withQuotingEnabled(false)
+                                               .withQuoteStyle(QuoteStyle.NONE)
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
@@ -656,7 +656,7 @@ public class TableTest extends CudfTestBase {
                                          .includeColumn("str")
                                          .hasHeader(false)
                                          .withDelim(fieldDelim)
-                                         .withQuotingEnabled(false)
+                                         .withQuoteStyle(QuoteStyle.NONE)
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
            Table expected = new Table.TestBuilder()
@@ -685,7 +685,7 @@ public class TableTest extends CudfTestBase {
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
-                                               .withQuotingEnabled(false)
+                                               .withQuoteStyle(QuoteStyle.NONE)
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
@@ -707,7 +707,7 @@ public class TableTest extends CudfTestBase {
                                          .hasHeader(false)
                                          .withDelim(fieldDelim)
                                          .withNullValue("\\N")
-                                         .withQuotingEnabled(false)
+                                         .withQuoteStyle(QuoteStyle.NONE)
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
            Table section = new Table.TestBuilder()

@@ -34,9 +34,9 @@ public class CSVWriterOptions {
   private String nullValue = "";
   private String falseValue = "false";
   private String trueValue = "true";
-  // Whether to quote strings that contain delimiters or quote characters.
+  // Quote style used for CSV data.
   // Currently, `true` corresponds to `MINIMAL`, `false` to `NONE`.
-  private boolean quoteStrings = true;
+  private QuoteStyle quoteStyle = QuoteStyle.MINIMAL;
 
   private CSVWriterOptions(Builder builder) {
     this.columnNames = builder.columnNames.toArray(new String[builder.columnNames.size()]);
@@ -46,7 +46,7 @@ public class CSVWriterOptions {
     this.rowDelimiter = builder.rowDelimiter;
     this.falseValue = builder.falseValue;
     this.trueValue = builder.trueValue;
-    this.quoteStrings = builder.quoteStrings;
+    this.quoteStyle = builder.quoteStyle;
   }
 
   public String[] getColumnNames() {
@@ -78,10 +78,10 @@ public class CSVWriterOptions {
   }
 
   /**
-   * Whether or not quoting is enabled for strings containing special characters
+   * Returns the quoting style used for writing CSV.
    */
-  public boolean isQuotingEnabled() {
-    return quoteStrings;
+  public QuoteStyle getQuoteStyle() {
+    return quoteStyle;
   }
 
   public static Builder builder() {
@@ -97,7 +97,7 @@ public class CSVWriterOptions {
     private String nullValue = "";
     private String falseValue = "false";
     private String trueValue = "true";
-    private Boolean quoteStrings = true;
+    private QuoteStyle quoteStyle = QuoteStyle.MINIMAL;
 
     public CSVWriterOptions build() {
       return new CSVWriterOptions(this);
@@ -147,13 +147,15 @@ public class CSVWriterOptions {
     }
 
     /**
-     * Whether to quote strings that contain the following special characters:
-     * 1. Field delimiter
-     * 2. Row delimiter
-     * 3. Double quotes
+     * Sets the quote style used when writing CSV.
+     *
+     * Note: Only the following quoting styles are supported:
+     *   1. MINIMAL: String columns containing special characters like row-delimiters/
+     *               field-delimiter/quotes will be quoted.
+     *   2. NONE: No quoting is done for any columns.
      */
-    public Builder withQuotingEnabled(boolean quoteStrings) {
-      this.quoteStrings = quoteStrings;
+    public Builder withQuoteStyle(QuoteStyle quoteStyle) {
+      this.quoteStyle = quoteStyle;
       return this;
     }
   }
