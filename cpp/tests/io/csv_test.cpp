@@ -453,7 +453,6 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   EXPECT_EQ(result_strings, reference_strings);
 }
 
-/*
 void test_quoting_disabled_with_delimiter(char delimiter_char)
 {
   auto const delimiter     = std::string{delimiter_char};
@@ -486,7 +485,6 @@ TEST_F(CsvWriterTest, QuotingDisabled)
   test_quoting_disabled_with_delimiter(',');
   test_quoting_disabled_with_delimiter('\u0001');
 }
-*/
 
 TEST_F(CsvReaderTest, MultiColumn)
 {
