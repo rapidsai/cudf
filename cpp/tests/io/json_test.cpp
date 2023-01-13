@@ -186,8 +186,8 @@ struct JsonReaderParamTest : public cudf::test::BaseFixture,
 };
 
 /**
- * @brief Test fixture for parametrized JSON reader tests, testing record orient-only for existing
- * JSON lines reader and the new experimental reader
+ * @brief Test fixture for parametrized JSON reader tests, testing record orient-only for legacy
+ * JSON lines reader and the nested reader
  */
 struct JsonReaderDualTest : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {
@@ -269,16 +269,14 @@ struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalTy
 TYPED_TEST_SUITE(JsonFixedPointReaderTest, cudf::test::FixedPointTypes);
 TYPED_TEST_SUITE(JsonValidFixedPointReaderTest, cudf::test::FixedPointTypes);
 
-// Parametrize qualifying JSON tests for executing both experimental reader and existing JSON lines
-// reader
+// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
                         JsonReaderParamTest,
                         ::testing::Values(json_test_t::record_orient,
                                           json_test_t::legacy_lines_row_orient,
                                           json_test_t::legacy_lines_record_orient));
 
-// Parametrize qualifying JSON tests for executing both experimental reader and existing JSON lines
-// reader
+// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
