@@ -83,6 +83,13 @@ json_reader_options_builder json_reader_options::builder(source_info const& src)
   return json_reader_options_builder(src);
 }
 
+// Returns builder for orc_writer_options
+json_writer_options_builder json_writer_options::builder(sink_info const& sink,
+                                                         table_view const& table)
+{
+  return json_writer_options_builder{sink, table};
+}
+
 // Returns builder for parquet_reader_options
 parquet_reader_options_builder parquet_reader_options::builder(source_info const& src)
 {

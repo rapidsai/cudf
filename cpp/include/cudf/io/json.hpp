@@ -618,6 +618,13 @@ class json_writer_options {
   // Setter
 
   /**
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output
+   */
+  void set_table(table_view tbl) { _table = tbl; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -690,6 +697,18 @@ class json_writer_options_builder {
   explicit json_writer_options_builder(sink_info const& sink, table_view const& table)
     : options{sink, table}
   {
+  }
+
+  /**
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output
+   * @return this for chaining
+   */
+  json_writer_options_builder& table(table_view tbl)
+  {
+    options._table = tbl;
+    return *this;
   }
 
   /**
