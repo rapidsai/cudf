@@ -121,9 +121,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
 
   // Check not having nulls using `null_count==0` along with nullable because we may have
   // `null_count==UNKNOWN_NULL_COUNT`.
-  if (null_count == 0 || !output->nullable() || child_type_id == type_id::EMPTY) {
-    return std::move(output);
-  }
+  if (null_count == 0 || !output->nullable() || child_type_id == type_id::EMPTY) { return output; }
 
   auto const output_cv = output->view();
 
