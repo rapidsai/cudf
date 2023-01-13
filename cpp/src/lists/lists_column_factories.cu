@@ -131,7 +131,6 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   return detail::has_nonempty_nulls(output_cv, stream)
            ? detail::purge_nonempty_nulls(output_cv, stream, mr)
            : std::move(output);
-  ;
 }
 
 }  // namespace cudf
