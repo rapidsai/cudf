@@ -56,8 +56,7 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
       CUDF_CUDA_TRY(cudaMemcpyAsync(
         d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
 
-      auto const d_source = cudf::device_span<std::byte>(d_buffer);
-      return cudf::io::source_info(d_source);
+      return cudf::io::source_info(d_buffer);
     }
     default: CUDF_FAIL("invalid input type");
   }
