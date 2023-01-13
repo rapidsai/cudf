@@ -2360,8 +2360,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRepeatTimes(
-    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle,
-    jlong output_sizes_handle) {
+    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
   JNI_NULL_CHECK(env, strings_handle, "strings_handle is null", 0);
   JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times_handle is null", 0);
   try {
@@ -2369,33 +2368,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRe
     auto const strings_cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
     auto const strs_col = cudf::strings_column_view(strings_cv);
     auto const repeat_times_cv = *reinterpret_cast<cudf::column_view *>(repeat_times_handle);
-    if (output_sizes_handle != 0) {
-      auto const output_sizes_cv = *reinterpret_cast<cudf::column_view *>(output_sizes_handle);
-      return release_as_jlong(
-          cudf::strings::repeat_strings(strs_col, repeat_times_cv, output_sizes_cv));
-    } else {
-      return release_as_jlong(cudf::strings::repeat_strings(strs_col, repeat_times_cv));
-    }
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsSizes(
-    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
-  JNI_NULL_CHECK(env, strings_handle, "strings handle is null", 0);
-  JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times handle is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto const strings_cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
-    auto const strs_col = cudf::strings_column_view(strings_cv);
-    auto const repeat_times_cv = *reinterpret_cast<cudf::column_view *>(repeat_times_handle);
-
-    auto [output_sizes, total_bytes] =
-        cudf::strings::repeat_strings_output_sizes(strs_col, repeat_times_cv);
-    auto results = cudf::jni::native_jlongArray(env, 2);
-    results[0] = release_as_jlong(output_sizes);
-    results[1] = static_cast<jlong>(total_bytes);
-    return results.get_jArray();
+    return release_as_jlong(cudf::strings::repeat_strings(strs_col, repeat_times_cv));
   }
   CATCH_STD(env, 0);
 }
