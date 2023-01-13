@@ -7,10 +7,11 @@ This page contains a tutorial about reading and manipulating JSON data in cuDF.
 By default, the cuDF JSON reader expects input data using the
 "records" orientation. Records-oriented JSON data comprises
 an array of objects at the root level, and each object in the
-array corresponds to a row. Another common variant
-for JSON data is "JSON Lines", where JSON objects are separated
-by new line characters (`\n`), and each object corresponds to a
-row.
+array corresponds to a row. Records-oriented JSON data begins
+with `[`, ends with `]` and ignores unquoted whitespace.
+Another common variant for JSON data is "JSON Lines", where
+JSON objects are separated by new line characters (`\n`), and
+each object corresponds to a row.
 
 ```python
 >>> j = '''[
