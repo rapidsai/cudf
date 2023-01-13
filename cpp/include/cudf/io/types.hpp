@@ -229,7 +229,7 @@ struct source_info {
    * @param device_buffers Input buffers in device memory
    */
   explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
-    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers.begin(), device_buffers.end())
   {
   }
 
