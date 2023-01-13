@@ -443,7 +443,7 @@ struct column_to_strings_fn {
                     column.offset(),
                     {lists_column_view(column).offsets(), child_string->view()});
       return strings::detail::join_list_elements(lists_column_view(list_child_string),
-                                                 cudf::string_scalar{", "},
+                                                 cudf::string_scalar{","},
                                                  narep,
                                                  strings::separator_on_nulls::YES,
                                                  strings::output_if_empty_list::EMPTY_STRING,
@@ -467,7 +467,10 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
   operator()(column_view const& column, std::vector<column_name_info> const& children_names) const
   {
-    return operator()(column.child_begin(), column.child_end(), children_names);
+    auto col_string = operator()(column.child_begin(), column.child_end(), children_names);
+    col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
+                              column.null_count());
+    return col_string;
   }
 
   // Table:
@@ -535,10 +538,10 @@ struct column_to_strings_fn {
   json_writer_options const& options_;
   rmm::cuda_stream_view stream_;
   rmm::mr::device_memory_resource* mr_;
-  string_scalar const column_seperator{": "};
-  string_scalar const value_seperator{", "};
-  string_scalar const row_begin_wrap{"{ "};
-  string_scalar const row_end_wrap{" }"};
+  string_scalar const column_seperator{":"};
+  string_scalar const value_seperator{","};
+  string_scalar const row_begin_wrap{"{"};
+  string_scalar const row_end_wrap{"}"};
   cudf::string_scalar narep{options_.get_na_rep()};
 };
 
@@ -676,7 +679,7 @@ void write_json(data_sink* out_sink,
       return names;
     }
   }();
-  auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",\n");
+  auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
   cudf::string_scalar d_line_terminator{line_terminator};
 
   // write header: required for non-record oriented output
@@ -724,8 +727,8 @@ void write_json(data_sink* out_sink,
 
     // convert each chunk to JSON:
     column_to_strings_fn converter{options, stream, rmm::mr::get_current_device_resource()};
-    string_scalar const row_begin_wrap{"{ "};
-    string_scalar const row_end_wrap{" }"};  // {" },\n"}; {" }\n"}; to skip join in write_chunked
+    string_scalar const row_begin_wrap{"{"};
+    string_scalar const row_end_wrap{"}"};  // {" },\n"}; {" }\n"}; to skip join in write_chunked
 
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
