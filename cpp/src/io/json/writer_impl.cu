@@ -745,6 +745,14 @@ void write_json(data_sink* out_sink,
 
       write_chunked(out_sink, str_concat_col->view(), line_terminator, options, stream, mr);
     }
+  } else {
+    if (options.is_enabled_lines()) {
+      if (out_sink->is_device_write_preferred(1)) {
+        out_sink->device_write(d_line_terminator.data(), d_line_terminator.size(), stream);
+      } else {
+        out_sink->host_write(line_terminator.data(), line_terminator.size());
+      }
+    }
   }
   // TODO write_chunked_end(out_sink, options, stream, mr);
   if (!options.is_enabled_lines()) {
