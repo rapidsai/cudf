@@ -11,7 +11,7 @@ from .pylibcudf.column_view cimport ColumnView
 from .pylibcudf.gpumemoryview cimport gpumemoryview
 from .pylibcudf.table cimport Table
 from .pylibcudf.table_view cimport TableView
-from .pylibcudf.types cimport DataType
+from .pylibcudf.types cimport DataType, TypeId
 
 __all__ = [
     "Column",
@@ -21,6 +21,7 @@ __all__ = [
     "DataType",
     "Table",
     "TableView",
+    "TypeId",
     "copying",
     "gpumemoryview",
 ]
