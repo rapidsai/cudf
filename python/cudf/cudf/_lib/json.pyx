@@ -157,11 +157,11 @@ def write_json(
     int rows_per_chunk=8,
 ):
     """
-    Cython function to call into libcudf API, see `write_csv`.
+    Cython function to call into libcudf API, see `write_json`.
 
     See Also
     --------
-    cudf.to_csv
+    cudf.to_json
     """
     cdef table_view input_table_view = table_view_from_table(
         table, ignore_index=True
@@ -173,8 +173,8 @@ def write_json(
     cdef bool include_nulls_c = include_nulls
     cdef bool lines_c = lines
     cdef int rows_per_chunk_c = rows_per_chunk
-    cdef string true_value_c = 'True'.encode()
-    cdef string false_value_c = 'False'.encode()
+    cdef string true_value_c = 'true'.encode()
+    cdef string false_value_c = 'false'.encode()
     cdef unique_ptr[table_metadata] tbl_meta = make_unique[table_metadata]()
 
     num_index_cols_meta = 0
