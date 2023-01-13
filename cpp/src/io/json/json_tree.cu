@@ -487,8 +487,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   device_span<TreeDepthT const> node_levels,
   device_span<size_type const> node_type,
   device_span<NodeIndexT const> parent_node_ids,
-  bool const is_array_of_arrays,
-  bool const is_enabled_lines,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   tree_meta_t const& d_tree,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -498,7 +498,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
   // if level 1 is a list, then it should take its list index as key!
-  // (level 1 for records, level 0 for lines)
+  // (level 1 for values, level 0 for values-JSONLines)
   // copy nodes of level 1 children. (level 2) and their parent_node_id
   // exclusive scan by key -> get their indices and scatter to their node id
   // use this index for hashing at level 2
@@ -524,7 +524,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
     // memory usage could be reduced by using different data structure (hashmap)
     // or alternate method to hash it at node_type
     auto level2_parent_nodes = thrust::make_transform_iterator(
-      level2_nodes.begin(), [parent_node_ids = parent_node_ids.data()] __device__(auto node_id) {
+      level2_nodes.cbegin(), [parent_node_ids = parent_node_ids.data()] __device__(auto node_id) {
         return parent_node_ids[node_id];
       });
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
@@ -534,9 +534,9 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                                   level2_indices.begin());
     list_indices.resize(num_nodes, stream);
     thrust::scatter(rmm::exec_policy(stream),
-                    level2_indices.begin(),
-                    level2_indices.end(),
-                    level2_nodes.begin(),
+                    level2_indices.cbegin(),
+                    level2_indices.cend(),
+                    level2_nodes.cbegin(),
                     list_indices.begin());
   }
 
@@ -653,8 +653,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
   device_span<SymbolT const> d_input,
   tree_meta_t const& d_tree,
-  bool const is_array_of_arrays,
-  bool const is_enabled_lines,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -723,8 +723,8 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
  */
 rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndexT>&& parent_col_id,
                                                    tree_meta_t const& d_tree,
-                                                   bool const is_array_of_arrays,
-                                                   bool const is_enabled_lines,
+                                                   bool is_array_of_arrays,
+                                                   bool is_enabled_lines,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -822,8 +822,8 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
-                              bool const is_array_of_arrays,
-                              bool const is_enabled_lines,
+                              bool is_array_of_arrays,
+                              bool is_enabled_lines,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {

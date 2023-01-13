@@ -118,7 +118,7 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> sorted_col_ids,
                       device_span<NodeIndexT> ordered_node_ids,
                       device_span<size_type> row_offsets,
-                      bool const is_array_of_arrays,
+                      bool is_array_of_arrays,
                       NodeIndexT const row_array_parent_col_id,
                       rmm::cuda_stream_view stream)
 {
@@ -424,8 +424,8 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<NodeIndexT> col_ids,
                              device_span<size_type> row_offsets,
                              device_json_column& root,
-                             bool const is_array_of_arrays,
-                             bool const is_enabled_lines,
+                             bool is_array_of_arrays,
+                             bool is_enabled_lines,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {

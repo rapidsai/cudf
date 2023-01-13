@@ -539,7 +539,7 @@ TEST_P(JsonReaderParamTest, Dates)
   std::string row_orient =
     "[05/03/2001]\n[31/10/2010]\n[20/10/1994]\n[18/10/1990]\n[1/1/1970]\n"
     "[18/04/1995]\n[14/07/1994]\n[\"07/06/2006 11:20:30.400\"]\n"
-    "[\"16/09/2005T1:2:30.400PM\"]\n[2/2/1970]\n";
+    "[\"16/09/2005T1:2:30.400PM\"]\n[2/2/1970]\n[null]";
   std::string record_orient = to_records_orient({{{"0", R"("05/03/2001")"}},
                                                  {{"0", R"("31/10/2010")"}},
                                                  {{"0", R"("20/10/1994")"}},
@@ -549,7 +549,8 @@ TEST_P(JsonReaderParamTest, Dates)
                                                  {{"0", R"("14/07/1994")"}},
                                                  {{"0", R"("07/06/2006 11:20:30.400")"}},
                                                  {{"0", R"("16/09/2005T1:2:30.400PM")"}},
-                                                 {{"0", R"("2/2/1970")"}}},
+                                                 {{"0", R"("2/2/1970")"}},
+                                                 {{"0", R"(null)"}}},
                                                 "\n");
   std::string data          = (test_opt == json_test_t::json_lines_row_orient ||
                       test_opt == json_test_t::json_experimental_row_orient)
@@ -574,7 +575,7 @@ TEST_P(JsonReaderParamTest, Dates)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::nulls_at({10});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  timestamp_ms_wrapper{{983750400000,
@@ -586,7 +587,8 @@ TEST_P(JsonReaderParamTest, Dates)
                                                        774144000000,
                                                        1149679230400,
                                                        1126875750400,
-                                                       2764800000},
+                                                       2764800000,
+                                                       0L},
                                                       validity});
 }
 
@@ -599,7 +601,7 @@ TEST_P(JsonReaderParamTest, Durations)
     "[-2]\n[-1]\n[0]\n"
     "[\"1 days\"]\n[\"0 days 23:01:00\"]\n[\"0 days 00:00:00.000000123\"]\n"
     "[\"0:0:0.000123\"]\n[\"0:0:0.000123000\"]\n[\"00:00:00.100000001\"]\n"
-    "[-2147483648]\n[2147483647]\n";
+    "[-2147483648]\n[2147483647]\n[null]";
   std::string record_orient = to_records_orient({{{"0", "-2"}},
                                                  {{"0", "-1"}},
                                                  {{"0", "0"}},
@@ -610,7 +612,8 @@ TEST_P(JsonReaderParamTest, Durations)
                                                  {{"0", R"("0:0:0.000123000")"}},
                                                  {{"0", R"("00:00:00.100000001")"}},
                                                  {{"0", R"(-2147483648)"}},
-                                                 {{"0", R"(2147483647)"}}},
+                                                 {{"0", R"(2147483647)"}},
+                                                 {{"0", R"(null)"}}},
                                                 "\n");
   std::string data          = (test_opt == json_test_t::json_lines_row_orient ||
                       test_opt == json_test_t::json_experimental_row_orient)
@@ -633,7 +636,7 @@ TEST_P(JsonReaderParamTest, Durations)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::nulls_at({11});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
@@ -647,7 +650,8 @@ TEST_P(JsonReaderParamTest, Durations)
                                                         123000L,
                                                         100000001L,
                                                         -2147483648L,
-                                                        2147483647L},
+                                                        2147483647L,
+                                                        0L},
                                                        validity});
 }
 
