@@ -665,11 +665,21 @@ class csv_reader_options {
   void enable_skip_blank_lines(bool val) { _skip_blank_lines = val; }
 
   /**
-   * @brief Sets quoting style.
+   * @brief Sets the expected quoting style used in the input CSV data.
    *
-   * @param style Quoting style used
+   * Note: Only the following quoting styles are supported:
+   *   1. MINIMAL: String columns containing special characters like row-delimiters/
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @param quoting Quoting style used
    */
-  void set_quoting(quote_style style) { _quoting = style; }
+  void set_quoting(quote_style quoting)
+  {
+    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::NONE,
+                 "Only MINIMAL and NONE are supported for quoting.");
+    _quoting = quoting;
+  }
 
   /**
    * @brief Sets quoting character.
@@ -1523,7 +1533,7 @@ class csv_writer_options {
   /**
    * @brief Sets the quote style for the writer.
    *
-   * Note: Only MINIMAL and NONE are supported.
+   * Note: Only the following quote styles are supported:
    *   1. MINIMAL: String columns containing special characters like row-delimiters/
    *               field-delimiter/quotes will be quoted.
    *   2. NONE: No quoting is done for any columns.
