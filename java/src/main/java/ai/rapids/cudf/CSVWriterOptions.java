@@ -35,7 +35,7 @@ public class CSVWriterOptions {
   private String falseValue = "false";
   private String trueValue = "true";
   // Quote style used for CSV data.
-  // Currently, `true` corresponds to `MINIMAL`, `false` to `NONE`.
+  // Currently supports only `MINIMAL` and `NONE`.
   private QuoteStyle quoteStyle = QuoteStyle.MINIMAL;
 
   private CSVWriterOptions(Builder builder) {

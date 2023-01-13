@@ -1179,13 +1179,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
     auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char *>(buffer),
                                                       static_cast<std::size_t>(buffer_length)} :
                                 cudf::io::source_info{filename.get()};
-
     auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
-    if (quote_style != cudf::io::quote_style::MINIMAL &&
-        quote_style != cudf::io::quote_style::NONE) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "Only NONE and MINIMAL quoting styles are supported when reading CSV.", NULL);
-    }
 
     cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(source)
                                             .delimiter(delim)
@@ -1236,11 +1230,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
     auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
-    if (quote_style != cudf::io::quote_style::MINIMAL &&
-        quote_style != cudf::io::quote_style::NONE) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "Only NONE and MINIMAL quoting styles are supported when writing CSV.", );
-    }
 
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, *table)
                        .names(column_names)
@@ -1280,11 +1269,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
     auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
-    if (quote_style != cudf::io::quote_style::MINIMAL &&
-        quote_style != cudf::io::quote_style::NONE) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "Only NONE and MINIMAL quoting styles are supported when writing CSV.", 0);
-    }
 
     auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
                                                          cudf::table_view{})

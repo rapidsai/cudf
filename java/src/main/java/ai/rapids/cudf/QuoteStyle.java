@@ -21,10 +21,10 @@ package ai.rapids.cudf;
  * Quote style for CSV records, closely following cudf::io::quote_style.
  */
 enum QuoteStyle {
-    MINIMAL(0),
-    ALL(1),
-    NONNUMERIC(2),
-    NONE(3);
+    MINIMAL(0),    // Quote only fields which contain special characters
+    ALL(1),        // Quote all fields
+    NONNUMERIC(2), // Quote all non-numeric fields
+    NONE(3);       // Never quote fields; disable quotation parsing
 
     final int nativeId; // Native id, for use with libcudf.
     QuoteStyle(int nativeId) {
