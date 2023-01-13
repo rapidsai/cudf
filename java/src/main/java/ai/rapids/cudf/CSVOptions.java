@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ public class CSVOptions extends ColumnFilterOptions {
   private final String[] nullValues;
   private final String[] trueValues;
   private final String[] falseValues;
+  private final QuoteStyle quoteStyle;
 
   private CSVOptions(Builder builder) {
     super(builder);
@@ -48,6 +49,7 @@ public class CSVOptions extends ColumnFilterOptions {
         new String[builder.trueValues.size()]);
     falseValues = builder.falseValues.toArray(
         new String[builder.falseValues.size()]);
+    quoteStyle = builder.quoteStyle;
   }
 
   String[] getNullValues() {
@@ -78,6 +80,10 @@ public class CSVOptions extends ColumnFilterOptions {
     return comment;
   }
 
+  QuoteStyle getQuoteStyle() {
+    return quoteStyle;
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -91,6 +97,7 @@ public class CSVOptions extends ColumnFilterOptions {
     private int headerRow = NO_HEADER_ROW;
     private byte delim = ',';
     private byte quote = '"';
+    private QuoteStyle quoteStyle = QuoteStyle.MINIMAL;
 
     /**
      * Row of the header data (0 based counting).  Negative is no header.
@@ -134,6 +141,22 @@ public class CSVOptions extends ColumnFilterOptions {
         throw new IllegalArgumentException("Only ASCII characters are currently supported");
       }
       this.quote = (byte) quote;
+      return this;
+    }
+
+    /**
+     * Quote style to expect in the input CSV data.
+     *
+     * Note: Only the following quoting styles are supported:
+     *   1. MINIMAL: String columns containing special characters like row-delimiters/
+     *               field-delimiter/quotes will be quoted.
+     *   2. NONE: No quoting is done for any columns.
+     */
+    public Builder withQuoteStyle(QuoteStyle quoteStyle) {
+      if (quoteStyle != QuoteStyle.MINIMAL && quoteStyle != QuoteStyle.NONE) {
+        throw new IllegalArgumentException("Only MINIMAL and NONE quoting styles are supported");
+      }
+      this.quoteStyle = quoteStyle;
       return this;
     }
 

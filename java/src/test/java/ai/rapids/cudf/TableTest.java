@@ -585,12 +585,12 @@ public class TableTest extends CudfTestBase {
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
                                                .withColumnNames(schema.getColumnNames())
-                                               .withIncludeHeader(false)
-                                               .withFieldDelimiter((byte)'\u0001')
+                                               .withIncludeHeader(includeHeader)
+                                               .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
                                                .withNullValue("\\N")
-                                               .withTrueValue("T")
-                                               .withFalseValue("F")
+                                               .withTrueValue(trueValue)
+                                               .withFalseValue(falseValue)
                                                .build();
     try (Table inputTable
           = new Table.TestBuilder()
@@ -607,10 +607,10 @@ public class TableTest extends CudfTestBase {
                                          .includeColumn("f")
                                          .includeColumn("b")
                                          .includeColumn("str")
-                                         .hasHeader(false)
-                                         .withDelim('\u0001')
-                                         .withTrueValue("T")
-                                         .withFalseValue("F")
+                                         .hasHeader(includeHeader)
+                                         .withDelim(fieldDelim)
+                                         .withTrueValue(trueValue)
+                                         .withFalseValue(falseValue)
                                          .build();
       try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
         assertTablesAreEqual(inputTable, readTable);
@@ -628,6 +628,101 @@ public class TableTest extends CudfTestBase {
     testWriteCSVToFileImpl(',', NO_HEADER, "TRUE", "FALSE");
     testWriteCSVToFileImpl('\u0001', INCLUDE_HEADER, "T", "F");
     testWriteCSVToFileImpl('\u0001', NO_HEADER, "True", "False");
+  }
+
+  private void testWriteUnquotedCSVToFileImpl(char fieldDelim) throws IOException {
+    File outputFile = File.createTempFile("testWriteUnquotedCSVToFile", ".csv");
+    Schema schema = Schema.builder()
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withQuoteStyle(QuoteStyle.NONE)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
+                      "and\nthe\nsky\nis\ngrey")
+              .build()) {
+      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim(fieldDelim)
+                                         .withQuoteStyle(QuoteStyle.NONE)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
+           Table expected = new Table.TestBuilder()
+             .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
+             .build()) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    } finally {
+      outputFile.delete();
+    }
+  }
+
+  @Test
+  void testWriteUnquotedCSVToFile() throws IOException {
+    testWriteUnquotedCSVToFileImpl(',');
+    testWriteUnquotedCSVToFileImpl('\u0001');
+  }
+
+  private void testChunkedCSVWriterUnquotedImpl(char fieldDelim) throws IOException {
+    Schema schema = Schema.builder()
+                          .column(DType.STRING, "str")
+                          .build();
+    CSVWriterOptions writeOptions = CSVWriterOptions.builder()
+                                               .withColumnNames(schema.getColumnNames())
+                                               .withIncludeHeader(false)
+                                               .withFieldDelimiter((byte)fieldDelim)
+                                               .withRowDelimiter("\n")
+                                               .withNullValue("\\N")
+                                               .withQuoteStyle(QuoteStyle.NONE)
+                                               .build();
+    try (Table inputTable
+          = new Table.TestBuilder()
+              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                      "are\"brown",
+                      "and\nthe\nsky\nis\ngrey")
+              .build();
+          MyBufferConsumer consumer = new MyBufferConsumer()) {
+
+      try (TableWriter writer = Table.getCSVBufferWriter(writeOptions, consumer)) {
+        writer.write(inputTable);
+        writer.write(inputTable);
+        writer.write(inputTable);
+      }
+
+      // Read back.
+      CSVOptions readOptions = CSVOptions.builder()
+                                         .includeColumn("str")
+                                         .hasHeader(false)
+                                         .withDelim(fieldDelim)
+                                         .withNullValue("\\N")
+                                         .withQuoteStyle(QuoteStyle.NONE)
+                                         .build();
+      try (Table readTable = Table.readCSV(schema, readOptions, consumer.buffer, 0, consumer.offset);
+           Table section = new Table.TestBuilder()
+             .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
+             .build();
+           Table expected  = Table.concatenate(section, section, section)) {
+        assertTablesAreEqual(expected, readTable);
+      }
+    }
+  }
+
+  @Test
+  void testChunkedCSVWriterUnquoted() throws IOException {
+    testChunkedCSVWriterUnquotedImpl(',');
+    testChunkedCSVWriterUnquotedImpl('\u0001');
   }
 
   private void testChunkedCSVWriterImpl(char fieldDelim, boolean includeHeader,
