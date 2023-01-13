@@ -215,6 +215,16 @@ struct source_info {
   }
 
   /**
+   * @brief Construct a new source info object for multiple buffers in device memory
+   *
+   * @param device_buffers Input buffers in device memory
+   */
+  explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers)
+  {
+  }
+
+  /**
    * @brief Construct a new source info object from a device buffer
    *
    * @param d_buffer Input buffer in device memory
