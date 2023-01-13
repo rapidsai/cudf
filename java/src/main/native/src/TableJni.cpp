@@ -1238,7 +1238,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
                        .false_value(false_value.get())
-                       .enable_quote_strings(static_cast<bool>(j_quote_strings));
+                       .quoting(j_quote_strings? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE);
 
     cudf::io::write_csv(options.build());
   }
@@ -1277,7 +1277,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
                        .false_value(false_value.get())
-                       .enable_quote_strings(static_cast<bool>(j_quote_strings))
+                       .quoting(j_quote_strings? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE)
                        .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
