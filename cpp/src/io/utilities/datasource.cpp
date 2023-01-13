@@ -251,7 +251,7 @@ class device_buffer_source final : public datasource {
                                       rmm::cuda_stream_view stream) override
   {
     return std::make_unique<non_owning_buffer>(
-      reinterpret_cast<uint8_t*>(const_cast<std::byte*>(_d_buffer.data() + offset)), size);
+      reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), size);
   }
 
   [[nodiscard]] size_t size() const override { return _d_buffer.size(); }

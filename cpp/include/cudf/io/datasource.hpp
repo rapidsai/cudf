@@ -310,7 +310,7 @@ class datasource {
      * @param data The data buffer
      * @param size The size of the data buffer
      */
-    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+    non_owning_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
 
     /**
      * @brief Returns the size of the buffer.
@@ -327,8 +327,8 @@ class datasource {
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{nullptr};
-    size_t const _size{0};
+    uint8_t const* _data{nullptr};
+    size_t _size{0};
   };
 
   /**
