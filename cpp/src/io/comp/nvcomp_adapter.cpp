@@ -264,11 +264,11 @@ size_t batched_compress_temp_size(compression_type compression,
                                   size_t max_total_uncomp_size)
 {
 #if NVCOMP_HAS_COMP_TEMPSIZE_EX(NVCOMP_MAJOR_VERSION, NVCOMP_MINOR_VERSION, NVCOMP_PATCH_VERSION)
-  // Ignore errors in the expanded version; fall back to the old API in case of failure
   try {
     return batched_compress_get_temp_size_ex(
       compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
   } catch (...) {
+    // Ignore errors in the expanded version; fall back to the old API in case of failure
   }
 #endif
 
@@ -398,7 +398,7 @@ void batched_compress(compression_type compression,
   skip_unsupported_inputs(
     nvcomp_args.input_data_sizes, results, compress_max_allowed_chunk_size(compression), stream);
 
-  auto [max_uncomp_chunk_size, total_uncomp_size] =
+  auto const [max_uncomp_chunk_size, total_uncomp_size] =
     max_chunk_and_total_input_size(nvcomp_args.input_data_sizes, stream);
 
   auto const temp_size =
