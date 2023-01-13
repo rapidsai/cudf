@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,16 +86,12 @@ struct TypedRollingEmptyInputTest : RollingEmptyInputTest {
 
 TYPED_TEST_SUITE(TypedRollingEmptyInputTest, cudf::test::FixedWidthTypes);
 
-using cudf::rolling_aggregation;
-using agg_vector_t = std::vector<std::unique_ptr<rolling_aggregation>>;
+using agg_vector_t = std::vector<std::unique_ptr<cudf::rolling_aggregation>>;
 
 void rolling_output_type_matches(cudf::column_view const& result,
                                  cudf::type_id expected_type,
                                  cudf::type_id expected_child_type)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   EXPECT_EQ(result.type().id(), expected_type);
   EXPECT_EQ(result.size(), 0);
   if (expected_type == cudf::type_id::LIST) {
@@ -112,36 +108,38 @@ void rolling_output_type_matches(cudf::column_view const& empty_input,
                                  cudf::type_id expected_type,
                                  cudf::type_id expected_child_type = cudf::type_id::EMPTY)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
   auto const preceding_col = preceding_column();
   auto const following_col = following_column();
 
   for (auto const& agg : aggs) {
     auto rolling_output_numeric_bounds =
-      rolling_window(empty_input, preceding, following, min_periods, *agg);
+      cudf::rolling_window(empty_input, preceding, following, min_periods, *agg);
     rolling_output_type_matches(
       rolling_output_numeric_bounds->view(), expected_type, expected_child_type);
 
     auto rolling_output_columnar_bounds =
-      rolling_window(empty_input, *preceding_col, *following_col, min_periods, *agg);
+      cudf::rolling_window(empty_input, *preceding_col, *following_col, min_periods, *agg);
     rolling_output_type_matches(
       rolling_output_columnar_bounds->view(), expected_type, expected_child_type);
 
-    auto grouped_rolling_output = grouped_rolling_window(
-      table_view{std::vector{empty_input}}, empty_input, preceding, following, min_periods, *agg);
+    auto grouped_rolling_output =
+      cudf::grouped_rolling_window(cudf::table_view{std::vector{empty_input}},
+                                   empty_input,
+                                   preceding,
+                                   following,
+                                   min_periods,
+                                   *agg);
     rolling_output_type_matches(grouped_rolling_output->view(), expected_type, expected_child_type);
 
     auto grouped_range_rolling_output =
-      grouped_range_rolling_window(table_view{std::vector{empty_input}},
-                                   empty_input,
-                                   order::ASCENDING,
-                                   empty_input,
-                                   range_window_bounds::get(preceding_scalar()),
-                                   range_window_bounds::get(following_scalar()),
-                                   min_periods,
-                                   *agg);
+      cudf::grouped_range_rolling_window(cudf::table_view{std::vector{empty_input}},
+                                         empty_input,
+                                         cudf::order::ASCENDING,
+                                         empty_input,
+                                         cudf::range_window_bounds::get(preceding_scalar()),
+                                         cudf::range_window_bounds::get(following_scalar()),
+                                         min_periods,
+                                         *agg);
     rolling_output_type_matches(
       grouped_range_rolling_output->view(), expected_type, expected_child_type);
   }
@@ -150,17 +148,15 @@ void rolling_output_type_matches(cudf::column_view const& empty_input,
 void rolling_window_throws(cudf::column_view const& empty_input, agg_vector_t const& aggs)
 {
   for (auto const& agg : aggs) {
-    EXPECT_THROW(rolling_window(empty_input, 2, 2, 1, *agg), cudf::logic_error);
+    EXPECT_THROW(cudf::rolling_window(empty_input, 2, 2, 1, *agg), cudf::logic_error);
   }
 }
 
 TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
 {
   using InputType = TypeParam;
-  using namespace cudf;
-  using namespace cudf::test;
 
-  auto input_col   = fixed_width_column_wrapper<InputType>{}.release();
+  auto input_col   = cudf::test::fixed_width_column_wrapper<InputType>{}.release();
   auto empty_input = input_col->view();
 
   /// Test aggregations that yield columns of type `size_type`.
@@ -170,7 +166,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
     aggs.emplace_back(count_all());
     aggs.emplace_back(row_number());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<size_type>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<cudf::size_type>());
   }
 
   /// Test aggregations that yield columns of same type as input.
@@ -182,7 +178,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
     aggs.emplace_back(lag());
     aggs.emplace_back(udf());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<InputType>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<InputType>());
   }
 
   /// `SUM` returns 64-bit promoted types for integral/decimal input.
@@ -191,8 +187,8 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(sum());
 
-    using expected_type = cudf::detail::target_type_t<InputType, aggregation::SUM>;
-    rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
+    using expected_type = cudf::detail::target_type_t<InputType, cudf::aggregation::SUM>;
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
   }
 
   /// `MEAN` returns float64 for all numeric types,
@@ -201,26 +197,23 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(mean());
 
-    using expected_type = cudf::detail::target_type_t<InputType, aggregation::MEAN>;
-    rolling_output_type_matches(empty_input, aggs, type_to_id<expected_type>());
+    using expected_type = cudf::detail::target_type_t<InputType, cudf::aggregation::MEAN>;
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
   {
-    auto aggs = std::vector<std::unique_ptr<rolling_aggregation>>{};
+    auto aggs = std::vector<std::unique_ptr<cudf::rolling_aggregation>>{};
     aggs.emplace_back(collect_list());
 
     rolling_output_type_matches(
-      empty_input, aggs, type_to_id<list_view>(), type_to_id<InputType>());
+      empty_input, aggs, cudf::type_to_id<cudf::list_view>(), cudf::type_to_id<InputType>());
   }
 }
 
 TEST_F(RollingEmptyInputTest, Strings)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
-  auto input_col   = strings_column_wrapper{}.release();
+  auto input_col   = cudf::test::strings_column_wrapper{}.release();
   auto empty_input = input_col->view();
 
   /// Test aggregations that yield columns of type `size_type`.
@@ -230,7 +223,7 @@ TEST_F(RollingEmptyInputTest, Strings)
     aggs.emplace_back(count_all());
     aggs.emplace_back(row_number());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<size_type>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<cudf::size_type>());
   }
 
   /// Test aggregations that yield columns of same type as input.
@@ -242,7 +235,7 @@ TEST_F(RollingEmptyInputTest, Strings)
     aggs.emplace_back(lag());
     aggs.emplace_back(udf());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::STRING);
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::STRING);
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
@@ -250,7 +243,8 @@ TEST_F(RollingEmptyInputTest, Strings)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(collect_list());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<list_view>(), type_id::STRING);
+    rolling_output_type_matches(
+      empty_input, aggs, cudf::type_to_id<cudf::list_view>(), cudf::type_id::STRING);
   }
 
   /// All other aggregations are unsupported.
@@ -265,10 +259,7 @@ TEST_F(RollingEmptyInputTest, Strings)
 
 TEST_F(RollingEmptyInputTest, Dictionaries)
 {
-  using namespace cudf;
-  using namespace cudf::test;
-
-  auto input_col   = dictionary_column_wrapper<std::string>{}.release();
+  auto input_col   = cudf::test::dictionary_column_wrapper<std::string>{}.release();
   auto empty_input = input_col->view();
 
   /// Test aggregations that yield columns of type `size_type`.
@@ -278,7 +269,7 @@ TEST_F(RollingEmptyInputTest, Dictionaries)
     aggs.emplace_back(count_all());
     aggs.emplace_back(row_number());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<size_type>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<cudf::size_type>());
   }
 
   /// Test aggregations that yield columns of same type as input.
@@ -290,7 +281,7 @@ TEST_F(RollingEmptyInputTest, Dictionaries)
     aggs.emplace_back(lag());
     aggs.emplace_back(udf());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::DICTIONARY32);
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::DICTIONARY32);
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
@@ -298,7 +289,8 @@ TEST_F(RollingEmptyInputTest, Dictionaries)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(collect_list());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<list_view>(), type_id::DICTIONARY32);
+    rolling_output_type_matches(
+      empty_input, aggs, cudf::type_to_id<cudf::list_view>(), cudf::type_id::DICTIONARY32);
   }
 
   /// All other aggregations are unsupported.
@@ -314,10 +306,8 @@ TEST_F(RollingEmptyInputTest, Dictionaries)
 TYPED_TEST(TypedRollingEmptyInputTest, Lists)
 {
   using T = TypeParam;
-  using namespace cudf;
-  using namespace cudf::test;
 
-  auto input_col   = lists_column_wrapper<T>{}.release();
+  auto input_col   = cudf::test::lists_column_wrapper<T>{}.release();
   auto empty_input = input_col->view();
 
   /// Test aggregations that yield columns of type `size_type`.
@@ -327,7 +317,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Lists)
     aggs.emplace_back(count_all());
     aggs.emplace_back(row_number());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<size_type>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<cudf::size_type>());
   }
 
   /// Test aggregations that yield columns of same type as input.
@@ -339,7 +329,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Lists)
     aggs.emplace_back(lag());
     aggs.emplace_back(udf());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::LIST, type_to_id<T>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::LIST, cudf::type_to_id<T>());
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
@@ -347,7 +337,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Lists)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(collect_list());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::LIST, type_id::LIST);
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::LIST, cudf::type_id::LIST);
   }
 
   /// All other aggregations are unsupported.
@@ -363,11 +353,9 @@ TYPED_TEST(TypedRollingEmptyInputTest, Lists)
 TYPED_TEST(TypedRollingEmptyInputTest, Structs)
 {
   using T = TypeParam;
-  using namespace cudf;
-  using namespace cudf::test;
 
-  auto member_col  = fixed_width_column_wrapper<T>{};
-  auto input_col   = structs_column_wrapper{{member_col}}.release();
+  auto member_col  = cudf::test::fixed_width_column_wrapper<T>{};
+  auto input_col   = cudf::test::structs_column_wrapper{{member_col}}.release();
   auto empty_input = input_col->view();
 
   /// Test aggregations that yield columns of type `size_type`.
@@ -377,7 +365,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Structs)
     aggs.emplace_back(count_all());
     aggs.emplace_back(row_number());
 
-    rolling_output_type_matches(empty_input, aggs, type_to_id<size_type>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<cudf::size_type>());
   }
 
   /// Test aggregations that yield columns of same type as input.
@@ -389,7 +377,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Structs)
     aggs.emplace_back(lag());
     aggs.emplace_back(udf());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::STRUCT, type_to_id<T>());
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::STRUCT, cudf::type_to_id<T>());
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
@@ -397,7 +385,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Structs)
     auto aggs = agg_vector_t{};
     aggs.emplace_back(collect_list());
 
-    rolling_output_type_matches(empty_input, aggs, type_id::LIST, type_id::STRUCT);
+    rolling_output_type_matches(empty_input, aggs, cudf::type_id::LIST, cudf::type_id::STRUCT);
   }
 
   /// All other aggregations are unsupported.
