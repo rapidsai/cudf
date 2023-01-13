@@ -1,14 +1,29 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.copying cimport out_of_bounds_policy
+from libcpp cimport bool as cbool
+
+from cudf._lib.cpp cimport copying as cpp_copying
 
 from .column_view cimport ColumnView
 from .table cimport Table
 from .table_view cimport TableView
 
 
-cdef Table gather(
+cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
+    OutOfBoundsPolicy py_policy
+) nogil
+
+
+ctypedef cbool underlying_type_t_out_of_bounds_policy
+cpdef enum OutOfBoundsPolicy:
+    NULLIFY = <underlying_type_t_out_of_bounds_policy> cpp_copying.NULLIFY
+    DONT_CHECK = (
+        <underlying_type_t_out_of_bounds_policy> cpp_copying.DONT_CHECK
+    )
+
+
+cpdef Table gather(
     TableView source_table,
     ColumnView gather_map,
-    out_of_bounds_policy bounds_policy
+    OutOfBoundsPolicy bounds_policy
 )

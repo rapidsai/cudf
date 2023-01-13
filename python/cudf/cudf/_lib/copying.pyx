@@ -188,24 +188,28 @@ def gather(
     bool nullify=False
 ):
     cdef unique_ptr[table] c_result
-    cdef cpp_copying.out_of_bounds_policy policy = (
-        cpp_copying.out_of_bounds_policy.NULLIFY if nullify
-        else cpp_copying.out_of_bounds_policy.DONT_CHECK
-    )
 
     cdef table_view source_table_view
-    cdef pylibcudf.Table tbl
     cdef column_view gather_map_view
+    cdef cpp_copying.out_of_bounds_policy policy
+
+    cdef pylibcudf.Table tbl
+
     if cudf.get_option("_use_pylibcudf") > 0:
         tbl = pylibcudf.copying.gather(
             pylibcudf.TableView([col.to_ColumnView() for col in columns]),
             gather_map.to_ColumnView(),
-            policy
+            pylibcudf.copying.OutOfBoundsPolicy.NULLIFY if nullify
+            else pylibcudf.copying.OutOfBoundsPolicy.DONT_CHECK
         )
         return columns_from_unique_ptr(move(tbl.c_obj))
     else:
         source_table_view = table_view_from_columns(columns)
         gather_map_view = gather_map.view()
+        policy = (
+            cpp_copying.out_of_bounds_policy.NULLIFY if nullify
+            else cpp_copying.out_of_bounds_policy.DONT_CHECK
+        )
 
         with nogil:
             c_result = move(

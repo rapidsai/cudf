@@ -16,12 +16,22 @@ from .table cimport Table
 from .table_view cimport TableView
 
 
-# TODO: This should be cpdefed, but cpdefing
-# will require creating a Cython mirror for out_of_bounds_policy.
-cdef Table gather(
+# Cython doesn't support scoped enumerations. It assumes that enums correspond
+# to their underlying value types and will thus attempt operations that are
+# invalid. This code will ensure that these values are explicitly cast to the
+# underlying type before casting to the final type.
+cdef cpp_copying.out_of_bounds_policy py_policy_to_c_policy(
+    OutOfBoundsPolicy py_policy
+) nogil:
+    return <cpp_copying.out_of_bounds_policy> (
+        <underlying_type_t_out_of_bounds_policy> py_policy
+    )
+
+
+cpdef Table gather(
     TableView source_table,
     ColumnView gather_map,
-    cpp_copying.out_of_bounds_policy bounds_policy
+    OutOfBoundsPolicy bounds_policy
 ):
     cdef unique_ptr[table] c_result
     with nogil:
@@ -29,7 +39,7 @@ cdef Table gather(
             cpp_copying.gather(
                 dereference(source_table.get()),
                 dereference(gather_map.get()),
-                bounds_policy
+                py_policy_to_c_policy(bounds_policy)
             )
         )
     return Table.from_table(move(c_result))
