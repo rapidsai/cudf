@@ -921,6 +921,25 @@ TEST_F(JsonReaderTest, NoDataFile)
   EXPECT_EQ(0, view.num_columns());
 }
 
+// empty input in values orient
+TEST_F(JsonReaderTest, NoDataFileValues)
+{
+  auto filepath = temp_env->get_temp_dir() + "NoDataFileValues.csv";
+  {
+    std::ofstream outfile{filepath, std::ofstream::out};
+    outfile << "[]\n";
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .experimental(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(0, view.num_columns());
+}
+
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";

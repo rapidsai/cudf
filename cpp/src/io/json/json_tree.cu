@@ -593,12 +593,15 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       [node_level, node_type, is_array_of_arrays, row_array_children_level, list_indices](
         auto node_id1, auto node_id2) {
         if (node_id1 == node_id2) return true;
-        bool const is_level2_equal =
-          is_array_of_arrays and node_level[node_id1] == row_array_children_level
-            ? list_indices[node_id1] == list_indices[node_id2]
-            : true;
+        auto is_level2_equal =
+          [node_level, node_type, is_array_of_arrays, list_indices, row_array_children_level](
+            auto node_id1, auto node_id2) {
+            if (!is_array_of_arrays) return true;
+            return node_level[node_id1] != row_array_children_level or
+                   list_indices[node_id1] == list_indices[node_id2];
+          };
         return node_level[node_id1] == node_level[node_id2] and
-               node_type[node_id1] == node_type[node_id2] and is_level2_equal;
+               node_type[node_id1] == node_type[node_id2] and is_level2_equal(node_id1, node_id2);
       };
     // if both nodes have same node types at all levels, it will check until it has common parent
     // or root.
