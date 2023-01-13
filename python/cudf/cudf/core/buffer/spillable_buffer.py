@@ -62,7 +62,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
 
 class SpillableBuffer(Buffer):
-    """A spillable buffer that implements DeviceBufferLike.
+    """A spillable buffer that implements Buffer.
 
     This buffer supports spilling the represented data to host memory.
     Spilling can be done manually by calling `.spill(target="cpu")` but
@@ -257,6 +257,10 @@ class SpillableBuffer(Buffer):
             self._exposed = True
             self._last_accessed = time.monotonic()
             return self._ptr
+
+    @property
+    def mutable_ptr(self) -> int:
+        return self.get_ptr(spill_lock=SpillLock())
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         """Spill lock the buffer

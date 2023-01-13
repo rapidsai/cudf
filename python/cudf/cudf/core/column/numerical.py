@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from typing import (
     cast,
 )
 
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -110,8 +109,8 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data_array_view.dtype):
-                item = self.data_array_view.dtype.type(item)
+            if np.can_cast(item, self.dtype):
+                item = self.dtype.type(item)
             else:
                 return False
         except (TypeError, ValueError):
@@ -165,6 +164,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
+
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -573,14 +573,14 @@ class NumericalColumn(NumericalBaseColumn):
         found = 0
         if len(self):
             found = find(
-                self.data_array_view,
+                self._data_array_view,
                 value,
                 mask=self.mask,
             )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
-                    self.data_array_view,
+                    self._data_array_view,
                     value,
                     mask=self.mask,
                     compare=compare,
@@ -724,7 +724,7 @@ class NumericalColumn(NumericalBaseColumn):
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
-            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+            pd_series = pd.Series(self.values_host, copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
 

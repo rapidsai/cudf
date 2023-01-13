@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import functools
 from typing import Any, Dict
@@ -110,7 +110,7 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         col = cudf.core.dataframe.extract_col(df, k)
         if not col.nullable:
             continue
-        nullmask = df[k].nullmask
+        nullmask = cudf.Series(df[k]._column._nullmask)
 
         if out_mask is None:
             out_mask = column.as_column(

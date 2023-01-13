@@ -365,6 +365,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     name : str, optional
         The name to give to the Series.
 
+    copy : bool, default False
+        Copy input data. Only affects Series or 1d ndarray input.
+
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
         ``null`` values.
@@ -490,6 +493,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index=None,
         dtype=None,
         name=None,
+        copy=False,
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
@@ -520,6 +524,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if name is None:
                 name = data.name
             data = data._column
+            if copy:
+                data = data.copy(deep=True)
             if dtype is not None:
                 data = data.astype(dtype)
 
@@ -538,7 +544,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
-            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            has_cai = (
+                type(
+                    inspect.getattr_static(
+                        data, "__cuda_array_interface__", None
+                    )
+                )
+                is property
+            )
+            data = column.as_column(
+                data,
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+            )
+            if copy and has_cai:
+                data = data.copy(deep=True)
         else:
             if dtype is not None:
                 data = data.astype(dtype)
@@ -4959,10 +4979,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         index = as_index(a.index)
 
     a_col = column.as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view)
+    a_array = cupy.asarray(a_col._data_array_view)
 
     b_col = column.as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view)
+    b_array = cupy.asarray(b_col._data_array_view)
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan

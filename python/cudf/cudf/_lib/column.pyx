@@ -1,4 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+
+import inspect
 
 import cupy as cp
 import numpy as np
@@ -10,6 +12,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import (
     Buffer,
+    CopyOnWriteBuffer,
     SpillableBuffer,
     SpillLock,
     acquire_spill_lock,
@@ -203,9 +206,21 @@ cdef class Column:
             "The value for mask is smaller than expected, got {}  bytes, "
             "expected " + str(required_num_bytes) + " bytes."
         )
+
+        # Because hasattr will trigger invocation of
+        # `__cuda_array_interface__` which could
+        # be expensive in CopyOnWriteBuffer case.
+        value_cai = inspect.getattr_static(
+            value,
+            "__cuda_array_interface__",
+            None
+        )
+
         if value is None:
             mask = None
-        elif hasattr(value, "__cuda_array_interface__"):
+        elif type(value_cai) is property:
+            if isinstance(value, CopyOnWriteBuffer):
+                value = value._get_readonly_proxy_obj
             if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view
@@ -303,6 +318,7 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
+
         if inplace:
             self._offset = other_col.offset
             self._size = other_col.size
@@ -318,6 +334,7 @@ cdef class Column:
             return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
+
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:
@@ -331,12 +348,8 @@ cdef class Column:
 
         if col.base_data is None:
             data = NULL
-        elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(col.base_data).get_ptr(
-                spill_lock=get_spill_lock()
-            )
         else:
-            data = <void*><uintptr_t>(col.base_data.ptr)
+            data = <void*><uintptr_t>(col.base_data.mutable_ptr)
 
         cdef Column child_column
         if col.base_children:
@@ -396,7 +409,11 @@ cdef class Column:
                 spill_lock=get_spill_lock()
             )
         else:
-            data = <void*><uintptr_t>(col.base_data.ptr)
+            # Shouldn't access `.ptr`, because in case
+            # of `CopyOnWriteBuffer` that could trigger
+            # a copy, which isn't required to create a
+            # view that is read only.
+            data = <void*><uintptr_t>(col.base_data._ptr)
 
         cdef Column child_column
         if col.base_children:
@@ -526,6 +543,12 @@ cdef class Column:
                     rmm.DeviceBuffer(ptr=data_ptr,
                                      size=(size+offset) * dtype_itemsize)
                 )
+            elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
+                # TODO: In future, see if we can just pass on the
+                # CopyOnWriteBuffer reference to another column
+                # and still create a weak reference.
+                # With the current design that's not possible.
+                data = data_owner.copy(deep=False)
             elif (
                 # This is an optimization of the most common case where
                 # from_column_view creates a "view" that is identical to
@@ -552,7 +575,9 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, SpillableBuffer):
+                if isinstance(data_owner, CopyOnWriteBuffer):
+                    data_owner.ptr  # accessing the pointer marks it exposed.
+                elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(
                             f"{data_owner} is spilled, which invalidates "

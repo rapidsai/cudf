@@ -121,6 +121,30 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property
+    def _data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        Internal implementation for viewing the data as a device array object
+        without triggering a deep-copy.
+        """
+        return cuda.as_cuda_array(
+            self.data._get_readonly_proxy_obj
+            if self.data is not None
+            else None
+        ).view(self.dtype)
+
+    @property
+    def _mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        Internal implementation for viewing the mask as a device array object
+        without triggering a deep-copy.
+        """
+        return cuda.as_cuda_array(
+            self.mask._get_readonly_proxy_obj
+            if self.mask is not None
+            else None
+        ).view(mask_dtype)
+
+    @property
     def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
@@ -163,7 +187,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view.copy_to_host()
+        return self._data_array_view.copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
@@ -365,24 +389,59 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view
 
+    @property
+    def _nullmask(self) -> Buffer:
+        """The gpu buffer for the null-mask"""
+        if not self.nullable:
+            raise ValueError("Column has no null mask")
+        return self._mask_array_view
+
+    def force_deep_copy(self: T) -> T:
+        """
+        A method to create deep copy irrespective of whether
+        `copy-on-write` is enable.
+        """
+        result = libcudf.copying.copy_column(self)
+        return cast(T, result._with_type_metadata(self.dtype))
+
     def copy(self: T, deep: bool = True) -> T:
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        Makes a copy of the Column.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, a true physical copy of the column
+            is made.
+            If False and `copy_on_write` is False, the same
+            memory is shared between the buffers of the Column
+            and changes made to one Column will propagate to
+            it's copy and vice-versa.
+            If False and `copy_on_write` is True, the same
+            memory is shared between the buffers of the Column
+            until there is a write operation being performed on
+            them.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return cast(T, result._with_type_metadata(self.dtype))
+            return self.force_deep_copy()
         else:
             return cast(
                 T,
                 build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
+                    data=self.base_data
+                    if self.base_data is None
+                    else self.base_data.copy(deep=False),
+                    dtype=self.dtype,
+                    mask=self.base_mask
+                    if self.base_mask is None
+                    else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
-                    children=self.base_children,
+                    children=tuple(
+                        col.copy(deep=False) for col in self.base_children
+                    )
+                    if cudf.get_option("copy_on_write")
+                    else self.base_children,
                 ),
             )
 
@@ -1301,11 +1360,12 @@ def column_empty_like(
     ):
         column = cast("cudf.core.column.CategoricalColumn", column)
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
+
         return build_column(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            children=(codes,),
             size=codes.size,
         )
 

@@ -198,6 +198,11 @@ class ListColumn(ColumnBase):
 
         return self
 
+    def copy(self, deep: bool = True):
+        # Since list columns are immutable, both deep and shallow copies share
+        # the underlying device data and mask.
+        return super().copy(deep=False)
+
     def leaves(self):
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()

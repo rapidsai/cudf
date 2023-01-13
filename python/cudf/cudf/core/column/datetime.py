@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -279,6 +279,7 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
+
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),

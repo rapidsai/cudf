@@ -192,6 +192,28 @@ class Buffer(Serializable):
             raise ValueError("slice must be C-contiguous")
         return self._getitem(offset=start, size=stop - start)
 
+    def copy(self, deep: bool = True):
+        """
+        Return a copy of Buffer.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, returns a deep copy of the underlying Buffer data.
+            If False, returns a shallow copy of the Buffer pointing to
+            the same underlying data.
+
+        Returns
+        -------
+        Buffer
+        """
+        if not deep:
+            return self[:]
+        else:
+            return self._from_device_memory(
+                rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
+            )
+
     @property
     def size(self) -> int:
         """Size of the buffer in bytes."""
@@ -208,20 +230,42 @@ class Buffer(Serializable):
         return self._ptr
 
     @property
+    def mutable_ptr(self) -> int:
+        """Device pointer to the start of the buffer."""
+        return self._ptr
+
+    @property
     def owner(self) -> Any:
         """Object owning the memory of the buffer."""
         return self._owner
 
     @property
-    def __cuda_array_interface__(self) -> Mapping:
-        """Implementation of the CUDA Array Interface."""
+    def __cuda_array_interface__(self) -> dict:
+        """Implementation for the CUDA Array Interface."""
+        return self._get_cuda_array_interface(readonly=False)
+
+    def _get_cuda_array_interface(self, readonly=False):
         return {
-            "data": (self.ptr, False),
+            "data": (self.ptr, readonly),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
+
+    @property
+    def _get_readonly_proxy_obj(self) -> dict:
+        """
+        Returns a proxy object with a read-only CUDA Array Interface.
+        """
+        return cuda_array_interface_wrapper(
+            ptr=self.ptr,
+            size=self.size,
+            owner=self,
+            readonly=True,
+            typestr="|u1",
+            version=0,
+        )
 
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
