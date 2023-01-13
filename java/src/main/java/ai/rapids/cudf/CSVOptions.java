@@ -52,6 +52,7 @@ public class CSVOptions extends ColumnFilterOptions {
     quoteStrings = builder.quoteStrings;
   }
 
+
   String[] getNullValues() {
     return nullValues;
   }

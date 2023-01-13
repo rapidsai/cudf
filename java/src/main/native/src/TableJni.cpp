@@ -1238,7 +1238,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeCSVToFile(
                        .na_rep(na_rep.get())
                        .true_value(true_value.get())
                        .false_value(false_value.get())
-                       .quoting(j_quote_strings? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE);
+                       .quoting(j_quote_strings ? cudf::io::quote_style::MINIMAL :
+                                                  cudf::io::quote_style::NONE);
 
     cudf::io::write_csv(options.build());
   }
@@ -1268,17 +1269,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
     auto const true_value = cudf::jni::native_jstring{env, j_true_value};
     auto const false_value = cudf::jni::native_jstring{env, j_false_value};
 
-    auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
-                                                         cudf::table_view{})
-                       .names(column_names)
-                       .include_header(static_cast<bool>(include_header))
-                       .line_terminator(line_terminator.get())
-                       .inter_column_delimiter(j_field_delimiter)
-                       .na_rep(na_rep.get())
-                       .true_value(true_value.get())
-                       .false_value(false_value.get())
-                       .quoting(j_quote_strings? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE)
-                       .build();
+    auto options =
+        cudf::io::csv_writer_options::builder(cudf::io::sink_info{data_sink.get()},
+                                              cudf::table_view{})
+            .names(column_names)
+            .include_header(static_cast<bool>(include_header))
+            .line_terminator(line_terminator.get())
+            .inter_column_delimiter(j_field_delimiter)
+            .na_rep(na_rep.get())
+            .true_value(true_value.get())
+            .false_value(false_value.get())
+            .quoting(j_quote_strings ? cudf::io::quote_style::MINIMAL : cudf::io::quote_style::NONE)
+            .build();
 
     return ptr_as_jlong(new cudf::jni::io::csv_chunked_writer{options, data_sink});
   }
