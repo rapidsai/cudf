@@ -309,17 +309,17 @@ struct parse_datetime {
           timeparts.hour = hour;
           break;
         }
-        case 'U':    // week of year: Sunday based
-        case 'W': {  // week of year: Monday based
+        case 'U': [[fallthrough]];  // week of year: Sunday based
+        case 'W': {                 // week of year: Monday based
           auto const [week, left] = parse_int(ptr, item.length);
           timeparts.week          = static_cast<int8_t>(week + 1);
           bytes_read -= left;
           break;
         }
-        case 'u':    // day of week: Mon(1)-Sun(7)
-        case 'w': {  // day of week; Sun(0)-Sat(6): 0 is mapped to 7 for chrono
+        case 'u': [[fallthrough]];  // day of week: Mon(1)-Sat(6),Sun(7)
+        case 'w': {                 // day of week; Sun(0),Mon(1)-Sat(6)
           auto const [weekday, left] = parse_int(ptr, item.length);
-          timeparts.weekday =
+          timeparts.weekday          =  // 0 is mapped to 7 for chrono library
             static_cast<int8_t>((item.value == 'w' && weekday == 0) ? 7 : weekday);
           bytes_read -= left;
           break;
@@ -615,15 +615,15 @@ struct check_datetime_format {
           }
           break;
         }
-        case 'U':
+        case 'U': [[fallthrough]];
         case 'W': {
           auto const cv = check_value(ptr, item.length, 0, 53);
           result        = cv.first;
           bytes_read -= cv.second;
           break;
         }
-        case 'u':
-        case 'w': {
+        case 'u': [[fallthrough]];  // valid values: 1-7
+        case 'w': {                 // valid values: 0-6
           auto const first = item.value == 'w' ? 0 : 1;
           auto const cv    = check_value(ptr, item.length, first, first + 6);
           result           = cv.first;
