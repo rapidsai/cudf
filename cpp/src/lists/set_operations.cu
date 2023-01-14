@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #include "utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -168,16 +167,14 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
   auto out_offsets    = reconstruct_offsets(out_table->get_column(0).view(), num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = make_lists_column(num_rows,
-                                  std::move(out_offsets),
-                                  std::move(out_table->release().back()),
-                                  null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
 
-  return null_count == 0 ? std::move(output)
-                         : cudf::detail::purge_nonempty_nulls(output->view(), stream, mr);
+  return make_lists_column(num_rows,
+                           std::move(out_offsets),
+                           std::move(out_table->release().back()),
+                           null_count,
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
@@ -244,16 +241,13 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
-  auto output = make_lists_column(num_rows,
-                                  std::move(out_offsets),
-                                  std::move(out_table->release().back()),
-                                  null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
-
-  return null_count == 0 ? std::move(output)
-                         : cudf::detail::purge_nonempty_nulls(output->view(), stream, mr);
+  return make_lists_column(num_rows,
+                           std::move(out_offsets),
+                           std::move(out_table->release().back()),
+                           null_count,
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail
