@@ -350,7 +350,10 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
                             0,
                             cudf::test::detail::make_null_mask(no_nulls(), no_nulls() + 4));
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
-  EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
+
+  // The child column has non-empty nulls but it has already been sanitized during lists column
+  // construction.
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*lists));
 
   // Set lists nullmask, post construction.
   cudf::detail::set_null_mask(
