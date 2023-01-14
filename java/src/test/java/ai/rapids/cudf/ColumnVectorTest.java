@@ -4096,6 +4096,18 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testExtractReRegexProg() {
+      try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
+            Table expected = new Table.TestBuilder()
+                    .column("a", "b", null, null)
+                    .column("1", "2", null, null)
+                    .build();
+            Table found = input.extractReRegexProg(new RegexProgram("([ab])(\\d)"))) {
+          assertTablesAreEqual(expected, found);
+      }
+  }
+
+  @Test
   void testExtractAllRecord() {
     String pattern = "([ab])(\\d)";
     try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
@@ -4122,6 +4134,37 @@ public class ColumnVectorTest extends CudfTestBase {
     ) {
       assertColumnsAreEqual(expectedIdx0, resultIdx0);
       assertColumnsAreEqual(expectedIdx12, resultIdx1);
+      assertColumnsAreEqual(expectedIdx12, resultIdx2);
+    }
+  }
+
+  @Test
+  void testExtractAllRecordRegexProg() {
+    RegexProgram regexProg = new RegexProgram("([ab])(\\d)");
+    try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
+          ColumnVector expectedIdx0 = ColumnVector.fromLists(
+            new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.STRING)),
+            Arrays.asList("a1"),
+            Arrays.asList("b2"),
+            Arrays.asList(),
+            null,
+            Arrays.asList("a1", "b1", "a2"));
+          ColumnVector expectedIdx12 = ColumnVector.fromLists(
+              new HostColumnVector.ListType(true,
+                new HostColumnVector.BasicType(true, DType.STRING)),
+              Arrays.asList("a", "1"),
+              Arrays.asList("b", "2"),
+              null,
+              null,
+              Arrays.asList("a", "1", "b", "1", "a", "2"));
+
+          ColumnVector resultIdx0 = v.extractAllRecordRegexProg(regexProg, 0);
+          ColumnVector resultIdx1 = v.extractAllRecordRegexProg(regexProg, 1);
+          ColumnVector resultIdx2 = v.extractAllRecordRegexProg(regexProg, 2);
+    ) {
+      assertColumnsAreEqual(expectedIdx0, resultIdx0);
+      // assertColumnsAreEqual(expectedIdx12, resultIdx1);
       assertColumnsAreEqual(expectedIdx12, resultIdx2);
     }
   }
@@ -4155,6 +4198,34 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMatchesReRegexProg() {
+    RegexProgram regexProg1 = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram("[A-Za-z]+\\s@[A-Za-z]+", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(".*", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram("", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+          "lazy @dog", "1234", "00:0:00");
+         ColumnVector res1 = testStrings.matchesReRegexProg(regexProg1);
+         ColumnVector res2 = testStrings.matchesReRegexProg(regexProg2);
+         ColumnVector res3 = testStrings.matchesReRegexProg(regexProg3);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+           true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+           false, false);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
+           true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+      assertColumnsAreEqual(expected3, res3);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+             "lazy @dog", "1234", "00:0:00");
+           ColumnVector res = testStrings.matchesReRegexProg(regexProg4)) {}
+    });
+  }
+
+  @Test
   void testContainsRe() {
     String patternString1 = "\\d+";
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
@@ -4179,6 +4250,34 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
           "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
            ColumnVector res = testStrings.containsRe(patternString4)) {}
+    });
+  }
+
+  @Test
+  void testContainsReRegexProg() {
+    RegexProgram regexProg1 = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram("[A-Za-z]+\\s@[A-Za-z]+", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(".*", CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram("", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector testStrings = ColumnVector.fromStrings(null, "abCD", "ovér the",
+        "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
+         ColumnVector res1 = testStrings.containsReRegexProg(regexProg1);
+         ColumnVector res2 = testStrings.containsReRegexProg(regexProg2);
+         ColumnVector res3 = testStrings.containsReRegexProg(regexProg3);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(null, false, false, false,
+             true, true, true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(null, false, false, true,
+             false, false, false, true);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(null, true, true, true,
+             true, true, true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+      assertColumnsAreEqual(expected3, res3);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+          "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
+           ColumnVector res = testStrings.containsReRegexProg(regexProg4)) {}
     });
   }
 
@@ -4459,11 +4558,32 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testExtractListElementsRegexProg() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
+         ColumnVector expected = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "test");
+         ColumnVector list = v.stringSplitRecordRegexProg(new RegexProgram(" ", CaptureGroups.NON_CAPTURE));
+         ColumnVector result = list.extractListElement(0)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testExtractListElementsV() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
          ColumnVector indices = ColumnVector.fromInts(0, 2, 0, 0, 1, -1);
          ColumnVector expected = ColumnVector.fromStrings("Héllo", null, null, "", "some", "strings");
          ColumnVector list = v.stringSplitRecord(" ");
+         ColumnVector result = list.extractListElement(indices)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testExtractListElementsVRegexProg() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
+         ColumnVector indices = ColumnVector.fromInts(0, 2, 0, 0, 1, -1);
+         ColumnVector expected = ColumnVector.fromStrings("Héllo", null, null, "", "some", "strings");
+         ColumnVector list = v.stringSplitRecordRegexProg(new RegexProgram(" ", CaptureGroups.NON_CAPTURE));
          ColumnVector result = list.extractListElement(indices)) {
       assertColumnsAreEqual(expected, result);
     }
@@ -5011,6 +5131,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringSplitRegexProg() {
+    RegexProgram regexProg = new RegexProgram(" ", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
+           "ARé some things", "test strings here");
+         Table expectedSplitLimit2 = new Table.TestBuilder()
+           .column("Héllo", "thésé", null, "", "ARé", "test")
+           .column("there all", null, null, null, "some things", "strings here")
+           .build();
+         Table expectedSplitAll = new Table.TestBuilder()
+           .column("Héllo", "thésé", null, "", "ARé", "test")
+           .column("there", null, null, null, "some", "strings")
+           .column("all", null, null, null, "things", "here")
+           .build();
+         Table resultSplitLimit2 = v.stringSplitRegexProg(regexProg, 2);
+         Table resultSplitAll = v.stringSplitRegexProg(regexProg)) {
+      assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertTablesAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
   void testStringSplitByRegularExpression() {
     String pattern = "[_ ]";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
@@ -5026,6 +5167,27 @@ public class ColumnVectorTest extends CudfTestBase {
              .build();
          Table resultSplitLimit2 = v.stringSplit(pattern, 2, true);
          Table resultSplitAll = v.stringSplit(pattern, true)) {
+      assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertTablesAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
+  void testStringSplitByRegularExpressionRegexProg() {
+    RegexProgram regexProg = new RegexProgram("[_ ]", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
+             "ARé some_things", "test_strings_here");
+         Table expectedSplitLimit2 = new Table.TestBuilder()
+             .column("Héllo", "thésé", null, "", "ARé", "test")
+             .column("there all", null, null, null, "some_things", "strings_here")
+             .build();
+         Table expectedSplitAll = new Table.TestBuilder()
+             .column("Héllo", "thésé", null, "", "ARé", "test")
+             .column("there", null, null, null, "some", "strings")
+             .column("all", null, null, null, "things", "here")
+             .build();
+         Table resultSplitLimit2 = v.stringSplitRegexProg(regexProg, 2, true);
+         Table resultSplitAll = v.stringSplitRegexProg(regexProg, true)) {
       assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
       assertTablesAreEqual(expectedSplitAll, resultSplitAll);
     }
@@ -5062,6 +5224,36 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringSplitRecordRegexProg() {
+    RegexProgram regexProg = new RegexProgram(" ", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
+             "ARé some things", "test strings here");
+         ColumnVector expectedSplitLimit2 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there all"),
+             Arrays.asList("thésé"),
+             null,
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some things"),
+             Arrays.asList("test", "strings here"));
+         ColumnVector expectedSplitAll = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there", "all"),
+             Arrays.asList("thésé"),
+             null,
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some", "things"),
+             Arrays.asList("test", "strings", "here"));
+         ColumnVector resultSplitLimit2 = v.stringSplitRecordRegexProg(regexProg, 2);
+         ColumnVector resultSplitAll = v.stringSplitRecordRegexProg(regexProg)) {
+      assertColumnsAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertColumnsAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
   void testStringSplitRecordByRegularExpression() {
     String pattern = "[_ ]";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
@@ -5086,6 +5278,36 @@ public class ColumnVectorTest extends CudfTestBase {
              Arrays.asList("test", "strings", "here"));
          ColumnVector resultSplitLimit2 = v.stringSplitRecord(pattern, 2, true);
          ColumnVector resultSplitAll = v.stringSplitRecord(pattern, true)) {
+      assertColumnsAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertColumnsAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
+  void testStringSplitRecordByRegularExpressionRegexProg() {
+    RegexProgram regexProg = new RegexProgram("[_ ]", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
+             "ARé some_things", "test_strings_here");
+         ColumnVector expectedSplitLimit2 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there all"),
+             Arrays.asList("thésé"),
+             null,
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some_things"),
+             Arrays.asList("test", "strings_here"));
+         ColumnVector expectedSplitAll = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there", "all"),
+             Arrays.asList("thésé"),
+             null,
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some", "things"),
+             Arrays.asList("test", "strings", "here"));
+         ColumnVector resultSplitLimit2 = v.stringSplitRecordRegexProg(regexProg, 2, true);
+         ColumnVector resultSplitAll = v.stringSplitRecordRegexProg(regexProg, true)) {
       assertColumnsAreEqual(expectedSplitLimit2, resultSplitLimit2);
       assertColumnsAreEqual(expectedSplitAll, resultSplitAll);
     }
@@ -5163,6 +5385,28 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReplaceReRegexProg() {
+    ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+    Scalar repl = Scalar.fromString("Repl");
+    RegexProgram regexProg = new RegexProgram("[tT]itle", CaptureGroups.NON_CAPTURE);
+    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl);
+         ColumnVector expected =
+             ColumnVector.fromStrings("Repl and Repl with Repl", "nothing", null, "Repl")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl, 0)) {
+      assertColumnsAreEqual(v, actual);
+    }
+
+    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl, 1);
+         ColumnVector expected =
+             ColumnVector.fromStrings("Repl and Title with title", "nothing", null, "Repl")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testReplaceMultiRegex() {
     try (ColumnVector v =
              ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
@@ -5222,6 +5466,61 @@ public class ColumnVectorTest extends CudfTestBase {
     assertThrows(CudfException.class, () -> {
       try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
            ColumnVector r = v.stringReplaceWithBackrefs("([A-Z]+)([0-9]+)([a-z]+)", "\\4")) {
+      }
+    });
+
+  }
+
+  @Test
+  void testStringReplaceWithBackrefsRegexProg() {
+
+    try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>", null);
+         ColumnVector expected = ColumnVector.fromStrings("<h2>title</h2>",
+             "<h2>another title</h2>", null);
+         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("<h1>(.*)</h1>"),
+             "<h2>\\1</h2>")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector v = ColumnVector.fromStrings("2020-1-01", "2020-2-02", null);
+         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
+         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])-"),
+             "-0\\1-")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1", "2020-02-2",
+             "2020-03-3invalid", null);
+         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02",
+             "2020-03-3invalid", null);
+         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])$"),
+             "-0\\1")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1 random_text", "2020-02-2T12:34:56",
+             "2020-03-3invalid", null);
+         ColumnVector expected = ColumnVector.fromStrings("2020-01-01 random_text",
+             "2020-02-02T12:34:56", "2020-03-3invalid", null);
+         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])([ T])"),
+             "-0\\1\\2")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    // test zero as group index
+    try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
+         ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
+             "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
+         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("([a-z]+)-([0-9]+)"),
+             "${0}:${1}:${2};")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    // group index exceeds group count
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
+           ColumnVector r = v.stringReplaceWithBackrefsRegexProg(
+               new RegexProgram("([A-Z]+)([0-9]+)([a-z]+)"), "\\4")) {
       }
     });
 
