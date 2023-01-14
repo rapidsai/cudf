@@ -6,7 +6,7 @@
 10min
 pandas-comparison
 data-types
-io
+io/index
 missing-data
 groupby
 guide-to-udfs
