@@ -220,7 +220,6 @@ struct concat_structs_base {
  */
 std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           column_view const& column_names,
-                                          // TODO these items are string_view or string_scalar?
                                           string_scalar const& prepend_row,
                                           string_scalar const& append_row,
                                           string_scalar const& column_name_separator,
@@ -667,16 +666,17 @@ void write_json(data_sink* out_sink,
                 rmm::mr::device_memory_resource* mr)
 {
   std::vector<column_name_info> user_column_names = [&]() {
-    if (not options.get_metadata()->column_names.empty()) {
-      auto const& column_names = options.get_metadata()->column_names;
+    auto const& metadata = options.get_metadata();
+    if (metadata.has_value() and not metadata->column_names.empty()) {
+      auto const& column_names = metadata->column_names;
       std::vector<column_name_info> names;
       std::transform(
         column_names.begin(), column_names.end(), std::back_inserter(names), [](auto const& name) {
           return column_name_info{name};
         });
       return names;
-    } else if (not options.get_metadata()->schema_info.empty()) {
-      return options.get_metadata()->schema_info;
+    } else if (metadata.has_value() and not metadata->schema_info.empty()) {
+      return metadata->schema_info;
     } else {
       std::vector<column_name_info> names;
       // generate strings 0 to table.num_columns()

@@ -507,7 +507,7 @@ class json_writer_options {
   table_view _table;
   // string to use for null entries
   std::string _na_rep = "";
-  // Indicates whether to output nulls as 'null'
+  // Indicates whether to output nulls as 'null' or exclude the field
   bool _include_nulls = false;
   // Indicates whether to use JSON lines for records format
   bool _lines = false;
@@ -518,8 +518,7 @@ class json_writer_options {
   // string to use for values == 0 in INT8 types (default 'false')
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
-  // std::vector<std::string> _names;
-  table_metadata const* _metadata = nullptr;  // Optional column names
+  std::optional<table_metadata> _metadata;  // Optional column names
 
   /**
    * @brief Constructor from sink and table.
@@ -571,14 +570,14 @@ class json_writer_options {
    *
    * @return Metadata information
    */
-  [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] std::optional<table_metadata> const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns string to used for null entries.
    *
    * @return string to used for null entries
    */
-  [[nodiscard]] std::string get_na_rep() const { return _na_rep; }
+  [[nodiscard]] std::string const& get_na_rep() const { return _na_rep; }
 
   /**
    * @brief Whether to output nulls as 'null'.
@@ -606,14 +605,14 @@ class json_writer_options {
    *
    * @return string used for values != 0 in INT8 types
    */
-  [[nodiscard]] std::string get_true_value() const { return _true_value; }
+  [[nodiscard]] std::string const& get_true_value() const { return _true_value; }
 
   /**
    * @brief Returns string used for values == 0 in INT8 types.
    *
    * @return string used for values == 0 in INT8 types
    */
-  [[nodiscard]] std::string get_false_value() const { return _false_value; }
+  [[nodiscard]] std::string const& get_false_value() const { return _false_value; }
 
   // Setter
 
@@ -629,14 +628,14 @@ class json_writer_options {
    *
    * @param metadata Associated metadata
    */
-  void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_metadata metadata) { _metadata = std::move(metadata); }
 
   /**
    * @brief Sets string to used for null entries.
    *
    * @param val String to represent null value
    */
-  void set_na_rep(std::string val) { _na_rep = val; }
+  void set_na_rep(std::string val) { _na_rep = std::move(val); }
 
   /**
    * @brief Enables/Disables output of nulls as 'null'.
@@ -664,14 +663,14 @@ class json_writer_options {
    *
    * @param val String to represent values != 0 in INT8 types
    */
-  void set_true_value(std::string val) { _true_value = val; }
+  void set_true_value(std::string val) { _true_value = std::move(val); }
 
   /**
    * @brief Sets string used for values == 0 in INT8 types.
    *
    * @param val String to represent values == 0 in INT8 types
    */
-  void set_false_value(std::string val) { _false_value = val; }
+  void set_false_value(std::string val) { _false_value = std::move(val); }
 };
 
 /**
@@ -717,9 +716,9 @@ class json_writer_options_builder {
    * @param metadata metadata (with column names)
    * @return this for chaining
    */
-  json_writer_options_builder& metadata(table_metadata const* metadata)
+  json_writer_options_builder& metadata(table_metadata metadata)
   {
-    options._metadata = metadata;
+    options._metadata = std::move(metadata);
     return *this;
   }
 
@@ -731,7 +730,7 @@ class json_writer_options_builder {
    */
   json_writer_options_builder& na_rep(std::string val)
   {
-    options._na_rep = val;
+    options._na_rep = std::move(val);
     return *this;
   };
 
@@ -779,7 +778,7 @@ class json_writer_options_builder {
    */
   json_writer_options_builder& true_value(std::string val)
   {
-    options._true_value = val;
+    options._true_value = std::move(val);
     return *this;
   }
 
@@ -791,7 +790,7 @@ class json_writer_options_builder {
    */
   json_writer_options_builder& false_value(std::string val)
   {
-    options._false_value = val;
+    options._false_value = std::move(val);
     return *this;
   }
 
