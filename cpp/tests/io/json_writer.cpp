@@ -90,4 +90,37 @@ TEST_F(JsonWriterTest, SimpleNested)
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 }
 
+TEST_F(JsonWriterTest, MixedNested)
+{
+  std::string const data = R"(
+{"a": 1, "b": 2, "c": {"d": [3]      }, "f": 5.5,  "g": [ {"h": 1}]}
+{"a": 6, "b": 7, "c": {"d": [8]      }, "f": 10.5, "g": null}
+{"a": 1, "b": 2, "c": {        "e": 4}, "f": 5.5,  "g": [{"h": 2}, null]}
+{"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [{"h": 3}, {"h": 4}, {"h": 5}]} )";
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .experimental(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  cudf::table_view tbl_view = result.tbl->view();
+  cudf::io::table_metadata mt{result.metadata};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(false)
+                           .metadata(mt)
+                           .lines(false)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  std::string const expected =
+    R"([{"a":1,"b":2,"c":{"d":[3]},"f":5.5,"g":[{"h":1}]},)"
+    R"({"a":6,"b":7,"c":{"d":[8]},"f":10.5},)"
+    R"({"a":1,"b":2,"c":{"e":4},"f":5.5,"g":[{"h":2},null]},)"
+    R"({"a":6,"b":7,"c":{"e":9},"f":10.5,"g":[{"h":3},{"h":4},{"h":5}]}])";
+  EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
