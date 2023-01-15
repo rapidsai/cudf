@@ -66,8 +66,7 @@ TEST_F(JsonWriterTest, SimpleNested)
 {"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [3, 4, 5]} )";
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .lines(true)
-      .experimental(true);
+      .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
   cudf::table_view tbl_view            = result.tbl->view();
@@ -99,11 +98,10 @@ TEST_F(JsonWriterTest, MixedNested)
 {"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [{"h": 3}, {"h": 4}, {"h": 5}]} )";
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .lines(true)
-      .experimental(true);
+      .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  cudf::table_view tbl_view = result.tbl->view();
+  cudf::table_view tbl_view            = result.tbl->view();
   cudf::io::table_metadata mt{result.metadata};
 
   std::vector<char> out_buffer;
