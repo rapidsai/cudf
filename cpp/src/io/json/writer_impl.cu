@@ -411,7 +411,15 @@ struct column_to_strings_fn {
   std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
+    auto duration_string = cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
+    auto quotes = make_column_from_scalar(cudf::string_scalar{"\""}, column.size(), stream_, mr_);
+    return cudf::strings::detail::concatenate(
+      table_view{{quotes->view(), duration_string->view(), quotes->view()}},
+      string_scalar(""),
+      string_scalar("", false),
+      strings::separator_on_nulls::YES,
+      stream_,
+      mr_);
   }
 
   // lists:
