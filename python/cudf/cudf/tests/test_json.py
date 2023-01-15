@@ -14,7 +14,12 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -50,6 +55,32 @@ def pdf(request):
 @pytest.fixture
 def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
+
+
+@pytest.fixture(params=[0, 1, 10, 100])
+def gdf_writer_types(request):
+    # datetime64[us], datetime64[ns] are unsupported due to a bug in parser
+    types = (
+        NUMERIC_TYPES
+        + ["datetime64[s]", "datetime64[ms]"]
+        + TIMEDELTA_TYPES
+        + ["bool", "str"]
+    )
+    typer = {"col_" + val: val for val in types}
+    ncols = len(types)
+    nrows = request.param
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = cudf.DataFrame(
+        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
+        columns=pd.Index([f"col_{typ}" for typ in types]),
+    )
+
+    # Cast all the column dtypes to objects, rename them, and then cast to
+    # appropriate types
+    test_pdf = test_pdf.astype(typer)
+
+    return test_pdf
 
 
 index_params = [True, False]
@@ -164,9 +195,34 @@ def test_cudf_json_writer(pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
     pdf_string = pdf.to_json(orient="records", lines=True)
     gdf_string = gdf.to_json(orient="records", lines=True, engine="cudf")
-    print(pdf_string)
 
     assert_eq(pdf_string, gdf_string)
+
+
+def test_cudf_json_writer2(gdf_writer_types):
+    dtypes = {
+        col_name: col_name[len("col_") :]
+        for col_name in gdf_writer_types.columns
+    }
+    gdf_string = gdf_writer_types.to_json(
+        orient="records", lines=True, engine="cudf"
+    )
+    gdf2 = cudf.read_json(
+        StringIO(gdf_string),
+        lines=True,
+        engine="cudf_experimental",
+        dtype=dict(dtypes),
+    )
+    # zero size columns to_json() does not contain column names.
+    # So we need to add them manually
+    if len(gdf_writer_types) == 0:
+        gdf2 = cudf.DataFrame(
+            gdf2,
+            columns=gdf_writer_types.columns,
+            dtype=dict(gdf_writer_types.dtypes),
+        )
+
+    assert_eq(gdf_writer_types, gdf2)
 
 
 @pytest.fixture(
