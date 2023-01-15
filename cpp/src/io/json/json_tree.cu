@@ -489,7 +489,6 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   device_span<NodeIndexT const> parent_node_ids,
   bool is_array_of_arrays,
   bool is_enabled_lines,
-  tree_meta_t const& d_tree,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -507,26 +506,22 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
   rmm::device_uvector<size_type> list_indices(0, stream);
   if (is_array_of_arrays) {
-    auto num_level2_nodes = thrust::count(rmm::exec_policy(stream),
-                                          d_tree.node_levels.begin(),
-                                          d_tree.node_levels.end(),
-                                          row_array_children_level);
+    auto num_level2_nodes = thrust::count(
+      rmm::exec_policy(stream), node_levels.begin(), node_levels.end(), row_array_children_level);
     rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
     rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
     auto const iter = thrust::copy_if(rmm::exec_policy(stream),
                                       thrust::counting_iterator<NodeIndexT>(0),
                                       thrust::counting_iterator<NodeIndexT>(num_nodes),
-                                      d_tree.node_levels.begin(),
+                                      node_levels.begin(),
                                       level2_nodes.begin(),
                                       [row_array_children_level] __device__(auto level) {
                                         return level == row_array_children_level;
                                       });
     // memory usage could be reduced by using different data structure (hashmap)
     // or alternate method to hash it at node_type
-    auto level2_parent_nodes = thrust::make_transform_iterator(
-      level2_nodes.cbegin(), [parent_node_ids = parent_node_ids.data()] __device__(auto node_id) {
-        return parent_node_ids[node_id];
-      });
+    auto level2_parent_nodes =
+      thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   level2_parent_nodes,
                                   level2_parent_nodes + num_level2_nodes,
@@ -679,7 +674,6 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
                           d_tree.parent_node_ids,
                           is_array_of_arrays,
                           is_enabled_lines,
-                          d_tree,
                           stream,
                           mr);
   }();

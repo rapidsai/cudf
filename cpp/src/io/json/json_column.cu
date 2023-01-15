@@ -447,7 +447,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
                                   col_ids.data() + list_node_index,
                                   sizeof(NodeIndexT),
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
     return value;
@@ -920,7 +920,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     CUDF_CUDA_TRY(cudaMemcpyAsync(h_node_categories,
                                   gpu_tree.node_categories.data(),
                                   sizeof(node_t) * size_to_copy,
-                                  cudaMemcpyDeviceToHost,
+                                  cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;
@@ -961,17 +961,11 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
   auto constexpr single_child_col_count = 1;
-  if (is_array_of_arrays) {
-    CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
-                   data_root.child_columns.size() == single_child_col_count and
-                   data_root.child_columns.begin()->second.type == json_col_t::ListColumn,
-                 "Currently the nested JSON parser only supports an array of arrays");
-  } else {
-    CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
-                   data_root.child_columns.size() == single_child_col_count and
-                   data_root.child_columns.begin()->second.type == json_col_t::StructColumn,
-                 "Currently the nested JSON parser only supports an array of (nested) objects");
-  }
+  CUDF_EXPECTS(data_root.type == json_col_t::ListColumn and
+                 data_root.child_columns.size() == single_child_col_count and
+                 data_root.child_columns.begin()->second.type ==
+                   (is_array_of_arrays ? json_col_t::ListColumn : json_col_t::StructColumn),
+               "Input needs to be an array of arrays or an array of (nested) objects");
 
   // Slice off the root list column, which has only a single row that contains all the structs
   auto& root_struct_col = data_root.child_columns.begin()->second;
