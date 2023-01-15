@@ -25,7 +25,7 @@
 
 #include <type_traits>
 
-namespace cudf::test::print {
+namespace cudf::test::pls {
 
 constexpr int32_t hex_tag = 0;
 
@@ -79,7 +79,7 @@ CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
   printf("%*d", width, arg);
 }
 
-CUDF_HOST_DEVICE void print_value(int32_t width, char arg) { printf("%*c", width, arg); }
+inline CUDF_HOST_DEVICE void print_value(int32_t width, char arg) { printf("%*c", width, arg); }
 
 template <typename T>
 CUDF_HOST_DEVICE void print_value(int32_t width, hex_t<T> arg)
@@ -132,9 +132,9 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   constexpr char delimiter = ',';
 
   // TODO we want this to compile to nothing dependnig on compiler flag, rather than runtime
-  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+  // if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
     detail::print_array_kernel<<<1, 1, 0, stream.value()>>>(count, width, delimiter, args...);
-  }
+  // }
 }
 
 }  // namespace cudf::test::print

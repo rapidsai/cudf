@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf_test/print_utilities.cuh>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -417,9 +419,16 @@ class device_row_comparator {
 
       // Traverse the nested list hierarchy to get a column device view
       // pointing to the underlying child data.
+      detail::lists_column_device_view l_list = _lhs;
+      detail::lists_column_device_view r_list = _rhs;
+
       column_device_view lcol = _lhs.slice(lhs_element_index, 1);
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
+
       while (lcol.type().id() == type_id::LIST) {
+        l_list = lcol;
+        r_list = rcol;
+
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
@@ -442,43 +451,45 @@ class device_row_comparator {
       // and empty lists, so not every index corresponds to an actual element
       // in the child column. The element_index is used to keep track of the current
       // child element that we're actually comparing.
-      weak_ordering state{weak_ordering::EQUIVALENT};
       for (int l_dremel_index = l_start, r_dremel_index = r_start, element_index = 0;
            l_dremel_index < l_end and r_dremel_index < r_end;
-           ++l_dremel_index, ++r_dremel_index) {
-        // Second early exit: the repetition levels do not match.
-        if (l_rep_levels[l_dremel_index] != r_rep_levels[r_dremel_index]) {
-          state = (l_rep_levels[l_dremel_index] < r_rep_levels[r_dremel_index])
-                    ? weak_ordering::LESS
-                    : weak_ordering::GREATER;
-          return cuda::std::pair(state, _depth);
-        }
+           ++l_dremel_index, ++r_dremel_index, ++element_index) {
+        auto const l_rep_level = l_rep_levels[l_dremel_index];
+        auto const r_rep_level = r_rep_levels[r_dremel_index];
 
-        // First early exit: the definition levels do not match.
-        if (l_def_levels[l_dremel_index] != r_def_levels[r_dremel_index]) {
-          state = (l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index])
-                    ? weak_ordering::LESS
-                    : weak_ordering::GREATER;
-          return cuda::std::pair(state, _depth);
-        }
+        if (l_rep_level == r_rep_level) {
 
-        // Third early exit: This case has two branches.
-        // 1) If we are at the maximum definition level, then we actually have
-        //    an underlying element to compare, not just an empty list or a
-        //    null. Therefore, we access the element_index element of each list
-        //    and compare the values.
-        // 2) If we are one level below the maximum definition level and the
-        //    column is nullable, the current element must be a null in the
-        //    leaf data. In this case we ignore the null and skip to the next
-        //    element.
-        if (l_def_levels[l_dremel_index] == l_max_def_level) {
+          // check if left element or right is an empty list
+          bool const is_left_list_empty = l_list.offset_at(element_index + 1) == l_list.offset_at(element_index);
+          bool const is_right_list_empty = r_list.offset_at(element_index + 1) == r_list.offset_at(element_index);
+
+          if (threadIdx.x == 0 && lhs_element_index != rhs_element_index) {
+            printf("l rep level: %d, l dremel: %d, r rep revel: %d, r dremel: %d, le: %d, re: %d\n", l_rep_level, l_dremel_index, r_rep_level, r_dremel_index, is_left_list_empty, is_right_list_empty);
+          }
+
+          if (is_left_list_empty && is_right_list_empty) {
+            if (l_def_levels[l_dremel_index] == r_def_levels[r_dremel_index]) {
+              continue;
+            }
+            return l_def_levels[l_dremel_index] < r_def_levels[r_dremel_index] ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
+          }
+          if (is_left_list_empty) {
+            return cuda::std::pair(weak_ordering::LESS, _depth);
+          }
+          if (is_right_list_empty) {
+            return cuda::std::pair(weak_ordering::GREATER, _depth);
+          }
+
+          weak_ordering state{weak_ordering::EQUIVALENT};
           int last_null_depth                    = _depth;
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
             lcol.type(), comparator, element_index, element_index);
-          if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
-          ++element_index;
-        } else if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
-          ++element_index;
+          if (state != weak_ordering::EQUIVALENT) {printf("can't be here"); return cuda::std::pair(state, _depth); }
+        }
+        else {
+          printf("AM I HERE\n");
+          // the lower repetition level is a smaller sub-list
+          return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
         }
       }
 
@@ -777,7 +788,7 @@ struct preprocessed_table {
     }
   }
 
- private:
+ public:
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
   rmm::device_uvector<null_order> const _null_precedence;
@@ -823,6 +834,10 @@ class self_comparator {
                   rmm::cuda_stream_view stream                = cudf::get_default_stream())
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
+    std::cout << "Dremel def level" << std::endl;
+    cudf::test::pls::print_array(d_t->_dremel_data.value()[0].def_level.size(), stream, d_t->_dremel_data.value()[0].def_level.data());
+    std::cout << "Dremel rep level" << std::endl;
+    cudf::test::pls::print_array(d_t->_dremel_data.value()[0].rep_level.size(), stream, d_t->_dremel_data.value()[0].rep_level.data());
   }
 
   /**
