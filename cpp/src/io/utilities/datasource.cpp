@@ -220,8 +220,7 @@ class device_buffer_source final : public datasource {
   {
     auto const count = std::min(size, this->size() - offset);
     std::vector<std::byte> h_data(count);
-    CUDF_CUDA_TRY(
-      cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDefault));
+    CUDF_CUDA_TRY(cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDefault));
     return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
   }
 
@@ -233,8 +232,8 @@ class device_buffer_source final : public datasource {
                                         rmm::cuda_stream_view stream) override
   {
     auto const count = std::min(size, this->size() - offset);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
     return std::async(std::launch::deferred, [count] { return count; });
   }
 
