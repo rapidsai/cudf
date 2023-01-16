@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -77,7 +77,7 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options_builder& dayfirst(
             bool val
         ) except +
-        json_reader_options_builder& experimental(
+        json_reader_options_builder& legacy(
             bool val
         ) except +
         json_reader_options_builder& keep_quotes(

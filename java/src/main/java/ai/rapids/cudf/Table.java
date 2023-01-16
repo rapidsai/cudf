@@ -220,6 +220,7 @@ public final class Table implements AutoCloseable {
    * @param length            the length of the buffer to read from.
    * @param headerRow         the 0 based index row of the header can be -1
    * @param delim             character deliminator (must be ASCII).
+   * @param quoteStyle        quote style expected to be used in the input (represented as int)
    * @param quote             character quote (must be ASCII).
    * @param comment           character that starts a comment line (must be ASCII) use '\0'
    * @param nullValues        values that should be treated as nulls
@@ -230,7 +231,7 @@ public final class Table implements AutoCloseable {
                                        int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       int headerRow, byte delim, byte quote,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
@@ -777,6 +778,7 @@ public final class Table implements AutoCloseable {
             0, 0,
             opts.getHeaderRow(),
             opts.getDelim(),
+            opts.getQuoteStyle().nativeId,
             opts.getQuote(),
             opts.getComment(),
             opts.getNullValues(),
@@ -850,6 +852,7 @@ public final class Table implements AutoCloseable {
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
+        opts.getQuoteStyle().nativeId,
         opts.getQuote(),
         opts.getComment(),
         opts.getNullValues(),
@@ -865,6 +868,7 @@ public final class Table implements AutoCloseable {
                                             String nullValue,
                                             String trueValue,
                                             String falseValue,
+                                            int quoteStyle,
                                             String outputPath) throws CudfException;
 
   public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
@@ -876,6 +880,7 @@ public final class Table implements AutoCloseable {
                    options.getNullValue(),
                    options.getTrueValue(),
                    options.getFalseValue(),
+                   options.getQuoteStyle().nativeId,
                    outputPath);
   }
 
@@ -886,6 +891,7 @@ public final class Table implements AutoCloseable {
                                                    String nullValue,
                                                    String trueValue,
                                                    String falseValue,
+                                                   int quoteStyle,
                                                    HostBufferConsumer buffer) throws CudfException;
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
@@ -904,6 +910,7 @@ public final class Table implements AutoCloseable {
                                                 options.getNullValue(),
                                                 options.getTrueValue(),
                                                 options.getFalseValue(),
+                                                options.getQuoteStyle().nativeId,
                                                 consumer);
       this.consumer = consumer;
     }
