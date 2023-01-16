@@ -73,7 +73,7 @@ TEST_F(SortSpark, TestExamples)
 
   auto const col2 = lcw{lcw{lcw{1}, lcw{2}}, lcw{lcw{{1, 0}, nulls_at({1})}, lcw{2, 3}}};
   cudf::test::fixed_width_column_wrapper<int32_t> expected2{{0, 1}};
-  auto result2    = cudf::sorted_order(cudf::table_view({col2}), {});
+  auto result2 = cudf::sorted_order(cudf::table_view({col2}), {});
   cudf::test::print(*result2);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, *result2);
 }
@@ -778,17 +778,15 @@ TYPED_TEST(Sort, WithListColumn)
   if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
-  lcw col{
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
-    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
-    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
-    {{7, 8}, {}},
-    lcw{lcw{}, lcw{}, lcw{}},
-    lcw{lcw{}},
-    {lcw{10}},
-    lcw{}
-  };
+  lcw col{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+          {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+          {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+          {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
+          {{7, 8}, {}},
+          lcw{lcw{}, lcw{}, lcw{}},
+          lcw{lcw{}},
+          {lcw{10}},
+          lcw{}};
 
   cudf::test::print(col);
   auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 0, 1, 2, 4, 7};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,14 +301,12 @@ dremel_data get_dremel_data(column_view h_col,
                                                    start_at_sub_level[level],
                                                    def_at_level[level]});
     // 1 empties that are not nulls. use empty_idx to go through cols and mark as 1
-    auto input_parent_global_empty_it = thrust::make_transform_iterator(empties_idx.begin(), 
-    [d_parent_col = d_nesting_levels + level] __device__ (auto idx) { 
-      auto col = *d_parent_col;
-      if (col.nullable()) {
-        return not col.is_null(idx);
-      }
-      return true;
-     } );
+    auto input_parent_global_empty_it = thrust::make_transform_iterator(
+      empties_idx.begin(), [d_parent_col = d_nesting_levels + level] __device__(auto idx) {
+        auto col = *d_parent_col;
+        if (col.nullable()) { return not col.is_null(idx); }
+        return true;
+      });
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
@@ -321,17 +319,17 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_child_global_empty_it = thrust::make_constant_iterator(0);
 
     // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
+    auto input_parent_zip_it = thrust::make_zip_iterator(
+      thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
 
     // 0 constant for empties since there are no empties at leaf level
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_child_rep_it, input_child_def_it, input_child_global_empty_it));
+    auto input_child_zip_it = thrust::make_zip_iterator(
+      thrust::make_tuple(input_child_rep_it, input_child_def_it, input_child_global_empty_it));
 
-    auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
+    auto output_zip_it = thrust::make_zip_iterator(
+      thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
+    auto ends            = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -411,25 +409,22 @@ dremel_data get_dremel_data(column_view h_col,
                                                    start_at_sub_level[level],
                                                    def_at_level[level]});
 
-    auto input_parent_global_empty_it = thrust::make_transform_iterator(empties_idx.begin(), 
-    [d_parent_col = d_nesting_levels + level] __device__ (auto idx) { 
-      auto col = *d_parent_col;
-      if (col.nullable()) {
-        return not cudf::bit_is_set(col.null_mask(), idx);
-      }
-      return true;
-    } );
-                                               
+    auto input_parent_global_empty_it = thrust::make_transform_iterator(
+      empties_idx.begin(), [d_parent_col = d_nesting_levels + level] __device__(auto idx) {
+        auto col = *d_parent_col;
+        if (col.nullable()) { return not cudf::bit_is_set(col.null_mask(), idx); }
+        return true;
+      });
 
     // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
+    auto input_parent_zip_it = thrust::make_zip_iterator(
+      thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
 
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin(), temp_global_empties.begin()));
+    auto input_child_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
+      temp_rep_vals.begin(), temp_def_vals.begin(), temp_global_empties.begin()));
 
-    auto output_zip_it =
-      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
+    auto output_zip_it = thrust::make_zip_iterator(
+      thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
 
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      transformed_empties,

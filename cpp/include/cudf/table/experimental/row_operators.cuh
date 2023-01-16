@@ -411,12 +411,12 @@ class device_row_comparator {
                                                               size_type rhs_element_index)
     {
       // These are all the values from the Dremel encoding.
-      auto const l_max_def_level = _l_dremel_device_view->max_def_level;
-      auto const r_max_def_level = _r_dremel_device_view->max_def_level;
-      auto const l_def_levels    = _l_dremel_device_view->def_levels;
-      auto const r_def_levels    = _r_dremel_device_view->def_levels;
-      auto const l_rep_levels    = _l_dremel_device_view->rep_levels;
-      auto const r_rep_levels    = _r_dremel_device_view->rep_levels;
+      auto const l_max_def_level  = _l_dremel_device_view->max_def_level;
+      auto const r_max_def_level  = _r_dremel_device_view->max_def_level;
+      auto const l_def_levels     = _l_dremel_device_view->def_levels;
+      auto const r_def_levels     = _r_dremel_device_view->def_levels;
+      auto const l_rep_levels     = _l_dremel_device_view->rep_levels;
+      auto const r_rep_levels     = _r_dremel_device_view->rep_levels;
       auto const l_global_empties = _l_dremel_device_view->global_empties;
       auto const r_global_empties = _r_dremel_device_view->global_empties;
 
@@ -462,40 +462,44 @@ class device_row_comparator {
 
         // only compare if left and right are at same nesting level
         if (l_rep_level == r_rep_level) {
-
           // check if left element or right is an empty list
-          auto const l_def_level = l_def_levels[l_dremel_index];
-          auto const r_def_level = r_def_levels[r_dremel_index];
-          bool const is_left_list_empty = l_global_empties[l_dremel_index];
+          auto const l_def_level         = l_def_levels[l_dremel_index];
+          auto const r_def_level         = r_def_levels[r_dremel_index];
+          bool const is_left_list_empty  = l_global_empties[l_dremel_index];
           bool const is_right_list_empty = r_global_empties[r_dremel_index];
-          bool const is_left_list_null = l_def_level < l_max_def_level && not is_left_list_empty;
-          bool const is_right_list_null = r_def_level < r_max_def_level && not is_right_list_empty;
+          bool const is_left_list_null   = l_def_level < l_max_def_level && not is_left_list_empty;
+          bool const is_right_list_null  = r_def_level < r_max_def_level && not is_right_list_empty;
 
-          if (threadIdx.x + blockDim.x * blockIdx.x == 0 && ((lhs_element_index== 1 and rhs_element_index == 0) || (lhs_element_index== 0 and rhs_element_index == 1))) {
+          if (threadIdx.x + blockDim.x * blockIdx.x == 0 &&
+              ((lhs_element_index == 1 and rhs_element_index == 0) ||
+               (lhs_element_index == 0 and rhs_element_index == 1))) {
             printf("l dremel: %d, r dremel: %d, le: %d, re: %d, ln: %d, rn: %d\n",
-                   l_dremel_index, r_dremel_index, is_left_list_empty, is_right_list_empty,
-                  is_left_list_null, is_right_list_null);
+                   l_dremel_index,
+                   r_dremel_index,
+                   is_left_list_empty,
+                   is_right_list_empty,
+                   is_left_list_null,
+                   is_right_list_null);
           }
 
           // both empty lists at arbitrary nesting
           if (is_left_list_empty && is_right_list_empty) {
-            if (l_def_level == r_def_level) {
-              continue;
-            }
-            return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
+            if (l_def_level == r_def_level) { continue; }
+            return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                             : cuda::std::pair(weak_ordering::GREATER, _depth);
           }
           // both nulls at arbitrary nesting
           else if (is_left_list_null && is_right_list_null) {
-            if (l_def_level == r_def_level) {
-              continue;
-            }
+            if (l_def_level == r_def_level) { continue; }
             // push less nested null to front
             if (_null_precedence == null_order::BEFORE) {
-              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
+              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                               : cuda::std::pair(weak_ordering::GREATER, _depth);
             }
             // push less nested null to back
             else {
-              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth) : cuda::std::pair(weak_ordering::LESS, _depth);
+              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth)
+                                               : cuda::std::pair(weak_ordering::LESS, _depth);
             }
           }
           // left list empty
@@ -504,7 +508,8 @@ class device_row_comparator {
             if (is_right_list_null) {
               // push lower nested null to front
               if (_null_precedence == null_order::BEFORE) {
-                return r_def_level < l_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth) : cuda::std::pair(weak_ordering::LESS, _depth);
+                return r_def_level < l_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth)
+                                                 : cuda::std::pair(weak_ordering::LESS, _depth);
               }
             }
             // left empty list always before right leaf or null when null_order::AFTER
@@ -516,7 +521,8 @@ class device_row_comparator {
             if (is_left_list_null) {
               // let lower nested null be in front
               if (_null_precedence == null_order::BEFORE) {
-                return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
+                return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                                 : cuda::std::pair(weak_ordering::GREATER, _depth);
               }
             }
             // right empty leaf always before left leaf or null when null_order::AFTER
@@ -530,10 +536,10 @@ class device_row_comparator {
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
             lcol.type(), comparator, element_index, element_index);
           if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
-        }
-        else {
+        } else {
           // the lower repetition level is a smaller sub-list
-          return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth) : cuda::std::pair(weak_ordering::GREATER, _depth);
+          return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth)
+                                           : cuda::std::pair(weak_ordering::GREATER, _depth);
         }
       }
 
@@ -879,14 +885,14 @@ class self_comparator {
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
     // std::cout << "Dremel def level" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].def_level.size(), stream, d_t->_dremel_data.value()[0].def_level.data());
-    // stream.synchronize();
-    // std::cout << "Dremel rep level" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].rep_level.size(), stream, d_t->_dremel_data.value()[0].rep_level.data());
-    // stream.synchronize();
-    // std::cout << "Dremel global empties" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].global_empties.size(), stream, d_t->_dremel_data.value()[0].global_empties.data());
-    // stream.synchronize();
+    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].def_level.size(), stream,
+    // d_t->_dremel_data.value()[0].def_level.data()); stream.synchronize(); std::cout << "Dremel
+    // rep level" << std::endl;
+    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].rep_level.size(), stream,
+    // d_t->_dremel_data.value()[0].rep_level.data()); stream.synchronize(); std::cout << "Dremel
+    // global empties" << std::endl;
+    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].global_empties.size(), stream,
+    // d_t->_dremel_data.value()[0].global_empties.data()); stream.synchronize();
   }
 
   /**

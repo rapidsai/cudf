@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,8 +133,8 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
 
   // TODO we want this to compile to nothing dependnig on compiler flag, rather than runtime
   // if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
-    detail::print_array_kernel<<<1, 1, 0, stream.value()>>>(count, width, delimiter, args...);
+  detail::print_array_kernel<<<1, 1, 0, stream.value()>>>(count, width, delimiter, args...);
   // }
 }
 
-}  // namespace cudf::test::print
+}  // namespace cudf::test::pls

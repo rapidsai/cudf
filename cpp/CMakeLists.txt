@@ -569,7 +569,7 @@ add_library(
   src/transform/encode.cu
   src/transform/mask_to_bools.cu
   src/transform/nans_to_nulls.cu
-  # src/transform/one_hot_encode.cu
+  src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
