@@ -593,7 +593,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  if (reader_opts.is_enabled_experimental()) {
+  if (not reader_opts.is_enabled_legacy()) {
     return experimental::read_json(sources, reader_opts, stream, mr);
   }
 
