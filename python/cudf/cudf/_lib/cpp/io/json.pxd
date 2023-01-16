@@ -93,7 +93,6 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options() except +
         cudf_io_types.sink_info get_sink() except +
         cudf_table_view.table_view get_table() except +
-        const cudf_io_types.table_metadata *get_metadata() except +
         string get_na_rep() except +
         bool is_enabled_include_nulls() except +
         bool is_enabled_lines() except +
@@ -104,7 +103,7 @@ cdef extern from "cudf/io/json.hpp" \
 
         # setter
         void set_table(cudf_table_view.table_view tbl) except +
-        void set_metadata(cudf_io_types.table_metadata* meta) except +
+        void set_metadata(cudf_io_types.table_metadata meta) except +
         void set_na_rep(string val) except +
         void enable_include_nulls(bool val) except +
         void enable_lines(bool val) except +
@@ -128,7 +127,7 @@ cdef extern from "cudf/io/json.hpp" \
             cudf_table_view.table_view tbl
         ) except +
         json_writer_options_builder& metadata(
-            cudf_io_types.table_metadata* meta
+            cudf_io_types.table_metadata meta
         ) except +
         json_writer_options_builder& na_rep(string val) except +
         json_writer_options_builder& include_nulls(bool val) except +

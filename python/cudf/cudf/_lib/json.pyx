@@ -11,7 +11,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -175,21 +175,21 @@ def write_json(
     cdef int rows_per_chunk_c = rows_per_chunk
     cdef string true_value_c = 'true'.encode()
     cdef string false_value_c = 'false'.encode()
-    cdef unique_ptr[table_metadata] tbl_meta = make_unique[table_metadata]()
+    cdef table_metadata tbl_meta
 
     num_index_cols_meta = 0
     cdef column_name_info child_info
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         child_info.name = name.encode()
-        tbl_meta.get().schema_info.push_back(child_info)
+        tbl_meta.schema_info.push_back(child_info)
         _set_col_children_metadata(
             table[name]._column,
-            tbl_meta.get().schema_info[i]
+            tbl_meta.schema_info[i]
         )
 
     cdef json_writer_options options = move(
         json_writer_options.builder(sink_info_c, input_table_view)
-        .metadata(tbl_meta.get())
+        .metadata(tbl_meta)
         .na_rep(na_c)
         .include_nulls(include_nulls_c)
         .lines(lines_c)
