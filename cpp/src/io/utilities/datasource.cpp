@@ -212,7 +212,7 @@ class device_buffer_source final : public datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count = std::min(size, this->size() - offset);
-    CUDF_CUDA_TRY(cudaMemcpy(dst, _d_buffer.data() + offset, count, cudaMemcpyDeviceToHost));
+    CUDF_CUDA_TRY(cudaMemcpy(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault));
     return count;
   }
 
@@ -221,7 +221,7 @@ class device_buffer_source final : public datasource {
     auto const count = std::min(size, this->size() - offset);
     std::vector<std::byte> h_data(count);
     CUDF_CUDA_TRY(
-      cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDeviceToHost));
+      cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDefault));
     return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
   }
 
@@ -234,8 +234,8 @@ class device_buffer_source final : public datasource {
   {
     auto const count = std::min(size, this->size() - offset);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      dst, _d_buffer.data() + offset, count, cudaMemcpyDeviceToDevice, stream.value()));
-    return std::async(std::launch::async, [count] { return count; });
+      dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    return std::async(std::launch::deferred, [count] { return count; });
   }
 
   size_t device_read(size_t offset,
