@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,8 +99,8 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
-  // Whether to use the experimental reader
-  bool _experimental = false;
+  // Whether to use the legacy reader
+  bool _legacy = false;
 
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
@@ -222,16 +222,16 @@ class json_reader_options {
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
-   * @brief Whether the experimental reader should be used.
+   * @brief Whether the legacy reader should be used.
    *
-   * @returns true if the experimental reader will be used, false otherwise
+   * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_experimental() const { return _experimental; }
+  bool is_enabled_legacy() const { return _legacy; }
 
   /**
-   * @brief Whether the experimental reader should keep quotes of string values.
+   * @brief Whether the reader should keep quotes of string values.
    *
-   * @returns true if the experimental reader should keep quotes, false otherwise
+   * @returns true if the reader should keep quotes, false otherwise
    */
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
@@ -292,16 +292,16 @@ class json_reader_options {
   void enable_dayfirst(bool val) { _dayfirst = val; }
 
   /**
-   * @brief Set whether to use the experimental reader.
+   * @brief Set whether to use the legacy reader.
    *
-   * @param val Boolean value to enable/disable the experimental reader
+   * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_experimental(bool val) { _experimental = val; }
+  void enable_legacy(bool val) { _legacy = val; }
 
   /**
-   * @brief Set whether the experimental reader should keep quotes of string values.
+   * @brief Set whether the reader should keep quotes of string values.
    *
-   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * @param val Boolean value to indicate whether the reader should keep quotes
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
@@ -425,21 +425,21 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to use the experimental reader.
+   * @brief Set whether to use the legacy reader.
    *
-   * @param val Boolean value to enable/disable experimental parsing
+   * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& experimental(bool val)
+  json_reader_options_builder& legacy(bool val)
   {
-    options._experimental = val;
+    options._legacy = val;
     return *this;
   }
 
   /**
-   * @brief Set whether the experimental reader should keep quotes of string values.
+   * @brief Set whether the reader should keep quotes of string values.
    *
-   * @param val Boolean value to indicate whether the experimental reader should keep quotes
+   * @param val Boolean value to indicate whether the reader should keep quotes
    * of string values
    * @return this for chaining
    */
