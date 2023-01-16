@@ -31,6 +31,7 @@ struct dremel_device_view {
   size_type const* offsets;
   uint8_t const* rep_levels;
   uint8_t const* def_levels;
+  uint8_t const* global_empties;
   size_type const leaf_data_size;
   uint8_t const max_def_level;
 };
@@ -44,6 +45,7 @@ struct dremel_data {
   rmm::device_uvector<size_type> dremel_offsets;
   rmm::device_uvector<uint8_t> rep_level;
   rmm::device_uvector<uint8_t> def_level;
+  rmm::device_uvector<uint8_t> global_empties;
 
   size_type const leaf_data_size;
   uint8_t const max_def_level;
@@ -51,7 +53,7 @@ struct dremel_data {
   operator dremel_device_view() const
   {
     return dremel_device_view{
-      dremel_offsets.data(), rep_level.data(), def_level.data(), leaf_data_size, max_def_level};
+      dremel_offsets.data(), rep_level.data(), def_level.data(), global_empties.data(), leaf_data_size, max_def_level};
   }
 };
 
