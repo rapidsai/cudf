@@ -199,7 +199,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     # Disable occupancy warnings to avoid polluting output when there are few
     # groups.
     with NoNumbaOccWarnings():
-        specialized[ngroups, tpb, stream](*launch_args)
+        specialized[ngroups, tpb](*launch_args)
 
 
     return output
