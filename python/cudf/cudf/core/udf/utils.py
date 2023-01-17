@@ -6,6 +6,11 @@ from typing import Any, Callable, Dict, List
 
 import numba
 
+from numba.core.datamodel import default_manager
+from numba.cuda.cudadrv import nvvm
+
+import llvmlite.binding as ll
+
 import cachetools
 import cupy as cp
 import numpy as np
@@ -329,3 +334,15 @@ class NoNumbaOccWarnings(object):
         numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
     def __exit__(self, exc_type, exc_val, exc_tb):
         numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 1
+
+def _get_extensionty_size(ty):
+    """
+    Return the size of an extension type in bytes
+    """
+    data_layout = nvvm.data_layout
+    if isinstance(data_layout, dict):
+        data_layout = data_layout[64]
+    target_data = ll.create_target_data(data_layout)
+    llty = default_manager[ty].get_value_type()  
+    return llty.get_abi_size(target_data)
+ 

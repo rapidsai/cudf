@@ -13,6 +13,7 @@ from cudf.core.udf.groupby_typing import (
     Group,
     GroupType,
     call_cuda_functions,
+    index_default_type
 )
 
 
@@ -101,6 +102,12 @@ def cuda_Group_idx_max_or_min(context, builder, sig, args, function):
         context, builder, value=args[0]
     )
     grp_type = sig.args[0]
+
+    if grp_type.index_type != index_default_type:
+        raise TypeError(
+            f"Only inputs with default index dtype {index_default_type} "
+            "are supported."
+        )
 
     group_dataty = grp_type.group_data_type
     group_data_ptr = builder.alloca(grp.group_data.type)

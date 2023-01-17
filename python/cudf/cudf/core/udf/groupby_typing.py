@@ -17,7 +17,7 @@ from numba.np import numpy_support
 import pandas as pd
 
 
-index_default_type = pd.RangeIndex(0,0).dtype # int64
+index_default_type = numpy_support.from_dtype(pd.RangeIndex(0,0).dtype) # int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
@@ -43,7 +43,7 @@ class GroupType(numba.types.Type):
     """
     Numba extension type carrying metadata associated with a single
     GroupBy group. This metadata ultimately is passed to the CUDA
-    __device__ function which actually performs the work.
+    __device__ function which actually performs the work. 
     """
     def __init__(self, group_scalar_type, index_type=index_default_type):
         self.group_scalar_type = group_scalar_type
@@ -58,10 +58,15 @@ class GroupType(numba.types.Type):
 
 @typeof_impl.register(Group)
 def typeof_group(val, c):
+    """
+    Tie Group and GroupType together such that when Numba
+    sees usage of Group in raw python code, it knows to
+    treat those usages as uses of GroupType
+    """
     return GroupType(
         numba.np.numpy_support.from_dtype(val.dtype),
         numba.np.numpy_support.from_dtype(val.index_dtype),
-    )  # Identifies instances of the Group class as GroupType
+    )
 
 
 # The typing of the python "function" Group.__init__
@@ -170,6 +175,16 @@ class GroupIdxMin(AbstractTemplate):
 class GroupAttr(AttributeTemplate):
     key = GroupType
 
+    resolve_max = _create_reduction_attr("GroupType.max")
+    resolve_min = _create_reduction_attr("GroupType.min")
+    resolve_sum = _create_reduction_attr("GroupType.sum")
+
+    resolve_size = _create_reduction_attr("GroupType.size", retty=types.int64)
+    resolve_count = _create_reduction_attr("GroupType.count", retty=types.int64)
+    resolve_mean = _create_reduction_attr("GroupType.mean", retty=types.float64)
+    resolve_var = _create_reduction_attr("GroupType.var", retty=types.float64)
+    resolve_std = _create_reduction_attr("GroupType.std", retty=types.float64)
+
     def resolve_idxmax(self, mod):
         return types.BoundFunction(
             GroupIdxMax, GroupType(mod.group_scalar_type, mod.index_type)
@@ -179,36 +194,6 @@ class GroupAttr(AttributeTemplate):
         return types.BoundFunction(
             GroupIdxMin, GroupType(mod.group_scalar_type, mod.index_type)
         )
-
-
-setattr(GroupAttr, "resolve_max", _create_reduction_attr("GroupType.max"))
-setattr(GroupAttr, "resolve_min", _create_reduction_attr("GroupType.min"))
-setattr(GroupAttr, "resolve_sum", _create_reduction_attr("GroupType.sum"))
-setattr(
-    GroupAttr,
-    "resolve_size",
-    _create_reduction_attr("GroupType.size", retty=types.int64),
-)
-setattr(
-    GroupAttr,
-    "resolve_count",
-    _create_reduction_attr("GroupType.count", retty=types.int64),
-)
-setattr(
-    GroupAttr,
-    "resolve_mean",
-    _create_reduction_attr("GroupType.mean", retty=types.float64),
-)
-setattr(
-    GroupAttr,
-    "resolve_var",
-    _create_reduction_attr("GroupType.var", retty=types.float64),
-)
-setattr(
-    GroupAttr,
-    "resolve_std",
-    _create_reduction_attr("GroupType.std", retty=types.float64),
-)
 
 
 _register_cuda_reduction_caller("Max", types.float64, types.float64)

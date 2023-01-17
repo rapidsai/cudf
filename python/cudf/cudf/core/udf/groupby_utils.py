@@ -28,10 +28,10 @@ from cudf.core.udf.utils import (
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
+    _get_extensionty_size
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
 
-from contextlib import contextmanager
 
 dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
 cudf.core.udf.utils.ptx_files.append(dev_func_ptx)
@@ -43,8 +43,16 @@ def _get_frame_groupby_type(dtype, index_dtype):
     Models the column as a dictionary like data structure
     containing GroupTypes.
     See numba.np.numpy_support.from_struct_dtype for details.
-    """
 
+    Parameters
+    ----------
+    level : np.dtype
+        A numpy structured array dtype associating field names
+        to scalar dtypes
+    index_dtype : np.dtype
+        A numpy scalar dtype associated with the index of the
+        incoming grouped data
+    """
     # Create the numpy structured type corresponding to the numpy dtype.
     fields = []
     offset = 0
@@ -55,21 +63,19 @@ def _get_frame_groupby_type(dtype, index_dtype):
         title = info[2] if len(info) == 3 else None
         ty = numpy_support.from_dtype(elemdtype)
         indexty = numpy_support.from_dtype(index_dtype)
+        groupty = GroupType(ty, indexty)
         infos = {
-            "type": GroupType(ty, indexty),
+            "type": groupty,
             "offset": offset,
             "title": title,
         }
         fields.append((name, infos))
-
-        offset += 8 + 8 + 8  # group struct size (2 pointers and 1 integer)
+        offset += _get_extensionty_size(groupty)
 
         # Align the next member of the struct to be a multiple of the
         # memory access size, per PTX ISA 7.4/5.4.5
         if i < len(sizes) - 1:
-            # next_itemsize = sizes[i + 1]
-            next_itemsize = 8
-            offset = int(math.ceil(offset / next_itemsize) * next_itemsize)
+            offset = int(math.ceil(offset / 8) * 8)
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
@@ -131,6 +137,20 @@ def _get_groupby_apply_kernel(frame, func, args):
 
 @_cudf_nvtx_annotate
 def jit_groupby_apply(offsets, grouped_values, function, *args):
+    """
+    Main entrypoint for JIT Groupby.apply via Numba. 
+
+    Parameters
+    ----------
+    offsets : list
+        A list of intergers denoting the indices of the group
+        boundries in grouped_values
+    grouped_values : DataFrame
+        A DataFrame representing the source data
+        sorted by group keys
+    function: callable
+        The user UDF defined on a DataFrame
+    """
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
@@ -157,7 +177,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     if max_group_size >= 1000:
         blocklim = 256
     else:
-        blocklim = ((max_group_size + 32 - 1) / 32) * 32
+        blocklim = ((max_group_size + 32 - 1) // 32) * 32
 
     if kernel.specialized:
         specialized = kernel
@@ -168,7 +188,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     ctx = get_context()
     # Dispatcher is specialized, so there's only one definition - get
     # it so we can get the cufunc from the code library
-    kern_def = next(iter(specialized.overloads.values()))
+    kern_def, = specialized.overloads.values()
     grid, tpb = ctx.get_max_potential_block_size(
         func=kern_def._codelibrary.get_cufunc(),
         b2d_func=0,
@@ -176,13 +196,10 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         blocksizelimit=int(blocklim),
     )
 
-    stream = cuda.default_stream()
-
     # Disable occupancy warnings to avoid polluting output when there are few
     # groups.
     with NoNumbaOccWarnings():
         specialized[ngroups, tpb, stream](*launch_args)
 
-    stream.synchronize()
 
     return output
