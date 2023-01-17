@@ -400,6 +400,10 @@ template <typename Op>
 struct column_type_dispatcher {
   /**
    * @brief Specialization for reducing floating-point column types to any output type.
+   *
+   * This is called when the output_type does not match the ElementType.
+   * The input values are promoted to double (via transform-iterator) for the
+   * reduce calculation. The result is then cast to the specified output_type.
    */
   template <typename ElementType,
             typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
@@ -411,7 +415,7 @@ struct column_type_dispatcher {
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
-    // TODO: per gh-9988, we should change the compute precision to `output_type`.
+    // Floats are computed in double precision and then cast to the output type
     auto result = simple_segmented_reduction<ElementType, double, Op>(
       col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
@@ -420,6 +424,13 @@ struct column_type_dispatcher {
 
   /**
    * @brief Specialization for reducing integer column types to any output type.
+   *
+   * This is called when the output_type does not match the ElementType.
+   * The input values are promoted to int64_t (via transform-iterator) for the
+   * reduce calculation. The result is then cast to the specified output_type.
+   *
+   * For uint64_t case, the only reasonable output_type is also UINT64 and
+   * this is not called when the input/output types match.
    */
   template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
@@ -431,7 +442,7 @@ struct column_type_dispatcher {
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
-    // TODO: per gh-9988, we should change the compute precision to `output_type`.
+    // Integers are computed in int64 precision and then cast to the output type.
     auto result = simple_segmented_reduction<ElementType, int64_t, Op>(
       col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
@@ -462,11 +473,12 @@ struct column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    // If the output type matches the input type, then reduce using that type
     if (output_type.id() == cudf::type_to_id<ElementType>()) {
       return simple_segmented_reduction<ElementType, ElementType, Op>(
         col, offsets, null_handling, init, stream, mr);
     }
-    // reduce and map to output type
+    // otherwise, reduce and map to output type
     return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 

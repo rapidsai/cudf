@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,8 +99,7 @@ TEST_F(JsonReaderTest, ByteRange)
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{json_string.c_str(), json_string.size()})
       .compression(cudf::io::compression_type::NONE)
-      .lines(true)
-      .experimental(true);
+      .lines(true);
 
   // Read full test data via existing, nested JSON lines reader
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
