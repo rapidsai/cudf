@@ -220,6 +220,21 @@ records_orient_tree_traversal(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Get the indices of the children of array of arrays.
+ *
+ * @param row_array_children_level Level of the children of array of arrays.
+ * @param node_levels Levels of each node in the tree
+ * @param parent_node_ids Parent node ids of each node in the tree
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A pair of device_uvector containing the node id and their corresponding array indices of
+ * the children of array of arrays.
+ */
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
+get_array_children_indices(TreeDepthT row_array_children_level,
+                           device_span<TreeDepthT const> node_levels,
+                           device_span<NodeIndexT const> parent_node_ids,
+                           rmm::cuda_stream_view stream);
+/**
  * @brief Reduce node tree into column tree by aggregating each property of column.
  *
  * @param tree json node tree to reduce (modified in-place, but restored to original state)

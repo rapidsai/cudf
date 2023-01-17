@@ -471,6 +471,40 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   return node_type;
 }
 
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
+get_array_children_indices(TreeDepthT row_array_children_level,
+                           device_span<TreeDepthT const> node_levels,
+                           device_span<NodeIndexT const> parent_node_ids,
+                           rmm::cuda_stream_view stream)
+{
+  // array children level: (level 2 for values, level 1 for values-JSONLines format)
+  // copy nodes id of level 1's children (level 2)
+  // exclusive scan by key (on key their parent_node_id, because we need indices in each row.
+  // parent_node_id for each row will be same).
+  // -> return their indices and their node id
+  auto const num_nodes  = node_levels.size();
+  auto num_level2_nodes = thrust::count(
+    rmm::exec_policy(stream), node_levels.begin(), node_levels.end(), row_array_children_level);
+  rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
+  rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
+  auto const iter = thrust::copy_if(rmm::exec_policy(stream),
+                                    thrust::counting_iterator<NodeIndexT>(0),
+                                    thrust::counting_iterator<NodeIndexT>(num_nodes),
+                                    node_levels.begin(),
+                                    level2_nodes.begin(),
+                                    [row_array_children_level] __device__(auto level) {
+                                      return level == row_array_children_level;
+                                    });
+  auto level2_parent_nodes =
+    thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                level2_parent_nodes,
+                                level2_parent_nodes + num_level2_nodes,
+                                thrust::make_constant_iterator(NodeIndexT{1}),
+                                level2_indices.begin());
+  return std::make_pair(std::move(level2_nodes), std::move(level2_indices));
+}
+
 // Two level hashing algorithm
 // 1. Convert node_category+fieldname to node_type. (passed as argument)
 //   a. Create a hashmap to hash field name and assign unique node id as values.
@@ -496,37 +530,26 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   auto const num_nodes = parent_node_ids.size();
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
 
-  // if level 1 is a list, then it should take its list index as key!
-  // (level 1 for values, level 0 for values-JSONLines)
-  // copy nodes of level 1 children. (level 2) and their parent_node_id
-  // exclusive scan by key -> get their indices and scatter to their node id
-  // use this index for hashing at level 2
-
   // array of arrays
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
   rmm::device_uvector<size_type> list_indices(0, stream);
   if (is_array_of_arrays) {
-    auto num_level2_nodes = thrust::count(
-      rmm::exec_policy(stream), node_levels.begin(), node_levels.end(), row_array_children_level);
-    rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
-    rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
-    auto const iter = thrust::copy_if(rmm::exec_policy(stream),
-                                      thrust::counting_iterator<NodeIndexT>(0),
-                                      thrust::counting_iterator<NodeIndexT>(num_nodes),
-                                      node_levels.begin(),
-                                      level2_nodes.begin(),
-                                      [row_array_children_level] __device__(auto level) {
-                                        return level == row_array_children_level;
-                                      });
+    // For array of arrays, Level 2 nodes do not have column name (field name).
+    // So, we need to generated indices for each level 2 node w.r.t to that row, to uniquely
+    // identify each level 2 node as separate column.
+    // Example:
+    // array of structs: [ { a: 1, b: 2}, { a: 3, b: 4} ]
+    //          levels : 0 1 2  3  2  3   1 2  3  2  3
+    // array of arrays:  [ [    1,    2], [    3,    4] ]
+    //          levels : 0 1    2     2   1    2     2
+    // For example, in the above example, we need to generate indices for each level 2 node
+    // (1, 2, 3, 4) w.r.t to their row as (0, 1, 0, 1).
+    // This indices uniquely identifies each column in each row. This is used during hashing for
+    // level 2 nodes to generate unique column ids, instead of field name for level 2 nodes.
+    auto [level2_nodes, level2_indices] =
+      get_array_children_indices(row_array_children_level, node_levels, parent_node_ids, stream);
     // memory usage could be reduced by using different data structure (hashmap)
     // or alternate method to hash it at node_type
-    auto level2_parent_nodes =
-      thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                  level2_parent_nodes,
-                                  level2_parent_nodes + num_level2_nodes,
-                                  thrust::make_constant_iterator(NodeIndexT{1}),
-                                  level2_indices.begin());
     list_indices.resize(num_nodes, stream);
     thrust::scatter(rmm::exec_policy(stream),
                     level2_indices.cbegin(),
@@ -557,6 +580,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
                                  cudf::detail::default_hash<size_type>{}(node_type[node_id]));
     node_id = parent_node_ids[node_id];
+    // Each node computes its hash by walking from its node upto the root.
     while (node_id != parent_node_sentinel) {
       hash = cudf::detail::hash_combine(
         hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));

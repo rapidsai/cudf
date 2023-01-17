@@ -296,37 +296,15 @@ reduce_to_column_tree(tree_meta_t& tree,
  * @param stream The stream to use
  * @return The value columns' indices
  */
-rmm::device_uvector<NodeIndexT> get_values_column_indices(NodeIndexT const row_array_children_level,
+rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_array_children_level,
                                                           tree_meta_t const& d_tree,
                                                           device_span<NodeIndexT> col_ids,
                                                           size_type const num_columns,
                                                           rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  auto const num_nodes  = d_tree.node_categories.size();
-  auto num_level2_nodes = thrust::count(rmm::exec_policy(stream),
-                                        d_tree.node_levels.begin(),
-                                        d_tree.node_levels.end(),
-                                        row_array_children_level);
-  rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
-  rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
-  auto const iter = thrust::copy_if(rmm::exec_policy(stream),
-                                    thrust::counting_iterator<NodeIndexT>(0),
-                                    thrust::counting_iterator<NodeIndexT>(num_nodes),
-                                    d_tree.node_levels.begin(),
-                                    level2_nodes.begin(),
-                                    [row_array_children_level] __device__(auto level) {
-                                      return level == row_array_children_level;
-                                    });
-  // copy nodes of level 1 children. (level 2) and their parent_node_id
-  // exclusive scan by key -> get their indices and scatter them to the correct column
-  auto level2_parent_nodes =
-    thrust::make_permutation_iterator(d_tree.parent_node_ids.begin(), level2_nodes.begin());
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                level2_parent_nodes,
-                                level2_parent_nodes + num_level2_nodes,
-                                thrust::make_constant_iterator(NodeIndexT{1}),
-                                level2_indices.begin());
+  auto [level2_nodes, level2_indices] = get_array_children_indices(
+    row_array_children_level, d_tree.node_levels, d_tree.parent_node_ids, stream);
   auto col_id_location = thrust::make_permutation_iterator(col_ids.begin(), level2_nodes.begin());
   rmm::device_uvector<NodeIndexT> values_column_indices(num_columns, stream);
   thrust::scatter(rmm::exec_policy(stream),
@@ -476,7 +454,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   // array of arrays column names
   if (is_array_of_arrays) {
-    NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
+    TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
     auto values_column_indices =
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
     auto h_values_column_indices =
