@@ -20,9 +20,8 @@ from numba.np import numpy_support
 numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 index_default_type = types.int64
-SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
-    numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
+    numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
 ]
 
 
