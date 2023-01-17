@@ -14,15 +14,23 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
+import pandas as pd
 
 
-index_default_type = types.int64
+index_default_type = pd.RangeIndex(0,0).dtype # int64
+SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
 ]
 
 
 class Group(object):
+    """
+    A piece of python code whose purpose is to be replaced
+    during compilation. After being registered to GroupType,
+    serves as a handle for instantiating GroupType objects
+    in python code and accessing their attributes
+    """
     def __init__(self, group_data, size, index, dtype, index_dtype):
         self.group_data = group_data
         self.size = size
@@ -32,6 +40,11 @@ class Group(object):
 
 
 class GroupType(numba.types.Type):
+    """
+    Numba extension type carrying metadata associated with a single
+    GroupBy group. This metadata ultimately is passed to the CUDA
+    __device__ function which actually performs the work.
+    """
     def __init__(self, group_scalar_type, index_type=index_default_type):
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
