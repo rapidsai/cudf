@@ -22,7 +22,6 @@
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf_test/print_utilities.cuh>
 
 #include <rmm/exec_policy.hpp>
 
@@ -339,13 +338,6 @@ dremel_data get_dremel_data(column_view h_col,
                                      thrust::make_discard_iterator(),
                                      output_zip_it);
     curr_rep_values_size = ends.second - output_zip_it;
-
-    std::cout << "leaf + 1 empties" << std::endl;
-    cudf::test::pls::print_array(empties_size, stream, empties.data());
-    stream.synchronize();
-    std::cout << "leaf + 1 empties idx" << std::endl;
-    cudf::test::pls::print_array(empties_size, stream, empties_idx.data());
-    stream.synchronize();
 
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(

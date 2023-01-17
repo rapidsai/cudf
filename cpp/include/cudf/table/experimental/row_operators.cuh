@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf_test/print_utilities.cuh>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -422,16 +420,10 @@ class device_row_comparator {
 
       // Traverse the nested list hierarchy to get a column device view
       // pointing to the underlying child data.
-      detail::lists_column_device_view l_list = _lhs;
-      detail::lists_column_device_view r_list = _rhs;
-
       column_device_view lcol = _lhs.slice(lhs_element_index, 1);
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
 
       while (lcol.type().id() == type_id::LIST) {
-        l_list = lcol;
-        r_list = rcol;
-
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
@@ -469,18 +461,6 @@ class device_row_comparator {
           bool const is_right_list_empty = r_global_empties[r_dremel_index];
           bool const is_left_list_null   = l_def_level < l_max_def_level && not is_left_list_empty;
           bool const is_right_list_null  = r_def_level < r_max_def_level && not is_right_list_empty;
-
-          if (threadIdx.x + blockDim.x * blockIdx.x == 0 &&
-              ((lhs_element_index == 1 and rhs_element_index == 0) ||
-               (lhs_element_index == 0 and rhs_element_index == 1))) {
-            printf("l dremel: %d, r dremel: %d, le: %d, re: %d, ln: %d, rn: %d\n",
-                   l_dremel_index,
-                   r_dremel_index,
-                   is_left_list_empty,
-                   is_right_list_empty,
-                   is_left_list_null,
-                   is_right_list_null);
-          }
 
           // both empty lists at arbitrary nesting
           if (is_left_list_empty && is_right_list_empty) {
@@ -528,9 +508,21 @@ class device_row_comparator {
             // right empty leaf always before left leaf or null when null_order::AFTER
             return cuda::std::pair(weak_ordering::GREATER, _depth);
           }
+          // col.is_null(element_index) is not reliable after the list has been unraveled
+          // compare left null to right leaf
+          else if (is_left_list_null && r_def_level == r_max_def_level) {
+            return _null_precedence == null_order::BEFORE
+                     ? cuda::std::pair(weak_ordering::LESS, _depth)
+                     : cuda::std::pair(weak_ordering::GREATER, _depth);
+          }
+          // compare right null to left leaf
+          else if (is_right_list_null && l_def_level == l_max_def_level) {
+            return _null_precedence == null_order::BEFORE
+                     ? cuda::std::pair(weak_ordering::GREATER, _depth)
+                     : cuda::std::pair(weak_ordering::LESS, _depth);
+          }
 
-          // finally, compare any aribtrary depth null with a leaf or leaf to leaf
-          // position of null is always according to _null_precedence
+          // finally, compare leaf to leaf
           weak_ordering state{weak_ordering::EQUIVALENT};
           int last_null_depth                    = _depth;
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
@@ -838,7 +830,7 @@ struct preprocessed_table {
     }
   }
 
- public:
+ private:
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
   rmm::device_uvector<null_order> const _null_precedence;
@@ -884,15 +876,6 @@ class self_comparator {
                   rmm::cuda_stream_view stream                = cudf::get_default_stream())
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
-    // std::cout << "Dremel def level" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].def_level.size(), stream,
-    // d_t->_dremel_data.value()[0].def_level.data()); stream.synchronize(); std::cout << "Dremel
-    // rep level" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].rep_level.size(), stream,
-    // d_t->_dremel_data.value()[0].rep_level.data()); stream.synchronize(); std::cout << "Dremel
-    // global empties" << std::endl;
-    // cudf::test::pls::print_array(d_t->_dremel_data.value()[0].global_empties.size(), stream,
-    // d_t->_dremel_data.value()[0].global_empties.data()); stream.synchronize();
   }
 
   /**
