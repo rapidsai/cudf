@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @addtogroup strings_substring
+ * @addtogroup strings_slice
  * @{
  * @file
  */
@@ -44,9 +44,9 @@ namespace strings {
  * @code{.pseudo}
  * Example:
  * s = ["hello", "goodbye"]
- * r = substring(s,2,6)
+ * r = slice_strings(s,2,6)
  * r is now ["llo","odby"]
- * r2 = substring(s,2,5,2)
+ * r2 = slice_strings(s,2,5,2)
  * r2 is now ["lo","ob"]
  * @endcode
  *
@@ -87,7 +87,7 @@ std::unique_ptr<column> slice_strings(
  * s = ["hello", "goodbye"]
  * starts = [ 1, 2 ]
  * stops = [ 5, 4 ]
- * r = substring_from(s,starts,stops)
+ * r = slice_strings(s,starts,stops)
  * r is now ["ello","od"]
  * @endcode
  *
