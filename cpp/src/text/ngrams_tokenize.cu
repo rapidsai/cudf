@@ -195,7 +195,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
       auto token_count = d_token_offsets[idx + 1] - d_token_offsets[idx];
       return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
     },
-    thrust::plus<cudf::size_type>());
+    thrust::plus{});
   ngram_offsets.set_element_to_zero_async(0, stream);
   auto const total_ngrams = ngram_offsets.back_element(stream);
 
