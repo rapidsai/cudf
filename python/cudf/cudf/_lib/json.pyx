@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -99,7 +99,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
-        .experimental(experimental)
+        .legacy(not experimental)
         .build()
     )
     if is_list_like_dtypes:
