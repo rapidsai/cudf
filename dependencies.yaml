@@ -317,7 +317,5 @@ dependencies:
               # dependency of transformers.
               - tokenizers==0.13.1
               - transformers==4.24.0
-              # For test_no_cuinit.py
-              - gdb
           - matrix:
             packages:

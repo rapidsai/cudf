@@ -28,7 +28,6 @@ dependencies:
 - fastavro>=0.22.9
 - fsspec>=0.6.0
 - gcc_linux-64=9.*
-- gdb
 - hypothesis
 - ipython
 - libarrow=10
