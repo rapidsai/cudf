@@ -65,11 +65,11 @@ def _get_appropriate_file(sms, cc):
         return None
 
 
-def maybe_patch_numba_linker(driver_version, ptx_version):
+def maybe_patch_numba_linker(driver_version, ptx_toolkit_version):
     # Numba thinks cubinlinker is only needed if the driver is older than the ctk
     # but when strings_udf is present, it might also need to patch because the PTX
     # file strings_udf relies on may be newer than the driver as well
-    if driver_version < ptx_version:
+    if driver_version < ptx_toolkit_version:
         logger.debug(
             "Driver version %s.%s needs patching due to strings_udf"
             % driver_version
