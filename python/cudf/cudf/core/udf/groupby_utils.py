@@ -5,12 +5,14 @@ import os
 
 import cupy as cp
 import numpy as np
+import numba
 from numba import cuda, types
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 from numba.types import Record
 
 import cudf.core.udf.utils
+from cudf.core.udf.utils import NoNumbaOccWarnings
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -28,6 +30,8 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+from contextlib import contextmanager
 
 dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
 cudf.core.udf.utils.ptx_files.append(dev_func_ptx)
@@ -174,7 +178,10 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     stream = cuda.default_stream()
 
-    specialized[ngroups, tpb, stream](*launch_args)
+    # Disable occupancy warnings to avoid polluting output when there are few
+    # groups.
+    with NoNumbaOccWarnings():
+        specialized[ngroups, tpb, stream](*launch_args)
 
     stream.synchronize()
 

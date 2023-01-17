@@ -24,6 +24,8 @@ from typing import (
 )
 from uuid import uuid4
 
+from cudf.core.udf.utils import NoNumbaOccWarnings
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -2128,7 +2130,8 @@ class IndexedFrame(Frame):
         launch_args = output_args + input_args + list(args)
 
         try:
-            kernel.forall(len(self))(*launch_args)
+            with NoNumbaOccWarnings():
+                kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 

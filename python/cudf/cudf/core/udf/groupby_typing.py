@@ -15,9 +15,6 @@ from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
 
-# Disable occupancy warnings to avoid polluting output when there are few
-# groups.
-numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
 index_default_type = types.int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
