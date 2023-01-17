@@ -106,7 +106,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf",
+            engine == "cudf_legacy",
             keep_quotes,
         )
     else:
