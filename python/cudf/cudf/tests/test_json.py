@@ -319,7 +319,7 @@ def test_json_engine_selection():
         assert isinstance(col_name, str)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=False)
+    df = cudf.read_json(json, lines=False, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
@@ -332,7 +332,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="cudf")
+        cudf.read_json(json, lines=False, engine="cudf_legacy")
 
 
 def test_json_bool_values():
@@ -352,6 +352,9 @@ def test_json_bool_values():
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:engine='cudf_legacy' is a deprecated engine."
+)
 @pytest.mark.parametrize(
     "buffer",
     [
@@ -362,7 +365,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True)
+    df = cudf.read_json(buffer, lines=True, engine="cudf_legacy")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -532,12 +535,13 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
     "engine",
     [
         pytest.param(
-            "cudf",
+            "cudf_legacy",
             marks=pytest.mark.skip(
                 reason="cannot partially set dtypes for cudf json engine"
             ),
         ),
         "pandas",
+        "cudf",
     ],
 )
 def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
@@ -1077,13 +1081,13 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     pdf = _replace_with_nulls(pdf, [123, "123", 12.3, "abc"])
     gdf = cudf.read_json(
         StringIO(jsonl_string),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         lines=True,
     )
     gdf2 = cudf.read_json(
         StringIO(json_string),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="records",
         lines=False,
     )
@@ -1124,7 +1128,7 @@ def test_json_nested_mixed_types_error(jsonl_string):
     with pytest.raises(RuntimeError):
         cudf.read_json(
             StringIO(jsonl_string),
-            engine="cudf_experimental",
+            engine="cudf",
             orient="records",
             lines=True,
         )

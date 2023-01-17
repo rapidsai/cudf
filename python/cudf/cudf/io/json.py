@@ -37,6 +37,12 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
+    if engine == "cudf_experimental":
+        raise ValueError(
+            "engine='cudf_experimental' support has been removed, "
+            "use `engine='cudf'`"
+        )
+
     if engine == "cudf_legacy":
         # TODO: Deprecated in 23.02, please
         # give some time until `cudf_legacy`
