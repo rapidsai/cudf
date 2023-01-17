@@ -7,10 +7,19 @@ from shutil import which
 
 import pytest
 
-gdb = which("gdb")
+gdb = which("cuda-gdb")
 
 
-@pytest.mark.skipif(gdb is None, reason="gdb not found, can't detect cuInit")
+GDB_COMMANDS = b"""
+set confirm off
+set breakpoint pending on
+break cuInit
+run
+exit
+"""
+
+
+@pytest.mark.skipif(gdb is None, reason="cuda-gdb not found, can't detect cuInit")
 def test_cudf_import_no_cuinit():
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
@@ -26,21 +35,14 @@ def test_cudf_import_no_cuinit():
     output: str = subprocess.check_output(
         [
             gdb,
-            "-ex",
-            "set confirm off",
-            "-ex",
-            "set breakpoint pending on",
-            "-ex",
-            "break cuInit",
-            "-ex",
-            "run",
-            "-ex",
-            "exit",
+            "-x",
+            "-",
             "--args",
             sys.executable,
             "-c",
             "import cudf",
         ],
+        input=GDB_COMMANDS,
         env=env,
         stderr=subprocess.DEVNULL,
     ).decode()
@@ -49,7 +51,7 @@ def test_cudf_import_no_cuinit():
     assert cuInit_called < 0
 
 
-@pytest.mark.skipif(gdb is None, reason="gdb not found, can't detect cuInit")
+@pytest.mark.skipif(gdb is None, reason="cuda-gdb not found, can't detect cuInit")
 def test_cudf_create_series_cuinit():
     # This tests that our gdb scripting correctly identifies cuInit
     # when it definitely should have been called.
@@ -58,21 +60,14 @@ def test_cudf_create_series_cuinit():
     output: str = subprocess.check_output(
         [
             gdb,
-            "-ex",
-            "set confirm off",
-            "-ex",
-            "set breakpoint pending on",
-            "-ex",
-            "break cuInit",
-            "-ex",
-            "run",
-            "-ex",
-            "exit",
+            "-x",
+            "-",
             "--args",
             sys.executable,
             "-c",
             "import cudf; cudf.Series([1])",
         ],
+        input=GDB_COMMANDS,
         env=env,
         stderr=subprocess.DEVNULL,
     ).decode()
