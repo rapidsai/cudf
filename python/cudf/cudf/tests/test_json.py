@@ -199,7 +199,7 @@ def test_cudf_json_writer(pdf):
     assert_eq(pdf_string, gdf_string)
 
 
-def test_cudf_json_writer2(gdf_writer_types):
+def test_cudf_json_writer_read(gdf_writer_types):
     dtypes = {
         col_name: col_name[len("col_") :]
         for col_name in gdf_writer_types.columns
@@ -223,6 +223,25 @@ def test_cudf_json_writer2(gdf_writer_types):
         )
 
     assert_eq(gdf_writer_types, gdf2)
+
+
+@pytest.mark.parametrize("sink", ["string", "file"])
+def test_cudf_json_writer_sinks(sink, tmp_path_factory):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    target = None
+    if sink == "string":
+        target = StringIO()
+    elif sink == "file":
+        target = tmp_path_factory.mktemp("json") / "test_df.json"
+    df.to_json(target, engine="cudf")
+    if sink == "string":
+        assert (
+            target.getvalue() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
+        )
+    elif sink == "file":
+        assert os.path.exists(target)
+        with open(target, "r") as f:
+            assert f.read() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
 
 
 @pytest.fixture(
