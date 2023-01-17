@@ -126,7 +126,7 @@ ConfigureBench(SCATTER_BENCH copying/scatter.cu)
 ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists.cu)
 
 # ##################################################################################################
-# * Other list-related operartions benchmark -----------------------------------------------------------------------
+# * Other list-related operartions benchmark ------------------------------------------------------
 ConfigureNVBench(SET_OPS_NVBENCH lists/set_operations.cpp)
 
 # ##################################################################################################
