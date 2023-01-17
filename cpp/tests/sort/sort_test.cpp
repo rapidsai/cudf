@@ -845,6 +845,7 @@ TYPED_TEST(Sort, MoreLists)
   if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
   {
@@ -872,68 +873,60 @@ TYPED_TEST(Sort, MoreLists)
     */
     auto const col = lcw{lcw{lcw{1}, lcw{2}}, lcw{lcw{{1, 0}, nulls_at({1})}, lcw{2, 3}}};
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1}};
-    auto result = cudf::sorted_order(cudf::table_view({col}), {});
+    auto result = cudf::sorted_order(cudf::table_view({col}));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
-  // {
-  //   /*
-  //   List<List<List<int>
-  //   [
-  //     [[[0, 0, 0]]],                                0
-  //     [[[0], [0], [0]]],                            1
-  //     [[[0]], [[0]], [[0]]],                        2
-  //     [[[0, 0, 0]], [[0]], [[0]]],                  3
-  //     [[[0, 0]], [[0, 0, 0, 0, 0, 0, 0, 0]], [[0]]] 4
-  //   ]
-  //   */
-  //   lcw col{
-  //     lcw{lcw{lcw{{0, 0, 0}}}},
-  //     lcw{lcw{{lcw{0}, lcw{0}, lcw{0}}}},
-  //     lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
-  //     lcw{lcw{lcw{{0, 0, 0}}}, lcw{lcw{0}}, lcw{lcw{0}}},
-  //     lcw{lcw{lcw{{0, 0}}}, lcw{lcw{{0, 0, 0, 0, 0, 0, 0, 0}}}, lcw{lcw{0}}}
-  //   };
-  //   cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 4, 0, 3}};
-  //   auto result = cudf::sorted_order(cudf::table_view({col}), {});
-  //   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-  // }
-  // {
-  /*
-  [
-    NULL,     0
-    [],       1
-    [NULL],   2
-    [[]],     3
-    [[NULL]], 4
-    [[0]]     5
-  ]
-  */
-  //  lcw col{
-  //     {
-  //     lcw{},
-  //     lcw{},
-  //     // lcw{{lcw{}}, nulls_at{0}},
-  //     lcw{lcw{}},
-  //     lcw{lcw{{lcw{}}, nulls_at({0})}},
-  //     lcw{lcw{0}}
-  //     },
-  //     nulls_at({0})
-  //  };
+  {
+    /*
+    List<List<List<int>
+    [
+      [[[0, 0, 0]]],                                0
+      [[[0], [0], [0]]],                            1
+      [[[0]], [[0]], [[0]]],                        2
+      [[[0, 0, 0]], [[0]], [[0]]],                  3
+      [[[0, 0]], [[0, 0, 0, 0, 0, 0, 0, 0]], [[0]]] 4
+    ]
+    */
+    lcw col{lcw{lcw{lcw{0, 0, 0}}},
+            lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+            lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+            lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+            lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 4, 0, 3}};
+    auto result = cudf::sorted_order(cudf::table_view({col}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+  {
+    /*
+    [
+      [],    0
+      [1],   1
+      [2, 2] 2
+      [2, 3] 3
+      []     4
+      NULL   5
+      [2]    6
+      NULL   7
+      [NULL] 8
+    ]
+    */
+    lcw col{{{}, {1}, {2, 2}, {2, 3}, {}, {} /*NULL*/, {2}, {} /*NULL*/, {{0}, null_at(0)}},
+            nulls_at({5, 7})};
 
-  //   // null_order::BEFORE
-  //   {
-  //     cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1, 2, 3, 4, 5}};
-  //     auto result = cudf::sorted_order(cudf::table_view({col}), {});
-  //     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-  //   }
-  //   // null_order::AFTER
-  //   {
-  //     cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 3, 5, 4, 2, 0}};
-  //     auto result = cudf::sorted_order(cudf::table_view({col}), {});
-  //     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-  //   }
-  // }
+    // null_order::BEFORE
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{5, 7, 0, 4, 8, 1, 6, 2, 3}};
+      auto result = cudf::sorted_order(cudf::table_view({col}));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+    // null_order::AFTER
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 4, 1, 6, 2, 3, 8, 5, 7}};
+      auto result = cudf::sorted_order(cudf::table_view({col}), {}, {cudf::null_order::AFTER});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+  }
 }
 
 TYPED_TEST(Sort, WithSlicedListColumn)
