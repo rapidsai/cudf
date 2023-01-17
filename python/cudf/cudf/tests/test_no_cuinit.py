@@ -19,7 +19,9 @@ exit
 """
 
 
-@pytest.mark.skipif(gdb is None, reason="cuda-gdb not found, can't detect cuInit")
+@pytest.mark.skipif(
+    gdb is None, reason="cuda-gdb not found, can't detect cuInit"
+)
 def test_cudf_import_no_cuinit():
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
@@ -51,7 +53,9 @@ def test_cudf_import_no_cuinit():
     assert cuInit_called < 0
 
 
-@pytest.mark.skipif(gdb is None, reason="cuda-gdb not found, can't detect cuInit")
+@pytest.mark.skipif(
+    gdb is None, reason="cuda-gdb not found, can't detect cuInit"
+)
 def test_cudf_create_series_cuinit():
     # This tests that our gdb scripting correctly identifies cuInit
     # when it definitely should have been called.
