@@ -176,7 +176,7 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
                                       nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<true>))
-  .set_name("inner_join_32bit_nulls")
+  .set_name("mixed_inner_join_32bit_nulls")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("Probe Table Size",
