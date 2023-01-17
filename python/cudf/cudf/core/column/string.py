@@ -3929,10 +3929,14 @@ class StringMethods(ColumnMethods):
         """
         if suffix is None or len(suffix) == 0:
             return self._return_or_inplace(self._column)
-        ends = self.endswith(suffix)
-        removed = self.slice(0, -len(suffix))
+        ends_column = libstrings.endswith(
+            self._column, cudf.Scalar(suffix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, 0, -len(suffix), None
+        )
         result = cudf._lib.copying.copy_if_else(
-            column.as_column(removed), self._column, column.as_column(ends)
+            removed_column, self._column, ends_column
         )
         return self._return_or_inplace(result)
 
@@ -3969,10 +3973,14 @@ class StringMethods(ColumnMethods):
         """
         if prefix is None or len(prefix) == 0:
             return self._return_or_inplace(self._column)
-        starts = self.startswith(prefix)
-        removed = self.slice(len(prefix))
+        starts_column = libstrings.startswith(
+            self._column, cudf.Scalar(prefix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, len(prefix), None, None
+        )
         result = cudf._lib.copying.copy_if_else(
-            column.as_column(removed), self._column, column.as_column(starts)
+            removed_column, self._column, starts_column
         )
         return self._return_or_inplace(result)
 
