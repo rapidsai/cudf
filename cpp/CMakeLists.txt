@@ -530,6 +530,7 @@ add_library(
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
+  src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_re.cu
@@ -538,7 +539,6 @@ add_library(
   src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
-  src/strings/substring.cu
   src/strings/translate.cu
   src/strings/utilities.cu
   src/strings/wrap.cu
