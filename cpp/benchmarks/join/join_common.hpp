@@ -77,7 +77,7 @@ template <typename key_type,
           join_t join_type = join_t::HASH,
           typename state_type,
           typename Join>
-static void BM_join(state_type& state, Join JoinFunc)
+void BM_join(state_type& state, Join JoinFunc)
 {
   auto const build_table_size = [&]() {
     if constexpr (std::is_same_v<state_type, benchmark::State>) {
@@ -172,18 +172,18 @@ static void BM_join(state_type& state, Join JoinFunc)
   }
   if constexpr (std::is_same_v<state_type, nvbench::state> and (join_type != join_t::CONDITIONAL)) {
     if constexpr (join_type == join_t::MIXED) {
-      auto const col_ref_left_1 = cudf::ast::column_reference(1);
-      auto const col_ref_right_1 =
-        cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
-      auto left_zero_eq_right_one =
-        cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_1, col_ref_right_1);
+      auto const col_ref_left_0 = cudf::ast::column_reference(0);
+      auto const col_ref_right_0 =
+        cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+      auto left_zero_eq_right_zero =
+        cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         rmm::cuda_stream_view stream_view{launch.get_stream()};
         auto result = JoinFunc(probe_table.select(columns_to_join),
                                build_table.select(columns_to_join),
                                probe_table.select({1}),
                                build_table.select({1}),
-                               left_zero_eq_right_one,
+                               left_zero_eq_right_zero,
                                cudf::null_equality::UNEQUAL,
                                stream_view);
       });
