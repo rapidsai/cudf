@@ -1,6 +1,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 import os
+import platform
 import subprocess
 import sys
 from shutil import which
@@ -8,6 +9,7 @@ from shutil import which
 import pytest
 
 gdb = which("cuda-gdb")
+machine_arch = platform.uname().machine
 
 
 GDB_COMMANDS = b"""
@@ -19,9 +21,20 @@ exit
 """
 
 
-@pytest.mark.skipif(
-    gdb is None, reason="cuda-gdb not found, can't detect cuInit"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        machine_arch != "x86_64",
+        reason=(
+            "cuda-gdb install is broken on nvidia/cuda aarch64 images "
+            "(libexpat is missing)"
+        ),
+    ),
+    pytest.mark.skipif(
+        gdb is None, reason="cuda-gdb not found, can't detect cuInit"
+    ),
+]
+
+
 def test_cudf_import_no_cuinit():
     # When RAPIDS_NO_INITIALIZE is set, importing cudf should _not_
     # create a CUDA context (i.e. cuInit should not be called).
@@ -53,9 +66,6 @@ def test_cudf_import_no_cuinit():
     assert cuInit_called < 0
 
 
-@pytest.mark.skipif(
-    gdb is None, reason="cuda-gdb not found, can't detect cuInit"
-)
 def test_cudf_create_series_cuinit():
     # This tests that our gdb scripting correctly identifies cuInit
     # when it definitely should have been called.
