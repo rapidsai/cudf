@@ -49,6 +49,8 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
     case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
     case io_type::DEVICE_BUFFER: {
+      // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
+      // stream
       auto const stream = cudf::get_default_stream();
       d_buffer.resize(h_buffer.size(), stream);
       CUDF_CUDA_TRY(cudaMemcpyAsync(
