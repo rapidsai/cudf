@@ -75,8 +75,7 @@ def make_numpy_mixed_dataframe():
     )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    # Category is not yet supported from libcudf
-    # df["Category"] = np.array(["M", "F", "F", "F"])
+    df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df
@@ -270,34 +269,22 @@ def test_csv_reader_mixed_data_delimiter_sep(
 
     gdf1 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
 
     pdf = pd.read_csv(
         fname,
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        names=["1", "2", "3", "4", "5", "6"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
         parse_dates=[1],
         dayfirst=True,
         **pandas_arg,
