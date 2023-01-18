@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,29 +14,30 @@
  * limitations under the License.
  */
 
-#include "simple_segmented.cuh"
+#include "compound.cuh"
 
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/detail/segmented_reduction_functions.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_sum(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  cudf::data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> segmented_mean(column_view const& col,
+                                             device_span<size_type const> offsets,
+                                             cudf::data_type const output_dtype,
+                                             null_policy null_handling,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
+  using reducer = compound::detail::compound_segmented_dispatcher<cudf::reduction::op::mean>;
   return cudf::type_dispatcher(col.type(),
-                               simple::detail::column_type_dispatcher<cudf::reduction::op::sum>{},
+                               reducer{},
                                col,
                                offsets,
                                output_dtype,
                                null_handling,
-                               init,
+                               1,  // ddof is not used for mean
                                stream,
                                mr);
 }

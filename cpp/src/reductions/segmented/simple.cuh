@@ -21,7 +21,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/reduction.cuh>
+#include <cudf/detail/segmented_reduction.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/element_argminmax.cuh>

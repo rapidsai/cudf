@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+
+#include <typeinfo>
 
 #define XXX 0  // null placeholder
 
@@ -768,6 +770,76 @@ TEST_F(SegmentedReductionTestUntyped, NonNullableInput)
                                cudf::null_policy::INCLUDE,
                                *init_scalar);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, null_init_expect);
+}
+
+TEST_F(SegmentedReductionTestUntyped, Mean)
+{
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50, 60, 70, 80, 90};
+  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<float>{{10, 0, 30, 70}, {true, false, true, true}};
+
+  auto result =
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
+                           cudf::data_type{cudf::type_id::FLOAT32},
+                           cudf::null_policy::INCLUDE);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
+TEST_F(SegmentedReductionTestUntyped, SumOfSquares)
+{
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50, 60, 70, 80, 90};
+  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const expected = cudf::test::fixed_width_column_wrapper<double>{{100, 0, 2900, 25500},
+                                                                       {true, false, true, true}};
+
+  auto result = cudf::segmented_reduce(
+    input,
+    d_offsets,
+    *cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>(),
+    cudf::data_type{cudf::type_id::FLOAT64},
+    cudf::null_policy::INCLUDE);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
+TEST_F(SegmentedReductionTestUntyped, StdVar)
+{
+  constexpr float NaN{std::numeric_limits<float>::quiet_NaN()};
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50, 60, 70, 80, 90};
+  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+
+  auto expected = cudf::test::fixed_width_column_wrapper<float>{{NaN, 0.f, 10.f, 15.811388f},
+                                                                {true, false, true, true}};
+  auto result =
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
+                           cudf::data_type{cudf::type_id::FLOAT32},
+                           cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<float>{{NaN, 0.f, 100.f, 250.f},
+                                                           {true, false, true, true}};
+  result =
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>(),
+                           cudf::data_type{cudf::type_id::FLOAT32},
+                           cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
