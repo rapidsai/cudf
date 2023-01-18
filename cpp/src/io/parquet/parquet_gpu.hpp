@@ -83,9 +83,20 @@ enum level_type {
   NUM_LEVEL_TYPES
 };
 
+/**
+ * @brief Nesting information specifically needed by the decode and preprocessing
+ * kernels.
+ *
+ * This data is kept separate from PageNestingInfo to keep it as small as possible.
+ * It is used in a cached form in shared memory when possible.
+ */
 struct PageNestingDecodeInfo {
   // set up prior to decoding
   int32_t max_def_level;
+  // input repetition/definition levels are remapped with these values
+  // into the corresponding real output nesting depths.
+  int32_t start_depth;
+  int32_t end_depth;
 
   // computed during preprocessing
   int32_t page_start_value;
@@ -105,16 +116,12 @@ struct PageNestingDecodeInfo {
  * @brief Nesting information
  */
 struct PageNestingInfo {
-  // input repetition/definition levels are remapped with these values
-  // into the corresponding real output nesting depths.
-  int32_t start_depth;
-  int32_t end_depth;
-
   // set at initialization (see start_offset_output_iterator in reader_impl_preprocess.cu)
   cudf::type_id type;  // type of the corresponding cudf output column
   bool nullable;
 
-  // set during preprocessing
+  // TODO: these fields might make sense to move into PageNestingDecodeInfo for memory performance
+  // reasons.
   int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
                  // decoded
   int32_t batch_size;  // the size of the page for this batch

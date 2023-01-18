@@ -616,10 +616,10 @@ void reader::impl::allocate_nesting_info()
             std::vector<int> const& def_depth_remap = (remap->second.second);
 
             for (size_t m = 0; m < rep_depth_remap.size(); m++) {
-              pni[m].start_depth = rep_depth_remap[m];
+              pndi[m].start_depth = rep_depth_remap[m];
             }
             for (size_t m = 0; m < def_depth_remap.size(); m++) {
-              pni[m].end_depth = def_depth_remap[m];
+              pndi[m].end_depth = def_depth_remap[m];
             }
           }
 

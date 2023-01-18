@@ -51,7 +51,11 @@ constexpr int non_zero_buffer_size = block_size * 2;
 
 constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
-constexpr int max_cacheable_nesting_decode_info = 8;
+// the PageNestingDecodeInfo struct is 48 bytes (as of 1/18/23) so
+// this cache costs 480 bytes per block. Columns nested more than 2 or 3 deep are exceedingly
+// rare.  If we encounter one that exceeds the below limit, the code falls back on the uncached
+// PageNestingDecodeInfo stored in global memory.
+constexpr int max_cacheable_nesting_decode_info = 10;
 
 struct page_state_s {
   const uint8_t* data_start;
@@ -96,7 +100,7 @@ struct page_state_s {
   // a shared-memory cache of frequently used data when decoding. The source of this data is
   // normally stored in global memory which can yield poor performance.  So, when possible
   // we copy that info here prior to decoding
-  PageNestingDecodeInfo nesting_decode[max_cacheable_nesting_decode_info];
+  PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info];
   // points to either nesting_decode above when possible, or to the global source otherwise
   PageNestingDecodeInfo* pndi;
 };
@@ -932,13 +936,16 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
     while (d < s->page.num_nesting_levels) {
       if (d + t < s->page.num_nesting_levels) {
         // these values need to be copied over from global
-        s->nesting_decode[d + t].max_def_level    = s->page.nesting_decode[d + t].max_def_level;
-        s->nesting_decode[d + t].page_start_value = s->page.nesting_decode[d + t].page_start_value;
+        s->nesting_decode_cache[d + t].max_def_level = s->page.nesting_decode[d + t].max_def_level;
+        s->nesting_decode_cache[d + t].page_start_value =
+          s->page.nesting_decode[d + t].page_start_value;
+        s->nesting_decode_cache[d + t].start_depth = s->page.nesting_decode[d + t].start_depth;
+        s->nesting_decode_cache[d + t].end_depth   = s->page.nesting_decode[d + t].end_depth;
       }
       d += blockDim.x;
     }
   }
-  if (!t) { s->pndi = can_use_decode_cache ? s->nesting_decode : s->page.nesting_decode; }
+  if (!t) { s->pndi = can_use_decode_cache ? s->nesting_decode_cache : s->page.nesting_decode; }
   __syncthreads();
 
   // zero counts
@@ -1300,8 +1307,8 @@ inline __device__ void get_nesting_bounds(int& start_depth,
     // bound what nesting levels we apply values to
     if (s->col.max_level[level_type::REPETITION] > 0) {
       int r       = s->rep[index];
-      start_depth = s->page.nesting[r].start_depth;
-      end_depth   = s->page.nesting[d].end_depth;
+      start_depth = s->pndi[r].start_depth;
+      end_depth   = s->pndi[d].end_depth;
     }
     // for columns without repetition (even ones involving structs) we always
     // traverse the entire hierarchy.
@@ -1948,11 +1955,11 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   }
 
   // if we are using the nesting decode cache, copy null count back
-  if (s->pndi == s->nesting_decode) {
+  if (s->pndi == s->nesting_decode_cache) {
     int d = 0;
     while (d < s->page.num_nesting_levels) {
       if (d + t < s->page.num_nesting_levels) {
-        s->page.nesting_decode[d + t].null_count = s->pndi[d + t].null_count;
+        s->page.nesting_decode[d + t].null_count = s->nesting_decode_cache[d + t].null_count;
       }
       d += blockDim.x;
     }
