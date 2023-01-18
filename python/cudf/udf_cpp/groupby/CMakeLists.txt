@@ -81,7 +81,7 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_compile_options(
     ${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${GROUPBY_FUNCTION_CUDA_FLAGS}>"
   )
-  target_link_libraries(${tgt} PUBLIC CUDA::nvrtc)
+  target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
   copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/")
   install(
