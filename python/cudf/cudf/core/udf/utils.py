@@ -4,18 +4,15 @@ import glob
 import os
 from typing import Any, Callable, Dict, List
 
-import numba
-
-from numba.core.datamodel import default_manager
-from numba.cuda.cudadrv import nvvm
-
-import llvmlite.binding as ll
-
 import cachetools
 import cupy as cp
+import llvmlite.binding as ll
+import numba
 import numpy as np
 from numba import cuda, typeof
+from numba.core.datamodel import default_manager
 from numba.core.errors import TypingError
+from numba.cuda.cudadrv import nvvm
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
@@ -329,11 +326,14 @@ def _get_ptx_file(path, prefix):
     else:
         return regular_result[1]
 
+
 class NoNumbaOccWarnings(object):
     def __enter__(self):
         numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 1
+
 
 def _get_extensionty_size(ty):
     """
@@ -343,6 +343,5 @@ def _get_extensionty_size(ty):
     if isinstance(data_layout, dict):
         data_layout = data_layout[64]
     target_data = ll.create_target_data(data_layout)
-    llty = default_manager[ty].get_value_type()  
+    llty = default_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
- 

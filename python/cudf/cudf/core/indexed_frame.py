@@ -24,8 +24,6 @@ from typing import (
 )
 from uuid import uuid4
 
-from cudf.core.udf.utils import NoNumbaOccWarnings
-
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -61,6 +59,7 @@ from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
+    NoNumbaOccWarnings,
     _compile_or_get,
     _get_input_args_from_frame,
     _post_process_output_col,

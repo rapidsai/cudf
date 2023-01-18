@@ -2,6 +2,7 @@
 from typing import Any, Dict
 
 import numba
+import pandas as pd
 from numba import cuda, types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -14,10 +15,10 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
-import pandas as pd
 
-
-index_default_type = numpy_support.from_dtype(pd.RangeIndex(0,0).dtype) # int64
+index_default_type = numpy_support.from_dtype(
+    pd.RangeIndex(0, 0).dtype
+)  # int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
@@ -31,6 +32,7 @@ class Group(object):
     serves as a handle for instantiating GroupType objects
     in python code and accessing their attributes
     """
+
     def __init__(self, group_data, size, index, dtype, index_dtype):
         self.group_data = group_data
         self.size = size
@@ -43,8 +45,9 @@ class GroupType(numba.types.Type):
     """
     Numba extension type carrying metadata associated with a single
     GroupBy group. This metadata ultimately is passed to the CUDA
-    __device__ function which actually performs the work. 
+    __device__ function which actually performs the work.
     """
+
     def __init__(self, group_scalar_type, index_type=index_default_type):
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
@@ -180,8 +183,12 @@ class GroupAttr(AttributeTemplate):
     resolve_sum = _create_reduction_attr("GroupType.sum")
 
     resolve_size = _create_reduction_attr("GroupType.size", retty=types.int64)
-    resolve_count = _create_reduction_attr("GroupType.count", retty=types.int64)
-    resolve_mean = _create_reduction_attr("GroupType.mean", retty=types.float64)
+    resolve_count = _create_reduction_attr(
+        "GroupType.count", retty=types.int64
+    )
+    resolve_mean = _create_reduction_attr(
+        "GroupType.mean", retty=types.float64
+    )
     resolve_var = _create_reduction_attr("GroupType.var", retty=types.float64)
     resolve_std = _create_reduction_attr("GroupType.std", retty=types.float64)
 

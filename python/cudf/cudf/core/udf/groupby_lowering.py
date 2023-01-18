@@ -13,7 +13,7 @@ from cudf.core.udf.groupby_typing import (
     Group,
     GroupType,
     call_cuda_functions,
-    index_default_type
+    index_default_type,
 )
 
 

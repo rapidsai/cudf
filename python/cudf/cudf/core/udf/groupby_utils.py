@@ -5,14 +5,12 @@ import os
 
 import cupy as cp
 import numpy as np
-import numba
 from numba import cuda, types
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
 from numba.types import Record
 
 import cudf.core.udf.utils
-from cudf.core.udf.utils import NoNumbaOccWarnings
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -23,15 +21,15 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    NoNumbaOccWarnings,
+    _get_extensionty_size,
     _get_kernel,
     _get_ptx_file,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
-    _get_extensionty_size
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-
 
 dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
 cudf.core.udf.utils.ptx_files.append(dev_func_ptx)
@@ -138,13 +136,13 @@ def _get_groupby_apply_kernel(frame, func, args):
 @_cudf_nvtx_annotate
 def jit_groupby_apply(offsets, grouped_values, function, *args):
     """
-    Main entrypoint for JIT Groupby.apply via Numba. 
+    Main entrypoint for JIT Groupby.apply via Numba.
 
     Parameters
     ----------
     offsets : list
-        A list of intergers denoting the indices of the group
-        boundries in grouped_values
+        A list of integers denoting the indices of the group
+        boundaries in grouped_values
     grouped_values : DataFrame
         A DataFrame representing the source data
         sorted by group keys
@@ -188,7 +186,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     ctx = get_context()
     # Dispatcher is specialized, so there's only one definition - get
     # it so we can get the cufunc from the code library
-    kern_def, = specialized.overloads.values()
+    (kern_def,) = specialized.overloads.values()
     grid, tpb = ctx.get_max_potential_block_size(
         func=kern_def._codelibrary.get_cufunc(),
         b2d_func=0,
@@ -200,6 +198,5 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     # groups.
     with NoNumbaOccWarnings():
         specialized[ngroups, tpb](*launch_args)
-
 
     return output

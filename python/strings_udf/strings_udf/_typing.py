@@ -1,8 +1,7 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import operator
 
-import llvmlite.binding as ll
 import numpy as np
 from numba import types
 from numba.core.extending import models, register_model
@@ -12,10 +11,9 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 from cudf.core.udf.utils import _get_extensionty_size
 
-
-
 # libcudf size_type
 size_type = types.int32
+
 
 # String object definitions
 class UDFString(types.Type):
