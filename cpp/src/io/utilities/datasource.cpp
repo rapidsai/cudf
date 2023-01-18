@@ -257,7 +257,7 @@ class device_buffer_source final : public datasource {
 
  private:
   cudf::device_span<std::byte const>
-    _d_buffer;  ///< A non-owning buffer to the existing device data
+    _d_buffer;  ///< A non-owning view of the existing device data
 };
 
 /**
