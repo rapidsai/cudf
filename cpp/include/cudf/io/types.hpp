@@ -75,6 +75,7 @@ enum class compression_type {
 enum class io_type {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
   VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
   USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
@@ -166,7 +167,8 @@ struct table_with_metadata {
  * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
-  const char* data = nullptr;  //!< Pointer to the buffer
+  // TODO: to be replaced by `host_span`
+  char const* data = nullptr;  //!< Pointer to the buffer
   size_t size      = 0;        //!< Size of the buffer
   host_buffer()    = default;
   /**
@@ -206,7 +208,7 @@ struct source_info {
    * @param host_buffers Input buffers in host memory
    */
   explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
+    : _type(io_type::HOST_BUFFER), _host_buffers(host_buffers)
   {
   }
 
@@ -217,7 +219,27 @@ struct source_info {
    * @param size Size of the buffer
    */
   explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
+    : _type(io_type::HOST_BUFFER), _host_buffers({{host_data, size}})
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in device memory
+   *
+   * @param device_buffers Input buffers in device memory
+   */
+  explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers.begin(), device_buffers.end())
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object from a device buffer
+   *
+   * @param d_buffer Input buffer in device memory
+   */
+  explicit source_info(cudf::device_span<std::byte const> d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer}})
   {
   }
 
@@ -258,7 +280,13 @@ struct source_info {
    *
    * @return The host buffers of the input
    */
-  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& host_buffers() const { return _host_buffers; }
+  /**
+   * @brief Get the device buffers of the input
+   *
+   * @return The device buffers of the input
+   */
+  [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
    * @brief Get the input files
    *
@@ -275,7 +303,8 @@ struct source_info {
  private:
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _buffers;
+  std::vector<host_buffer> _host_buffers;
+  std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 
