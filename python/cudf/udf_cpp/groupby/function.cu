@@ -16,10 +16,8 @@
 
 #include <cudf/types.hpp>
 
-#include <cfloat>
-#include <cstdint>
+#include <limits>
 
-// double atomicAdd
 __device__ __forceinline__ double atomicAdds(double* address, double val)
 {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -323,9 +321,9 @@ __device__ T BlockMax(T const* data, int64_t size)
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smax;
-  if (threadIdx.x == 0) { smax = INT64_MIN; }
+  if (threadIdx.x == 0) { smax = std::numeric_limits<int64_t>::min(); }
   __syncthreads();
-  device_max<T>(data, items_per_thread, size, INT64_MIN, &smax);
+  device_max<T>(data, items_per_thread, size, std::numeric_limits<int64_t>::min(), &smax);
   return smax;
 }
 
@@ -335,9 +333,9 @@ __device__ T BlockMin(T const* data, int64_t size)
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smin;
-  if (threadIdx.x == 0) { smin = INT64_MAX; }
+  if (threadIdx.x == 0) { smin = std::numeric_limits<int64_t>::max(); }
   __syncthreads();
-  device_min<T>(data, items_per_thread, size, INT64_MAX, &smin);
+  device_min<T>(data, items_per_thread, size, std::numeric_limits<int64_t>::max(), &smin);
   return smin;
 }
 
@@ -349,11 +347,12 @@ __device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size)
   __shared__ T smax;
   __shared__ int64_t sidx;
   if (threadIdx.x == 0) {
-    smax = INT64_MIN;
-    sidx = INT64_MAX;
+    smax = std::numeric_limits<int64_t>::min();
+    sidx = std::numeric_limits<int64_t>::max();
   }
   __syncthreads();
-  device_idxmax<T>(data, items_per_thread, index, size, INT64_MIN, &smax, &sidx);
+  device_idxmax<T>(
+    data, items_per_thread, index, size, std::numeric_limits<int64_t>::min(), &smax, &sidx);
   return sidx;
 }
 
@@ -365,7 +364,7 @@ __device__ T BlockIdxMin(T const* data, int64_t* index, T min, int64_t size)
   __shared__ int64_t sidx;
   if (threadIdx.x == 0) {
     smin = min;
-    sidx = INT64_MAX;
+    sidx = std::numeric_limits<int64_t>::max();
   }
   __syncthreads();
   device_idxmin<T>(data, items_per_thread, index, size, min, &smin, &sidx);
@@ -491,7 +490,8 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
                                             int64_t* index,
                                             int64_t size)
 {
-  *numba_return_value = BlockIdxMin<int64_t>(data, index, INT64_MAX, size);
+  *numba_return_value =
+    BlockIdxMin<int64_t>(data, index, std::numeric_limits<int64_t>::max(), size);
   return 0;
 }
 
@@ -500,6 +500,6 @@ extern "C" __device__ int BlockIdxMin_float64(double* numba_return_value,
                                               int64_t* index,
                                               int64_t size)
 {
-  *numba_return_value = BlockIdxMin<double>(data, index, DBL_MAX, size);
+  *numba_return_value = BlockIdxMin<double>(data, index, std::numeric_limits<double>::max(), size);
   return 0;
 }
