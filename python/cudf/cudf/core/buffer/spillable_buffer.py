@@ -269,29 +269,29 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, spill_lock: SpillLock = None) -> int:
+    def get_ptr(self) -> int:
         """Get a device pointer to the memory of the buffer.
 
-        If spill_lock is not None, a reference to this buffer is added
-        to spill_lock, which disable spilling of this buffer while
-        spill_lock is alive.
+        If this is called within an `acquire_spill_lock` context,
+        a reference to this buffer is added to spill_lock, which
+        disable spilling of this buffer while in the context.
 
-        Parameters
-        ----------
-        spill_lock : SpillLock, optional
-            Adding a reference of this buffer to the spill lock.
+        If this is *not* called within a `acquire_spill_lock` context,
+        this buffer is marked as unspillable permanently.
 
         Return
         ------
         int
             The device pointer as an integer
         """
+        from cudf.core.buffer.utils import get_spill_lock
 
+        spill_lock = get_spill_lock()
         if spill_lock is None:
-            return self.ptr  # expose the buffer permanently
-
-        self.spill_lock(spill_lock)
-        self._last_accessed = time.monotonic()
+            self.mark_exposed()
+        else:
+            self.spill_lock(spill_lock)
+            self._last_accessed = time.monotonic()
         return self._ptr
 
     def memory_info(self) -> Tuple[int, int, str]:
@@ -412,12 +412,13 @@ class SpillableBuffer(Buffer):
             else:
                 # TODO: Use `frames=[self]` instead of this hack, see doc above
                 spill_lock = SpillLock()
-                ptr = self.get_ptr(spill_lock=spill_lock)
+                self.spill_lock(spill_lock)
+                ptr, size, _ = self.memory_info()
                 frames = [
                     Buffer._from_device_memory(
                         cuda_array_interface_wrapper(
                             ptr=ptr,
-                            size=self.size,
+                            size=size,
                             owner=(self._owner, spill_lock),
                         )
                     )
@@ -472,8 +473,8 @@ class SpillableBufferSlice(SpillableBuffer):
     def ptr(self) -> int:
         return self._base.ptr + self._offset
 
-    def get_ptr(self, spill_lock: SpillLock = None) -> int:
-        return self._base.get_ptr(spill_lock=spill_lock) + self._offset
+    def get_ptr(self) -> int:
+        return self._base.get_ptr() + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferSlice(

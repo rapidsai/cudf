@@ -13,7 +13,6 @@ from cudf.core.buffer import (
     SpillableBuffer,
     acquire_spill_lock,
     as_buffer,
-    get_spill_lock,
 )
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -331,9 +330,7 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(col.base_data).get_ptr(
-                spill_lock=get_spill_lock()
-            )
+            data = <void*><uintptr_t>(col.base_data).get_ptr()
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 
@@ -391,9 +388,7 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         elif isinstance(col.base_data, SpillableBuffer):
-            data = <void*><uintptr_t>(col.base_data).get_ptr(
-                spill_lock=get_spill_lock()
-            )
+            data = <void*><uintptr_t>(col.base_data).get_ptr()
         else:
             data = <void*><uintptr_t>(col.base_data.ptr)
 
