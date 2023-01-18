@@ -42,19 +42,28 @@ def _get_cuda_version_from_ptx_file(path):
                 break
         else:
             raise ValueError("Could not read CUDA version from ptx file.")
-    version = ver_line.strip("\n").split(" ")[-1]
-    ptx_major = version.split(".")[0]
-    ptx_minor = version.split(".")[1]
-
+    version = ver_line.strip("\n").split(" ")[1]
     # from ptx_docs/release_notes above:
-    maj_ver_map = {"7": "11", "8": "12"}
-    cuda_major = maj_ver_map.get(ptx_major)
-    if cuda_major is None:
+    ver_map = {
+        "7.0": (11, 0),
+        "7.1": (11, 1),
+        "7.2": (11, 2),
+        "7.3": (11, 3),
+        "7.4": (11, 4),
+        "7.5": (11, 5),
+        "7.6": (11, 6),
+        "7.7": (11, 7),
+        "7.8": (11, 8),
+        "8.0": (12, 0),
+    }
+
+    cuda_ver = ver_map.get(version)
+    if cuda_ver is None:
         raise ValueError(
-            f"Could not map major PTX version {ptx_major} to a CUDA version"
+            f"Could not map PTX version {version} to a CUDA version"
         )
 
-    return int(cuda_major), int(ptx_minor)
+    return cuda_ver
 
 
 def _get_appropriate_file(sms, cc):
