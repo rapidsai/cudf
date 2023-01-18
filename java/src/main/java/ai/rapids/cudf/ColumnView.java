@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -2560,8 +2560,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg.pattern() != null : "pattern is null";
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplitRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().getValue(),
-                                          regexProg.capture().getValue(), limit, splitByRegex));
+    return new Table(stringSplitRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+                                          regexProg.capture().nativeId, limit, splitByRegex));
   }
 
   /**
@@ -2696,8 +2696,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecordRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().getValue(),
-                                   regexProg.capture().getValue(), limit, splitByRegex));
+        stringSplitRecordRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+                                   regexProg.capture().nativeId, limit, splitByRegex));
   }
 
   /**
@@ -3089,8 +3089,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
-    return new ColumnVector(replaceReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().getValue(),
-        regexProg.capture().getValue(), repl.getScalarHandle(), maxRepl));
+    return new ColumnVector(replaceReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+        regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
   }
 
   /**
@@ -3133,7 +3133,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringReplaceWithBackrefsRegexProg(RegexProgram regexProg, String replace) {
     return new ColumnVector(stringReplaceWithBackrefsRegexProg(getNativeView(), regexProg.pattern(),
-        regexProg.flags().getValue(), regexProg.capture().getValue(), replace));
+        regexProg.flags().nativeId, regexProg.capture().nativeId, replace));
   }
 
   /**
@@ -3433,7 +3433,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().getValue(), regexProg.capture().getValue()));
+    return new ColumnVector(matchesReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3480,7 +3480,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().getValue(), regexProg.capture().getValue()));
+    return new ColumnVector(containsReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3517,7 +3517,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
-    return new Table(extractReRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().getValue(), regexProg.capture().getValue()));
+    return new Table(extractReRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3551,7 +3551,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
 
-    return new ColumnVector(extractAllRecordRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().getValue(), regexProg.capture().getValue(), idx));
+    return new ColumnVector(extractAllRecordRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId, idx));
   }
 
   /**

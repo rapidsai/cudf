@@ -16,12 +16,12 @@
 package ai.rapids.cudf;
 
 /**
- * This is the regex program class.
+ * Regex program class, closely following cudf::strings::regex_program.
  */
 public class RegexProgram {
-  private String pattern; /* regex pattern */
-  private RegexFlags flags; /* regex flags for interpreting special characters in the pattern */
-  private CaptureGroups capture; /* controls how capture groups in the pattern are used */
+  private String pattern;        // regex pattern
+  private RegexFlags flags;      // regex flags for interpreting special characters in the pattern
+  private CaptureGroups capture; // controls how capture groups in the pattern are used
 
   /**
    * Constructor for RegexProgram

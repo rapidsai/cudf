@@ -19,21 +19,17 @@
 package ai.rapids.cudf;
 
 /**
- * This is the capture groups setting. For processing a regex pattern containing
- * capture groups. These can be used to optimize the generated regex instructions
- * where the capture groups do not require extracting the groups.
+ * Capture groups setting, closely following cudf::strings::capture_groups.
+ * For processing a regex pattern containing capture groups. These can be used
+ * to optimize the generated regex instructions where the capture groups do not
+ * require extracting the groups.
  */
 public enum CaptureGroups {
-  EXTRACT(0), /* capture groups processed normally for extract */
-  NON_CAPTURE(1); /* convert all capture groups to non-capture groups */
+  EXTRACT(0),     // capture groups processed normally for extract
+  NON_CAPTURE(1); // convert all capture groups to non-capture groups
 
-  private int captureGroups;
-
-  CaptureGroups(int captureGroups) {
-    this.captureGroups = captureGroups;
-  }
-
-  public int getValue() {
-    return captureGroups;
+  final int nativeId; // Native id, for use with libcudf.
+  CaptureGroups(int nativeId) {
+    this.nativeId = nativeId;
   }
 }

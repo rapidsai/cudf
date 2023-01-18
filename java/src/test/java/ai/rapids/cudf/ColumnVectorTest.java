@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -4098,12 +4098,12 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testExtractReRegexProg() {
       try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
-            Table expected = new Table.TestBuilder()
-                    .column("a", "b", null, null)
-                    .column("1", "2", null, null)
-                    .build();
-            Table found = input.extractReRegexProg(new RegexProgram("([ab])(\\d)"))) {
-          assertTablesAreEqual(expected, found);
+           Table expected = new Table.TestBuilder()
+                   .column("a", "b", null, null)
+                   .column("1", "2", null, null)
+                   .build();
+           Table found = input.extractReRegexProg(new RegexProgram("([ab])(\\d)"))) {
+        assertTablesAreEqual(expected, found);
       }
   }
 
@@ -4142,29 +4142,29 @@ public class ColumnVectorTest extends CudfTestBase {
   void testExtractAllRecordRegexProg() {
     RegexProgram regexProg = new RegexProgram("([ab])(\\d)");
     try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
-          ColumnVector expectedIdx0 = ColumnVector.fromLists(
-            new HostColumnVector.ListType(true,
-              new HostColumnVector.BasicType(true, DType.STRING)),
-            Arrays.asList("a1"),
-            Arrays.asList("b2"),
-            Arrays.asList(),
-            null,
-            Arrays.asList("a1", "b1", "a2"));
-          ColumnVector expectedIdx12 = ColumnVector.fromLists(
-              new HostColumnVector.ListType(true,
-                new HostColumnVector.BasicType(true, DType.STRING)),
-              Arrays.asList("a", "1"),
-              Arrays.asList("b", "2"),
-              null,
-              null,
-              Arrays.asList("a", "1", "b", "1", "a", "2"));
+         ColumnVector expectedIdx0 = ColumnVector.fromLists(
+           new HostColumnVector.ListType(true,
+             new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("a1"),
+           Arrays.asList("b2"),
+           Arrays.asList(),
+           null,
+           Arrays.asList("a1", "b1", "a2"));
+         ColumnVector expectedIdx12 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+               new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("a", "1"),
+             Arrays.asList("b", "2"),
+             null,
+             null,
+             Arrays.asList("a", "1", "b", "1", "a", "2"));
 
-          ColumnVector resultIdx0 = v.extractAllRecordRegexProg(regexProg, 0);
-          ColumnVector resultIdx1 = v.extractAllRecordRegexProg(regexProg, 1);
-          ColumnVector resultIdx2 = v.extractAllRecordRegexProg(regexProg, 2);
+         ColumnVector resultIdx0 = v.extractAllRecordRegexProg(regexProg, 0);
+         ColumnVector resultIdx1 = v.extractAllRecordRegexProg(regexProg, 1);
+         ColumnVector resultIdx2 = v.extractAllRecordRegexProg(regexProg, 2);
     ) {
       assertColumnsAreEqual(expectedIdx0, resultIdx0);
-      // assertColumnsAreEqual(expectedIdx12, resultIdx1);
+      assertColumnsAreEqual(expectedIdx12, resultIdx1);
       assertColumnsAreEqual(expectedIdx12, resultIdx2);
     }
   }

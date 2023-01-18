@@ -19,23 +19,18 @@
 package ai.rapids.cudf;
 
 /**
- * This is the regex flags setting.
- * These types can be or'd to combine them.
- * The values are chosen to leave room for future flags and to match the Python flag values.
+ * Regex flags setting, closely following cudf::strings::regex_flags.
+ * These types can be or'd to combine them. The values are chosen to
+ * leave room for future flags and to match the Python flag values.
  */
 public enum RegexFlags {
-  DEFAULT(0), /* default */
-  MULTILINE(8), /* the '^' and '$' honor new-line characters */
-  DOTALL(16), /* the '.' matching includes new-line characters */
-  ASCII(256); /* use only ASCII when matching built-in character classes */
+  DEFAULT(0),   // default
+  MULTILINE(8), // the '^' and '$' honor new-line characters
+  DOTALL(16),   // the '.' matching includes new-line characters
+  ASCII(256);   // use only ASCII when matching built-in character classes
 
-  private int regexFlags;
-
-  RegexFlags(int regexFlags) {
-    this.regexFlags = regexFlags;
-  }
-
-  public int getValue() {
-    return regexFlags;
+  final int nativeId; // Native id, for use with libcudf.
+  RegexFlags(int nativeId) {
+    this.nativeId = nativeId;
   }
 }
