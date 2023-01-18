@@ -259,7 +259,8 @@ __device__ void device_idxmin(T const* data,
 }
 
 template <typename T>
-__device__ T BlockSum(T const* data, int64_t size) {
+__device__ T BlockSum(T const* data, int64_t size)
+{
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T sum;
 
@@ -267,11 +268,11 @@ __device__ T BlockSum(T const* data, int64_t size) {
   __syncthreads();
   device_sum<T>(data, items_per_thread, size, &sum);
   return sum;
-
 }
 
 template <typename T>
-__device__ T BlockMean(T const* data, int64_t size) {
+__device__ T BlockMean(T const* data, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
@@ -284,9 +285,9 @@ __device__ T BlockMean(T const* data, int64_t size) {
   return mean;
 }
 
-
 template <typename T>
-__device__ T BlockStd(T const* data, int64_t size) {
+__device__ T BlockStd(T const* data, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T sum;
@@ -301,7 +302,8 @@ __device__ T BlockStd(T const* data, int64_t size) {
 }
 
 template <typename T>
-__device__ T BlockVar(T const* data, int64_t size) {
+__device__ T BlockVar(T const* data, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T sum;
@@ -315,9 +317,9 @@ __device__ T BlockVar(T const* data, int64_t size) {
   return var;
 }
 
-
 template <typename T>
-__device__ T BlockMax(T const* data, int64_t size) {
+__device__ T BlockMax(T const* data, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smax;
@@ -328,7 +330,8 @@ __device__ T BlockMax(T const* data, int64_t size) {
 }
 
 template <typename T>
-__device__ T BlockMin(T const* data, int64_t size) {
+__device__ T BlockMin(T const* data, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smin;
@@ -339,7 +342,8 @@ __device__ T BlockMin(T const* data, int64_t size) {
 }
 
 template <typename T>
-__device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size) {
+__device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size)
+{
   // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smax;
@@ -354,7 +358,8 @@ __device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size) {
 }
 
 template <typename T>
-__device__ T BlockIdxMin(T const* data, int64_t* index, T min, int64_t size) {
+__device__ T BlockIdxMin(T const* data, int64_t* index, T min, int64_t size)
+{
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smin;
   __shared__ int64_t sidx;
@@ -367,23 +372,29 @@ __device__ T BlockIdxMin(T const* data, int64_t* index, T min, int64_t size) {
   return sidx;
 }
 
-
-extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value, int64_t const* data, int64_t size) {
+extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
+                                         int64_t const* data,
+                                         int64_t size)
+{
   *numba_return_value = BlockSum<int64_t>(data, size);
   return 0;
 }
 
-extern "C" __device__ int BlockSum_float64(double* numba_return_value, double const* data, int64_t size) {
+extern "C" __device__ int BlockSum_float64(double* numba_return_value,
+                                           double const* data,
+                                           int64_t size)
+{
   *numba_return_value = BlockSum<double>(data, size);
   return 0;
 }
 
-
-extern "C" __device__ int BlockMean_int64(int64_t* numba_return_value, int64_t const* data, int64_t size) {
+extern "C" __device__ int BlockMean_int64(int64_t* numba_return_value,
+                                          int64_t const* data,
+                                          int64_t size)
+{
   *numba_return_value = BlockMean<int64_t>(data, size);
   return 0;
 }
-
 
 extern "C" __device__ int BlockMean_float64(double* numba_return_value,
                                             double const* data,
@@ -393,24 +404,21 @@ extern "C" __device__ int BlockMean_float64(double* numba_return_value,
   return 0;
 }
 
-
 extern "C" __device__ int BlockStd_int64(double* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
 {
   *numba_return_value = BlockStd<int64_t>(data, size);
   return 0;
-}  
+}
 
-
-extern "C" __device__ int BlockStd_float64(double* numba_return_value, 
-                                           double const* data, 
+extern "C" __device__ int BlockStd_float64(double* numba_return_value,
+                                           double const* data,
                                            int64_t size)
 {
   *numba_return_value = BlockStd<double>(data, size);
   return 0;
-}  
-
+}
 
 extern "C" __device__ int BlockVar_int64(double* numba_return_value,
                                          int64_t const* data,
@@ -420,15 +428,13 @@ extern "C" __device__ int BlockVar_int64(double* numba_return_value,
   return 0;
 }
 
-
 extern "C" __device__ int BlockVar_float64(double* numba_return_value,
                                            double const* data,
                                            int64_t size)
 {
-*numba_return_value = BlockVar<double>(data, size);
-return 0;
+  *numba_return_value = BlockVar<double>(data, size);
+  return 0;
 }
-
 
 extern "C" __device__ int BlockMax_int64(int64_t* numba_return_value,
                                          int64_t const* data,
@@ -446,8 +452,6 @@ extern "C" __device__ int BlockMax_float64(double* numba_return_value,
   return 0;
 }
 
-
-
 extern "C" __device__ int BlockMin_int64(int64_t* numba_return_value,
                                          int64_t const* data,
                                          int64_t size)
@@ -456,15 +460,13 @@ extern "C" __device__ int BlockMin_int64(int64_t* numba_return_value,
   return 0;
 }
 
-
 extern "C" __device__ int BlockMin_float64(double* numba_return_value,
-                                         double const* data,
-                                         int64_t size)
+                                           double const* data,
+                                           int64_t size)
 {
   *numba_return_value = BlockMin<double>(data, size);
   return 0;
 }
-
 
 extern "C" __device__ int BlockIdxMax_int64(int64_t* numba_return_value,
                                             int64_t const* data,
@@ -483,7 +485,6 @@ extern "C" __device__ int BlockIdxMax_float64(double* numba_return_value,
   *numba_return_value = BlockIdxMax<double>(data, index, size);
   return 0;
 }
-
 
 extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
                                             int64_t const* data,
