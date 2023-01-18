@@ -166,8 +166,8 @@ struct table_with_metadata {
  *
  * Used to describe buffer input in `source_info` objects.
  */
-// TODO: to be replaced by `host_span`?
 struct host_buffer {
+  // TODO: to be replaced by `host_span`
   char const* data = nullptr;  //!< Pointer to the buffer
   size_t size      = 0;        //!< Size of the buffer
   host_buffer()    = default;
