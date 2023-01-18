@@ -2046,19 +2046,27 @@ def test_csv_writer_category(df):
     assert expected == actual
 
 
-def test_csv_reader_category_error():
-    # TODO: Remove this test once following
-    # issue is fixed: https://github.com/rapidsai/cudf/issues/3960
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "category",
+        {"a": "category", "b": "str"},
+        {"b": "category"},
+        {"a": "category"},
+        {"a": pd.CategoricalDtype([1, 2])},
+        {"b": pd.CategoricalDtype([1, 2, 3])},
+        {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
+        pd.CategoricalDtype(["a", "b"]),
+    ],
+)
+def test_csv_reader_category(dtype):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
     csv_buf = df.to_csv()
 
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape(
-            "CategoricalDtype as dtype is not yet " "supported in CSV reader"
-        ),
-    ):
-        cudf.read_csv(StringIO(csv_buf), dtype="category")
+    actual = cudf.read_csv(StringIO(csv_buf), dtype=dtype)
+    expected = pd.read_csv(StringIO(csv_buf), dtype=dtype)
+
+    assert_eq(expected, actual)
 
 
 def test_csv_writer_datetime_sep():
