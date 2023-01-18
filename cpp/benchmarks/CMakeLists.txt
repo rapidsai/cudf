@@ -286,8 +286,8 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
+  string/slice.cpp
   string/split.cpp
-  string/substring.cpp
   string/translate.cpp
   string/url_decode.cu
 )
