@@ -45,11 +45,6 @@ def _get_cuda_version_from_ptx_file(path):
     version = ver_line.strip("\n").split(" ")[1]
     # from ptx_docs/release_notes above:
     ver_map = {
-        "7.0": (11, 0),
-        "7.1": (11, 1),
-        "7.2": (11, 2),
-        "7.3": (11, 3),
-        "7.4": (11, 4),
         "7.5": (11, 5),
         "7.6": (11, 6),
         "7.7": (11, 7),
