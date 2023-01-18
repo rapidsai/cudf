@@ -239,14 +239,10 @@ class SpillableBuffer(Buffer):
             time=time_end - time_start,
         )
 
-    @property
-    def ptr(self) -> int:
-        """Access the memory directly
+    def mark_exposed(self) -> None:
+        """Mark the buffer as "exposed" and make it unspillable permanently.
 
-        Notice, this will mark the buffer as "exposed" and make
-        it unspillable permanently.
-
-        Consider using `.get_ptr()` instead.
+        This also unspill the buffer (unspillable buffers cannot be spilled!).
         """
 
         self._manager.spill_to_device_limit()
@@ -256,7 +252,6 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()
-            return self._ptr
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         """Spill lock the buffer
@@ -299,6 +294,18 @@ class SpillableBuffer(Buffer):
 
         self.spill_lock(spill_lock)
         self._last_accessed = time.monotonic()
+        return self._ptr
+
+    @property
+    def ptr(self) -> int:
+        """Access the memory directly
+
+        Notice, this will mark the buffer as "exposed" and make
+        it unspillable permanently.
+
+        Consider using `.get_ptr()` instead.
+        """
+        self.mark_exposed()
         return self._ptr
 
     @property
