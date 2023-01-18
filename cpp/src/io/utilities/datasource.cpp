@@ -16,6 +16,7 @@
 
 #include "file_io_utilities.hpp"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -211,16 +212,21 @@ class device_buffer_source final : public datasource {
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    auto const count = std::min(size, this->size() - offset);
-    CUDF_CUDA_TRY(cudaMemcpy(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault));
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    stream.synchronize();
     return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto const count = std::min(size, this->size() - offset);
-    std::vector<std::byte> h_data(count);
-    CUDF_CUDA_TRY(cudaMemcpy(h_data.data(), _d_buffer.data() + offset, count, cudaMemcpyDefault));
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    auto h_data       = cudf::detail::make_std_vector_async(
+      cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
+    stream.synchronize();
     return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
   }
 
