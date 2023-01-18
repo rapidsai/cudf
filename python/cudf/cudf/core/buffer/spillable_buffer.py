@@ -298,8 +298,8 @@ class SpillableBuffer(Buffer):
         """Get pointer, size, and device type of this buffer.
 
         Warning, it is not safe to access the pointer value without
-        spill lock the buffer manually. This method neither expose
-        nor spill lock the buffer.
+        spill lock the buffer manually. This method neither exposes
+        nor spill locks the buffer.
 
         Return
         ------
