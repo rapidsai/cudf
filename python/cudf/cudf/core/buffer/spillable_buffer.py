@@ -265,8 +265,6 @@ class SpillableBuffer(Buffer):
             The object that defines the scope of the lock.
         """
 
-        if spill_lock is None:
-            spill_lock = SpillLock()
         with self.lock:
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
