@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,8 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger parquet file/table write,
    * normally used for chunked writing.
    *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
+   *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
@@ -170,7 +172,9 @@ class writer::impl {
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
   /**
-   * @brief Encode a batch pages
+   * @brief Encode a batch of pages
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
@@ -214,6 +218,9 @@ class writer::impl {
   size_t max_page_size_bytes           = default_max_page_size_bytes;
   size_type max_page_size_rows         = default_max_page_size_rows;
   statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
+  dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
+  size_t max_dictionary_size_          = default_max_dictionary_size;
+  size_type max_page_fragment_size_    = default_max_page_fragment_size;
   bool int96_timestamps                = false;
   int32_t column_index_truncate_length = default_column_index_truncate_length;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()

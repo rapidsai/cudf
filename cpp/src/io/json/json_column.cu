@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/data_casting.cuh>
@@ -36,6 +37,7 @@
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -194,6 +196,45 @@ reduce_to_column_tree(tree_meta_t& tree,
       return parent_node_id == parent_node_sentinel ? parent_node_sentinel
                                                     : col_ids[parent_node_id];
     });
+
+  // Mixed types in List children go to different columns,
+  // so all immediate children of list column should have same max_row_offsets.
+  //   create list's children max_row_offsets array. (initialize to zero)
+  //   atomicMax on  children max_row_offsets array.
+  //   gather the max_row_offsets from children row offset array.
+  {
+    rmm::device_uvector<NodeIndexT> list_parents_children_max_row_offsets(num_columns, stream);
+    thrust::fill(rmm::exec_policy(stream),
+                 list_parents_children_max_row_offsets.begin(),
+                 list_parents_children_max_row_offsets.end(),
+                 0);
+    thrust::for_each(rmm::exec_policy(stream),
+                     unique_col_ids.begin(),
+                     unique_col_ids.end(),
+                     [column_categories = column_categories.begin(),
+                      parent_col_ids    = parent_col_ids.begin(),
+                      max_row_offsets   = max_row_offsets.begin(),
+                      list_parents_children_max_row_offsets =
+                        list_parents_children_max_row_offsets.begin()] __device__(auto col_id) {
+                       auto parent_col_id = parent_col_ids[col_id];
+                       if (parent_col_id != parent_node_sentinel and
+                           column_categories[parent_col_id] == node_t::NC_LIST) {
+                         atomicMax(list_parents_children_max_row_offsets + parent_col_id,
+                                   max_row_offsets[col_id]);
+                       }
+                     });
+    thrust::gather_if(
+      rmm::exec_policy(stream),
+      parent_col_ids.begin(),
+      parent_col_ids.end(),
+      parent_col_ids.begin(),
+      list_parents_children_max_row_offsets.begin(),
+      max_row_offsets.begin(),
+      [column_categories = column_categories.begin()] __device__(size_type parent_col_id) {
+        return parent_col_id != parent_node_sentinel and
+               column_categories[parent_col_id] == node_t::NC_LIST;
+      });
+  }
 
   // copy lists' max_row_offsets to children.
   // all structs should have same size.
@@ -465,47 +506,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto d_ignore_vals  = cudf::detail::make_device_uvector_async(ignore_vals, stream);
   auto d_columns_data = cudf::detail::make_device_uvector_async(columns_data, stream);
 
-  // 3. scatter List offset
-  //   pre-condition: {node_id} is already sorted by {col_id}
-  //   unique_copy_by_key {parent_node_id} {row_offset} to
-  //   col[parent_col_id].child_offsets[row_offset[parent_node_id]]
-
-  auto ordered_parent_node_ids =
-    thrust::make_permutation_iterator(tree.parent_node_ids.begin(), node_ids.begin());
-  auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), node_ids.begin());
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<size_type>(0),
-    num_nodes,
-    [num_nodes,
-     ordered_parent_node_ids,
-     ordered_row_offsets,
-     col_ids         = col_ids.begin(),
-     sorted_col_ids  = sorted_col_ids.begin(),
-     row_offsets     = row_offsets.begin(),
-     node_categories = tree.node_categories.begin(),
-     d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
-      auto parent_node_id = ordered_parent_node_ids[i];
-      if (parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST) {
-        // unique item
-        if (i == 0 or (sorted_col_ids[i - 1] != sorted_col_ids[i] or
-                       ordered_parent_node_ids[i - 1] != parent_node_id)) {
-          // scatter to list_offset
-          d_columns_data[col_ids[parent_node_id]].child_offsets[row_offsets[parent_node_id]] =
-            ordered_row_offsets[i];
-        }
-        // TODO: verify if this code is right. check with more test cases.
-        if (i == num_nodes - 1 or (sorted_col_ids[i] != sorted_col_ids[i + 1] or
-                                   ordered_parent_node_ids[i + 1] != parent_node_id)) {
-          // last value of list child_offset is its size.
-          d_columns_data[col_ids[parent_node_id]].child_offsets[row_offsets[parent_node_id] + 1] =
-            ordered_row_offsets[i] + 1;
-        }
-      }
-    });
-
-  // 4. scatter string offsets to respective columns, set validity bits
+  // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
@@ -528,6 +529,65 @@ void make_device_json_column(device_span<SymbolT const> input,
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;
         default: break;
+      }
+    });
+
+  // 4. scatter List offset
+  // copy_if only node's whose parent is list, (node_id, parent_col_id)
+  // stable_sort by parent_col_id of {node_id}.
+  // For all unique parent_node_id of (i==0, i-1!=i), write start offset.
+  //                                  (i==last, i+1!=i), write end offset.
+  //    unique_copy_by_key {parent_node_id} {row_offset} to
+  //    col[parent_col_id].child_offsets[row_offset[parent_node_id]]
+
+  auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
+  auto parent_col_id   = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0),
+    [col_ids         = col_ids.begin(),
+     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                : col_ids[parent_node_ids[node_id]];
+    });
+  auto const list_children_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
+    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
+      num_nodes,
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
+    [node_categories = tree.node_categories.begin(),
+     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+      auto parent_node_id = parent_node_ids[node_id];
+      return parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST;
+    });
+
+  auto const num_list_children =
+    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
+  thrust::stable_sort_by_key(rmm::exec_policy(stream),
+                             parent_col_ids.begin(),
+                             parent_col_ids.begin() + num_list_children,
+                             node_ids.begin());
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    num_list_children,
+    [node_ids        = node_ids.begin(),
+     parent_node_ids = tree.parent_node_ids.begin(),
+     parent_col_ids  = parent_col_ids.begin(),
+     row_offsets     = row_offsets.begin(),
+     d_columns_data  = d_columns_data.begin(),
+     num_list_children] __device__(size_type i) {
+      auto const node_id        = node_ids[i];
+      auto const parent_node_id = parent_node_ids[node_id];
+      // scatter to list_offset
+      if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
+          row_offsets[node_id];
+      }
+      // last value of list child_offset is its size.
+      if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
+          row_offsets[node_id] + 1;
       }
     });
 
@@ -691,7 +751,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       auto [child_column, names] =
         json_col.child_columns.empty()
           ? std::pair<std::unique_ptr<column>,
-                      std::vector<column_name_info>>{std::make_unique<column>(), {}}
+                      // EMPTY type could not used because gather throws exception on EMPTY type.
+                      std::vector<column_name_info>>{std::make_unique<column>(
+                                                       data_type{type_id::INT8},
+                                                       0,
+                                                       rmm::device_buffer{0, stream, mr}),
+                                                     {}}
           : device_json_column_to_cudf_column(
               json_col.child_columns.begin()->second,
               d_input,
@@ -701,14 +766,18 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
               mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
-      return {make_lists_column(num_rows,
-                                std::move(offsets_column),
-                                std::move(child_column),
-                                null_count,
-                                std::move(result_bitmask),
-                                stream,
-                                mr),
-              std::move(column_names)};
+      auto ret_col                      = make_lists_column(num_rows,
+                                       std::move(offsets_column),
+                                       std::move(child_column),
+                                       0,
+                                       rmm::device_buffer{0, stream, mr},
+                                       stream,
+                                       mr);
+      // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
+      // null validation applied in make_lists_column factory, which is not needed for json
+      // parent column cannot be null when its children is non-empty in JSON
+      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;
   }
