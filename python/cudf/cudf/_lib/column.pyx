@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -11,7 +11,6 @@ from cudf.api.types import is_categorical_dtype
 from cudf.core.buffer import (
     Buffer,
     SpillableBuffer,
-    SpillLock,
     acquire_spill_lock,
     as_buffer,
     get_spill_lock,
@@ -533,12 +532,9 @@ cdef class Column:
                 column_owner and
                 isinstance(data_owner, SpillableBuffer) and
                 # We check that `data_owner` is spill locked (not spillable)
-                # and that its pointer is the same as `data_ptr` _without_
-                # exposing the buffer permanently (calling get_ptr with a
-                # dummy SpillLock).
+                # and that it points to the same memory as `data_ptr`.
                 not data_owner.spillable and
-                data_owner.get_ptr(spill_lock=SpillLock()) == data_ptr and
-                data_owner.size == base_nbytes
+                data_owner.memory_info() == (data_ptr, base_nbytes, "gpu")
             ):
                 data = data_owner
             else:

@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import importlib
 import random
@@ -144,6 +144,7 @@ def test_spillable_buffer(manager: SpillManager):
         "spillable",
         "spill_lock",
         "spill",
+        "memory_info",
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
@@ -155,6 +156,22 @@ def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
         pass
     else:
         assert attr_base == attr_view
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_memory_info(manager: SpillManager, target):
+    if target == "gpu":
+        mem = rmm.DeviceBuffer(size=10)
+        ptr = mem.ptr
+    elif target == "cpu":
+        mem = np.empty(10, dtype="u1")
+        ptr = mem.__array_interface__["data"][0]
+    b = as_buffer(data=mem, exposed=False)
+    assert b.memory_info() == (ptr, mem.size, target)
+    assert b[:].memory_info() == (ptr, mem.size, target)
+    assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
+    assert b[1:].memory_info() == (ptr + 1, mem.size - 1, target)
+    assert b[2:4].memory_info() == (ptr + 2, 2, target)
 
 
 def test_from_pandas(manager: SpillManager):

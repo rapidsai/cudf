@@ -294,6 +294,31 @@ class SpillableBuffer(Buffer):
         self._last_accessed = time.monotonic()
         return self._ptr
 
+    def memory_info(self) -> Tuple[int, int, str]:
+        """Get pointer, size, and device type of this buffer.
+
+        Warning, it is not safe to access the pointer value without
+        spill lock the buffer manually. This method neither expose
+        nor spill lock the buffer.
+
+        Return
+        ------
+        int
+            The memory pointer as an integer (device or host memory)
+        int
+            The size of the memory in bytes
+        str
+            The device type as a string ("cpu" or "gpu")
+        """
+
+        if self._ptr_desc["type"] == "gpu":
+            ptr = self._ptr
+        elif self._ptr_desc["type"] == "cpu":
+            ptr = numpy.array(
+                self._ptr_desc["memoryview"], copy=False
+            ).__array_interface__["data"][0]
+        return (ptr, self.nbytes, self._ptr_desc["type"])
+
     @property
     def ptr(self) -> int:
         """Access the memory directly
@@ -492,3 +517,7 @@ class SpillableBufferSlice(SpillableBuffer):
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         self._base.spill_lock(spill_lock=spill_lock)
+
+    def memory_info(self) -> Tuple[int, int, str]:
+        (ptr, _, device_type) = self._base.memory_info()
+        return (ptr + self._offset, self.nbytes, device_type)
