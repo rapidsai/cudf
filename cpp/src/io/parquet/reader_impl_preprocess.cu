@@ -523,9 +523,10 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
 
 void reader::impl::allocate_nesting_info()
 {
-  auto const& chunks      = _file_itm_data.chunks;
-  auto& pages             = _file_itm_data.pages_info;
-  auto& page_nesting_info = _file_itm_data.page_nesting_info;
+  auto const& chunks             = _file_itm_data.chunks;
+  auto& pages                    = _file_itm_data.pages_info;
+  auto& page_nesting_info        = _file_itm_data.page_nesting_info;
+  auto& page_nesting_decode_info = _file_itm_data.page_nesting_decode_info;
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
@@ -539,6 +540,8 @@ void reader::impl::allocate_nesting_info()
     });
 
   page_nesting_info = hostdevice_vector<gpu::PageNestingInfo>{total_page_nesting_infos, _stream};
+  page_nesting_decode_info =
+    hostdevice_vector<gpu::PageNestingDecodeInfo>{total_page_nesting_infos, _stream};
 
   // retrieve from the gpu so we can update
   pages.device_to_host(_stream, true);
@@ -556,6 +559,8 @@ void reader::impl::allocate_nesting_info()
     target_page_index += chunks[idx].num_dict_pages;
     for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
+      pages[target_page_index + p_idx].nesting_decode =
+        page_nesting_decode_info.device_ptr() + src_info_index;
       pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
 
       src_info_index += per_page_nesting_info_size;
@@ -599,6 +604,9 @@ void reader::impl::allocate_nesting_info()
           gpu::PageNestingInfo* pni =
             &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
 
+          gpu::PageNestingDecodeInfo* pndi =
+            &page_nesting_decode_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
+
           // if we have lists, set our start and end depth remappings
           if (schema.max_repetition_level > 0) {
             auto remap = depth_remapping.find(src_col_schema);
@@ -616,9 +624,8 @@ void reader::impl::allocate_nesting_info()
           }
 
           // values indexed by output column index
-          pni[cur_depth].max_def_level = cur_schema.max_definition_level;
-          pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
-          pni[cur_depth].size          = 0;
+          pndi[cur_depth].max_def_level = cur_schema.max_definition_level;
+          pni[cur_depth].size           = 0;
           pni[cur_depth].type =
             to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
           pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
@@ -638,6 +645,7 @@ void reader::impl::allocate_nesting_info()
 
   // copy nesting info to the device
   page_nesting_info.host_to_device(_stream);
+  page_nesting_decode_info.host_to_device(_stream);
 }
 
 void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
@@ -1252,7 +1260,7 @@ struct start_offset_output_iterator {
     if (p.src_col_schema != src_col_schema || p.flags & gpu::PAGEINFO_FLAGS_DICTIONARY) {
       return empty;
     }
-    return p.nesting[nesting_depth].page_start_value;
+    return p.nesting_decode[nesting_depth].page_start_value;
   }
 };
 

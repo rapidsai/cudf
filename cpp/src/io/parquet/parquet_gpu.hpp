@@ -83,6 +83,24 @@ enum level_type {
   NUM_LEVEL_TYPES
 };
 
+struct PageNestingDecodeInfo {
+  // set up prior to decoding
+  int32_t max_def_level;
+
+  // computed during preprocessing
+  int32_t page_start_value;
+
+  // computed during decoding
+  int32_t null_count;
+
+  // used internally during decoding
+  int32_t valid_map_offset;
+  int32_t valid_count;
+  int32_t value_count;
+  uint8_t* data_out;
+  uint32_t* valid_map;
+};
+
 /**
  * @brief Nesting information
  */
@@ -92,25 +110,14 @@ struct PageNestingInfo {
   int32_t start_depth;
   int32_t end_depth;
 
-  // set at initialization
-  int32_t max_def_level;
-  int32_t max_rep_level;
+  // set at initialization (see start_offset_output_iterator in reader_impl_preprocess.cu)
   cudf::type_id type;  // type of the corresponding cudf output column
   bool nullable;
 
   // set during preprocessing
   int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
                  // decoded
-  int32_t batch_size;        // the size of the page for this batch
-  int32_t page_start_value;  // absolute output start index in output column data
-
-  // set during data decoding
-  int32_t valid_count;       // # of valid values decoded in this page/nesting-level
-  int32_t value_count;       // total # of values decoded in this page/nesting-level
-  int32_t null_count;        // null count
-  int32_t valid_map_offset;  // current offset in bits relative to valid_map
-  uint8_t* data_out;         // pointer into output buffer
-  uint32_t* valid_map;       // pointer into output validity buffer
+  int32_t batch_size;  // the size of the page for this batch
 };
 
 /**
@@ -160,8 +167,9 @@ struct PageInfo {
   int32_t str_bytes;
 
   // nesting information (input/output) for each page
-  int num_nesting_levels;
   PageNestingInfo* nesting;
+  PageNestingDecodeInfo* nesting_decode;
+  int num_nesting_levels;
 };
 
 /**
@@ -252,6 +260,7 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
 };
 
 /**
