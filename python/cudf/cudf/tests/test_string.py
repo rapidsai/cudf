@@ -2102,6 +2102,33 @@ def test_string_starts_ends_list_like_pat(data, pat):
 @pytest.mark.parametrize(
     "data",
     [
+        ["str_foo", "str_bar", "no_prefix", "", None],
+        ["foo_str", "bar_str", "no_suffix", "", None],
+    ],
+)
+def test_string_remove_suffix_prefix(data):
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    got = gs.str.removeprefix("str_")
+    expect = ps.str.removeprefix("str_")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
+    got = gs.str.removesuffix("_str")
+    expect = ps.str.removesuffix("_str")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         ["abc", "xyz", "a", "ab", "123", "097"],
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
