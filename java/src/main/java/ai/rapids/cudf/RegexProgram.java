@@ -68,7 +68,7 @@ public class RegexProgram {
   /**
    * Get the pattern used to create this instance
    *
-   * @param return A regex pattern as a string 
+   * @param return A regex pattern as a string
    */
   public String pattern() {
     return pattern;
@@ -77,7 +77,7 @@ public class RegexProgram {
   /**
    * Get the regex flags used to create this instance
    *
-   * @param return Regex flags setting 
+   * @param return Regex flags setting
    */
   public RegexFlags flags() {
     return flags;
@@ -86,7 +86,7 @@ public class RegexProgram {
   /**
    * Get the capture groups used to create this instance
    *
-   * @param return Capture groups setting 
+   * @param return Capture groups setting
    */
   public CaptureGroups capture() {
     return capture;

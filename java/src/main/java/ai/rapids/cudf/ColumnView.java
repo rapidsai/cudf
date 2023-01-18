@@ -3089,7 +3089,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
-    return new ColumnVector(replaceReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().getValue(), 
+    return new ColumnVector(replaceReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().getValue(),
         regexProg.capture().getValue(), repl.getScalarHandle(), maxRepl));
   }
 
@@ -4237,7 +4237,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long[] stringSplit(long nativeHandle, String pattern, int limit,
                                            boolean splitByRegex);
-  
+
   /**
    * Returns a list of columns by splitting each string using the specified pattern. The number of
    * rows in the output columns will be the same as the input column. Null entries are added for a
@@ -4271,7 +4271,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long stringSplitRecord(long nativeHandle, String pattern, int limit,
                                                boolean splitByRegex);
-  
+
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
@@ -4367,7 +4367,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long stringReplaceWithBackrefs(long columnView, String pattern,
                                                        String replace) throws CudfException;
-  
+
   /**
    * Native method for replacing any character sequence matching the given regex program
    * pattern using the replace template for back-references.

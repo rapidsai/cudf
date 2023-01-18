@@ -19,9 +19,9 @@
 package ai.rapids.cudf;
 
 /**
- * This is the capture groups setting.
- * For processing a regex pattern containing capture groups. 
- * These can be used to optimize the generated regex instructions where the capture groups do not require extracting the groups.
+ * This is the capture groups setting. For processing a regex pattern containing
+ * capture groups. These can be used to optimize the generated regex instructions
+ * where the capture groups do not require extracting the groups.
  */
 public enum CaptureGroups {
   EXTRACT(0), /* capture groups processed normally for extract */
