@@ -41,7 +41,9 @@ from cudf._lib.cpp.types cimport size_type
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
-_CATEGORICAL_AGGS = {"COLLECT", "COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
+# The libcudf infrastructure exists for "COLLECT" support on
+# categoricals, but the dtype support in python does not.
+_CATEGORICAL_AGGS = {"COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
 _STRING_AGGS = {
     "COLLECT",
     "COUNT",

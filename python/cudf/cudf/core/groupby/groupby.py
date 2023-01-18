@@ -21,7 +21,6 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtypes import is_categorical_dtype
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
@@ -489,7 +488,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = col_name
                 if (
                     agg in {list, "collect"}
-                    and not is_categorical_dtype(orig_dtype)
                     and orig_dtype != col.dtype.element_type
                 ):
                     # Structs lose their labels which we reconstruct here
