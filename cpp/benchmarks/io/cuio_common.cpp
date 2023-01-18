@@ -16,8 +16,6 @@
 
 #include <benchmarks/io/cuio_common.hpp>
 
-#include <cudf/detail/utilities/vector_factories.hpp>
-
 #include <cstdio>
 #include <fstream>
 #include <numeric>
