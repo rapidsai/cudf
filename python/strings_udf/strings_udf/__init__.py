@@ -17,7 +17,7 @@ __version__ = _version.get_versions()["version"]
 logger = get_logger()
 
 # tracks the version of CUDA used to build the c++ and PTX components
-STRINGS_UDF_PTX_VERSION = (11, 5)
+STRINGS_UDF_PTX_VERSION = (11, 8)
 
 path = os.path.dirname(__file__)
 
