@@ -57,13 +57,10 @@
 
 using cudf::host_span;
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
+namespace cudf::io::json::detail {
 
-using namespace cudf::io;
-using namespace cudf::io::json;
+using namespace cudf::io::detail;
+using namespace cudf::io::detail::json;
 
 using col_map_type     = cudf::io::json::gpu::col_map_type;
 using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type*)>>;
@@ -659,7 +656,4 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                                mr);
 }
 
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail

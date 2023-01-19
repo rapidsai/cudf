@@ -62,10 +62,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
+namespace cudf::io::json::detail {
 
 using namespace cudf::io;
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
@@ -128,7 +125,6 @@ struct escape_strings_fn {
 struct concat_structs_base {
   table_device_view const d_table;
   column_device_view const d_column_names;
-  // TODO these items are string_view or string_scalar?
   string_view const prepend_row;            //{
   string_view const append_row;             //} or }\n for json-lines
   string_view const d_col_separator;        //:
@@ -231,13 +227,12 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
 {
   CUDF_EXPECTS(column_names.type().id() == type_id::STRING, "Column names must be of type string");
   auto const num_columns = strings_columns.num_columns();
-  // CUDF_EXPECTS(num_columns > 1, "At least two columns must be specified");
   CUDF_EXPECTS(num_columns == column_names.size(),
                "Number of column names should be equal to number of columns in the table");
   // check all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
                            strings_columns.end(),
-                           [](auto c) { return c.type().id() == type_id::STRING; }),
+                           [](auto const& c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
   auto const strings_count = strings_columns.num_rows();
   if (strings_count == 0)  // empty begets empty
@@ -411,7 +406,7 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     auto duration_string = cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
-    auto quotes = make_column_from_scalar(cudf::string_scalar{"\""}, column.size(), stream_, mr_);
+    auto quotes = make_column_from_scalar(string_scalar{"\""}, column.size(), stream_, mr_);
     return cudf::strings::detail::concatenate(
       table_view{{quotes->view(), duration_string->view(), quotes->view()}},
       string_scalar(""),
@@ -453,7 +448,7 @@ struct column_to_strings_fn {
                     column.offset(),
                     {lists_column_view(column).offsets(), child_string->view()});
       return strings::detail::join_list_elements(lists_column_view(list_child_string),
-                                                 cudf::string_scalar{","},
+                                                 string_scalar{","},
                                                  narep,
                                                  strings::separator_on_nulls::YES,
                                                  strings::output_if_empty_list::EMPTY_STRING,
@@ -461,8 +456,8 @@ struct column_to_strings_fn {
                                                  mr_);
     }();
     // create column with "[", "]" to wrap around list string
-    auto prepend = make_column_from_scalar(cudf::string_scalar{"["}, column.size(), stream_, mr_);
-    auto append  = make_column_from_scalar(cudf::string_scalar{"]"}, column.size(), stream_, mr_);
+    auto prepend = make_column_from_scalar(string_scalar{"["}, column.size(), stream_, mr_);
+    auto append  = make_column_from_scalar(string_scalar{"]"}, column.size(), stream_, mr_);
     return cudf::strings::detail::concatenate(
       table_view{{prepend->view(), list_string->view(), append->view()}},
       string_scalar(""),
@@ -528,21 +523,16 @@ struct column_to_strings_fn {
     // concatenate columns in each row into one big string column
     // (using null representation and delimiter):
     //
-    return [&] {
-      return struct_to_strings(str_table_view,
-                               column_names_view,
-                               row_begin_wrap,
-                               row_end_wrap,
-                               column_seperator,
-                               value_seperator,
-                               narep,
-                               options_.is_enabled_include_nulls(),
-                               stream_,
-                               rmm::mr::get_current_device_resource());
-      //
-      // return cudf::strings::detail::replace_nulls(
-      //   str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
-    }();
+    return struct_to_strings(str_table_view,
+                             column_names_view,
+                             row_begin_wrap,
+                             row_end_wrap,
+                             column_seperator,
+                             value_seperator,
+                             narep,
+                             options_.is_enabled_include_nulls(),
+                             stream_,
+                             rmm::mr::get_current_device_resource());
   }
 
  private:
@@ -553,7 +543,7 @@ struct column_to_strings_fn {
   string_scalar const value_seperator{","};
   string_scalar const row_begin_wrap{"{"};
   string_scalar const row_end_wrap{"}"};
-  cudf::string_scalar narep{options_.get_na_rep()};
+  string_scalar narep{options_.get_na_rep()};
 };
 
 }  // namespace
@@ -626,7 +616,7 @@ void write_chunked(data_sink* out_sink,
 {
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar d_line_terminator{line_terminator};
+  string_scalar d_line_terminator{line_terminator};
   auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
                                                             d_line_terminator,
                                                             string_scalar("", false),
@@ -692,14 +682,14 @@ void write_json(data_sink* out_sink,
     }
   }();
   auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
-  cudf::string_scalar d_line_terminator{line_terminator};
+  string_scalar d_line_terminator{line_terminator};
 
   // write header: required for non-record oriented output
   // header varies depending on orient.
   // write_chunked_begin(out_sink, table, user_column_names, options, stream, mr);
   // TODO This should go into the write_chunked_begin function
   std::string const list_braces{"[]"};
-  cudf::string_scalar d_list_braces{list_braces};
+  string_scalar d_list_braces{list_braces};
   if (!options.is_enabled_lines()) {
     if (out_sink->is_device_write_preferred(1)) {
       out_sink->device_write(d_list_braces.data(), 1, stream);
@@ -748,12 +738,7 @@ void write_json(data_sink* out_sink,
       std::vector<std::unique_ptr<column>> str_column_vec;
 
       // struct converter for the table
-      auto str_concat_col = [&] {
-        return converter(sub_view.begin(), sub_view.end(), user_column_names);
-        // cudf::string_scalar narep{options.get_na_rep()};
-        // return cudf::strings::detail::replace_nulls(
-        //   str_table_view.column(0), narep, stream, rmm::mr::get_current_device_resource());
-      }();
+      auto str_concat_col = converter(sub_view.begin(), sub_view.end(), user_column_names);
 
       write_chunked(out_sink, str_concat_col->view(), line_terminator, options, stream, mr);
     }
@@ -776,7 +761,4 @@ void write_json(data_sink* out_sink,
   }
 }
 
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail

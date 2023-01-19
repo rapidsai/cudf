@@ -21,10 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
+namespace cudf::io::json::detail {
 
 /**
  * @brief Reads and returns the entire data set.
@@ -56,7 +53,4 @@ void write_json(data_sink* sink,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail
