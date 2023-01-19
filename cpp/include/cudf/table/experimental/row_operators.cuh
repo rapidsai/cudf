@@ -408,15 +408,21 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
+      // only order top-NULLs according to null_order
+      auto const is_l_row_null = _lhs.is_null(lhs_element_index);
+      auto const is_r_row_null = _rhs.is_null(rhs_element_index);
+      if (is_l_row_null || is_r_row_null) {
+        return cuda::std::pair(null_compare(is_l_row_null, is_r_row_null, _null_precedence),
+                               _depth);
+      }
+
       // These are all the values from the Dremel encoding.
-      auto const l_max_def_level  = _l_dremel_device_view->max_def_level;
-      auto const r_max_def_level  = _r_dremel_device_view->max_def_level;
-      auto const l_def_levels     = _l_dremel_device_view->def_levels;
-      auto const r_def_levels     = _r_dremel_device_view->def_levels;
-      auto const l_rep_levels     = _l_dremel_device_view->rep_levels;
-      auto const r_rep_levels     = _r_dremel_device_view->rep_levels;
-      auto const l_global_empties = _l_dremel_device_view->global_empties;
-      auto const r_global_empties = _r_dremel_device_view->global_empties;
+      auto const l_max_def_level = _l_dremel_device_view->max_def_level;
+      auto const r_max_def_level = _r_dremel_device_view->max_def_level;
+      auto const l_def_levels    = _l_dremel_device_view->def_levels;
+      auto const r_def_levels    = _r_dremel_device_view->def_levels;
+      auto const l_rep_levels    = _l_dremel_device_view->rep_levels;
+      auto const r_rep_levels    = _r_dremel_device_view->rep_levels;
 
       // Traverse the nested list hierarchy to get a column device view
       // pointing to the underlying child data.
@@ -448,78 +454,30 @@ class device_row_comparator {
       // child element that we're actually comparing.
       for (int l_dremel_index = l_start, r_dremel_index = r_start, element_index = 0;
            l_dremel_index < l_end and r_dremel_index < r_end;
-           ++l_dremel_index, ++r_dremel_index, ++element_index) {
+           ++l_dremel_index, ++r_dremel_index) {
         auto const l_rep_level = l_rep_levels[l_dremel_index];
         auto const r_rep_level = r_rep_levels[r_dremel_index];
 
         // only compare if left and right are at same nesting level
         if (l_rep_level == r_rep_level) {
-          // check if left element or right is an empty list
-          auto const l_def_level         = l_def_levels[l_dremel_index];
-          auto const r_def_level         = r_def_levels[r_dremel_index];
-          bool const is_left_list_empty  = l_global_empties[l_dremel_index];
-          bool const is_right_list_empty = r_global_empties[r_dremel_index];
-          bool const is_left_list_null   = l_def_level < l_max_def_level && not is_left_list_empty;
-          bool const is_right_list_null  = r_def_level < r_max_def_level && not is_right_list_empty;
+          auto const l_def_level = l_def_levels[l_dremel_index];
+          auto const r_def_level = r_def_levels[r_dremel_index];
 
-          // both empty lists at arbitrary nesting
-          if (is_left_list_empty && is_right_list_empty) {
+          // either left or right are empty or NULLs of arbitrary nesting
+          if (l_def_level < l_max_def_level || r_def_level < r_max_def_level) {
+            // in the fully unraveled version of the list column, only the
+            // most nested NULLs and leafs are present
+            // In this rare condition that we get to the most nested NULL, we increment
+            // element_index because either both rows have a deeply nested NULL at the
+            // same position, and we'll "continue" in our iteration, or we will early
+            // exit if only one of the rows has a deeply nested NULL
+            if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
+              ++element_index;
+            }
             if (l_def_level == r_def_level) { continue; }
+            // [] < [NULL] < [leaf]
             return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
                                              : cuda::std::pair(weak_ordering::GREATER, _depth);
-          }
-          // both nulls at arbitrary nesting
-          else if (is_left_list_null && is_right_list_null) {
-            if (l_def_level == r_def_level) { continue; }
-            // push less nested null to front
-            if (_null_precedence == null_order::BEFORE) {
-              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
-                                               : cuda::std::pair(weak_ordering::GREATER, _depth);
-            }
-            // push less nested null to back
-            else {
-              return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth)
-                                               : cuda::std::pair(weak_ordering::LESS, _depth);
-            }
-          }
-          // left list empty
-          else if (is_left_list_empty) {
-            // if right is null
-            if (is_right_list_null) {
-              // push lower nested null to front
-              if (_null_precedence == null_order::BEFORE) {
-                return r_def_level < l_def_level ? cuda::std::pair(weak_ordering::GREATER, _depth)
-                                                 : cuda::std::pair(weak_ordering::LESS, _depth);
-              }
-            }
-            // left empty list always before right leaf or null when null_order::AFTER
-            return cuda::std::pair(weak_ordering::LESS, _depth);
-          }
-          // right list empty
-          else if (is_right_list_empty) {
-            // if left list is null
-            if (is_left_list_null) {
-              // let lower nested null be in front
-              if (_null_precedence == null_order::BEFORE) {
-                return l_def_level < r_def_level ? cuda::std::pair(weak_ordering::LESS, _depth)
-                                                 : cuda::std::pair(weak_ordering::GREATER, _depth);
-              }
-            }
-            // right empty leaf always before left leaf or null when null_order::AFTER
-            return cuda::std::pair(weak_ordering::GREATER, _depth);
-          }
-          // col.is_null(element_index) is not reliable after the list has been unraveled
-          // compare left null to right leaf
-          else if (is_left_list_null && r_def_level == r_max_def_level) {
-            return _null_precedence == null_order::BEFORE
-                     ? cuda::std::pair(weak_ordering::LESS, _depth)
-                     : cuda::std::pair(weak_ordering::GREATER, _depth);
-          }
-          // compare right null to left leaf
-          else if (is_right_list_null && l_def_level == l_max_def_level) {
-            return _null_precedence == null_order::BEFORE
-                     ? cuda::std::pair(weak_ordering::GREATER, _depth)
-                     : cuda::std::pair(weak_ordering::LESS, _depth);
           }
 
           // finally, compare leaf to leaf
@@ -528,6 +486,7 @@ class device_row_comparator {
           cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<dispatch_void_if_nested>(
             lcol.type(), comparator, element_index, element_index);
           if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
+          ++element_index;
         } else {
           // the lower repetition level is a smaller sub-list
           return l_rep_level < r_rep_level ? cuda::std::pair(weak_ordering::LESS, _depth)

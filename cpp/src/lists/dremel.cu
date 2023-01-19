@@ -267,11 +267,9 @@ dremel_data get_dremel_data(column_view h_col,
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
-  rmm::device_uvector<uint8_t> global_empties(max_vals_size, stream);
 
   rmm::device_uvector<uint8_t> temp_rep_vals(max_vals_size, stream);
   rmm::device_uvector<uint8_t> temp_def_vals(max_vals_size, stream);
-  rmm::device_uvector<uint8_t> temp_global_empties(max_vals_size, stream);
   rmm::device_uvector<size_type> new_offsets(0, stream);
   size_type curr_rep_values_size = 0;
   {
@@ -299,13 +297,6 @@ dremel_data get_dremel_data(column_view h_col,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
                                                    def_at_level[level]});
-    // 1 empties that are not nulls. use empty_idx to go through cols and mark as 1
-    auto input_parent_global_empty_it = thrust::make_transform_iterator(
-      empties_idx.begin(), [d_parent_col = d_nesting_levels + level] __device__(auto idx) {
-        auto col = *d_parent_col;
-        if (col.nullable()) { return not col.is_null(idx); }
-        return true;
-      });
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
@@ -315,18 +306,17 @@ dremel_data get_dremel_data(column_view h_col,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level + 1],
                                                    def_at_level[level + 1]});
-    auto input_child_global_empty_it = thrust::make_constant_iterator(0);
 
     // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it = thrust::make_zip_iterator(
-      thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
+    auto input_parent_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
 
     // 0 constant for empties since there are no empties at leaf level
-    auto input_child_zip_it = thrust::make_zip_iterator(
-      thrust::make_tuple(input_child_rep_it, input_child_def_it, input_child_global_empty_it));
+    auto input_child_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_child_rep_it, input_child_def_it));
 
-    auto output_zip_it = thrust::make_zip_iterator(
-      thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
+    auto output_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
     auto ends            = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
@@ -388,7 +378,6 @@ dremel_data get_dremel_data(column_view h_col,
     // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
     std::swap(temp_rep_vals, rep_level);
     std::swap(temp_def_vals, def_level);
-    std::swap(temp_global_empties, global_empties);
 
     // Merge empty at parent level with the rep, def level vals at current level
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
@@ -401,22 +390,15 @@ dremel_data get_dremel_data(column_view h_col,
                                                    start_at_sub_level[level],
                                                    def_at_level[level]});
 
-    auto input_parent_global_empty_it = thrust::make_transform_iterator(
-      empties_idx.begin(), [d_parent_col = d_nesting_levels + level] __device__(auto idx) {
-        auto col = *d_parent_col;
-        if (col.nullable()) { return not cudf::bit_is_set(col.null_mask(), idx); }
-        return true;
-      });
-
     // Zip the input and output value iterators so that merge operation is done only once
-    auto input_parent_zip_it = thrust::make_zip_iterator(
-      thrust::make_tuple(input_parent_rep_it, input_parent_def_it, input_parent_global_empty_it));
+    auto input_parent_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(input_parent_rep_it, input_parent_def_it));
 
-    auto input_child_zip_it = thrust::make_zip_iterator(thrust::make_tuple(
-      temp_rep_vals.begin(), temp_def_vals.begin(), temp_global_empties.begin()));
+    auto input_child_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
 
-    auto output_zip_it = thrust::make_zip_iterator(
-      thrust::make_tuple(rep_level.begin(), def_level.begin(), global_empties.begin()));
+    auto output_zip_it =
+      thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
     auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      transformed_empties,
@@ -465,7 +447,6 @@ dremel_data get_dremel_data(column_view h_col,
   size_t level_vals_size = new_offsets.back_element(stream);
   rep_level.resize(level_vals_size, stream);
   def_level.resize(level_vals_size, stream);
-  global_empties.resize(level_vals_size, stream);
 
   stream.synchronize();
 
@@ -474,7 +455,6 @@ dremel_data get_dremel_data(column_view h_col,
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
-                     std::move(global_empties),
                      leaf_data_size,
                      max_def_level};
 }

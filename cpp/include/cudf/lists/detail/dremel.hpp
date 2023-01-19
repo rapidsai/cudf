@@ -31,7 +31,6 @@ struct dremel_device_view {
   size_type const* offsets;
   uint8_t const* rep_levels;
   uint8_t const* def_levels;
-  uint8_t const* global_empties;
   size_type const leaf_data_size;
   uint8_t const max_def_level;
 };
@@ -45,19 +44,14 @@ struct dremel_data {
   rmm::device_uvector<size_type> dremel_offsets;
   rmm::device_uvector<uint8_t> rep_level;
   rmm::device_uvector<uint8_t> def_level;
-  rmm::device_uvector<uint8_t> global_empties;
 
   size_type const leaf_data_size;
   uint8_t const max_def_level;
 
   operator dremel_device_view() const
   {
-    return dremel_device_view{dremel_offsets.data(),
-                              rep_level.data(),
-                              def_level.data(),
-                              global_empties.data(),
-                              leaf_data_size,
-                              max_def_level};
+    return dremel_device_view{
+      dremel_offsets.data(), rep_level.data(), def_level.data(), leaf_data_size, max_def_level};
   }
 };
 
@@ -90,7 +84,6 @@ struct dremel_data {
  * dremel_offsets = { 0,         3,   4,  6}
  * rep_level      = { 0, 1, 1,   0,   0, 1}
  * def_level      = { 1, 1, 1,   0,   1, 1}
- * global_empties = { 0, 0, 0,   1,   0, 0}
  * ```
  *
  * The repetition and definition level values are ideally computed using a recursive call over a
@@ -117,8 +110,6 @@ struct dremel_data {
  * col = {[], [[], [1, 2, 3], [4, 5]], [[]]}
  * def = { 0    1,  2, 2, 2,   2, 2,     1 }
  * rep = { 0,   0,  0, 2, 2,   1, 2,     0 }
- * empties =
- *       { 1,   1,  0, 0, 0,   0, 0,     1 }
  * ```
  *
  * Since repetition and definition levels arrays contain a value for each empty list, the size of
@@ -134,16 +125,13 @@ struct dremel_data {
  * empties at level 1 = {0, 5}
  * def values at 1    = {1, 1}
  * rep values at 1    = {1, 1}
- * empties at 1       = {1, 1}
  * indices at leaf    = {0, 1, 2, 3, 4}
  * def values at leaf = {2, 2, 2, 2, 2}
  * rep values at leaf = {2, 2, 2, 2, 2}
- * empties at leaf    = {0, 0, 0, 0, 0}
  * ```
  *
  * merged def values  = {1, 2, 2, 2, 2, 2, 1}
  * merged rep values  = {1, 2, 2, 2, 2, 2, 1}
- * merged empties     = {1, 0, 0, 0, 0, 0, 1}
  *
  * The size of the rep/def values is now larger than the leaf values and the offsets need to be
  * adjusted in order to point to the correct start indices. We do this with an exclusive scan over
