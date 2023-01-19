@@ -242,7 +242,7 @@ class SpillableBuffer(Buffer):
     def mark_exposed(self) -> None:
         """Mark the buffer as "exposed" and make it unspillable permanently.
 
-        This also unspill the buffer (unspillable buffers cannot be spilled!).
+        This also unspills the buffer (unspillable buffers cannot be spilled!).
         """
 
         self._manager.spill_to_device_limit()
