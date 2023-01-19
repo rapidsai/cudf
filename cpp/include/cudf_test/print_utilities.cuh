@@ -25,7 +25,7 @@
 
 #include <type_traits>
 
-namespace cudf::test {
+namespace cudf::test::print {
 
 constexpr int32_t hex_tag = 0;
 
@@ -79,7 +79,7 @@ CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
   printf("%*d", width, arg);
 }
 
-inline CUDF_HOST_DEVICE void print_value(int32_t width, char arg) { printf("%*c", width, arg); }
+CUDF_HOST_DEVICE void print_value(int32_t width, char arg) { printf("%*c", width, arg); }
 
 template <typename T>
 CUDF_HOST_DEVICE void print_value(int32_t width, hex_t<T> arg)
@@ -137,4 +137,4 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   }
 }
 
-}  // namespace cudf::test
+}  // namespace cudf::test::print
