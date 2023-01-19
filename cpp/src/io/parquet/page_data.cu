@@ -98,7 +98,7 @@ struct page_state_s {
   int32_t row_index_lower_bound;              // lower bound of row indices we should process
 
   // a shared-memory cache of frequently used data when decoding. The source of this data is
-  // normally stored in global memory which can yield poor performance.  So, when possible
+  // normally stored in global memory which can yield poor performance. So, when possible
   // we copy that info here prior to decoding
   PageNestingDecodeInfo nesting_decode_cache[max_cacheable_nesting_decode_info];
   // points to either nesting_decode above when possible, or to the global source otherwise
