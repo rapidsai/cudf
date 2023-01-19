@@ -893,7 +893,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   bool const is_array_of_arrays = [&]() {
     std::array<node_t, 2> h_node_categories = {NC_ERR, NC_ERR};
-    auto const size_to_copy                 = std::min(2, gpu_tree.node_categories.size());
+    auto const size_to_copy                 = std::min(size_t{2}, gpu_tree.node_categories.size());
     CUDF_CUDA_TRY(cudaMemcpyAsync(h_node_categories.data(),
                                   gpu_tree.node_categories.data(),
                                   sizeof(node_t) * size_to_copy,
