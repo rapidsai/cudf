@@ -62,6 +62,7 @@ def _get_cuda_version_from_ptx_file(path):
 
     return cuda_ver
 
+
 path = os.path.dirname(__file__)
 
 

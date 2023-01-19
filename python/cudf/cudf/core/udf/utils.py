@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict, List
 import cachetools
 import cupy as cp
 import llvmlite.binding as ll
-import numba
 import numpy as np
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager
@@ -325,6 +324,7 @@ def _get_ptx_file(path, prefix):
         )
     else:
         return regular_result[1]
+
 
 def _get_extensionty_size(ty):
     """
