@@ -216,10 +216,10 @@ struct concat_structs_base {
  */
 std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           column_view const& column_names,
-                                          string_scalar const& prepend_row,
-                                          string_scalar const& append_row,
-                                          string_scalar const& column_name_separator,
-                                          string_scalar const& value_separator,
+                                          string_view const prepend_row,
+                                          string_view const append_row,
+                                          string_view const column_name_separator,
+                                          string_view const value_separator,
                                           string_scalar const& narep,
                                           bool include_nulls,
                                           rmm::cuda_stream_view stream,
@@ -238,27 +238,16 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   if (strings_count == 0)  // empty begets empty
     return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(prepend_row.is_valid(stream), "Parameter prepend_row must be a valid string_scalar");
-  CUDF_EXPECTS(append_row.is_valid(stream), "Parameter append_row must be a valid string_scalar");
-  CUDF_EXPECTS(column_name_separator.is_valid(stream),
-               "Parameter column_name_separator must be a valid string_scalar");
-  CUDF_EXPECTS(value_separator.is_valid(stream),
-               "Parameter value_separator must be a valid string_scalar");
-  string_view d_prepend_row(prepend_row.data(), prepend_row.size());
-  string_view d_append_row(append_row.data(), append_row.size());
-  string_view d_col_separator(column_name_separator.data(), column_name_separator.size());
-  string_view d_val_separator(value_separator.data(), value_separator.size());
-  auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
-
   // Create device views from the strings columns.
   auto d_table        = table_device_view::create(strings_columns, stream);
   auto d_column_names = column_device_view::create(column_names, stream);
+  auto d_narep        = get_scalar_device_view(const_cast<string_scalar&>(narep));
   concat_structs_base fn{*d_table,
                          *d_column_names,
-                         d_prepend_row,
-                         d_append_row,
-                         d_col_separator,
-                         d_val_separator,
+                         prepend_row,
+                         append_row,
+                         column_name_separator,
+                         value_separator,
                          d_narep,
                          include_nulls};
   auto children = strings::detail::make_strings_children(fn, strings_count, stream, mr);
@@ -419,7 +408,7 @@ struct column_to_strings_fn {
   // lists:
   template <typename column_type>
   std::enable_if_t<std::is_same_v<column_type, cudf::list_view>, std::unique_ptr<column>>
-  operator()(column_view const& column, std::vector<column_name_info> const& children_names) const
+  operator()(column_view const& column, host_span<column_name_info const> children_names) const
   {
     auto child_view            = lists_column_view(column).get_sliced_child(stream_);
     auto constexpr child_index = lists_column_view::child_column_index;
@@ -470,7 +459,7 @@ struct column_to_strings_fn {
   // structs:
   template <typename column_type>
   std::enable_if_t<std::is_same_v<column_type, cudf::struct_view>, std::unique_ptr<column>>
-  operator()(column_view const& column, std::vector<column_name_info> const& children_names) const
+  operator()(column_view const& column, host_span<column_name_info const> children_names) const
   {
     auto col_string = operator()(column.child_begin(), column.child_end(), children_names);
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
@@ -482,7 +471,7 @@ struct column_to_strings_fn {
   template <typename column_iterator>
   std::unique_ptr<column> operator()(column_iterator column_begin,
                                      column_iterator column_end,
-                                     std::vector<column_name_info> const& children_names) const
+                                     host_span<column_name_info const> children_names) const
   {
     auto const num_columns = std::distance(column_begin, column_end);
     auto column_names      = make_column_names_column(children_names, num_columns, stream_);
@@ -525,10 +514,10 @@ struct column_to_strings_fn {
     //
     return struct_to_strings(str_table_view,
                              column_names_view,
-                             row_begin_wrap,
-                             row_end_wrap,
-                             column_seperator,
-                             value_seperator,
+                             row_begin_wrap.value(stream_),
+                             row_end_wrap.value(stream_),
+                             column_seperator.value(stream_),
+                             value_seperator.value(stream_),
                              narep,
                              options_.is_enabled_include_nulls(),
                              stream_,
@@ -729,8 +718,6 @@ void write_json(data_sink* out_sink,
 
     // convert each chunk to JSON:
     column_to_strings_fn converter{options, stream, rmm::mr::get_current_device_resource()};
-    string_scalar const row_begin_wrap{"{"};
-    string_scalar const row_end_wrap{"}"};  // {" },\n"}; {" }\n"}; to skip join in write_chunked
 
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
