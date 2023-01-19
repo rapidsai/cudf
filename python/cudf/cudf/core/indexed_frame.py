@@ -59,7 +59,6 @@ from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
-    NoNumbaOccWarnings,
     _compile_or_get,
     _get_input_args_from_frame,
     _post_process_output_col,
@@ -2129,8 +2128,7 @@ class IndexedFrame(Frame):
         launch_args = output_args + input_args + list(args)
 
         try:
-            with NoNumbaOccWarnings():
-                kernel.forall(len(self))(*launch_args)
+            kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 

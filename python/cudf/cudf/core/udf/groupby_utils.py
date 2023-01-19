@@ -21,7 +21,6 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
-    NoNumbaOccWarnings,
     _get_extensionty_size,
     _get_kernel,
     _get_ptx_file,
@@ -194,9 +193,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         blocksizelimit=int(blocklim),
     )
 
-    # Disable occupancy warnings to avoid polluting output when there are few
-    # groups.
-    with NoNumbaOccWarnings():
-        specialized[ngroups, tpb](*launch_args)
+    # Launch kernel
+    specialized[ngroups, tpb](*launch_args)
 
     return output

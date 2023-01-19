@@ -326,15 +326,6 @@ def _get_ptx_file(path, prefix):
     else:
         return regular_result[1]
 
-
-class NoNumbaOccWarnings(object):
-    def __enter__(self):
-        numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        numba.config.CUDA_LOW_OCCUPANCY_WARNINGS = 1
-
-
 def _get_extensionty_size(ty):
     """
     Return the size of an extension type in bytes
