@@ -1,7 +1,8 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import array as arr
 import datetime
+import decimal
 import io
 import operator
 import random
@@ -617,7 +618,6 @@ def test_dataframe_drop_error():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([], {"columns": "d"}),
         rfunc_args_and_kwargs=([], {"columns": "d"}),
-        expected_error_message="column 'd' does not exist",
     )
 
     assert_exceptions_equal(
@@ -625,7 +625,6 @@ def test_dataframe_drop_error():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
         rfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
-        expected_error_message="column 'd' does not exist",
     )
 
     assert_exceptions_equal(
@@ -633,7 +632,6 @@ def test_dataframe_drop_error():
         rfunc=df.drop,
         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-        expected_error_message="Cannot specify both",
     )
 
     assert_exceptions_equal(
@@ -641,7 +639,6 @@ def test_dataframe_drop_error():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([], {"axis": 1}),
         rfunc_args_and_kwargs=([], {"axis": 1}),
-        expected_error_message="Need to specify at least",
     )
 
     assert_exceptions_equal(
@@ -649,7 +646,6 @@ def test_dataframe_drop_error():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([[2, 0]],),
         rfunc_args_and_kwargs=([[2, 0]],),
-        expected_error_message="One or more values not found in axis",
     )
 
 
@@ -725,7 +721,6 @@ def test_dataframe_drop_raises():
         rfunc=df.drop,
         lfunc_args_and_kwargs=(["p"],),
         rfunc_args_and_kwargs=(["p"],),
-        expected_error_message="One or more values not found in axis",
     )
 
     # label dtype mismatch
@@ -734,7 +729,6 @@ def test_dataframe_drop_raises():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([3],),
         rfunc_args_and_kwargs=([3],),
-        expected_error_message="One or more values not found in axis",
     )
 
     expect = pdf.drop("p", errors="ignore")
@@ -747,7 +741,6 @@ def test_dataframe_drop_raises():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([], {"columns": "p"}),
         rfunc_args_and_kwargs=([], {"columns": "p"}),
-        expected_error_message="column 'p' does not exist",
     )
 
     expect = pdf.drop(columns="p", errors="ignore")
@@ -760,7 +753,6 @@ def test_dataframe_drop_raises():
         rfunc=df.drop,
         lfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
         rfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
-        expected_error_message="column 'p' does not exist",
     )
 
     expect = pdf.drop(labels="p", axis=1, errors="ignore")
@@ -2292,7 +2284,6 @@ def test_arithmetic_binops_df(pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
@@ -2339,7 +2330,6 @@ def test_comparison_binops_df(pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
@@ -2387,7 +2377,6 @@ def test_comparison_binops_df_reindexing(request, pdf, gdf, binop, other):
             rfunc=binop,
             lfunc_args_and_kwargs=([pdf, other], {}),
             rfunc_args_and_kwargs=([gdf, cudf_other], {}),
-            compare_error_message=False,
         )
     else:
         request.applymarker(
@@ -2945,7 +2934,6 @@ def test_reset_index_dup_level_name(level, drop, inplace, col_level, col_fill):
                 [],
                 {"level": level, "drop": drop, "inplace": inplace},
             ),
-            expected_error_message="occurs multiple times, use a level number",
         )
         return
 
@@ -5965,9 +5953,6 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 [gs_condition],
                 {"other": gs_other, "inplace": inplace},
             ),
-            compare_error_message=False
-            if error is NotImplementedError
-            else True,
         )
 
         assert_exceptions_equal(
@@ -5981,7 +5966,6 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 [gs_condition],
                 {"other": gs_other, "inplace": inplace},
             ),
-            compare_error_message=False,
         )
 
 
@@ -10009,5 +9993,23 @@ def test_dataframe_duplicated(data, subset, keep):
 
     expected = pdf.duplicated(subset=subset, keep=keep)
     actual = gdf.duplicated(subset=subset, keep=keep)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"col": [{"a": 1.1}, {"a": 2.1}, {"a": 10.0}, {"a": 11.2323}, None]},
+        {"a": [[{"b": 567}], None] * 10},
+        {"a": [decimal.Decimal(10), decimal.Decimal(20), None]},
+    ],
+)
+def test_dataframe_transpose_complex_types(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.T
+    actual = gdf.T
 
     assert_eq(expected, actual)

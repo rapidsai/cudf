@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -381,7 +381,7 @@ add_library(
   src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
-  src/jit/type.cpp
+  src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
@@ -530,6 +530,7 @@ add_library(
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
+  src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_re.cu
@@ -538,7 +539,6 @@ add_library(
   src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
-  src/strings/substring.cu
   src/strings/translate.cu
   src/strings/utilities.cu
   src/strings/wrap.cu
@@ -580,6 +580,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+  src/utilities/type_dispatcher.cpp
 )
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation

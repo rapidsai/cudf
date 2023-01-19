@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import json
 import re
@@ -2033,18 +2033,12 @@ def test_string_starts_ends(data, pat):
             rfunc=gs.str.startswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
         assert_exceptions_equal(
             lfunc=ps.str.endswith,
             rfunc=gs.str.endswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
     else:
         assert_eq(
@@ -2103,6 +2097,33 @@ def test_string_starts_ends_list_like_pat(data, pat):
     ends_expected = pd.Series(ends_expected)
     assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
     assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["str_foo", "str_bar", "no_prefix", "", None],
+        ["foo_str", "bar_str", "no_suffix", "", None],
+    ],
+)
+def test_string_remove_suffix_prefix(data):
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    got = gs.str.removeprefix("str_")
+    expect = ps.str.removeprefix("str_")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
+    got = gs.str.removesuffix("_str")
+    expect = ps.str.removesuffix("_str")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2607,7 +2628,6 @@ def test_string_typecast_error(data, obj_type, dtype):
         rfunc=gsr.astype,
         lfunc_args_and_kwargs=([dtype],),
         rfunc_args_and_kwargs=([dtype],),
-        compare_error_message=False,
     )
 
 
@@ -3000,9 +3020,6 @@ def test_string_product():
     assert_exceptions_equal(
         lfunc=psr.product,
         rfunc=sr.product,
-        expected_error_message=re.escape(
-            f"cannot perform product with type {sr.dtype}"
-        ),
     )
 
 
@@ -3010,18 +3027,14 @@ def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.var, rfunc=sr.var)
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
 def test_string_slice_with_mask():

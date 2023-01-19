@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -77,8 +77,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "cudf"
-copyright = "2018-2021, NVIDIA"
-author = "NVIDIA"
+copyright = "2018-2023, NVIDIA Corporation"
+author = "NVIDIA Corporation"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -168,7 +168,7 @@ latex_documents = [
         master_doc,
         "cudf.tex",
         "cudf Documentation",
-        "Continuum Analytics",
+        "NVIDIA Corporation",
         "manual",
     )
 ]

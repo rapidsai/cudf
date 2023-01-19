@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from numba.np import numpy_support
 
@@ -53,6 +53,7 @@ def bools_to_mask(Column col):
     return buf
 
 
+@acquire_spill_lock()
 def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     """
     Given a mask buffer, returns a boolean column representng bit 0 -> False
@@ -72,6 +73,7 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     return Column.from_unique_ptr(move(result))
 
 
+@acquire_spill_lock()
 def nans_to_nulls(Column input):
     cdef column_view c_input = input.view()
     cdef pair[unique_ptr[device_buffer], size_type] c_output
@@ -84,9 +86,7 @@ def nans_to_nulls(Column input):
     if c_output.second == 0:
         return None
 
-    buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_buffer(buffer)
-    return buffer
+    return as_buffer(DeviceBuffer.c_from_unique_ptr(move(c_buffer)))
 
 
 @acquire_spill_lock()

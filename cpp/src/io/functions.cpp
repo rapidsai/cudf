@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,7 +123,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       }
       return sources;
     }
-    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers());
+    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.host_buffers());
+    case io_type::DEVICE_BUFFER: return cudf::io::datasource::create(info.device_buffers());
     case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }
@@ -251,8 +252,13 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_EXPECTS(src_info.filepaths().size() == 1, "Only a single source is currently supported.");
     source = cudf::io::datasource::create(src_info.filepaths()[0]);
   } else if (src_info.type() == io_type::HOST_BUFFER) {
-    CUDF_EXPECTS(src_info.buffers().size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.buffers()[0]);
+    CUDF_EXPECTS(src_info.host_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.host_buffers()[0]);
+  } else if (src_info.type() == io_type::DEVICE_BUFFER) {
+    CUDF_EXPECTS(src_info.device_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.device_buffers()[0]);
   } else if (src_info.type() == io_type::USER_IMPLEMENTED) {
     CUDF_EXPECTS(src_info.user_sources().size() == 1,
                  "Only a single source is currently supported.");
@@ -661,6 +667,24 @@ void parquet_writer_options::set_column_index_truncate_length(int32_t size_bytes
   _column_index_truncate_length = size_bytes;
 }
 
+void parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
+{
+  _dictionary_policy = policy;
+}
+
+void parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum dictionary size cannot exceed 2GB.");
+  _max_dictionary_size = size_bytes;
+}
+
+void parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+  _max_page_fragment_size = size_rows;
+}
+
 parquet_writer_options_builder& parquet_writer_options_builder::partitions(
   std::vector<partition_info> partitions)
 {
@@ -679,6 +703,26 @@ parquet_writer_options_builder& parquet_writer_options_builder::column_chunks_fi
   std::vector<std::string> file_paths)
 {
   options.set_column_chunks_file_paths(std::move(file_paths));
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::dictionary_policy(
+  enum dictionary_policy val)
+{
+  options.set_dictionary_policy(val);
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::max_dictionary_size(size_t val)
+{
+  options.set_max_dictionary_size(val);
+  return *this;
+}
+
+parquet_writer_options_builder& parquet_writer_options_builder::max_page_fragment_size(
+  size_type val)
+{
+  options.set_max_page_fragment_size(val);
   return *this;
 }
 
@@ -724,10 +768,49 @@ void chunked_parquet_writer_options::set_column_index_truncate_length(int32_t si
   _column_index_truncate_length = size_bytes;
 }
 
+void chunked_parquet_writer_options::set_dictionary_policy(dictionary_policy policy)
+{
+  _dictionary_policy = policy;
+}
+
+void chunked_parquet_writer_options::set_max_dictionary_size(size_t size_bytes)
+{
+  CUDF_EXPECTS(size_bytes <= static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+               "The maximum dictionary size cannot exceed 2GB.");
+  _max_dictionary_size = size_bytes;
+}
+
+void chunked_parquet_writer_options::set_max_page_fragment_size(size_type size_rows)
+{
+  CUDF_EXPECTS(size_rows > 0, "Page fragment size must be a positive integer.");
+  _max_page_fragment_size = size_rows;
+}
+
 chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
   options.set_key_value_metadata(std::move(metadata));
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::dictionary_policy(
+  enum dictionary_policy val)
+{
+  options.set_dictionary_policy(val);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::max_dictionary_size(
+  size_t val)
+{
+  options.set_max_dictionary_size(val);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder&
+chunked_parquet_writer_options_builder::max_page_fragment_size(size_type val)
+{
+  options.set_max_page_fragment_size(val);
   return *this;
 }
 

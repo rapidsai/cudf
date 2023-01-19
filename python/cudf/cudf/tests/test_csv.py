@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -2101,7 +2101,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": "abc"}),
         rfunc_args_and_kwargs=([], {"sep": "abc"}),
-        expected_error_message='"sep" must be a 1-character string',
     )
 
     assert_exceptions_equal(
@@ -2109,7 +2108,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": 1}),
         rfunc_args_and_kwargs=([], {"sep": 1}),
-        expected_error_message='"sep" must be string, not int',
     )
 
 

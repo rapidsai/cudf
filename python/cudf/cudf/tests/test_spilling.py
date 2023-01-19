@@ -1,9 +1,10 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import importlib
 import random
 import time
 import warnings
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
@@ -313,18 +314,16 @@ def test_spill_df_index(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
 
 
-def test_external_memory_never_spills(manager):
-    """
-    Test that external data, i.e., data not managed by RMM,
-    is never spilled
-    """
-
+def test_external_memory(manager):
     cupy.cuda.set_allocator()  # uses default allocator
-
-    a = cupy.asarray([1, 2, 3])
-    s = cudf.Series(a)
-    assert len(manager.buffers()) == 0
-    assert not s._data[None].data.spillable
+    cpy = cupy.asarray([1, 2, 3])
+    s = cudf.Series(cpy)
+    # Check that the cupy array is still alive after overwriting `cpy`
+    cpy = weakref.ref(cpy)
+    assert cpy() is not None
+    # Check that the series is spillable and known by the spill manager
+    assert len(manager.buffers()) == 1
+    assert s._data[None].data.spillable
 
 
 def test_spilling_df_views(manager):
