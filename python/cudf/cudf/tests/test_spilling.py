@@ -1,9 +1,10 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import importlib
 import random
 import time
 import warnings
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Tuple
 
@@ -144,6 +145,7 @@ def test_spillable_buffer(manager: SpillManager):
         "spillable",
         "spill_lock",
         "spill",
+        "memory_info",
     ],
 )
 def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
@@ -155,6 +157,22 @@ def test_spillable_buffer_view_attributes(manager: SpillManager, attribute):
         pass
     else:
         assert attr_base == attr_view
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_memory_info(manager: SpillManager, target):
+    if target == "gpu":
+        mem = rmm.DeviceBuffer(size=10)
+        ptr = mem.ptr
+    elif target == "cpu":
+        mem = np.empty(10, dtype="u1")
+        ptr = mem.__array_interface__["data"][0]
+    b = as_buffer(data=mem, exposed=False)
+    assert b.memory_info() == (ptr, mem.size, target)
+    assert b[:].memory_info() == (ptr, mem.size, target)
+    assert b[:-1].memory_info() == (ptr, mem.size - 1, target)
+    assert b[1:].memory_info() == (ptr + 1, mem.size - 1, target)
+    assert b[2:4].memory_info() == (ptr + 2, 2, target)
 
 
 def test_from_pandas(manager: SpillManager):
@@ -313,18 +331,16 @@ def test_spill_df_index(manager: SpillManager):
     assert spilled_and_unspilled(manager) == (gen_df_data_nbytes * 2, 0)
 
 
-def test_external_memory_never_spills(manager):
-    """
-    Test that external data, i.e., data not managed by RMM,
-    is never spilled
-    """
-
+def test_external_memory(manager):
     cupy.cuda.set_allocator()  # uses default allocator
-
-    a = cupy.asarray([1, 2, 3])
-    s = cudf.Series(a)
-    assert len(manager.buffers()) == 0
-    assert not s._data[None].data.spillable
+    cpy = cupy.asarray([1, 2, 3])
+    s = cudf.Series(cpy)
+    # Check that the cupy array is still alive after overwriting `cpy`
+    cpy = weakref.ref(cpy)
+    assert cpy() is not None
+    # Check that the series is spillable and known by the spill manager
+    assert len(manager.buffers()) == 1
+    assert s._data[None].data.spillable
 
 
 def test_spilling_df_views(manager):
@@ -352,23 +368,22 @@ def test_modify_spilled_views(manager):
     assert_eq(df_view, df.iloc[1:])
 
 
-def test_ptr_restricted(manager: SpillManager):
-    buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+def test_get_ptr(manager: SpillManager, target):
+    if target == "gpu":
+        mem = rmm.DeviceBuffer(size=10)
+    elif target == "cpu":
+        mem = np.empty(10, dtype="u1")
+    buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
     assert len(buf._spill_locks) == 0
-    slock1 = SpillLock()
-    buf.get_ptr(spill_lock=slock1)
-    assert not buf.spillable
-    assert len(buf._spill_locks) == 1
-    slock2 = SpillLock()
-    buf.spill_lock(spill_lock=slock2)
-    buf.get_ptr(spill_lock=slock2)
-    assert not buf.spillable
-    assert len(buf._spill_locks) == 2
-    del slock1
-    assert len(buf._spill_locks) == 1
-    del slock2
-    assert len(buf._spill_locks) == 0
+    with acquire_spill_lock():
+        buf.get_ptr()
+        assert not buf.spillable
+        with acquire_spill_lock():
+            buf.get_ptr()
+            assert not buf.spillable
+        assert not buf.spillable
     assert buf.spillable
 
 
