@@ -181,7 +181,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     with nogil:
         c_out_table = move(parquet_reader(args))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    column_names = [info.name.decode() for info in c_out_table.metadata.schema_info]
 
     # Access the Parquet per_file_user_data to find the index
     index_col = None
