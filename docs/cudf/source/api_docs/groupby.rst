@@ -51,7 +51,7 @@ Computations / descriptive stats
    GroupBy.diff
    GroupBy.ffill
    GroupBy.first
-   GroupBy.get_groups
+   GroupBy.get_group
    GroupBy.groups
    GroupBy.idxmax
    GroupBy.idxmin
