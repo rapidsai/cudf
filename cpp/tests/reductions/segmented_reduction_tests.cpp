@@ -795,12 +795,12 @@ TEST_F(SegmentedReductionTestUntyped, Mean)
 TEST_F(SegmentedReductionTestUntyped, MeanNulls)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
-    {10, 0, 30, 40, 50, 60, 0, 80, 90}, {1, 0, 1, 1, 1, 1, 0, 1, 1});
+    {10, 20, 30, 40, 50, 60, 0, 80, 90}, {1, 1, 1, 1, 1, 1, 0, 1, 1});
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
 
-  auto expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 35, 70}, {1, 0, 1, 1}};
+  auto expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 30, 70}, {1, 0, 1, 1}};
   auto result =
     cudf::segmented_reduce(input,
                            d_offsets,
@@ -809,7 +809,7 @@ TEST_F(SegmentedReductionTestUntyped, MeanNulls)
                            cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
-  expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 0, 0}, {1, 0, 0, 0}};
+  expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 30, 0}, {1, 0, 1, 0}};
   result =
     cudf::segmented_reduce(input,
                            d_offsets,
@@ -842,13 +842,13 @@ TEST_F(SegmentedReductionTestUntyped, SumOfSquares)
 TEST_F(SegmentedReductionTestUntyped, SumOfSquaresNulls)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
-    {10, 0, 30, 40, 50, 60, 0, 80, 90}, {1, 0, 1, 1, 1, 1, 0, 1, 1});
+    {10, 20, 30, 40, 50, 60, 0, 80, 90}, {1, 1, 1, 1, 1, 1, 0, 1, 1});
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
 
   auto expected =
-    cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 2500, 20600}, {1, 0, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 2900, 20600}, {1, 0, 1, 1}};
   auto result = cudf::segmented_reduce(
     input,
     d_offsets,
@@ -857,7 +857,7 @@ TEST_F(SegmentedReductionTestUntyped, SumOfSquaresNulls)
     cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
-  expected = cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 0, 0}, {1, 0, 0, 0}};
+  expected = cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 2900, 0}, {1, 0, 1, 0}};
   result   = cudf::segmented_reduce(
     input,
     d_offsets,
