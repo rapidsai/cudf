@@ -2047,7 +2047,7 @@ def test_csv_writer_category(df):
     ],
 )
 def test_csv_reader_category(dtype):
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df = cudf.DataFrame({"a": [1, 2, 3, None], "b": ["a", "b", None, "c"]})
     csv_buf = df.to_csv()
 
     actual = cudf.read_csv(StringIO(csv_buf), dtype=dtype)
