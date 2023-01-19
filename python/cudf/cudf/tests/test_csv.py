@@ -2053,7 +2053,7 @@ def test_csv_reader_category(dtype):
     actual = cudf.read_csv(StringIO(csv_buf), dtype=dtype)
     expected = pd.read_csv(StringIO(csv_buf), dtype=dtype)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_dtype=True)
 
 
 def test_csv_writer_datetime_sep():
