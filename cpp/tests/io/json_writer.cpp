@@ -40,7 +40,8 @@ TEST_F(JsonWriterTest, PlainTable)
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
   std::vector<std::string> column_names{"col1", "col2", "int", "float", "int16"};
-  cudf::io::table_metadata mt{column_names};
+  cudf::io::table_metadata mt;
+  std::copy(column_names.begin(), column_names.end(), std::back_inserter(mt.schema_info));
 
   std::vector<char> out_buffer;
   auto destination     = cudf::io::sink_info(&out_buffer);

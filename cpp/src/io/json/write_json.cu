@@ -650,15 +650,7 @@ void write_json(data_sink* out_sink,
 {
   std::vector<column_name_info> user_column_names = [&]() {
     auto const& metadata = options.get_metadata();
-    if (metadata.has_value() and not metadata->column_names.empty()) {
-      auto const& column_names = metadata->column_names;
-      std::vector<column_name_info> names;
-      std::transform(
-        column_names.begin(), column_names.end(), std::back_inserter(names), [](auto const& name) {
-          return column_name_info{name};
-        });
-      return names;
-    } else if (metadata.has_value() and not metadata->schema_info.empty()) {
+    if (metadata.has_value() and not metadata->schema_info.empty()) {
       return metadata->schema_info;
     } else {
       std::vector<column_name_info> names;
