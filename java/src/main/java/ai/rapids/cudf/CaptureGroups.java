@@ -29,7 +29,7 @@ public enum CaptureGroups {
   NON_CAPTURE(1); // convert all capture groups to non-capture groups
 
   final int nativeId; // Native id, for use with libcudf.
-  CaptureGroups(int nativeId) {
+  private CaptureGroups(int nativeId) { // Only constant values should be used
     this.nativeId = nativeId;
   }
 }

@@ -30,7 +30,7 @@ public enum RegexFlags {
   ASCII(256);   // use only ASCII when matching built-in character classes
 
   final int nativeId; // Native id, for use with libcudf.
-  RegexFlags(int nativeId) {
+  private RegexFlags(int nativeId) { // Only constant values should be used
     this.nativeId = nativeId;
   }
 }
