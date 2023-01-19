@@ -534,17 +534,19 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
   rmm::device_uvector<size_type> list_indices(0, stream);
   if (is_array_of_arrays) {
-    // For array of arrays, Level 2 nodes do not have column name (field name).
-    // So, we need to generated indices for each level 2 node w.r.t to that row, to uniquely
+    // For array of arrays, level 2 nodes do not have column name (field name).
+    // So, we need to generate indices for each level 2 node w.r.t to that row, to uniquely
     // identify each level 2 node as separate column.
     // Example:
     // array of structs: [ { a: 1, b: 2}, { a: 3, b: 4} ]
-    //          levels : 0 1 2  3  2  3   1 2  3  2  3
+    //           levels: 0 1 2  3  2  3   1 2  3  2  3
     // array of arrays:  [ [    1,    2], [    3,    4] ]
-    //          levels : 0 1    2     2   1    2     2
-    // For example, in the above example, we need to generate indices for each level 2 node
-    // (1, 2, 3, 4) w.r.t to their row as (0, 1, 0, 1).
-    // This indices uniquely identifies each column in each row. This is used during hashing for
+    //           levels: 0 1    2     2   1    2     2
+    // For example, in the above example, we need to generate indices for each level 2 node:
+    // array of arrays:  [ [    1,    2], [    3,    4] ]
+    //          levels:  0 1    2     2   1    2     2
+    //   child indices:         0     1        0     1
+    // These indices uniquely identify each column in each row. This is used during hashing for
     // level 2 nodes to generate unique column ids, instead of field name for level 2 nodes.
     auto [level2_nodes, level2_indices] =
       get_array_children_indices(row_array_children_level, node_levels, parent_node_ids, stream);
@@ -580,7 +582,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
                                  cudf::detail::default_hash<size_type>{}(node_type[node_id]));
     node_id = parent_node_ids[node_id];
-    // Each node computes its hash by walking from its node upto the root.
+    // Each node computes its hash by walking from its node up to the root.
     while (node_id != parent_node_sentinel) {
       hash = cudf::detail::hash_combine(
         hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
@@ -612,13 +614,11 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
       [node_level, node_type, is_array_of_arrays, row_array_children_level, list_indices](
         auto node_id1, auto node_id2) {
         if (node_id1 == node_id2) return true;
-        auto is_level2_equal =
-          [node_level, node_type, is_array_of_arrays, list_indices, row_array_children_level](
-            auto node_id1, auto node_id2) {
-            if (!is_array_of_arrays) return true;
-            return node_level[node_id1] != row_array_children_level or
-                   list_indices[node_id1] == list_indices[node_id2];
-          };
+        auto const is_level2_equal = [&]() {
+          if (!is_array_of_arrays) return true;
+          return node_level[node_id1] != row_array_children_level or
+                 list_indices[node_id1] == list_indices[node_id2];
+        }();
         return node_level[node_id1] == node_level[node_id2] and
                node_type[node_id1] == node_type[node_id2] and is_level2_equal(node_id1, node_id2);
       };

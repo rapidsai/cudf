@@ -214,19 +214,24 @@ std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(
   device_span<SymbolT const> d_input,
   tree_meta_t const& d_tree,
-  bool const is_array_of_arrays,
-  bool const is_enabled_lines,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected node, the function outputs the original index of that node (i.e., the nodes index within `node_levels`) and also generates the child index of that node relative to other children of the same parent. E.g., the child indices of the following string nodes relative to their respective list parents are: `[["a", "b", "c"], ["d", "e"]]`: `"a": 0, "b": 1, "c": 2, "d": 0, "e": 1`.
+ * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
+ * node, the function outputs the original index of that node (i.e., the nodes index within
+ * `node_levels`) and also generates the child index of that node relative to other children of the
+ * same parent. E.g., the child indices of the following string nodes relative to their respective
+ * list parents are: `[["a", "b", "c"], ["d", "e"]]`: `"a": 0, "b": 1, "c": 2, "d": 0, "e": 1`.
  *
  * @param row_array_children_level Level of the nodes to search for
  * @param node_levels Levels of each node in the tree
  * @param parent_node_ids Parent node ids of each node in the tree
  * @param stream The CUDA stream to which kernels are dispatched
- * @return A pair of device_uvector containing the original node indices and their corresponding child index .
+ * @return A pair of device_uvector containing the original node indices and their corresponding
+ * child index
  */
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
 get_array_children_indices(TreeDepthT row_array_children_level,
