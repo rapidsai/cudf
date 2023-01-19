@@ -33,13 +33,11 @@ __device__ __forceinline__ double atomicAdds(double* address, double val)
   return __longlong_as_double(old);
 }
 
-// int64_t atomicAdd
 __device__ __forceinline__ int64_t atomicAdds(int64_t* address, int64_t val)
 {
   return atomicAdd((unsigned long long*)address, (unsigned long long)val);
 }
 
-// double atomicMax
 __device__ __forceinline__ double atomicMax(double* address, double val)
 {
   unsigned long long old = __double_as_longlong(*address);
@@ -52,13 +50,11 @@ __device__ __forceinline__ double atomicMax(double* address, double val)
   return __longlong_as_double(old);
 }
 
-// int64_t atomicMax
 __device__ __forceinline__ int64_t atomicMax(int64_t* address, int64_t val)
 {
   return atomicMax((long long*)address, (long long)val);
 }
 
-// double atomicMin
 __device__ __forceinline__ double atomicMin(double* address, double val)
 {
   unsigned long long old = __double_as_longlong(*address);
@@ -71,19 +67,16 @@ __device__ __forceinline__ double atomicMin(double* address, double val)
   return __longlong_as_double(old);
 }
 
-// int64_t atomicMin
 __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 {
   return atomicMin((long long*)address, (long long)val);
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_sum(T const* data, int const items_per_thread, cudf::size_type size, T* sum)
 {
   T local_sum = 0;
 
-// Calculate local sum for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -97,12 +90,10 @@ __device__ void device_sum(T const* data, int const items_per_thread, cudf::size
   __syncthreads();
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_var(
   T const* data, int const items_per_thread, cudf::size_type size, T* sum, double* var)
 {
-  // Calculate how many elements each thread is working on
   T local_sum      = 0;
   double local_var = 0;
   double mean;
@@ -113,7 +104,6 @@ __device__ void device_var(
 
   mean = (*sum) / static_cast<double>(size);
 
-// Calculate local sum for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -133,14 +123,12 @@ __device__ void device_var(
   __syncthreads();
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_max(
   T const* data, int const items_per_thread, cudf::size_type size, T init_val, T* smax)
 {
   T local_max = init_val;
 
-// Calculate local max for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -151,20 +139,17 @@ __device__ void device_max(
 
   __syncthreads();
 
-  // Calculate local max for each group
   atomicMax(smax, local_max);
 
   __syncthreads();
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_min(
   T const* data, int const items_per_thread, cudf::size_type size, T init_val, T* smin)
 {
   T local_min = init_val;
 
-// Calculate local min for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -175,13 +160,11 @@ __device__ void device_min(
 
   __syncthreads();
 
-  // Calculate local min for each group
   atomicMin(smin, local_min);
 
   __syncthreads();
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_idxmax(T const* data,
                               int const items_per_thread,
@@ -191,11 +174,9 @@ __device__ void device_idxmax(T const* data,
                               T* smax,
                               int64_t* sidx)
 {
-  // Calculate how many elements each thread is working on
   T local_max       = init_val;
   int64_t local_idx = -1;
 
-// Calculate local max for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -209,7 +190,6 @@ __device__ void device_idxmax(T const* data,
 
   __syncthreads();
 
-  // Calculate local max for each group
   atomicMax(smax, local_max);
 
   __syncthreads();
@@ -219,7 +199,6 @@ __device__ void device_idxmax(T const* data,
   __syncthreads();
 }
 
-// Use a C++ templated __device__ function to implement the body of the algorithm.
 template <typename T>
 __device__ void device_idxmin(T const* data,
                               int const items_per_thread,
@@ -232,7 +211,6 @@ __device__ void device_idxmin(T const* data,
   T local_min       = init_val;
   int64_t local_idx = -1;
 
-// Calculate local max for each thread
 #pragma unroll
   for (cudf::size_type item = 0; item < items_per_thread; item++) {
     if (threadIdx.x + (item * blockDim.x) < size) {
@@ -246,7 +224,6 @@ __device__ void device_idxmin(T const* data,
 
   __syncthreads();
 
-  // Calculate local max for each group
   atomicMin(smin, local_min);
 
   __syncthreads();
@@ -271,7 +248,6 @@ __device__ T BlockSum(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMean(T const* data, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
 
   __shared__ T sum;
@@ -286,7 +262,6 @@ __device__ T BlockMean(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockStd(T const* data, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T sum;
   __shared__ double var;
@@ -302,7 +277,6 @@ __device__ T BlockStd(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockVar(T const* data, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T sum;
   __shared__ double var;
@@ -318,7 +292,6 @@ __device__ T BlockVar(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMax(T const* data, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smax;
   if (threadIdx.x == 0) { smax = std::numeric_limits<int64_t>::min(); }
@@ -330,7 +303,6 @@ __device__ T BlockMax(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMin(T const* data, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smin;
   if (threadIdx.x == 0) { smin = std::numeric_limits<int64_t>::max(); }
@@ -342,7 +314,6 @@ __device__ T BlockMin(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size)
 {
-  // Calculate how many elements each thread is working on
   auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
   __shared__ T smax;
   __shared__ int64_t sidx;
