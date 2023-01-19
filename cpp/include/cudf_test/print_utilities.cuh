@@ -132,9 +132,9 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   constexpr char delimiter = ',';
 
   // TODO we want this to compile to nothing dependnig on compiler flag, rather than runtime
-  // if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
-  detail::print_array_kernel<<<1, 1, 0, stream.value()>>>(count, width, delimiter, args...);
-  // }
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    detail::print_array_kernel<<<1, 1, 0, stream.value()>>>(count, width, delimiter, args...);
+  }
 }
 
 }  // namespace cudf::test
