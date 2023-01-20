@@ -20,7 +20,7 @@
 
 __device__ __forceinline__ double atomicAdds(double* address, double val)
 {
-  unsigned long long int* address_as_ull = static_cast<unsigned long long int*>(address);
+  unsigned long long int* address_as_ull = reinterpret_cast<unsigned long long int*>(address);
   unsigned long long int old             = *address_as_ull, assumed;
 
   do {
@@ -35,7 +35,8 @@ __device__ __forceinline__ double atomicAdds(double* address, double val)
 
 __device__ __forceinline__ int64_t atomicAdds(int64_t* address, int64_t val)
 {
-  return atomicAdd(static_cast<unsigned long long*>(address), static_cast<unsigned long long>(val));
+  return atomicAdd(reinterpret_cast<unsigned long long*>(address),
+                   static_cast<unsigned long long>(val));
 }
 
 __device__ __forceinline__ double atomicMax(double* address, double val)
@@ -44,7 +45,7 @@ __device__ __forceinline__ double atomicMax(double* address, double val)
   while (val > __longlong_as_double(old)) {
     unsigned long long assumed = old;
     if ((old = atomicCAS(
-           static_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
+           reinterpret_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
         assumed)
       break;
   }
@@ -53,7 +54,7 @@ __device__ __forceinline__ double atomicMax(double* address, double val)
 
 __device__ __forceinline__ int64_t atomicMax(int64_t* address, int64_t val)
 {
-  return atomicMax(static_cast<long long*>(address), static_cast<long long>(val));
+  return atomicMax(reinterpret_cast<long long*>(address), static_cast<long long>(val));
 }
 
 __device__ __forceinline__ double atomicMin(double* address, double val)
@@ -62,7 +63,7 @@ __device__ __forceinline__ double atomicMin(double* address, double val)
   while (val < __longlong_as_double(old)) {
     unsigned long long assumed = old;
     if ((old = atomicCAS(
-           static_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
+           reinterpret_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
         assumed)
       break;
   }
@@ -71,7 +72,7 @@ __device__ __forceinline__ double atomicMin(double* address, double val)
 
 __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 {
-  return atomicMin(static_cast<long long*>(address), static_cast<long long>(val));
+  return atomicMin(reinterpret_cast<long long*>(address), static_cast<long long>(val));
 }
 
 template <typename T>
@@ -101,8 +102,6 @@ __device__ void device_var(
   double mean;
 
   device_sum<T>(data, items_per_thread, size, sum);
-
-  __syncthreads();
 
   mean = (*sum) / static_cast<double>(size);
 
@@ -139,8 +138,6 @@ __device__ void device_max(
     }
   }
 
-  __syncthreads();
-
   atomicMax(smax, local_max);
 
   __syncthreads();
@@ -159,8 +156,6 @@ __device__ void device_min(
       local_min = min(local_min, load);
     }
   }
-
-  __syncthreads();
 
   atomicMin(smin, local_min);
 
@@ -189,8 +184,6 @@ __device__ void device_idxmax(T const* data,
       }
     }
   }
-
-  __syncthreads();
 
   atomicMax(smax, local_max);
 
@@ -223,8 +216,6 @@ __device__ void device_idxmin(T const* data,
       }
     }
   }
-
-  __syncthreads();
 
   atomicMin(smin, local_min);
 
