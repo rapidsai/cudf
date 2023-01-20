@@ -1012,7 +1012,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     column_index++;
   }
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns))};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail
