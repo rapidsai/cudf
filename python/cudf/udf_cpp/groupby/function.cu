@@ -447,7 +447,7 @@ extern "C" __device__ int BlockIdxMax_int64(int64_t* numba_return_value,
   return 0;
 }
 
-extern "C" __device__ int BlockIdxMax_float64(double* numba_return_value,
+extern "C" __device__ int BlockIdxMax_float64(int64_t* numba_return_value,
                                               double const* data,
                                               int64_t* index,
                                               int64_t size)
@@ -466,7 +466,7 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
   return 0;
 }
 
-extern "C" __device__ int BlockIdxMin_float64(double* numba_return_value,
+extern "C" __device__ int BlockIdxMin_float64(int64_t* numba_return_value,
                                               double const* data,
                                               int64_t* index,
                                               int64_t size)
