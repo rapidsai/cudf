@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
+import os
 
 import cupy
 from numba import config as numba_config, cuda
@@ -88,7 +89,13 @@ except ImportError:
     pass
 else:
     # Patch Numba to support CUDA enhanced compatibility.
-    patch_numba_linker_if_needed()
+    # cuDF requires a stronger set of conditions than what is
+    # checked by patch_numba_linker_if_needed due to the PTX
+    # files needed for JIT Groupby Apply and string UDFs
+    from cudf.core.udf.utils import _setup_numba_linker
+
+    _setup_numba_linker(os.path.dirname(__file__) + "/core/udf/", "function_")
+
     del patch_numba_linker_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
