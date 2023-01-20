@@ -288,6 +288,7 @@ if buildAll || hasArg libcudf; then
           -DDISABLE_DEPRECATION_WARNINGS=${BUILD_DISABLE_DEPRECATION_WARNINGS} \
           -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          -DCPM_KvikIO_SOURCE=/home/nfs/mkristensen/repos/kvikio \
           ${EXTRA_CMAKE_ARGS}
 
     cd ${LIB_BUILD_DIR}
