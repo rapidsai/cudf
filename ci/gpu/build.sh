@@ -169,7 +169,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         done
 
         # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
             gt="$WORKSPACE/cpp/build/gtests/$test_name"
             echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
             LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
