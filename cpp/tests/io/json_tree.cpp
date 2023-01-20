@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <string>
+#include <unordered_map>
 
 namespace cuio_json = cudf::io::json;
 namespace cudf::io::json {
@@ -422,10 +423,29 @@ tree_meta_t2 get_tree_representation_cpu(device_span<PdaTokenT const> tokens_gpu
 }
 
 std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_traversal_cpu(
-  host_span<SymbolT const> input, tree_meta_t2 const& tree, rmm::cuda_stream_view stream)
+  host_span<SymbolT const> input,
+  tree_meta_t2 const& tree,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
+  rmm::cuda_stream_view stream)
 {
   std::vector<NodeIndexT> node_ids(tree.parent_node_ids.size());
   std::iota(node_ids.begin(), node_ids.end(), 0);
+
+  NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
+  std::unordered_map<NodeIndexT, NodeIndexT> list_indices;
+  if (is_array_of_arrays) {
+    NodeIndexT parent_node = -1, child_index = 0;
+    for (size_t i = 0; i < tree.node_levels.size(); i++) {
+      if (tree.node_levels[i] == row_array_children_level) {
+        if (tree.parent_node_ids[i] != parent_node) {
+          parent_node = tree.parent_node_ids[i];
+          child_index = 0;
+        }
+        list_indices[i] = child_index++;
+      }
+    }
+  }
 
   if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     for (int i = 0; i < int(tree.node_range_begin.size()); i++) {
@@ -454,6 +474,8 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
                            tree.node_range_end[node_id] - tree.node_range_begin[node_id]);
         seed = cudf::detail::hash_combine(seed, std::hash<std::string_view>{}(field_name));
       }
+      if (is_array_of_arrays and tree.node_levels[node_id] == row_array_children_level)
+        seed = cudf::detail::hash_combine(seed, list_indices[node_id]);
       node_id = tree.parent_node_ids[node_id];
     }
     return seed;
@@ -471,6 +493,10 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
           std::string_view(input.data() + tree.node_range_begin[node_id2],
                            tree.node_range_end[node_id2] - tree.node_range_begin[node_id2]);
         is_equal &= field_name1 == field_name2;
+      }
+      if (is_array_of_arrays and is_equal and
+          tree.node_levels[node_id1] == row_array_children_level) {
+        is_equal &= list_indices[node_id1] == list_indices[node_id2];
       }
       node_id1 = tree.parent_node_ids[node_id1];
       node_id2 = tree.parent_node_ids[node_id2];
@@ -509,7 +535,8 @@ std::tuple<std::vector<NodeIndexT>, std::vector<size_type>> records_orient_tree_
       col_id_current_offset[current_col_id]++;
       row_offsets[i] = col_id_current_offset[current_col_id] - 1;
     } else {
-      if (tree.node_categories[parent_node_id] == node_t::NC_LIST) {
+      if (tree.node_categories[parent_node_id] == node_t::NC_LIST and
+          !(is_array_of_arrays and tree.node_levels[i] == row_array_children_level)) {
         col_id_current_offset[current_col_id]++;
         row_offsets[i] = col_id_current_offset[current_col_id] - 1;
       } else {
@@ -777,13 +804,16 @@ std::vector<std::string> json_list = {
              { "a": { "y" : 6, "z": [7, 8, 9]}, "b": {"x": 10, "z": [{}, {"q": 3}, {"p": 4}]}},
              { "a": { "z": [12, 13, 14, 15]}},
              { "a": { "z": [16], "x": 2}}
-        ])"
+        ])",
   //^row offset a a.x a.y a.z   b b.x b.z
   //            1       1   1
   //            2   2   2       2   2   2                     b.z[] 0        b.z.p 0, b.z.q 0
   //            3       3   3   3   3   3   a.z[] 0, 1, 2     b.z[] 1, 2, 3  b.z.q 2, b.z.p 3
   //            4           4               a.z[] 3, 4, 5, 6
   //            5   5       5               a.z[] 7
+  R"([[1, 2, 3], [4, 5, 6], [7, 8, 9]])",
+  R"([[1, 2, 3], [4, 5], [7]])",
+  R"([[1], [4, 5, 6], [7, 8]])",
 };
 
 std::vector<std::string> json_lines_list = {
@@ -797,7 +827,12 @@ std::vector<std::string> json_lines_list = {
   // empty list, row.
   R"( {"a" : [], "b" : {}}
  {"a" : []}
- {"b" : {}})"};
+ {"b" : {}})",
+  R"([1, 2, 3]
+     [4, 5, 6])",
+  R"([1]
+     [4, [5], 6]
+     [7, [8]])"};
 INSTANTIATE_TEST_SUITE_P(Mixed_And_Records,
                          JsonTreeTraversalTest,
                          ::testing::Combine(::testing::Values(false),
@@ -825,9 +860,14 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
   // host tree generation
   auto cpu_tree =
     cuio_json::test::get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
+  bool const is_array_of_arrays =
+    (cpu_tree.node_categories.size() > 0 and
+     cpu_tree.node_categories[0] == cudf::io::json::NC_LIST) and
+    (json_lines or (cpu_tree.node_categories.size() > 1 and
+                    cpu_tree.node_categories[1] == cudf::io::json::NC_LIST));
   // host tree traversal
-  auto [cpu_col_id, cpu_row_offsets] =
-    cuio_json::test::records_orient_tree_traversal_cpu(input, cpu_tree, stream);
+  auto [cpu_col_id, cpu_row_offsets] = cuio_json::test::records_orient_tree_traversal_cpu(
+    input, cpu_tree, is_array_of_arrays, json_lines, stream);
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(tokens_gpu, token_indices_gpu, stream);
   // Print tree representation
@@ -836,8 +876,8 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
     json_test::print_tree(gpu_tree);
   }
   // gpu tree traversal
-  auto [gpu_col_id, gpu_row_offsets] =
-    cuio_json::detail::records_orient_tree_traversal(d_input, gpu_tree, stream);
+  auto [gpu_col_id, gpu_row_offsets] = cuio_json::detail::records_orient_tree_traversal(
+    d_input, gpu_tree, is_array_of_arrays, json_lines, stream);
   // Print tree representation
   if (std::getenv("NJP_DEBUG_DUMP") != nullptr) {
     printf("AFTER  traversal (gpu_tree):\n");

@@ -471,6 +471,40 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   return node_type;
 }
 
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
+get_array_children_indices(TreeDepthT row_array_children_level,
+                           device_span<TreeDepthT const> node_levels,
+                           device_span<NodeIndexT const> parent_node_ids,
+                           rmm::cuda_stream_view stream)
+{
+  // array children level: (level 2 for values, level 1 for values-JSONLines format)
+  // copy nodes id of level 1's children (level 2)
+  // exclusive scan by key (on key their parent_node_id, because we need indices in each row.
+  // parent_node_id for each row will be same).
+  // -> return their indices and their node id
+  auto const num_nodes  = node_levels.size();
+  auto num_level2_nodes = thrust::count(
+    rmm::exec_policy(stream), node_levels.begin(), node_levels.end(), row_array_children_level);
+  rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
+  rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
+  auto const iter = thrust::copy_if(rmm::exec_policy(stream),
+                                    thrust::counting_iterator<NodeIndexT>(0),
+                                    thrust::counting_iterator<NodeIndexT>(num_nodes),
+                                    node_levels.begin(),
+                                    level2_nodes.begin(),
+                                    [row_array_children_level] __device__(auto level) {
+                                      return level == row_array_children_level;
+                                    });
+  auto level2_parent_nodes =
+    thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                level2_parent_nodes,
+                                level2_parent_nodes + num_level2_nodes,
+                                thrust::make_constant_iterator(NodeIndexT{1}),
+                                level2_indices.begin());
+  return std::make_pair(std::move(level2_nodes), std::move(level2_indices));
+}
+
 // Two level hashing algorithm
 // 1. Convert node_category+fieldname to node_type. (passed as argument)
 //   a. Create a hashmap to hash field name and assign unique node id as values.
@@ -487,12 +521,44 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   device_span<TreeDepthT const> node_levels,
   device_span<size_type const> node_type,
   device_span<NodeIndexT const> parent_node_ids,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = parent_node_ids.size();
   rmm::device_uvector<size_type> col_id(num_nodes, stream, mr);
+
+  // array of arrays
+  NodeIndexT const row_array_children_level = is_enabled_lines ? 1 : 2;
+  rmm::device_uvector<size_type> list_indices(0, stream);
+  if (is_array_of_arrays) {
+    // For array of arrays, level 2 nodes do not have column name (field name).
+    // So, we need to generate indices for each level 2 node w.r.t to that row, to uniquely
+    // identify each level 2 node as separate column.
+    // Example:
+    // array of structs: [ { a: 1, b: 2}, { a: 3, b: 4} ]
+    //           levels: 0 1 2  3  2  3   1 2  3  2  3
+    // array of arrays:  [ [    1,    2], [    3,    4] ]
+    //           levels: 0 1    2     2   1    2     2
+    // For example, in the above example, we need to generate indices for each level 2 node:
+    // array of arrays:  [ [    1,    2], [    3,    4] ]
+    //          levels:  0 1    2     2   1    2     2
+    //   child indices:         0     1        0     1
+    // These indices uniquely identify each column in each row. This is used during hashing for
+    // level 2 nodes to generate unique column ids, instead of field name for level 2 nodes.
+    auto [level2_nodes, level2_indices] =
+      get_array_children_indices(row_array_children_level, node_levels, parent_node_ids, stream);
+    // memory usage could be reduced by using different data structure (hashmap)
+    // or alternate method to hash it at node_type
+    list_indices.resize(num_nodes, stream);
+    thrust::scatter(rmm::exec_policy(stream),
+                    level2_indices.cbegin(),
+                    level2_indices.cend(),
+                    level2_nodes.cbegin(),
+                    list_indices.begin());
+  }
 
   using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
   using hash_map_type =
@@ -508,16 +574,22 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   // path compression is not used since extra writes make all map operations slow.
   auto const d_hasher = [node_level      = node_levels.begin(),
                          node_type       = node_type.begin(),
-                         parent_node_ids = parent_node_ids.begin()] __device__(auto node_id) {
+                         parent_node_ids = parent_node_ids.begin(),
+                         list_indices    = list_indices.begin(),
+                         is_array_of_arrays,
+                         row_array_children_level] __device__(auto node_id) {
     auto hash =
       cudf::detail::hash_combine(cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]),
                                  cudf::detail::default_hash<size_type>{}(node_type[node_id]));
     node_id = parent_node_ids[node_id];
+    // Each node computes its hash by walking from its node up to the root.
     while (node_id != parent_node_sentinel) {
       hash = cudf::detail::hash_combine(
         hash, cudf::detail::default_hash<TreeDepthT>{}(node_level[node_id]));
       hash = cudf::detail::hash_combine(
         hash, cudf::detail::default_hash<size_type>{}(node_type[node_id]));
+      if (is_array_of_arrays and node_level[node_id] == row_array_children_level)
+        hash = cudf::detail::hash_combine(hash, list_indices[node_id]);
       node_id = parent_node_ids[node_id];
     }
     return hash;
@@ -532,14 +604,24 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   auto const d_equal = [node_level      = node_levels.begin(),
                         node_type       = node_type.begin(),
                         parent_node_ids = parent_node_ids.begin(),
+                        is_array_of_arrays,
+                        row_array_children_level,
+                        list_indices = list_indices.begin(),
                         d_hashed_cache] __device__(auto node_id1, auto node_id2) {
     if (node_id1 == node_id2) return true;
     if (d_hashed_cache(node_id1) != d_hashed_cache(node_id2)) return false;
-    auto const is_equal_level = [node_level, node_type](auto node_id1, auto node_id2) {
-      if (node_id1 == node_id2) return true;
-      return node_level[node_id1] == node_level[node_id2] and
-             node_type[node_id1] == node_type[node_id2];
-    };
+    auto const is_equal_level =
+      [node_level, node_type, is_array_of_arrays, row_array_children_level, list_indices](
+        auto node_id1, auto node_id2) {
+        if (node_id1 == node_id2) return true;
+        auto const is_level2_equal = [&]() {
+          if (!is_array_of_arrays) return true;
+          return node_level[node_id1] != row_array_children_level or
+                 list_indices[node_id1] == list_indices[node_id2];
+        }();
+        return node_level[node_id1] == node_level[node_id2] and
+               node_type[node_id1] == node_type[node_id2] and is_level2_equal;
+      };
     // if both nodes have same node types at all levels, it will check until it has common parent
     // or root.
     while (node_id1 != parent_node_sentinel and node_id2 != parent_node_sentinel and
@@ -584,6 +666,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
  * All inputs and outputs are in node_id order.
  * @param d_input JSON string in device memory
  * @param d_tree Tree representation of the JSON
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param is_enabled_lines Whether the input is a line-delimited JSON
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column_id, parent_column_id
@@ -591,6 +675,8 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
 std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> generate_column_id(
   device_span<SymbolT const> d_input,
   tree_meta_t const& d_tree,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -607,7 +693,13 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
       hash_node_type_with_field_name(d_input, d_tree, stream);
 
     // hash entire path from node to root.
-    return hash_node_path(d_tree.node_levels, node_type, d_tree.parent_node_ids, stream, mr);
+    return hash_node_path(d_tree.node_levels,
+                          node_type,
+                          d_tree.parent_node_ids,
+                          is_array_of_arrays,
+                          is_enabled_lines,
+                          stream,
+                          mr);
   }();
 
   thrust::sort(rmm::exec_policy(stream), unique_keys.begin(), unique_keys.end());
@@ -644,12 +736,16 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
  *  parent_col_id is moved and reused inside this function.
  * @param parent_col_id parent node's column id
  * @param d_tree Tree representation of the JSON string
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param is_enabled_lines Whether the input is a line-delimited JSON
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return row_offsets
  */
 rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndexT>&& parent_col_id,
                                                    tree_meta_t const& d_tree,
+                                                   bool is_array_of_arrays,
+                                                   bool is_enabled_lines,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -659,15 +755,26 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   rmm::device_uvector<size_type> scatter_indices(num_nodes, stream);
   thrust::sequence(rmm::exec_policy(stream), scatter_indices.begin(), scatter_indices.end());
 
+  // array of arrays
+  NodeIndexT const row_array_parent_level = is_enabled_lines ? 0 : 1;
+  // condition is true if parent is not a list, or sentinel/root
+  // Special case to return true if parent is a list and is_array_of_arrays is true
+  auto is_non_list_parent = [node_categories = d_tree.node_categories.begin(),
+                             node_levels     = d_tree.node_levels.begin(),
+                             is_array_of_arrays,
+                             row_array_parent_level] __device__(auto pnid) {
+    return !(pnid == parent_node_sentinel ||
+             node_categories[pnid] == NC_LIST &&
+               (!is_array_of_arrays || node_levels[pnid] != row_array_parent_level));
+  };
+
   // Extract only list children. (nodes who's parent is a list/root)
   auto const list_parent_end =
     thrust::remove_if(rmm::exec_policy(stream),
                       thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()),
                       thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
                       d_tree.parent_node_ids.begin(),
-                      [node_categories = d_tree.node_categories.begin()] __device__(auto pnid) {
-                        return !(pnid == parent_node_sentinel || node_categories[pnid] == NC_LIST);
-                      });
+                      is_non_list_parent);
   auto const num_list_parent = thrust::distance(
     thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
 
@@ -702,20 +809,20 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
     row_offsets.begin(),
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin(),
-     row_offsets     = row_offsets.begin()] __device__(size_type node_id) {
+     row_offsets     = row_offsets.begin(),
+     is_non_list_parent] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      while (parent_node_id != parent_node_sentinel and
-             node_categories[parent_node_id] != node_t::NC_LIST) {
+      while (is_non_list_parent(parent_node_id)) {
         node_id        = parent_node_id;
         parent_node_id = parent_node_ids[parent_node_id];
       }
       return row_offsets[node_id];
     },
     [node_categories = d_tree.node_categories.data(),
-     parent_node_ids = d_tree.parent_node_ids.begin()] __device__(size_type node_id) {
+     parent_node_ids = d_tree.parent_node_ids.begin(),
+     is_non_list_parent] __device__(size_type node_id) {
       auto const parent_node_id = parent_node_ids[node_id];
-      return parent_node_id != parent_node_sentinel and
-             !(node_categories[parent_node_id] == node_t::NC_LIST);
+      return is_non_list_parent(parent_node_id);
     });
   return row_offsets;
 }
@@ -736,13 +843,17 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
 std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
+                              bool is_array_of_arrays,
+                              bool is_enabled_lines,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto [new_col_id, new_parent_col_id] = generate_column_id(d_input, d_tree, stream, mr);
+  auto [new_col_id, new_parent_col_id] =
+    generate_column_id(d_input, d_tree, is_array_of_arrays, is_enabled_lines, stream, mr);
 
-  auto row_offsets = compute_row_offsets(std::move(new_parent_col_id), d_tree, stream, mr);
+  auto row_offsets = compute_row_offsets(
+    std::move(new_parent_col_id), d_tree, is_array_of_arrays, is_enabled_lines, stream, mr);
   return std::tuple{std::move(new_col_id), std::move(row_offsets)};
 }
 
