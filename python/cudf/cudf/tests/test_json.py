@@ -309,6 +309,9 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.filterwarnings(
+    "ignore:engine='cudf_legacy' is a deprecated engine."
+)
 def test_json_engine_selection():
     json = "[1, 2, 3]"
 
@@ -686,59 +689,82 @@ def test_json_types_data():
 
 
 @pytest.mark.parametrize(
-    "col_type,json_str",
+    "col_type,json_str,expected_data",
     [
         # without quotes
-        ("int", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        ("int", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
         # with quotes
-        ("int", '[{"k": "1"}, {"k": "2"}]'),
+        ("int", '[{"k": "1"}, {"k": "2"}]', [1, 2]),
         # with quotes, mixed
-        ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
         # with quotes, null, mixed
-        ("int", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        (
+            "int",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
         # without quotes, null
-        ("int", '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]'),
+        (
+            "int",
+            '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
         # without quotes
-        ("float", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        ("float", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
         # with quotes
-        ("float", '[{"k": "1"}, {"k": "2"}]'),
+        ("float", '[{"k": "1"}, {"k": "2"}]', [1, 2]),
         # with quotes, mixed
-        ("float", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        (
+            "float",
+            '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]',
+            [1, 2, 3, 4],
+        ),
         # with quotes, null, mixed
-        ("float", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        (
+            "float",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
         # with quotes, NAN
-        ("float", '[{"k": "1"}, {"k": "2"}, {"k": NaN}, {"k": "4"}]'),
+        (
+            "float",
+            '[{"k": "1"}, {"k": "2"}, {"k": NaN}, {"k": "4"}]',
+            [1, 2, np.nan, 4],
+        ),
         # without quotes
-        ("str", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]'),
+        ("str", '[{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
         # with quotes
-        ("str", '[{"k": "1"}, {"k": "2"}]'),
+        ("str", '[{"k": "1"}, {"k": "2"}]', [1, 2]),
         # with quotes, mixed
-        ("str", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]'),
+        ("str", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
         # with quotes, null, mixed
-        ("str", '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]'),
+        (
+            "str",
+            '[{"k": "1"}, {"k": "2"}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
         # without quotes, null
-        ("str", '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]'),
+        (
+            "str",
+            '[{"k": 1}, {"k": 2}, {"k": null}, {"k": 4}]',
+            [1, 2, None, 4],
+        ),
     ],
 )
-def test_json_quoted_values_with_schema(col_type, json_str):
-    experimental_df = cudf.read_json(
+def test_json_quoted_values_with_schema(col_type, json_str, expected_data):
+    actual = cudf.read_json(
         StringIO(json_str),
         engine="cudf",
         orient="records",
         dtype={"k": col_type},
     )
-    cudf_df = cudf.read_json(
-        StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf",
-        orient="records",
-        lines=True,
-        dtype={"k": col_type},
-    )
-    assert_eq(cudf_df, experimental_df)
+    expected = cudf.DataFrame({"k": expected_data}, dtype=col_type)
+
+    assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize(
-    "col_type,json_str,expected",
+    "col_type,json_str,expected_data",
     [
         # with quotes, mixed
         ("int", '[{"k": "1"}, {"k": "2"}, {"k": 3}, {"k": 4}]', [1, 2, 3, 4]),
@@ -762,22 +788,17 @@ def test_json_quoted_values_with_schema(col_type, json_str):
         ),
     ],
 )
-def test_json_quoted_values(col_type, json_str, expected):
-    experimental_df = cudf.read_json(
+def test_json_quoted_values(col_type, json_str, expected_data):
+    actual = cudf.read_json(
         StringIO(json_str),
         engine="cudf",
         orient="records",
         dtype={"k": col_type},
     )
-    cudf_df = cudf.read_json(
-        StringIO(json_str.replace(",", "\n")[1:-1]),
-        engine="cudf",
-        orient="records",
-        lines=True,
-        dtype={"k": col_type},
-    )
-    assert_eq(expected, experimental_df.k.to_arrow().to_pylist())
-    assert_eq(expected, cudf_df.k.to_arrow().to_pylist())
+    expected = cudf.DataFrame({"k": expected_data}, dtype=col_type)
+
+    assert_eq(expected, actual)
+    assert_eq(expected_data, actual.k.to_arrow().to_pylist())
 
 
 @pytest.mark.parametrize(
@@ -1049,7 +1070,7 @@ def test_json_array_of_arrays(data, lines):
     pdf = pd.read_json(data, orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
-        engine="cudf_experimental",
+        engine="cudf",
         orient="values",
         lines=lines,
     )
