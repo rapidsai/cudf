@@ -3352,11 +3352,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector matchesRe(String pattern) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), pattern));
+    return matchesRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
   }
 
   /**
@@ -3375,12 +3373,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param regexProg Regex program to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
-  public final ColumnVector matchesReRegexProg(RegexProgram regexProg) {
+  public final ColumnVector matchesRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3399,11 +3397,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector containsRe(String pattern) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), pattern));
+    return containsRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
   }
 
   /**
@@ -3422,12 +3418,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param regexProg Regex program to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
-  public final ColumnVector containsReRegexProg(RegexProgram regexProg) {
+  public final ColumnVector containsRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3477,11 +3473,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
+  @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
 
     return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+    // return extractAllRecord(new RegexProgram(pattern), idx);
   }
 
   /**
@@ -3497,8 +3495,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector extractAllRecordRegexProg(RegexProgram regexProg, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-
-    return new ColumnVector(extractAllRecordRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId, idx));
+    return new ColumnVector(
+        extractAllRecordRe(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+                         regexProg.capture().nativeId, idx));
   }
 
   /**
@@ -4343,15 +4342,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern from the
-   * beginning of the string.
-   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
-   * @param pattern string regex pattern.
-   * @return native handle of the resulting cudf column containing the boolean results.
-   */
-  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
-
-  /**
    * Native method for checking if strings match the passed in regex program from the
    * beginning of the string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
@@ -4360,15 +4350,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long matchesReRegexProg(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
+  private static native long matchesRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
-  /**
-   * Native method for checking if strings match the passed in regex pattern starting at any location.
-   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
-   * @param pattern string regex pattern.
-   * @return native handle of the resulting cudf column containing the boolean results.
-   */
-  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+  // /**
+  //  * Native method for checking if strings match the passed in regex pattern starting at any location.
+  //  * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+  //  * @param pattern string regex pattern.
+  //  * @return native handle of the resulting cudf column containing the boolean results.
+  //  */
+  // private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex program starting at any location.
@@ -4378,7 +4368,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long containsReRegexProg(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
+  private static native long containsRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in like pattern
@@ -4428,7 +4418,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param idx Regex group index. A 0 value means matching the entire regex.
    * @return Native handle of a string column of the result.
    */
-  private static native long extractAllRecordRegexProg(long nativeHandle, String pattern, int flags, int capture, int idx);
+  private static native long extractAllRecordRe(long nativeHandle, String pattern, int flags, int capture, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
