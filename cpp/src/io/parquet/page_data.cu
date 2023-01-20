@@ -51,11 +51,10 @@ constexpr int non_zero_buffer_size = block_size * 2;
 
 constexpr int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
-// the PageNestingDecodeInfo struct is 48 bytes (as of 1/18/23) so
-// this cache costs 480 bytes per block. Columns nested more than 2 or 3 deep are exceedingly
-// rare.  If we encounter one that exceeds the below limit, the code falls back on the uncached
-// PageNestingDecodeInfo stored in global memory.
-constexpr int max_cacheable_nesting_decode_info = 10;
+// Use up to 512 bytes of shared memory as a cache for nesting information.
+// As of 1/20/23, this gives us a max nesting depth of 10 (after which it falls back to
+// global memory). This handles all but the most extreme cases.
+constexpr int max_cacheable_nesting_decode_info = (512) / sizeof(PageNestingDecodeInfo);
 
 struct page_state_s {
   const uint8_t* data_start;
