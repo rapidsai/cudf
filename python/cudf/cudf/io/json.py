@@ -45,7 +45,8 @@ def read_json(
 
     if engine == "cudf_legacy":
         # TODO: Deprecated in 23.02, please
-        # give some time until `cudf_legacy`
+        # give some time until(more than couple of
+        # releases from now) `cudf_legacy`
         # support can be removed completely.
         warnings.warn(
             "engine='cudf_legacy' is a deprecated engine."
