@@ -239,14 +239,10 @@ class SpillableBuffer(Buffer):
             time=time_end - time_start,
         )
 
-    @property
-    def ptr(self) -> int:
-        """Access the memory directly
+    def mark_exposed(self) -> None:
+        """Mark the buffer as "exposed" and make it unspillable permanently.
 
-        Notice, this will mark the buffer as "exposed" and make
-        it unspillable permanently.
-
-        Consider using `.get_ptr()` instead.
+        This also unspills the buffer (unspillable buffers cannot be spilled!).
         """
 
         self._manager.spill_to_device_limit()
@@ -256,7 +252,6 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._exposed = True
             self._last_accessed = time.monotonic()
-            return self._ptr
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         """Spill lock the buffer
@@ -270,35 +265,70 @@ class SpillableBuffer(Buffer):
             The object that defines the scope of the lock.
         """
 
-        if spill_lock is None:
-            spill_lock = SpillLock()
         with self.lock:
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, spill_lock: SpillLock = None) -> int:
+    def get_ptr(self) -> int:
         """Get a device pointer to the memory of the buffer.
 
-        If spill_lock is not None, a reference to this buffer is added
-        to spill_lock, which disable spilling of this buffer while
-        spill_lock is alive.
+        If this is called within an `acquire_spill_lock` context,
+        a reference to this buffer is added to spill_lock, which
+        disable spilling of this buffer while in the context.
 
-        Parameters
-        ----------
-        spill_lock : SpillLock, optional
-            Adding a reference of this buffer to the spill lock.
+        If this is *not* called within a `acquire_spill_lock` context,
+        this buffer is marked as unspillable permanently.
 
         Return
         ------
         int
             The device pointer as an integer
         """
+        from cudf.core.buffer.utils import get_spill_lock
 
+        spill_lock = get_spill_lock()
         if spill_lock is None:
-            return self.ptr  # expose the buffer permanently
+            self.mark_exposed()
+        else:
+            self.spill_lock(spill_lock)
+            self._last_accessed = time.monotonic()
+        return self._ptr
 
-        self.spill_lock(spill_lock)
-        self._last_accessed = time.monotonic()
+    def memory_info(self) -> Tuple[int, int, str]:
+        """Get pointer, size, and device type of this buffer.
+
+        Warning, it is not safe to access the pointer value without
+        spill lock the buffer manually. This method neither exposes
+        nor spill locks the buffer.
+
+        Return
+        ------
+        int
+            The memory pointer as an integer (device or host memory)
+        int
+            The size of the memory in bytes
+        str
+            The device type as a string ("cpu" or "gpu")
+        """
+
+        if self._ptr_desc["type"] == "gpu":
+            ptr = self._ptr
+        elif self._ptr_desc["type"] == "cpu":
+            ptr = numpy.array(
+                self._ptr_desc["memoryview"], copy=False
+            ).__array_interface__["data"][0]
+        return (ptr, self.nbytes, self._ptr_desc["type"])
+
+    @property
+    def ptr(self) -> int:
+        """Access the memory directly
+
+        Notice, this will mark the buffer as "exposed" and make
+        it unspillable permanently.
+
+        Consider using `.get_ptr()` instead.
+        """
+        self.mark_exposed()
         return self._ptr
 
     @property
@@ -382,12 +412,13 @@ class SpillableBuffer(Buffer):
             else:
                 # TODO: Use `frames=[self]` instead of this hack, see doc above
                 spill_lock = SpillLock()
-                ptr = self.get_ptr(spill_lock=spill_lock)
+                self.spill_lock(spill_lock)
+                ptr, size, _ = self.memory_info()
                 frames = [
                     Buffer._from_device_memory(
                         cuda_array_interface_wrapper(
                             ptr=ptr,
-                            size=self.size,
+                            size=size,
                             owner=(self._owner, spill_lock),
                         )
                     )
@@ -442,8 +473,8 @@ class SpillableBufferSlice(SpillableBuffer):
     def ptr(self) -> int:
         return self._base.ptr + self._offset
 
-    def get_ptr(self, spill_lock: SpillLock = None) -> int:
-        return self._base.get_ptr(spill_lock=spill_lock) + self._offset
+    def get_ptr(self) -> int:
+        return self._base.get_ptr() + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferSlice(
@@ -487,3 +518,7 @@ class SpillableBufferSlice(SpillableBuffer):
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         self._base.spill_lock(spill_lock=spill_lock)
+
+    def memory_info(self) -> Tuple[int, int, str]:
+        (ptr, _, device_type) = self._base.memory_info()
+        return (ptr + self._offset, self.nbytes, device_type)
