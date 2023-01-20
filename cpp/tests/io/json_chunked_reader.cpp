@@ -104,7 +104,7 @@ TEST_F(JsonReaderTest, ByteRange)
   // Read full test data via existing, nested JSON lines reader
   cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
 
-  auto datasources = cudf::io::datasource::create(json_lines_options.get_source().buffers());
+  auto datasources = cudf::io::datasource::create(json_lines_options.get_source().host_buffers());
 
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500}) {
