@@ -189,8 +189,10 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   __shared__ T block_max;
   __shared__ int64_t block_idx_max;
 
-  // TODO: this is wrong but can pass tests!!!
-  auto local_max     = std::numeric_limits<int64_t>::min();
+  auto local_max = []() {
+    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::max(); }
+    return std::numeric_limits<T>::min();
+  }();
   auto local_idx_max = std::numeric_limits<int64_t>::max();
 
   if (threadIdx.x == 0) {
