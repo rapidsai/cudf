@@ -535,7 +535,7 @@ path_or_buf : list, str, path object, or file-like object
     as each input is of a valid type and all input JSON schema(s) match.
 engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
-    automatically selected based on the other parameters.
+    automatically selected based on the other parameters. See notes below.
 orient : string
 
     .. admonition:: Not GPU-accelerated
