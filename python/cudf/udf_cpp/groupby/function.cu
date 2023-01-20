@@ -73,25 +73,24 @@ __device__ void device_sum(T const* data, int64_t size, T* sum)
 }
 
 template <typename T>
-__device__ void device_var(
-  T const* data, int const items_per_thread, cudf::size_type size, T* sum, double* var)
+__device__ void device_var(T const* data, int64_t size, double* var)
 {
   T local_sum      = 0;
   double local_var = 0;
-  double mean;
 
-  device_sum<T>(data, size, sum);
+  __shared__ T block_sum;
+  if (threadIdx.x == 0) { block_sum = 0; }
+  __syncthreads();
 
-  mean = (*sum) / static_cast<double>(size);
+  device_sum<T>(data, size, &block_sum);
+
+  auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
 
 #pragma unroll
-  for (cudf::size_type item = 0; item < items_per_thread; item++) {
-    if (threadIdx.x + (item * blockDim.x) < size) {
-      T load      = data[threadIdx.x + item * blockDim.x];
-      double temp = load - mean;
-      temp        = pow(temp, 2);
-      local_var += temp;
-    }
+  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+    auto temp = static_cast<double>(data[idx]) - mean;
+    temp *= temp;
+    local_var += temp;
   }
 
   cuda::atomic_ref<double, cuda::thread_scope_device> ref{*var};
@@ -99,7 +98,7 @@ __device__ void device_var(
 
   __syncthreads();
 
-  *var = *var / (size - 1);
+  *var = *var / static_cast<double>(size - 1);
 
   __syncthreads();
 }
@@ -191,33 +190,25 @@ __device__ T BlockMean(T const* data, int64_t size)
 }
 
 template <typename T>
-__device__ T BlockStd(T const* data, int64_t size)
+__device__ double BlockStd(T const* data, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-  __shared__ T sum;
   __shared__ double var;
-  if (threadIdx.x == 0) {
-    sum = 0;
-    var = 0;
-  }
+  if (threadIdx.x == 0) { var = 0; }
   __syncthreads();
-  device_var<T>(data, items_per_thread, size, &sum, &var);
+
+  device_var<T>(data, size, &var);
   return sqrt(var);
 }
 
 template <typename T>
-__device__ T BlockVar(T const* data, int64_t size)
+__device__ double BlockVar(T const* data, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-  __shared__ T sum;
-  __shared__ double var;
-  if (threadIdx.x == 0) {
-    sum = 0;
-    var = 0;
-  }
+  __shared__ double block_var;
+  if (threadIdx.x == 0) { block_var = 0; }
   __syncthreads();
-  device_var<T>(data, items_per_thread, size, &sum, &var);
-  return var;
+
+  device_var<T>(data, size, &block_var);
+  return block_var;
 }
 
 template <typename T>
