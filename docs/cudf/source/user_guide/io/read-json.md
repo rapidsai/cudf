@@ -19,7 +19,7 @@ each object corresponds to a row.
     {"a": "v2", "b": 7},
     {"a": "v3", "b": 5}
 ]'''
->>> df_records = cudf.read_json(j)
+>>> df_records = cudf.read_json(j, engine='cudf')
 
 >>> j = '\n'.join([
 ...     '{"a": "v1", "b": 12}',
@@ -49,7 +49,7 @@ reading nested JSON data.
     {"list": [0,1,2], "struct": {"k":"v1"}},
     {"list": [3,4,5], "struct": {"k":"v2"}}
 ]'''
->>> df = cudf.read_json(j)
+>>> df = cudf.read_json(j, engine='cudf')
 >>> df
         list       struct
 0  [0, 1, 2]  {'k': 'v1'}
