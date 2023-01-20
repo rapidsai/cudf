@@ -1419,17 +1419,16 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 
 @pytest.mark.parametrize("keep_index", [True, False])
 def test_dataframe_hash_partition_keep_index(keep_index):
-
     gdf = cudf.DataFrame(
-        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+        {"val": [1, 2, 3, 4, 5], "key": [3, 2, 1, 4, 5]}, index=[5, 4, 3, 2, 1]
     )
 
     expected_df1 = cudf.DataFrame(
-        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+        {"val": [1, 5], "key": [3, 5]}, index=[5, 1] if keep_index else None
     )
     expected_df2 = cudf.DataFrame(
         {"val": [2, 3, 4], "key": [2, 1, 4]},
-        index=[3, 2, 1] if keep_index else range(1, 4),
+        index=[4, 3, 2] if keep_index else None,
     )
     expected = [expected_df1, expected_df2]
 
