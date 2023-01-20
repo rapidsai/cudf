@@ -1710,25 +1710,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *env, jclass,
-                                                                      jlong j_view_handle,
-                                                                      jstring patternObj) {
-  JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
-  JNI_NULL_CHECK(env, patternObj, "pattern is null", nullptr);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::strings_column_view const strings_column{
-        *reinterpret_cast<cudf::column_view *>(j_view_handle)};
-    cudf::jni::native_jstring pattern(env, patternObj);
-
-    return cudf::jni::convert_table_for_return(
-        env, cudf::strings::extract(strings_column, pattern.get()));
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractReRegexProg(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(
     JNIEnv *env, jclass, jlong j_view_handle, jstring pattern_obj, jint regex_flags,
     jint capture_groups) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);

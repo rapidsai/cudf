@@ -3441,10 +3441,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
+  @Deprecated
   public final Table extractRe(String pattern) throws CudfException {
-    assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    return new Table(extractRe(this.getNativeView(), pattern));
+    return extractRe(new RegexProgram(pattern));
   }
 
   /**
@@ -3459,11 +3458,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
-  public final Table extractReRegexProg(RegexProgram regexProg) throws CudfException {
+  public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
-    return new Table(extractReRegexProg(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),regexProg.flags().nativeId, regexProg.capture().nativeId));
   }
 
   /**
@@ -3478,10 +3477,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-    assert idx >= 0 : "group index must be at least 0";
-
-    // return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
     return extractAllRecord(new RegexProgram(pattern), idx);
   }
 
@@ -4333,14 +4328,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long matchesRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
-  // /**
-  //  * Native method for checking if strings match the passed in regex pattern starting at any location.
-  //  * @param cudfViewHandle native handle of the cudf::column_view being operated on.
-  //  * @param pattern string regex pattern.
-  //  * @return native handle of the resulting cudf column containing the boolean results.
-  //  */
-  // private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
-
   /**
    * Native method for checking if strings match the passed in regex program starting at any location.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
@@ -4370,24 +4357,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
-   * Native method for extracting results from an regular expressions.  Returns a table handle.
-   */
-  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
-
-  /**
    * Native method for extracting results from a regex program. Returns a table handle.
    */
-  private static native long[] extractReRegexProg(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
-
-  // /**
-  //  * Native method for extracting all results corresponding to group idx from a regular expression.
-  //  *
-  //  * @param nativeHandle Native handle of the cudf::column_view being operated on.
-  //  * @param pattern String regex pattern.
-  //  * @param idx Regex group index. A 0 value means matching the entire regex.
-  //  * @return Native handle of a string column of the result.
-  //  */
-  // private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+  private static native long[] extractRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
    * Native method for extracting all results corresponding to group idx from a regex program.
