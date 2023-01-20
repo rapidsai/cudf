@@ -304,8 +304,6 @@ struct parquet_column_device_view : stats_column_desc {
   bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
 };
 
-constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
-
 struct EncColumnChunk;
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -58,24 +57,23 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 {
   std::unique_ptr<column> offsets_column{};
   auto strings_count = input.size();
+  size_type bytes    = 0;
 
   if (input.nullable()) {
     auto input_begin =
       cudf::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
-    offsets_column = cudf::strings::detail::make_offsets_child_column(
+    std::tie(offsets_column, bytes) = cudf::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    offsets_column = cudf::strings::detail::make_offsets_child_column(
+    std::tie(offsets_column, bytes) = cudf::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   }
 
   // build chars column
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   return std::pair(std::move(offsets_column), std::move(chars_column));

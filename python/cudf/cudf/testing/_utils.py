@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import itertools
+import string
 import warnings
 from collections import abc
 from contextlib import contextmanager
@@ -294,9 +295,13 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind in ("O", "U"):
         low = kwargs.get("low", 10)
         high = kwargs.get("high", 11)
-        return pd._testing.rands_array(
-            np.random.randint(low=low, high=high, size=1)[0], size
+        nchars = np.random.randint(low=low, high=high, size=1)[0]
+        char_options = np.array(list(string.ascii_letters + string.digits))
+        all_chars = "".join(np.random.choice(char_options, nchars * size))
+        return np.array(
+            [all_chars[nchars * i : nchars * (i + 1)] for i in range(size)]
         )
+
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
