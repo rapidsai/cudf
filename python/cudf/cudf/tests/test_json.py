@@ -587,17 +587,18 @@ def test_default_float_bitwidth(default_float_bitwidth):
     assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
 
 
-def test_json_nested_basic(tmpdir):
-    fname = tmpdir.mkdir("gdf_json").join("tmp_json_nested_basic")
+def test_json_nested_basic():
+    bytes_obj = BytesIO()
     data = {
         "c1": [{"f1": "sf11", "f2": "sf21"}, {"f1": "sf12", "f2": "sf22"}],
         "c2": [["l11", "l21"], ["l12", "l22"]],
     }
     pdf = pd.DataFrame(data)
-    pdf.to_json(fname, orient="records")
+    pdf.to_json(bytes_obj, orient="records")
 
-    df = cudf.read_json(fname, engine="cudf", orient="records")
-    pdf = pd.read_json(fname, orient="records")
+    df = cudf.read_json(bytes_obj, engine="cudf", orient="records")
+    bytes_obj.seek(0)
+    pdf = pd.read_json(bytes_obj, orient="records")
 
     assert_eq(pdf, df)
 
