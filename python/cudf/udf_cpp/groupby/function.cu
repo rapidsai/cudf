@@ -16,28 +16,9 @@
 
 #include <cudf/types.hpp>
 
+#include <cuda/atomic>
+
 #include <limits>
-
-__device__ __forceinline__ double atomicAdds(double* address, double val)
-{
-  unsigned long long int* address_as_ull = reinterpret_cast<unsigned long long int*>(address);
-  unsigned long long int old             = *address_as_ull, assumed;
-
-  do {
-    assumed = old;
-    old =
-      atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
-
-  } while (assumed != old);
-
-  return __longlong_as_double(old);
-}
-
-__device__ __forceinline__ int64_t atomicAdds(int64_t* address, int64_t val)
-{
-  return atomicAdd(reinterpret_cast<unsigned long long*>(address),
-                   static_cast<unsigned long long>(val));
-}
 
 __device__ __forceinline__ double atomicMax(double* address, double val)
 {
@@ -88,7 +69,8 @@ __device__ void device_sum(T const* data, int const items_per_thread, cudf::size
     }
   }
 
-  atomicAdds(sum, local_sum);
+  cuda::atomic_ref<T, cuda::thread_scope_device> ref{*sum};
+  ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   __syncthreads();
 }
@@ -115,7 +97,8 @@ __device__ void device_var(
     }
   }
 
-  atomicAdds(var, local_var);
+  cuda::atomic_ref<double, cuda::thread_scope_device> ref{*var};
+  ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
 
   __syncthreads();
 
