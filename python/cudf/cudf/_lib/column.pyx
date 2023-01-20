@@ -323,7 +323,7 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data).get_ptr(mode="read")
+            data = <void*><uintptr_t>(col.base_data.get_ptr(mode="read"))
 
         cdef Column child_column
         if col.base_children:
@@ -381,7 +381,7 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data).get_ptr(mode="read")
+            data = <void*><uintptr_t>(col.base_data.get_ptr(mode="read"))
 
         cdef Column child_column
         if col.base_children:
