@@ -69,7 +69,7 @@ def test_read_json_lines(lines):
         dd.assert_eq(actual, actual_pd)
 
 
-def test_read_json_nested_experimental(tmp_path):
+def test_read_json_nested(tmp_path):
     # Check that `engine="cudf"` can
     # be used to support nested data
     df = pd.DataFrame(
