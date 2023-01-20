@@ -57,16 +57,13 @@ __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 }
 
 template <typename T>
-__device__ void device_sum(T const* data, int const items_per_thread, cudf::size_type size, T* sum)
+__device__ void device_sum(T const* data, int64_t size, T* sum)
 {
   T local_sum = 0;
 
 #pragma unroll
-  for (cudf::size_type item = 0; item < items_per_thread; item++) {
-    if (threadIdx.x + (item * blockDim.x) < size) {
-      T load = data[threadIdx.x + item * blockDim.x];
-      local_sum += load;
-    }
+  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+    local_sum += data[idx];
   }
 
   cuda::atomic_ref<T, cuda::thread_scope_device> ref{*sum};
@@ -83,7 +80,7 @@ __device__ void device_var(
   double local_var = 0;
   double mean;
 
-  device_sum<T>(data, items_per_thread, size, sum);
+  device_sum<T>(data, size, sum);
 
   mean = (*sum) / static_cast<double>(size);
 
@@ -174,27 +171,23 @@ __device__ void device_idxmin(T const* data,
 template <typename T>
 __device__ T BlockSum(T const* data, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-  __shared__ T sum;
-
-  if (threadIdx.x == 0) { sum = 0; }
+  __shared__ T block_sum;
+  if (threadIdx.x == 0) { block_sum = 0; }
   __syncthreads();
-  device_sum<T>(data, items_per_thread, size, &sum);
-  return sum;
+
+  device_sum<T>(data, size, &block_sum);
+  return block_sum;
 }
 
 template <typename T>
 __device__ T BlockMean(T const* data, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-
-  __shared__ T sum;
-  if (threadIdx.x == 0) { sum = 0; }
-
+  __shared__ T block_sum;
+  if (threadIdx.x == 0) { block_sum = 0; }
   __syncthreads();
-  device_sum<T>(data, items_per_thread, size, &sum);
-  double mean = sum / static_cast<double>(size);
-  return mean;
+
+  device_sum<T>(data, size, &block_sum);
+  return block_sum / static_cast<T>(size);
 }
 
 template <typename T>
