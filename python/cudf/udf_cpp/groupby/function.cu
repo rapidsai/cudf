@@ -16,6 +16,8 @@
 
 #include <cuda/atomic>
 
+#include <cooperative_groups.h>
+
 #include <limits>
 
 __device__ __forceinline__ double atomicMax(double* address, double val)
@@ -55,37 +57,43 @@ __device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
 }
 
 template <typename T>
-__device__ void device_sum(T const* data, int64_t size, T* sum)
+__device__ void device_sum(cooperative_groups::thread_block const& block,
+                           T const* data,
+                           int64_t size,
+                           T* sum)
 {
   T local_sum = 0;
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_sum += data[idx];
   }
 
   cuda::atomic_ref<T, cuda::thread_scope_device> ref{*sum};
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
-  __syncthreads();
+  block.sync();
 }
 
 template <typename T>
-__device__ void device_var(T const* data, int64_t size, double* var)
+__device__ void device_var(cooperative_groups::thread_block const& block,
+                           T const* data,
+                           int64_t size,
+                           double* var)
 {
   T local_sum      = 0;
   double local_var = 0;
 
   __shared__ T block_sum;
-  if (threadIdx.x == 0) { block_sum = 0; }
-  __syncthreads();
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
 
-  device_sum<T>(data, size, &block_sum);
+  device_sum<T>(block, data, size, &block_sum);
 
   auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto temp = static_cast<double>(data[idx]) - mean;
     temp *= temp;
     local_var += temp;
@@ -93,73 +101,84 @@ __device__ void device_var(T const* data, int64_t size, double* var)
 
   cuda::atomic_ref<double, cuda::thread_scope_device> ref{*var};
   ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
-
-  __syncthreads();
+  block.sync();
 
   *var = *var / static_cast<double>(size - 1);
-
-  __syncthreads();
+  block.sync();
 }
 
 template <typename T>
 __device__ T BlockSum(T const* data, int64_t size)
 {
-  __shared__ T block_sum;
-  if (threadIdx.x == 0) { block_sum = 0; }
-  __syncthreads();
+  auto block = cooperative_groups::this_thread_block();
 
-  device_sum<T>(data, size, &block_sum);
+  __shared__ T block_sum;
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
+
+  device_sum<T>(block, data, size, &block_sum);
   return block_sum;
 }
 
 template <typename T>
 __device__ T BlockMean(T const* data, int64_t size)
 {
-  __shared__ T block_sum;
-  if (threadIdx.x == 0) { block_sum = 0; }
-  __syncthreads();
+  auto block = cooperative_groups::this_thread_block();
 
-  device_sum<T>(data, size, &block_sum);
+  __shared__ T block_sum;
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
+
+  device_sum<T>(block, data, size, &block_sum);
   return block_sum / static_cast<T>(size);
 }
 
 template <typename T>
 __device__ double BlockStd(T const* data, int64_t size)
 {
-  __shared__ double var;
-  if (threadIdx.x == 0) { var = 0; }
-  __syncthreads();
+  auto block = cooperative_groups::this_thread_block();
 
-  device_var<T>(data, size, &var);
+  __shared__ double var;
+  if (block.thread_rank() == 0) { var = 0; }
+  block.sync();
+
+  device_var<T>(block, data, size, &var);
   return sqrt(var);
 }
 
 template <typename T>
 __device__ double BlockVar(T const* data, int64_t size)
 {
-  __shared__ double block_var;
-  if (threadIdx.x == 0) { block_var = 0; }
-  __syncthreads();
+  auto block = cooperative_groups::this_thread_block();
 
-  device_var<T>(data, size, &block_var);
+  __shared__ double block_var;
+  if (block.thread_rank() == 0) { block_var = 0; }
+  block.sync();
+
+  device_var<T>(block, data, size, &block_var);
   return block_var;
 }
 
 template <typename T>
 __device__ T BlockMax(T const* data, int64_t size)
 {
-  auto local_max = std::numeric_limits<T>::min();
+  auto block = cooperative_groups::this_thread_block();
+
+  auto local_max = []() {
+    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::max(); }
+    return std::numeric_limits<T>::min();
+  }();
   __shared__ T block_max;
-  if (threadIdx.x == 0) { block_max = local_max; }
-  __syncthreads();
+  if (block.thread_rank() == 0) { block_max = local_max; }
+  block.sync();
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_max = max(local_max, data[idx]);
   }
 
   atomicMax(&block_max, local_max);
-  __syncthreads();
+  block.sync();
 
   return block_max;
 }
@@ -167,18 +186,20 @@ __device__ T BlockMax(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMin(T const* data, int64_t size)
 {
+  auto block = cooperative_groups::this_thread_block();
+
   auto local_min = std::numeric_limits<T>::max();
   __shared__ T block_min;
-  if (threadIdx.x == 0) { block_min = local_min; }
-  __syncthreads();
+  if (block.thread_rank() == 0) { block_min = local_min; }
+  block.sync();
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_min = min(local_min, data[idx]);
   }
 
   atomicMin(&block_min, local_min);
-  __syncthreads();
+  block.sync();
 
   return block_min;
 }
@@ -186,6 +207,8 @@ __device__ T BlockMin(T const* data, int64_t size)
 template <typename T>
 __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
 {
+  auto block = cooperative_groups::this_thread_block();
+
   __shared__ T block_max;
   __shared__ int64_t block_idx_max;
 
@@ -195,14 +218,14 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   }();
   auto local_idx_max = std::numeric_limits<int64_t>::max();
 
-  if (threadIdx.x == 0) {
+  if (block.thread_rank() == 0) {
     block_max     = local_max;
     block_idx_max = local_idx_max;
   }
-  __syncthreads();
+  block.sync();
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto const current_data = data[idx];
     if (current_data > local_max) {
       local_max     = current_data;
@@ -211,10 +234,10 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   }
 
   atomicMax(&block_max, local_max);
-  __syncthreads();
+  block.sync();
 
   if (local_max == block_max) { atomicMin(&block_idx_max, local_idx_max); }
-  __syncthreads();
+  block.sync();
 
   return block_idx_max;
 }
@@ -222,20 +245,22 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
 template <typename T>
 __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
 {
+  auto block = cooperative_groups::this_thread_block();
+
   __shared__ T block_min;
   __shared__ int64_t block_idx_min;
 
   auto local_min     = std::numeric_limits<T>::max();
   auto local_idx_min = std::numeric_limits<int64_t>::max();
 
-  if (threadIdx.x == 0) {
+  if (block.thread_rank() == 0) {
     block_min     = local_min;
     block_idx_min = local_idx_min;
   }
-  __syncthreads();
+  block.sync();
 
 #pragma unroll
-  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto const current_data = data[idx];
     if (current_data < local_min) {
       local_min     = current_data;
@@ -244,10 +269,10 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   }
 
   atomicMin(&block_min, local_min);
-  __syncthreads();
+  block.sync();
 
   if (local_min == block_min) { atomicMin(&block_idx_min, local_idx_min); }
-  __syncthreads();
+  block.sync();
 
   return block_idx_min;
 }
