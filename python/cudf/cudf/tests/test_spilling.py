@@ -119,7 +119,7 @@ def test_spillable_buffer(manager: SpillManager):
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
     assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
-    buf.ptr  # Expose pointer
+    buf.get_ptr(mode="write")  # Expose pointer
     assert buf.exposed
     assert not buf.spillable
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
@@ -137,7 +137,6 @@ def test_spillable_buffer(manager: SpillManager):
 @pytest.mark.parametrize(
     "attribute",
     [
-        "ptr",
         "get_ptr",
         "memoryview",
         "is_spilled",
@@ -210,7 +209,7 @@ def test_spilling_buffer(manager: SpillManager):
     buf = as_buffer(rmm.DeviceBuffer(size=10), exposed=False)
     buf.spill(target="cpu")
     assert buf.is_spilled
-    buf.ptr  # Expose pointer and trigger unspill
+    buf.get_ptr(mode="write")  # Expose pointer and trigger unspill
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
         buf.spill(target="cpu")
@@ -378,10 +377,10 @@ def test_get_ptr(manager: SpillManager, target):
     assert buf.spillable
     assert len(buf._spill_locks) == 0
     with acquire_spill_lock():
-        buf.get_ptr()
+        buf.get_ptr(mode="read")
         assert not buf.spillable
         with acquire_spill_lock():
-            buf.get_ptr()
+            buf.get_ptr(mode="read")
             assert not buf.spillable
         assert not buf.spillable
     assert buf.spillable
@@ -501,7 +500,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert len(buf._base._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
-    assert frames[0].ptr == buf.ptr
+    assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
 
     frames[0] = cupy.array(frames[0], copy=True)
     df2 = protocol.deserialize(header, frames)
@@ -589,7 +588,7 @@ def test_statistics_expose(manager: SpillManager):
     ]
 
     # Expose the first buffer
-    buffers[0].ptr
+    buffers[0].get_ptr(mode="write")
     assert len(manager.statistics.exposes) == 1
     stat = list(manager.statistics.exposes.values())[0]
     assert stat.count == 1
@@ -598,7 +597,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose all 10 buffers
     for i in range(10):
-        buffers[i].ptr
+        buffers[i].get_ptr(mode="write")
 
     # The rest of the ptr accesses should accumulate to a single stat
     # because they resolve to the same traceback.
@@ -618,7 +617,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose the new buffers and check that they are counted as spilled
     for i in range(10):
-        buffers[i].ptr
+        buffers[i].get_ptr(mode="write")
     assert len(manager.statistics.exposes) == 3
     stat = list(manager.statistics.exposes.values())[2]
     assert stat.count == 10

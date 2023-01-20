@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION
+# Copyright (c) 2020-2023, NVIDIA CORPORATION
 
 import itertools
 
@@ -488,7 +488,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             return window
         else:
             return cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view, window
+                self.obj.index._values.data_array_view(mode="write"), window
             )
 
     def __repr__(self):
@@ -527,13 +527,13 @@ class RollingGroupby(Rolling):
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                column.arange(len(self.obj)).data_array_view,
+                column.arange(len(self.obj)).data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
         else:
             return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._values.data_array_view,
+                self.obj.index._values.data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )

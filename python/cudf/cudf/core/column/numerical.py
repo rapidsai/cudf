@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -110,8 +110,8 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data_array_view.dtype):
-                item = self.data_array_view.dtype.type(item)
+            if np.can_cast(item, self.dtype):
+                item = self.dtype.type(item)
             else:
                 return False
         except (TypeError, ValueError):
@@ -573,14 +573,14 @@ class NumericalColumn(NumericalBaseColumn):
         found = 0
         if len(self):
             found = find(
-                self.data_array_view,
+                self.data_array_view(mode="read"),
                 value,
                 mask=self.mask,
             )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
-                    self.data_array_view,
+                    self.data_array_view(mode="read"),
                     value,
                     mask=self.mask,
                     compare=compare,

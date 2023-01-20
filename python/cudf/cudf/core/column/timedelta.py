@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -128,8 +128,12 @@ class TimeDeltaColumn(ColumnBase):
     def to_arrow(self) -> pa.Array:
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.as_numerical.data_array_view.copy_to_host())
+            mask = pa.py_buffer(
+                self.mask_array_view(mode="read").copy_to_host()
+            )
+        data = pa.py_buffer(
+            self.as_numerical.data_array_view(mode="read").copy_to_host()
+        )
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import ast
 import datetime
@@ -220,7 +220,7 @@ def query_execute(df, expr, callenv):
             "or bool dtypes."
         )
 
-    colarrays = [col.data_array_view for col in colarrays]
+    colarrays = [col.data_array_view(mode="write") for col in colarrays]
 
     kernel = compiled["kernel"]
     # process env args
