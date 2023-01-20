@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -169,7 +169,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         done
 
         # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
             gt="$WORKSPACE/cpp/build/gtests/$test_name"
             echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
             LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
@@ -232,7 +232,7 @@ else
     done
 
     # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
+    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
         gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
         echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
         LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"

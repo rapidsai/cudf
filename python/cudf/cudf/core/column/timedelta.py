@@ -205,9 +205,6 @@ class TimeDeltaColumn(ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        if op == "__floordiv__":
-            op = "__truediv__"
-
         lhs, rhs = (other, this) if reflect else (this, other)
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
