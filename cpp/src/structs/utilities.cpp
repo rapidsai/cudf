@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -28,15 +26,9 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <bitset>
-#include <iterator>
 
 namespace cudf::structs::detail {
 
@@ -216,54 +208,6 @@ flattened_table flatten_nested_columns(table_view const& input,
 namespace {
 
 /**
- * @brief Dispatcher to conservatively check if the input column may contain any non-empty nulls.
- *
- * For performance reason, no non-empty null will actually be checked. Instead, this will perform
- * conservative checking to see if the input column contains any lists or strings column that is
- * nulllable. As such, it may return false positive answer.
- */
-struct may_contain_non_empty_nulls_dispatch {
-  template <typename T>
-  bool operator()(column_view const& col) const
-  {
-    return std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
-      return type_dispatcher(child.type(), may_contain_non_empty_nulls_dispatch{}, child);
-    });
-  }
-};
-
-template <>
-bool may_contain_non_empty_nulls_dispatch::operator()<cudf::string_view>(
-  column_view const& col) const
-{
-  return col.nullable();
-}
-
-template <>
-bool may_contain_non_empty_nulls_dispatch::operator()<cudf::list_view>(column_view const& col) const
-{
-  // A lists column may have empty data (i.e., having child column of type EMPTY).
-  // Thus, it needs to be sanitized only if the child column is not empty.
-  return col.nullable() &&
-         col.child(lists_column_view::child_column_index).type().id() != type_id::EMPTY;
-}
-
-/**
- * @brief Conservatively check if the input column may contain any non-empty nulls.
- *
- * This will just call `type_dispatcher` on the `may_contain_non_empty_nulls_dispatch` functor.
- *
- * @param col The input column to check
- */
-bool may_contain_non_empty_nulls(column_view const& col)
-{
-  // Type EMPTY is not handled by `type_dispatcher`.
-  if (col.type().id() == type_id::EMPTY) { return false; }
-
-  return type_dispatcher(col.type(), may_contain_non_empty_nulls_dispatch{}, col);
-}
-
-/**
  * @brief Superimpose the given null mask into the input column without any sanitization for
  * non-empty nulls.
  *
@@ -426,7 +370,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
-  if (auto const input_view = input->view(); may_contain_non_empty_nulls(input_view)) {
+  if (auto const input_view = input->view(); has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
@@ -444,7 +388,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first; may_contain_non_empty_nulls(output_view)) {
+  if (auto const output_view = output.first; has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();
