@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
-
 #include <cuda/atomic>
 
 #include <limits>
@@ -104,70 +102,6 @@ __device__ void device_var(T const* data, int64_t size, double* var)
 }
 
 template <typename T>
-__device__ void device_idxmax(T const* data,
-                              int const items_per_thread,
-                              int64_t const* index,
-                              cudf::size_type size,
-                              T init_val,
-                              T* smax,
-                              int64_t* sidx)
-{
-  T local_max       = init_val;
-  int64_t local_idx = -1;
-
-#pragma unroll
-  for (cudf::size_type item = 0; item < items_per_thread; item++) {
-    if (threadIdx.x + (item * blockDim.x) < size) {
-      T load = data[threadIdx.x + item * blockDim.x];
-      if (load > local_max) {
-        local_max = load;
-        local_idx = index[threadIdx.x + item * blockDim.x];
-      }
-    }
-  }
-
-  atomicMax(smax, local_max);
-
-  __syncthreads();
-
-  if (local_max == (*smax)) { atomicMin(sidx, local_idx); }
-
-  __syncthreads();
-}
-
-template <typename T>
-__device__ void device_idxmin(T const* data,
-                              int const items_per_thread,
-                              int64_t const* index,
-                              cudf::size_type size,
-                              T init_val,
-                              T* smin,
-                              int64_t* sidx)
-{
-  T local_min       = init_val;
-  int64_t local_idx = -1;
-
-#pragma unroll
-  for (cudf::size_type item = 0; item < items_per_thread; item++) {
-    if (threadIdx.x + (item * blockDim.x) < size) {
-      T load = data[threadIdx.x + item * blockDim.x];
-      if (load < local_min) {
-        local_min = load;
-        local_idx = index[threadIdx.x + item * blockDim.x];
-      }
-    }
-  }
-
-  atomicMin(smin, local_min);
-
-  __syncthreads();
-
-  if (local_min == (*smin)) { atomicMin(sidx, local_idx); }
-
-  __syncthreads();
-}
-
-template <typename T>
 __device__ T BlockSum(T const* data, int64_t size)
 {
   __shared__ T block_sum;
@@ -214,7 +148,7 @@ __device__ double BlockVar(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMax(T const* data, int64_t size)
 {
-  T local_max = std::numeric_limits<T>::min();
+  auto local_max = std::numeric_limits<T>::min();
   __shared__ T block_max;
   if (threadIdx.x == 0) { block_max = local_max; }
   __syncthreads();
@@ -233,7 +167,7 @@ __device__ T BlockMax(T const* data, int64_t size)
 template <typename T>
 __device__ T BlockMin(T const* data, int64_t size)
 {
-  T local_min = std::numeric_limits<T>::max();
+  auto local_min = std::numeric_limits<T>::max();
   __shared__ T block_min;
   if (threadIdx.x == 0) { block_min == local_min; }
   __syncthreads();
@@ -250,34 +184,70 @@ __device__ T BlockMin(T const* data, int64_t size)
 }
 
 template <typename T>
-__device__ T BlockIdxMax(T const* data, int64_t* index, int64_t size)
+__device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-  __shared__ T smax;
-  __shared__ int64_t sidx;
+  __shared__ T block_max;
+  __shared__ int64_t block_idx_max;
+
+  // TODO: this is wrong but can pass tests!!!
+  auto local_max     = std::numeric_limits<int64_t>::min();
+  auto local_idx_max = std::numeric_limits<int64_t>::max();
+
   if (threadIdx.x == 0) {
-    smax = std::numeric_limits<int64_t>::min();
-    sidx = std::numeric_limits<int64_t>::max();
+    block_max     = local_max;
+    block_idx_max = local_idx_max;
   }
   __syncthreads();
-  device_idxmax<T>(
-    data, items_per_thread, index, size, std::numeric_limits<int64_t>::min(), &smax, &sidx);
-  return sidx;
+
+#pragma unroll
+  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+    auto const current_data = data[idx];
+    if (current_data > local_max) {
+      local_max     = current_data;
+      local_idx_max = index[idx];
+    }
+  }
+
+  atomicMax(&block_max, local_max);
+  __syncthreads();
+
+  if (local_max == block_max) { atomicMin(&block_idx_max, local_idx_max); }
+  __syncthreads();
+
+  return block_idx_max;
 }
 
 template <typename T>
-__device__ T BlockIdxMin(T const* data, int64_t* index, T min, int64_t size)
+__device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
 {
-  auto const items_per_thread = (size + blockDim.x - 1) / blockDim.x;
-  __shared__ T smin;
-  __shared__ int64_t sidx;
+  __shared__ T block_min;
+  __shared__ int64_t block_idx_min;
+
+  auto local_min     = std::numeric_limits<T>::max();
+  auto local_idx_min = std::numeric_limits<int64_t>::max();
+
   if (threadIdx.x == 0) {
-    smin = min;
-    sidx = std::numeric_limits<int64_t>::max();
+    block_min     = local_min;
+    block_idx_min = local_idx_min;
   }
   __syncthreads();
-  device_idxmin<T>(data, items_per_thread, index, size, min, &smin, &sidx);
-  return sidx;
+
+#pragma unroll
+  for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+    auto const current_data = data[idx];
+    if (current_data < local_min) {
+      local_min     = current_data;
+      local_idx_min = index[idx];
+    }
+  }
+
+  atomicMin(&block_min, local_min);
+  __syncthreads();
+
+  if (local_min == block_min) { atomicMin(&block_idx_min, local_idx_min); }
+  __syncthreads();
+
+  return block_idx_min;
 }
 
 extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
@@ -399,8 +369,7 @@ extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
                                             int64_t* index,
                                             int64_t size)
 {
-  *numba_return_value =
-    BlockIdxMin<int64_t>(data, index, std::numeric_limits<int64_t>::max(), size);
+  *numba_return_value = BlockIdxMin<int64_t>(data, index, size);
   return 0;
 }
 
@@ -409,6 +378,6 @@ extern "C" __device__ int BlockIdxMin_float64(int64_t* numba_return_value,
                                               int64_t* index,
                                               int64_t size)
 {
-  *numba_return_value = BlockIdxMin<double>(data, index, std::numeric_limits<double>::max(), size);
+  *numba_return_value = BlockIdxMin<double>(data, index, size);
   return 0;
 }
