@@ -682,8 +682,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNI
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong input_handle,
                                                                         jstring pattern_obj,
-                                                                        jint limit,
-                                                                        jboolean split_by_regex) {
+                                                                        jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -709,17 +708,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
-    auto result = split_by_regex ?
-                      cudf::strings::split_re(strs_input, pattern, max_split) :
-                      cudf::strings::split(strs_input, cudf::string_scalar{pattern}, max_split);
+    auto result = cudf::strings::split(strs_input, cudf::string_scalar{pattern}, max_split);
     return cudf::jni::convert_table_for_return(env, std::move(result));
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRegexProg(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRe(
     JNIEnv *env, jclass, jlong input_handle, jstring pattern_obj, jint regex_flags,
-    jint capture_groups, jint limit, jboolean split_by_regex) {
+    jint capture_groups, jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -746,9 +743,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRegexProg
     auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups = static_cast<cudf::strings::capture_groups>(capture_groups);
     auto const regex_prog = cudf::strings::regex_program::create(pattern, flags, groups);
-    auto result = split_by_regex ?
-                      cudf::strings::split_re(strings_column, *regex_prog, max_split) :
-                      cudf::strings::split(strings_column, cudf::string_scalar{pattern}, max_split);
+    auto result = cudf::strings::split_re(strings_column, *regex_prog, max_split);
     return cudf::jni::convert_table_for_return(env, std::move(result));
   }
   CATCH_STD(env, 0);
@@ -757,8 +752,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRegexProg
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
                                                                          jlong input_handle,
                                                                          jstring pattern_obj,
-                                                                         jint limit,
-                                                                         jboolean split_by_regex) {
+                                                                         jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -784,18 +778,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
 
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
-    auto result =
-        split_by_regex ?
-            cudf::strings::split_record_re(strs_input, pattern, max_split) :
-            cudf::strings::split_record(strs_input, cudf::string_scalar{pattern}, max_split);
+    auto result = cudf::strings::split_record(strs_input, cudf::string_scalar{pattern}, max_split);
     return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRegexProg(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRe(
     JNIEnv *env, jclass, jlong input_handle, jstring pattern_obj, jint regex_flags,
-    jint capture_groups, jint limit, jboolean split_by_regex) {
+    jint capture_groups, jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -822,10 +813,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRegexPro
     auto const groups = static_cast<cudf::strings::capture_groups>(capture_groups);
     auto const regex_prog = cudf::strings::regex_program::create(pattern, flags, groups);
     auto const max_split = limit > 1 ? limit - 1 : limit;
-    auto result =
-        split_by_regex ?
-            cudf::strings::split_record_re(strings_column, *regex_prog, max_split) :
-            cudf::strings::split_record(strings_column, cudf::string_scalar{pattern}, max_split);
+    auto result = cudf::strings::split_record_re(strings_column, *regex_prog, max_split);
     return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
