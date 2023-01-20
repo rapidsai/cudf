@@ -282,7 +282,7 @@ class SpillableBuffer(Buffer):
         Parameters
         ----------
         mode : str, default 'write'
-            Supported values are {"read", "write"}
+            Supported values are {"read", "write", "internal_write"}
             If "write" is passed, the SpillableBuffer
             is marked as exposed and make it un-spillable
             permanently. This mode is to be used if the
@@ -291,6 +291,10 @@ class SpillableBuffer(Buffer):
             returns a pointer by not marking it as
             exposed, this mode is intended for internal
             use only.
+            If "internal_write" is passed, a spill lock is
+            created if none exists and we ensure that doesn't
+            escape to the user, hence to be used only for internal
+            write purposes like in `mutable_view` for example.
 
         Return
         ------
@@ -300,6 +304,10 @@ class SpillableBuffer(Buffer):
         from cudf.core.buffer.utils import get_spill_lock
 
         spill_lock = get_spill_lock()
+
+        if mode == "internal_write":
+            if spill_lock is None:
+                spill_lock = SpillLock()
         if spill_lock is None or mode == "write":
             self.mark_exposed()
         else:

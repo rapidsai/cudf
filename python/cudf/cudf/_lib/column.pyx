@@ -323,7 +323,9 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data.get_ptr(mode="read"))
+            data = <void*><uintptr_t>(col.base_data.get_ptr(
+                mode="internal_write")
+            )
 
         cdef Column child_column
         if col.base_children:
@@ -333,7 +335,7 @@ cdef class Column:
         cdef libcudf_types.bitmask_type* mask
         if self.nullable:
             mask = <libcudf_types.bitmask_type*><uintptr_t>(
-                self.base_mask.get_ptr(mode="read")
+                self.base_mask.get_ptr(mode="internal_write")
             )
         else:
             mask = NULL

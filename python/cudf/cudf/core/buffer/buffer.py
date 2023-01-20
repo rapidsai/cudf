@@ -216,7 +216,10 @@ class Buffer(Serializable):
 
     def _get_cuda_array_interface(self, readonly=False):
         return {
-            "data": (self.get_ptr(mode="read"), readonly),
+            "data": (
+                self.get_ptr(mode="read" if readonly else "write"),
+                readonly,
+            ),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
@@ -243,7 +246,23 @@ class Buffer(Serializable):
         Parameters
         ----------
         mode : str, default 'write'
-            Supported values are {"read", "write"}
+            Supported values are {"read", "write", "internal_write"}
+            If "write", the modification to the buffer
+            is allowed. Hence can pass it onto a
+            third-party library as well.
+            If "read", then modification to the buffer
+            isn't expected to be done by the user via this pointer.
+            Hence mostly intended for internal read purposes or
+            device to host copies.
+            If "internal_write", then modification to the buffer
+            is allowed and strictly for internal libcudf function
+            call usage only.
+
+        Notes
+        -----
+        In case of `Buffer` class, any value passed to `mode` is a no-op.
+        The significance of each value explained above is a
+        guidance for any implementation of `Buffer` class.
         """
         return self._ptr
 
