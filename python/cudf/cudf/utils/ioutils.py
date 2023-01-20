@@ -696,6 +696,12 @@ Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
 
+Notes
+-----
+When `engine='auto'`, and `line=False`, the `pandas` json
+reader will be used. To override the selection, please
+use `engine='cudf'`.
+
 See Also
 --------
 cudf.DataFrame.to_json
