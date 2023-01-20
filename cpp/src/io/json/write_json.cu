@@ -15,8 +15,8 @@
  */
 
 /**
- * @file writer_impl.cu
- * @brief cuDF-IO JSON writer class implementation
+ * @file write_json.cu
+ * @brief cuDF-IO JSON writer implementation
  */
 
 #include "io/csv/durations.hpp"
@@ -25,6 +25,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/data_casting.cuh>
@@ -64,7 +65,6 @@
 
 namespace cudf::io::json::detail {
 
-using namespace cudf::io;
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
                                                  size_type num_columns,
                                                  rmm::cuda_stream_view stream);
@@ -125,12 +125,12 @@ struct escape_strings_fn {
 struct concat_structs_base {
   table_device_view const d_table;
   column_device_view const d_column_names;
-  string_view const prepend_row;            //{
-  string_view const append_row;             //} or }\n for json-lines
+  string_view const row_prefix;             //{
+  string_view const row_suffix;             //} or }\n for json-lines
   string_view const d_col_separator;        //:
   string_view const d_val_separator;        //,
   string_scalar_device_view const d_narep;  // null
-  bool include_nulls;
+  bool include_nulls = false;
   offset_type* d_offsets{};
   char* d_chars{};
 
@@ -158,22 +158,23 @@ struct concat_structs_base {
     offset_type bytes    = 0;
     bool write_separator = false;
 
-    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, prepend_row);
-    bytes += prepend_row.size_bytes();
+    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, row_prefix);
+    bytes += row_prefix.size_bytes();
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
-      auto const col_idx      = thrust::distance(d_table.begin(), itr);
-      auto const d_column     = *itr;
-      bool const null_element = d_column.is_null(idx);
+      auto const col_idx         = thrust::distance(d_table.begin(), itr);
+      auto const d_column        = *itr;
+      bool const is_null_element = d_column.is_null(idx);
+      bool const include_element = (include_nulls == true || !is_null_element);
 
-      if (write_separator && (include_nulls == true || !null_element)) {
+      if (write_separator && include_element) {
         if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_val_separator);
         bytes += d_val_separator.size_bytes();
         write_separator = false;
       }
 
       // column_name:
-      if ((include_nulls == true || !null_element) && !d_column_names.is_null(col_idx)) {
+      if (include_element && !d_column_names.is_null(col_idx)) {
         auto const d_name = d_column_names.element<string_view>(col_idx);
         if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_name);
         bytes += d_name.size_bytes();
@@ -182,16 +183,16 @@ struct concat_structs_base {
       }
 
       // write out column's row data (or narep if the row is null)
-      if (include_nulls == true || !null_element) {
-        auto const d_str = null_element ? d_narep.value() : d_column.element<string_view>(idx);
+      if (include_element) {
+        auto const d_str = is_null_element ? d_narep.value() : d_column.element<string_view>(idx);
         if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, d_str);
         bytes += d_str.size_bytes();
       }
 
-      write_separator = write_separator || (include_nulls == true) || !null_element;
+      write_separator = write_separator || include_element;
     }
-    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, append_row);
-    bytes += append_row.size_bytes();
+    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, row_suffix);
+    bytes += row_suffix.size_bytes();
 
     if (!d_chars) d_offsets[idx] = bytes;
   }
@@ -204,8 +205,8 @@ struct concat_structs_base {
  *
  * @param strings_columns Table of strings columns
  * @param column_names Column of names for each column in the table
- * @param prepend_row Prepend this string to each row
- * @param append_row  Append this string to each row
+ * @param row_prefix Prepend this string to each row
+ * @param row_suffix  Append this string to each row
  * @param column_name_separator  Separator between column name and value
  * @param value_separator Separator between values
  * @param narep Null-String replacement
@@ -216,8 +217,8 @@ struct concat_structs_base {
  */
 std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           column_view const& column_names,
-                                          string_view const prepend_row,
-                                          string_view const append_row,
+                                          string_view const row_prefix,
+                                          string_view const row_suffix,
                                           string_view const column_name_separator,
                                           string_view const value_separator,
                                           string_scalar const& narep,
@@ -244,8 +245,8 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto d_narep        = get_scalar_device_view(const_cast<string_scalar&>(narep));
   concat_structs_base fn{*d_table,
                          *d_column_names,
-                         prepend_row,
-                         append_row,
+                         row_prefix,
+                         row_suffix,
                          column_name_separator,
                          value_separator,
                          d_narep,
@@ -542,20 +543,14 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
 {
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
-  rmm::device_uvector<char> d_chars(host_chars.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_chars.data(), host_chars.data(), host_chars.size(), cudaMemcpyHostToDevice, stream.value()));
+  auto d_chars = cudf::detail::make_device_uvector_async(host_chars, stream);
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
-  std::transform(host_strings.begin(), host_strings.end(), offsets.begin() + 1, [](auto& str) {
-    return str.size();
-  });
-  std::inclusive_scan(offsets.begin(), offsets.end(), offsets.begin());
-  rmm::device_uvector<cudf::size_type> d_offsets(offsets.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                                offsets.data(),
-                                offsets.size() * sizeof(cudf::size_type),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
+  std::transform_inclusive_scan(host_strings.begin(),
+                                host_strings.end(),
+                                offsets.begin() + 1,
+                                std::plus<cudf::size_type>{},
+                                [](auto& str) { return str.size(); });
+  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream);
   return cudf::make_strings_column(
     host_strings.size(), std::move(d_offsets), std::move(d_chars), {}, 0);
 }
@@ -621,13 +616,8 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                                  ptr_all_bytes,
-                                  total_num_bytes * sizeof(char),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
-    stream.synchronize();
+    auto const h_bytes = cudf::detail::make_host_vector_sync(
+      device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
   }
