@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -200,9 +200,6 @@ class TimeDeltaColumn(ColumnBase):
 
         if out_dtype is None:
             return NotImplemented
-
-        if op == "__floordiv__":
-            op = "__truediv__"
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
