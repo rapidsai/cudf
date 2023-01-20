@@ -56,12 +56,13 @@ def read_json(
         )
     if engine == "cudf_legacy" and not lines:
         raise ValueError(f"{engine} engine only supports JSON Lines format")
+    if engine == "auto":
+        engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
         raise ValueError(
             "keep_quotes='True' is supported only with engine='cudf'"
         )
-    if engine == "auto":
-        engine = "cudf" if lines else "pandas"
+
     if engine == "cudf_legacy" or engine == "cudf":
         if dtype is None:
             dtype = True

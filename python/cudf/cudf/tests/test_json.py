@@ -661,12 +661,7 @@ def test_json_empty_types():
     {"c": {"d": []}}
     {"e": [{}]}
     """
-    df = cudf.read_json(
-        StringIO(json_str),
-        engine="cudf",
-        orient="records",
-        lines=True,
-    )
+    df = cudf.read_json(StringIO(json_str), orient="records", lines=True)
     pdf = pd.read_json(StringIO(json_str), orient="records", lines=True)
     assert_eq(df, pdf)
 
@@ -838,7 +833,6 @@ def test_json_keep_quotes(keep_quotes, result):
 
     actual = cudf.read_json(
         bytes_file,
-        engine="cudf",
         orient="records",
         lines=True,
         keep_quotes=keep_quotes,
@@ -967,7 +961,7 @@ def test_json_dtypes_nested_data():
 class TestNestedJsonReaderCommon:
     @pytest.mark.parametrize("chunk_size", [10, 100, 1024, 1024 * 1024])
     def test_chunked_nested_json_reader(self, tag, data, chunk_size):
-        expected = cudf.read_json(StringIO(data), engine="cudf", lines=True)
+        expected = cudf.read_json(StringIO(data), lines=True)
 
         source_size = len(data)
         chunks = []
@@ -975,7 +969,6 @@ class TestNestedJsonReaderCommon:
             chunks.append(
                 cudf.read_json(
                     StringIO(data),
-                    engine="cudf",
                     byte_range=[chunk_start, chunk_size],
                     lines=True,
                 )
@@ -985,7 +978,7 @@ class TestNestedJsonReaderCommon:
 
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
-        target = cudf.read_json(StringIO(data), engine="cudf", lines=True)
+        target = cudf.read_json(StringIO(data), lines=True)
         if tag == "dtype_mismatch":
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation
@@ -1171,7 +1164,6 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     pdf = _replace_with_nulls(pdf, [123, "123", 12.3, "abc"])
     gdf = cudf.read_json(
         StringIO(jsonl_string),
-        engine="cudf",
         orient="records",
         lines=True,
     )
@@ -1218,7 +1210,6 @@ def test_json_nested_mixed_types_error(jsonl_string):
     with pytest.raises(RuntimeError):
         cudf.read_json(
             StringIO(jsonl_string),
-            engine="cudf",
             orient="records",
             lines=True,
         )
