@@ -372,7 +372,12 @@ class ListMethods(ColumnMethods):
                 out = out._scatter_by_column(
                     out_of_bounds_mask, cudf.Scalar(default)
                 )
-
+        if out.dtype != self._column.dtype.element_type:
+            # libcudf doesn't maintain struct labels so we must transfer over
+            # manually from the input column if we lost some information
+            # somewhere. Not doing this unilaterally since the cost is
+            # non-zero..
+            out = out._with_type_metadata(self._column.dtype.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:
