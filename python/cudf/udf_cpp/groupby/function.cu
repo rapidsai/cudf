@@ -169,7 +169,7 @@ __device__ T BlockMin(T const* data, int64_t size)
 {
   auto local_min = std::numeric_limits<T>::max();
   __shared__ T block_min;
-  if (threadIdx.x == 0) { block_min == local_min; }
+  if (threadIdx.x == 0) { block_min = local_min; }
   __syncthreads();
 
 #pragma unroll
