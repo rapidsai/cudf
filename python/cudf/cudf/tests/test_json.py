@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import copy
 import gzip
@@ -27,16 +27,14 @@ def make_numeric_dataframe(nrows, dtype):
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
-    renamer = {
-        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
-    }
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd._testing.makeCustomDataframe(
-        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    test_pdf = pd.DataFrame(
+        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
+        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
@@ -44,7 +42,7 @@ def pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -512,7 +510,8 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
 )
 def test_json_to_json_compare_contents(gdf, pdf):
     expected_json = pdf.to_json(lines=True, orient="records")
-    actual_json = gdf.to_json(lines=True, orient="records")
+    with pytest.warns(UserWarning):
+        actual_json = gdf.to_json(lines=True, orient="records")
 
     assert expected_json == actual_json
 
@@ -964,12 +963,7 @@ class TestNestedJsonReaderCommon:
                 )
             )
         df = cudf.concat(chunks, ignore_index=True)
-        if tag == "missing" and chunk_size == 10:
-            with pytest.raises(AssertionError):
-                # nested JSON reader inferences integer with nulls as float64
-                assert expected.to_arrow().equals(df.to_arrow())
-        else:
-            assert expected.to_arrow().equals(df.to_arrow())
+        assert expected.to_arrow().equals(df.to_arrow())
 
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
@@ -981,6 +975,10 @@ class TestNestedJsonReaderCommon:
                 # pandas parses integer values in float representation
                 # as integer
                 assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        elif tag == "missing":
+            with pytest.raises(AssertionError):
+                # pandas inferences integer with nulls as float64
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
         else:
             assert pa.Table.from_pandas(expected).equals(target.to_arrow())
 
@@ -989,7 +987,8 @@ def test_json_round_trip_gzip():
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["abc", "def", "ghi"]})
     bytes = BytesIO()
     with gzip.open(bytes, mode="wb") as fo:
-        df.to_json(fo, orient="records", lines=True)
+        with pytest.warns(UserWarning):
+            df.to_json(fo, orient="records", lines=True)
     bytes.seek(0)
     with gzip.open(bytes, mode="rb") as fo:
         written_df = cudf.read_json(fo, orient="records", lines=True)
@@ -1000,9 +999,210 @@ def test_json_round_trip_gzip():
 
     with gzip.open(bytes, mode="wb") as fo:
         fo.seek(loc)
-        df.to_json(fo, orient="records", lines=True)
+        with pytest.warns(UserWarning):
+            df.to_json(fo, orient="records", lines=True)
     bytes.seek(loc)
     with gzip.open(bytes, mode="rb") as fo:
         fo.seek(loc)
         written_df = cudf.read_json(fo, orient="records", lines=True)
     assert_eq(written_df, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # # empty input
+        # assert failing due to missing index size information
+        "",
+        "[]",
+        "[]\n[]\n[]",
+        # simple values
+        """[1]\n[2]\n[3]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nulls
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]\n[null, null, null]""",
+        """[1, 2, 3]\n[4, 5, null]\n[]""",
+        # missing
+        """[1, 2, 3]\n[4, 5   ]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9, 10]""",
+        """[1, 2, 3]\n[4, 5, 6, {}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, []]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, {"a": 10}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, [10]]\n[7, 8, 9]""",
+        # mixed
+        """[1, 2, 3]\n[4, 5, {}]\n[7, 8, 9]""",
+        """[1, 2, {}]\n[4, 5, 6]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, [6]]\n[7, 8, 9]""",
+        """[1, 2, [3]]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nested
+        """[1, 2, [3]]\n[4, 5, [6]]\n[7, 8, [9]]""",
+        """[1, 2, {"a": 3}]\n[4, 5, {"b": 6}]\n[7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": 3}]]
+           [4, 5, [{"b": 6}, {"b": 6}, {}, {"b": 6}]]
+           [7, 8, [{}]]""",
+        """[1, 2, {"a": [3, 3, 3]}]
+           [4, 5, {"b": [6, 6]}]
+           [7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": null}]]
+           [4, 5, [{"b": [6.0, 6, 06]}, {"b": [6]}, {}, {"b": null}]]
+           [7, 8, [{}]]""",
+    ],
+)
+@pytest.mark.parametrize("lines", [True, False])
+def test_json_array_of_arrays(data, lines):
+    data = data if lines else "[" + data.replace("\n", ",") + "]"
+    pdf = pd.read_json(data, orient="values", lines=lines)
+    df = cudf.read_json(
+        StringIO(data),
+        engine="cudf_experimental",
+        orient="values",
+        lines=lines,
+    )
+    # if mixed with dict/list type, replace other types with None.
+    if 2 in pdf.columns and any(
+        pdf[2].apply(lambda x: isinstance(x, dict) or isinstance(x, list))
+    ):
+        pdf[2] = pdf[2].apply(
+            lambda x: x if isinstance(x, dict) or isinstance(x, list) else None
+        )
+    # TODO: Replace string column names with integer column names
+    # for values orient in cudf json reader
+    pdf.rename(columns={name: str(name) for name in pdf.columns}, inplace=True)
+    # assert_eq(pdf, df)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "jsonl_string",
+    [
+        # simple list with mixed types
+        """{"a":[123, {}], "b":1.1}""",
+        """{"a":[123, {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[{"0": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[123, {"0": 123}, 12.3], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[123, {"0": 123}, null], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":["123", {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[{"0": 123}, "123"], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":["123", {"0": 123}, "123"], "b":1.0}\n {"b":1.1}""",
+        """{"a":[123]}\n {"a":[{"0": 123}], "b":1.0}\n {"b":1.1}""",
+        """{"a":[{"0": 123}]}\n {"a":[123], "b":1.0}\n {"b":1.1}""",
+        """{"a":[{"0": 123}]}\n {"a": []}\n {"a":[123], "b":1.0}\n{"b":1.1}""",
+        """{"b":1.0, "a":[{"0": 123}]}\n {"a":[123]}\n {"b":1.1}\n{"a": []}""",
+        """{"a": []}\n {"a":[{"0": 123}]}\n {"a":[123], "b":1.0}\n{"b":1.1}""",
+        """{"a": []}\n {"a":[123], "b":1.0}\n {"a":[{"0": 123}]}\n{"b":1.1}""",
+        # nested list with mixed types
+        """{"a":[123, [{"0": 123}, {}]], "b":1.0}
+           {"b":1.1}
+           {"a":[]}
+           {"a":[123]}
+           {"a":[[123], []]}""",
+        """{"a":[], "b":1.0}
+           {"a":[[[456]]]}
+           {"a":[[123]]}
+           {"a":[123]}""",
+        """{"a":[123], "b":1.0}
+           {"b":1.1}
+           {"b":2.1}
+           {"a":[[[[[[]]]]]]}""",
+        """{"a":[123], "b":1.0}
+           {"a":[[[[[[]]]]]]}
+           {"a":[[[[[[]]]]], [[[[[]]]]]]}
+           {"a":[[[[[[]]]], [[[[]]]]]]}
+           {"a":[[[[[[]]], [[[]]]]]]}
+           {"a":[[[[[[]], [[]]]]]]}
+           {"a":[[[[[[], 123, []]]]]]}""",
+        # mixed elements in multiple columns
+        """{"a":[123, {"0": 123}], "b":1.0}
+           {"c": ["abc"], "b":1.1}
+           {"c": ["abc", []] }""",
+    ],
+)
+def test_json_nested_mixed_types_in_list(jsonl_string):
+    # utility function for this test:
+    # replace list elements with None if it has dict and non-dict (ignore None)
+    def _replace_in_list(list_to_replace, replace_items):
+        return [
+            _replace_in_list(x, replace_items)
+            if isinstance(x, list)
+            else None
+            if x in replace_items
+            else x
+            for x in list_to_replace
+        ]
+
+    def _replace_with_nulls(df, replace_items):
+        for col in df.columns:
+            if df[col].dtype == "object":
+                df[col] = df[col].apply(
+                    lambda x: _replace_in_list(x, replace_items)
+                    if isinstance(x, list)
+                    else x
+                )
+        return df
+
+    # both json lines and json string tested.
+    json_string = "[" + jsonl_string.replace("\n", ",") + "]"
+    pdf = pd.read_json(jsonl_string, orient="records", lines=True)
+    pdf2 = pd.read_json(json_string, orient="records", lines=False)
+    assert_eq(pdf, pdf2)
+    # replace list elements with None if it has dict and non-dict
+    # in above test cases, these items are mixed with dict/list items
+    # so, replace them with None.
+    pdf = _replace_with_nulls(pdf, [123, "123", 12.3, "abc"])
+    gdf = cudf.read_json(
+        StringIO(jsonl_string),
+        engine="cudf_experimental",
+        orient="records",
+        lines=True,
+    )
+    gdf2 = cudf.read_json(
+        StringIO(json_string),
+        engine="cudf_experimental",
+        orient="records",
+        lines=False,
+    )
+    if """[{"0": 123}, {}]""" not in jsonl_string:
+        # {} in pandas is represented as {"0": None} in cudf
+        assert_eq(gdf, pdf)
+        assert_eq(gdf2, pdf)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=gdf.to_arrow().schema, safe=False
+    )
+    assert gdf.to_arrow().equals(pa_table_pdf)
+    assert gdf2.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
+    "jsonl_string",
+    [
+        # mixed type in list (in different order)
+        """{"a":[[{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        """{"a":[{"1": 321}, [{"0": 123}, {}], ], "b":1.0}""",
+        """{"a":[123, [{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        """{"a":[null, [{"0": 123}, {}], {"1": 321}], "b":1.0}""",
+        # mixed type in struct (in different order)
+        """{"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": null}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+        """{"a": {"b": {"0": 123}, "c": 123}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": {"1": 321}}, "d":1.0}
+           {"a": {"b": {"0": 123}, "c": [123, 123]}, "d":1.0}""",
+    ],
+)
+def test_json_nested_mixed_types_error(jsonl_string):
+    # mixing list and struct should raise an exception
+    with pytest.raises(RuntimeError):
+        cudf.read_json(
+            StringIO(jsonl_string),
+            engine="cudf_experimental",
+            orient="records",
+            lines=True,
+        )

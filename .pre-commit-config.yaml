@@ -83,6 +83,12 @@ repos:
                 entry: '(category=|\s)DeprecationWarning[,)]'
                 language: pygrep
                 types_or: [python, cython]
+              - id: no-programmatic-xfail
+                name: no-programmatic-xfail
+                description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'
+                entry: 'pytest\.xfail'
+                language: pygrep
+                types: [python]
               - id: cmake-format
                 name: cmake-format
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -131,6 +137,16 @@ repos:
                 language: system
                 pass_filenames: false
                 verbose: false
+      - repo: https://github.com/codespell-project/codespell
+        rev: v2.1.0
+        hooks:
+              - id: codespell
+                exclude: |
+                  (?x)^(
+                    .*test.*|
+                    ^CHANGELOG.md$|
+                    ^.*versioneer.py$
+                  )
 
 default_language_version:
       python: python3

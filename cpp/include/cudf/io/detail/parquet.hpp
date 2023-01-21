@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,62 @@ class reader {
 };
 
 /**
+ * @brief The reader class that supports iterative reading of a given file.
+ *
+ * This class intentionally subclasses the `reader` class with private inheritance to hide the
+ * `reader::read()` API. As such, only chunked reading APIs are supported.
+ */
+class chunked_reader : private reader {
+ public:
+  /**
+   * @brief Constructor from a read size limit and an array of data sources with reader options.
+   *
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * If `chunk_read_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
+   * whole file and return a table containing all rows.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          parquet_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr);
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header.
+   *
+   * Since the declaration of the internal `_impl` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_reader();
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::has_next
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
+};
+
+/**
  * @brief Class to write parquet dataset data into columns.
  */
 class writer {
@@ -129,6 +185,8 @@ class writer {
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same

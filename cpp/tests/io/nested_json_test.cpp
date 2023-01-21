@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,9 +469,10 @@ TEST_P(JsonParserTest, ExtractColumn)
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"( [{"a":0.0, "b":1.0}, {"a":0.1, "b":1.1}, {"a":0.2, "b":1.2}] )";
+  auto const d_input      = cudf::detail::make_device_uvector_async(
+    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
   // Get the JSON's tree representation
-  auto const cudf_table = json_parser(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream, mr);
+  auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
   auto const expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
@@ -506,8 +507,10 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
+  auto const d_ascii_pass      = cudf::detail::make_device_uvector_sync(
+    cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()}, stream);
 
-  CUDF_EXPECT_NO_THROW(json_parser(ascii_pass, default_options, stream, mr));
+  CUDF_EXPECT_NO_THROW(json_parser(d_ascii_pass, default_options, stream, mr));
 
   // utf-8 string that fails parsing.
   std::string const utf_failed = R"([
@@ -517,7 +520,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(json_parser(utf_failed, default_options, stream, mr));
+  auto const d_utf_failed      = cudf::detail::make_device_uvector_sync(
+    cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()}, stream);
+  CUDF_EXPECT_NO_THROW(json_parser(d_utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
   std::string const utf_pass = R"([
@@ -528,7 +533,9 @@ TEST_P(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  CUDF_EXPECT_NO_THROW(json_parser(utf_pass, default_options, stream, mr));
+  auto const d_utf_pass      = cudf::detail::make_device_uvector_sync(
+    cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()}, stream);
+  CUDF_EXPECT_NO_THROW(json_parser(d_utf_pass, default_options, stream, mr));
 }
 
 TEST_P(JsonParserTest, ExtractColumnWithQuotes)
@@ -547,9 +554,10 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
   options.enable_keep_quotes(true);
 
   std::string const input = R"( [{"a":"0.0", "b":1.0}, {"b":1.1}, {"b":2.1, "a":"2.0"}] )";
+  auto const d_input      = cudf::detail::make_device_uvector_async(
+    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
   // Get the JSON's tree representation
-  auto const cudf_table =
-    json_parser(cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr);
+  auto const cudf_table = json_parser(d_input, options, stream, mr);
 
   auto constexpr expected_col_count = 2;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
@@ -590,15 +598,16 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
 
   // libcudf does not currently support a mix of lists and structs.
   for (auto const& input : inputs_fail) {
-    EXPECT_THROW(auto const cudf_table = json_parser(
-                   cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr),
+    auto const d_input = cudf::detail::make_device_uvector_async(
+      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    EXPECT_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr),
                  cudf::logic_error);
   }
 
   for (auto const& input : inputs_succeed) {
-    CUDF_EXPECT_NO_THROW(
-      auto const cudf_table = json_parser(
-        cudf::host_span<SymbolT const>{input.data(), input.size()}, options, stream, mr));
+    auto const d_input = cudf::detail::make_device_uvector_async(
+      cudf::host_span<char const>{input.c_str(), input.size()}, stream);
+    CUDF_EXPECT_NO_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr));
   }
 }
 
@@ -617,9 +626,10 @@ TEST_P(JsonParserTest, EmptyString)
   cudf::io::json_reader_options default_options{};
 
   std::string const input = R"([])";
+  auto const d_input      = cudf::detail::make_device_uvector_sync(
+    cudf::host_span<char const>{input.c_str(), input.size()}, stream);
   // Get the JSON's tree representation
-  auto const cudf_table = json_parser(
-    cudf::host_span<SymbolT const>{input.data(), input.size()}, default_options, stream, mr);
+  auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
   auto const expected_col_count = 0;
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);

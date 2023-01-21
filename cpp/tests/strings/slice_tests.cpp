@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/slice.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/substring.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -30,10 +30,10 @@
 #include <string>
 #include <vector>
 
-struct StringsSubstringsTest : public cudf::test::BaseFixture {
+struct StringsSliceTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(StringsSubstringsTest, Substring)
+TEST_F(StringsSliceTest, Substring)
 {
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
@@ -51,8 +51,7 @@ TEST_F(StringsSubstringsTest, Substring)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-class Parameters : public StringsSubstringsTest,
-                   public testing::WithParamInterface<cudf::size_type> {
+class Parameters : public StringsSliceTest, public testing::WithParamInterface<cudf::size_type> {
 };
 
 TEST_P(Parameters, Substring)
@@ -146,11 +145,11 @@ TEST_P(Parameters, AllNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-INSTANTIATE_TEST_CASE_P(StringsSubstringsTest,
+INSTANTIATE_TEST_CASE_P(StringsSliceTest,
                         Parameters,
                         testing::ValuesIn(std::array<cudf::size_type, 3>{1, 2, 3}));
 
-TEST_F(StringsSubstringsTest, NegativePositions)
+TEST_F(StringsSliceTest, NegativePositions)
 {
   cudf::test::strings_column_wrapper strings{
     "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz", ""};
@@ -183,7 +182,7 @@ TEST_F(StringsSubstringsTest, NegativePositions)
   }
 }
 
-TEST_F(StringsSubstringsTest, NullPositions)
+TEST_F(StringsSliceTest, NullPositions)
 {
   cudf::test::strings_column_wrapper strings{"a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz"};
   auto strings_column = cudf::strings_column_view(strings);
@@ -224,7 +223,7 @@ TEST_F(StringsSubstringsTest, NullPositions)
   }
 }
 
-TEST_F(StringsSubstringsTest, MaxPositions)
+TEST_F(StringsSliceTest, MaxPositions)
 {
   cudf::test::strings_column_wrapper strings{"a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz"};
   auto strings_column = cudf::strings_column_view(strings);
@@ -253,7 +252,7 @@ TEST_F(StringsSubstringsTest, MaxPositions)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsSubstringsTest, Error)
+TEST_F(StringsSliceTest, Error)
 {
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
   auto strings_view = cudf::strings_column_view(strings);
@@ -275,7 +274,7 @@ TEST_F(StringsSubstringsTest, Error)
                cudf::logic_error);
 }
 
-TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
+TEST_F(StringsSliceTest, ZeroSizeStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
@@ -296,7 +295,7 @@ TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
   cudf::test::expect_column_empty(results->view());
 }
 
-TEST_F(StringsSubstringsTest, AllEmpty)
+TEST_F(StringsSliceTest, AllEmpty)
 {
   auto strings_col  = cudf::test::strings_column_wrapper({"", "", "", "", ""});
   auto strings_view = cudf::strings_column_view(strings_col);
@@ -308,7 +307,7 @@ TEST_F(StringsSubstringsTest, AllEmpty)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsTest, EmptyDelimiter)
+TEST_F(StringsSliceTest, EmptyDelimiter)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -328,7 +327,7 @@ TEST_F(StringsSubstringsTest, EmptyDelimiter)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsTest, ZeroCount)
+TEST_F(StringsSliceTest, ZeroCount)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -348,7 +347,7 @@ TEST_F(StringsSubstringsTest, ZeroCount)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsTest, SearchScalarDelimiter)
+TEST_F(StringsSliceTest, SearchScalarDelimiter)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -469,7 +468,7 @@ TEST_F(StringsSubstringsTest, SearchScalarDelimiter)
   }
 }
 
-TEST_F(StringsSubstringsTest, SearchColumnDelimiter)
+TEST_F(StringsSliceTest, SearchColumnDelimiter)
 {
   {
     auto col0 = cudf::test::strings_column_wrapper(

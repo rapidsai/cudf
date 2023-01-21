@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -77,6 +77,8 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     get_time_unit,
+    is_mixed_with_object_dtype,
+    min_scalar_type,
     min_unsigned_type,
     np_to_pa_dtype,
     pandas_dtypes_alias_to_cudf_alias,
@@ -615,7 +617,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result | libcudf.unary.is_nan(self)
 
@@ -626,7 +628,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of a float column
             result = result & libcudf.unary.is_non_nan(self)
 
@@ -683,7 +685,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
-            indices = indices.astype("int32")
+            indices = indices.astype(libcudf.types.size_type_dtype)
         if not libcudf.copying._gather_map_is_valid(
             indices, len(self), check_bounds, nullify
         ):
@@ -897,8 +899,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             ordered = False
 
-        sr = cudf.Series(self)
-
         # Re-label self w.r.t. the provided categories
         if (
             isinstance(dtype, cudf.CategoricalDtype)
@@ -907,7 +907,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             isinstance(dtype, pd.CategoricalDtype)
             and dtype.categories is not None
         ):
-            labels = sr._label_encoding(cats=dtype.categories)
+            labels = self._label_encoding(cats=as_column(dtype.categories))
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -916,20 +916,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             return build_categorical_column(
                 categories=as_column(dtype.categories),
-                codes=labels._column,
+                codes=labels,
                 mask=self.mask,
                 ordered=dtype.ordered,
             )
 
-        cats = sr.unique().astype(sr.dtype)
+        cats = self.unique().astype(self.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr._label_encoding(
+        labels = self._label_encoding(
             cats=cats, dtype=label_dtype, na_sentinel=1
         )
 
         # columns include null index in factorization; remove:
         if self.has_nulls():
-            cats = cats._column.dropna(drop_nan=False)
+            cats = cats.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
             if cudf.dtype(min_type).itemsize < labels.dtype.itemsize:
@@ -937,7 +937,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return build_categorical_column(
             categories=cats,
-            codes=labels._column,
+            codes=labels,
             mask=self.mask,
             ordered=ordered,
         )
@@ -998,7 +998,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def argsort(
         self, ascending: bool = True, na_position: str = "last"
-    ) -> ColumnBase:
+    ) -> "cudf.core.column.NumericalColumn":
 
         return self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1188,15 +1188,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         result_col = self
 
+        # TODO: If and when pandas decides to validate that `min_count` >= 0 we
+        # should insert comparable behavior.
+        # https://github.com/pandas-dev/pandas/issues/50022
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        elif min_count < 0:
-            warnings.warn(
-                f"min_count value cannot be negative({min_count}), will "
-                f"default to 0."
-            )
         return result_col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
@@ -1214,6 +1212,75 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         the children of ``self``.
         """
         return self
+
+    def _label_encoding(
+        self, cats: ColumnBase, dtype: Dtype = None, na_sentinel=-1
+    ):
+        """
+        Convert each value in `self` into an integer code, with `cats`
+        providing the mapping between codes and values.
+
+        Examples
+        --------
+        >>> from cudf.core.column import as_column
+        >>> col = as_column(['foo', 'bar', 'foo', 'baz'])
+        >>> cats = as_column(['foo', 'bar', 'baz'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bf3155c0>
+        [
+          0,
+          1,
+          0,
+          2
+        ]
+        dtype: int8
+        >>> cats = as_column(['foo', 'bar'])
+        >>> col._label_encoding(cats)
+        <cudf.core.column.numerical.NumericalColumn object at 0x7f99bfde0e40>
+        [
+          0,
+          1,
+          0,
+          -1
+        ]
+        dtype: int8
+        """
+        from cudf._lib.join import join as cpp_join
+
+        def _return_sentinel_column():
+            return cudf.core.column.full(
+                size=len(self), fill_value=na_sentinel, dtype=dtype
+            )
+
+        if dtype is None:
+            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+
+        if is_mixed_with_object_dtype(self, cats):
+            return _return_sentinel_column()
+
+        try:
+            # Where there is a type-cast failure, we have
+            # to catch the exception and return encoded labels
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            return _return_sentinel_column()
+
+        codes = arange(len(cats), dtype=dtype)
+        left_gather_map, right_gather_map = cpp_join(
+            [self], [cats], how="left"
+        )
+        codes = codes.take(
+            right_gather_map, nullify=True, check_bounds=False
+        ).fillna(na_sentinel)
+
+        # reorder `codes` so that its values correspond to the
+        # values of `self`:
+        order = arange(len(self))
+        order = order.take(left_gather_map, check_bounds=False).argsort()
+        codes = codes.take(order)
+        return codes
 
 
 def column_empty_like(
@@ -1277,7 +1344,7 @@ def column_empty(
     elif is_list_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
@@ -1286,16 +1353,17 @@ def column_empty(
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
-                        size=row_count * cudf.dtype("int32").itemsize
+                        size=row_count
+                        * cudf.dtype(libcudf.types.size_type_dtype).itemsize
                     )
                 ),
-                dtype="int32",
+                dtype=libcudf.types.size_type_dtype,
             ),
         )
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
-            full(row_count + 1, 0, dtype="int32"),
+            full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
             build_column(
                 data=as_buffer(
                     rmm.DeviceBuffer(
@@ -1765,7 +1833,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = as_buffer(arbitrary, exposed=True)
+        data = as_buffer(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -2222,7 +2290,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
         typecode = typestr[1]
         if typecode == "t":
             mask_size = bitmask_allocation_size_bytes(nelem)
-            mask = as_buffer(data=ptr, size=mask_size, owner=obj, exposed=True)
+            mask = as_buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             col = as_column(mask)
             mask = bools_to_mask(col)

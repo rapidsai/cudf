@@ -559,7 +559,7 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         string_view term{"]", 1};
-        bool const is_string = *pos == '\'' ? true : false;
+        bool const is_string = *pos == '\'';
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
@@ -969,6 +969,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
+
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
 
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(

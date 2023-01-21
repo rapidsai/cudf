@@ -105,7 +105,7 @@ struct regex_program {
   int32_t groups_count() const;
 
   /**
-   * @brief Return the pattern used to create this instance
+   * @brief Return the size of the working memory for the regex execution
    *
    * @param num_strings Number of strings for computation
    * @return Size of the working memory in bytes

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
     auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
-      - input_data[input_view.offset()]               // subract first offset if non-zero
+      - input_data[input_view.offset()]               // subtract first offset if non-zero
       + partition_offsets[partition_index];           // add offset of source column
 
     if (Nullable) {
@@ -293,7 +293,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           bytes_offset;
 
         CUDF_CUDA_TRY(
-          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
+          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
 
         // get ready for the next column
         d_new_chars += bytes;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/reverse.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
@@ -64,10 +65,11 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
+#include <cudf/strings/reverse.hpp>
+#include <cudf/strings/slice.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strip.hpp>
-#include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/transform.hpp>
@@ -652,6 +654,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listsDifferenceDistinct(J
     return release_as_jlong(cudf::lists::difference_distinct(
         cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}, cudf::null_equality::EQUAL,
         cudf::nan_equality::ALL_EQUAL));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNIEnv *env, jclass,
+                                                                             jlong input_handle) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    switch (input->type().id()) {
+      case cudf::type_id::STRING:
+        return release_as_jlong(cudf::strings::reverse(cudf::strings_column_view{*input}));
+      case cudf::type_id::LIST:
+        return release_as_jlong(cudf::lists::reverse(cudf::lists_column_view{*input}));
+      default:
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                      "A column of type string or list is required for reverse()", 0);
+    }
   }
   CATCH_STD(env, 0);
 }
@@ -2338,8 +2360,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRepeatTimes(
-    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle,
-    jlong output_sizes_handle) {
+    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
   JNI_NULL_CHECK(env, strings_handle, "strings_handle is null", 0);
   JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times_handle is null", 0);
   try {
@@ -2347,33 +2368,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRe
     auto const strings_cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
     auto const strs_col = cudf::strings_column_view(strings_cv);
     auto const repeat_times_cv = *reinterpret_cast<cudf::column_view *>(repeat_times_handle);
-    if (output_sizes_handle != 0) {
-      auto const output_sizes_cv = *reinterpret_cast<cudf::column_view *>(output_sizes_handle);
-      return release_as_jlong(
-          cudf::strings::repeat_strings(strs_col, repeat_times_cv, output_sizes_cv));
-    } else {
-      return release_as_jlong(cudf::strings::repeat_strings(strs_col, repeat_times_cv));
-    }
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsSizes(
-    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
-  JNI_NULL_CHECK(env, strings_handle, "strings handle is null", 0);
-  JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times handle is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto const strings_cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
-    auto const strs_col = cudf::strings_column_view(strings_cv);
-    auto const repeat_times_cv = *reinterpret_cast<cudf::column_view *>(repeat_times_handle);
-
-    auto [output_sizes, total_bytes] =
-        cudf::strings::repeat_strings_output_sizes(strs_col, repeat_times_cv);
-    auto results = cudf::jni::native_jlongArray(env, 2);
-    results[0] = release_as_jlong(output_sizes);
-    results[1] = static_cast<jlong>(total_bytes);
-    return results.get_jArray();
+    return release_as_jlong(cudf::strings::repeat_strings(strs_col, repeat_times_cv));
   }
   CATCH_STD(env, 0);
 }

@@ -304,6 +304,20 @@ def test_string_udf_rstrip(data, strip_char):
     run_udf_test(data, func, "str")
 
 
+def test_string_udf_upper(data):
+    def func(st):
+        return st.upper()
+
+    run_udf_test(data, func, "str")
+
+
+def test_string_udf_lower(data):
+    def func(st):
+        return st.lower()
+
+    run_udf_test(data, func, "str")
+
+
 @pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
 def test_string_udf_concat(data, concat_char):
     def func(st):
@@ -316,5 +330,14 @@ def test_string_udf_concat(data, concat_char):
 def test_string_udf_concat_reflected(data, concat_char):
     def func(st):
         return concat_char + st
+
+    run_udf_test(data, func, "str")
+
+
+@pytest.mark.parametrize("to_replace", ["a", "1", "", "@"])
+@pytest.mark.parametrize("replacement", ["a", "1", "", "@"])
+def test_string_udf_replace(data, to_replace, replacement):
+    def func(st):
+        return st.replace(to_replace, replacement)
 
     run_udf_test(data, func, "str")

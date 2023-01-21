@@ -27,7 +27,7 @@ def read_json(url_path, engine="auto", **kwargs):
         this value will be used as the underlying function used to create
         each partition from JSON data. The default value is "auto", so
         that ``engine=partial(cudf.read_json, engine="auto")`` will be
-        pased to ``dask.dataframe.read_json`` by default.
+        passed to ``dask.dataframe.read_json`` by default.
     **kwargs :
         Key-word arguments to pass through to ``dask.dataframe.read_json``.
 

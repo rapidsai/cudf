@@ -31,6 +31,7 @@ Attributes
    Series.size
    Series.T
    Series.memory_usage
+   Series.hasnans
    Series.has_nulls
    Series.empty
    Series.name
@@ -165,6 +166,7 @@ Reindexing / selection / label manipulation
    Series.add_suffix
    Series.drop
    Series.drop_duplicates
+   Series.duplicated
    Series.equals
    Series.first
    Series.head

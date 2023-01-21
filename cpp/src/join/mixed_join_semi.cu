@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,8 +160,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
@@ -398,8 +398,8 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 

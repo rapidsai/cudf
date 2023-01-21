@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import warnings
 from typing import Any, ClassVar, List, Optional
 
 import cudf
@@ -147,12 +148,14 @@ class Merge:
         self._key_columns_with_same_name = (
             set(_coerce_to_tuple(on))
             if on
-            else set()
-            if (self._using_left_index or self._using_right_index)
             else {
                 lkey.name
                 for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if lkey.name == rkey.name
+                and not (
+                    isinstance(lkey, _IndexIndexer)
+                    or isinstance(rkey, _IndexIndexer)
+                )
             }
         )
 
@@ -408,6 +411,23 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
+
+        if (
+            isinstance(lhs, cudf.DataFrame)
+            and isinstance(rhs, cudf.DataFrame)
+            # An empty column is considered to have 1 level by pandas (can be
+            # seen by using lhs.columns.nlevels, but we don't want to use
+            # columns internally because it's expensive).
+            # TODO: Investigate whether ColumnAccessor.nlevels should be
+            # modified in the size 0 case.
+            and max(lhs._data.nlevels, 1) != max(rhs._data.nlevels, 1)
+        ):
+            warnings.warn(
+                "merging between different levels is deprecated and will be "
+                f"removed in a future version. ({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)",
+                FutureWarning,
+            )
 
 
 class MergeSemi(Merge):

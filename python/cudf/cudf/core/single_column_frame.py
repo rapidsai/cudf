@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
-import pandas as pd
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
@@ -235,6 +234,12 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         bool
         """
+        warnings.warn(
+            "is_monotonic is deprecated and will be removed in a future "
+            "version. Use is_monotonic_increasing instead.",
+            FutureWarning,
+        )
+
         return self.is_monotonic_increasing
 
     @property  # type: ignore
@@ -326,29 +331,19 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if (
-            isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
-            and self.name != other.name
-        ):
+        if isinstance(other, SingleColumnFrame) and self.name != other.name:
             result_name = None
         else:
             result_name = self.name
 
-        # TODO: This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
-            if not hasattr(other, "__cuda_array_interface__"):
-                # TODO: When this deprecated behavior is removed, also change
-                # the above conditional to stop checking for pd.Series and
-                # pd.Index since we only need to support SingleColumnFrame.
-                warnings.warn(
-                    f"Binary operations between host objects such as "
-                    f"{type(other)} and {type(self)} are deprecated and will "
-                    "be removed in a future release. Please convert it to a "
-                    "cudf object before performing the operation.",
-                    FutureWarning,
-                )
+            if not hasattr(
+                other, "__cuda_array_interface__"
+            ) and not isinstance(other, cudf.RangeIndex):
+                return NotImplemented
+
             # Non-scalar right operands are valid iff they convert to columns.
             try:
                 other = as_column(other)

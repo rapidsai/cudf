@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,9 @@ std::string random_file_in_dir(std::string const& dir_path)
 }
 
 cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
-  : type{type}, file_name{random_file_in_dir(tmpdir.path())}
+  : type{type},
+    d_buffer{0, cudf::get_default_stream()},
+    file_name{random_file_in_dir(tmpdir.path())}
 {
 }
 
@@ -45,7 +47,17 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
 {
   switch (type) {
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
-    case io_type::HOST_BUFFER: return cudf::io::source_info(buffer.data(), buffer.size());
+    case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
+    case io_type::DEVICE_BUFFER: {
+      // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
+      // stream
+      auto const stream = cudf::get_default_stream();
+      d_buffer.resize(h_buffer.size(), stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
+
+      return cudf::io::source_info(d_buffer);
+    }
     default: CUDF_FAIL("invalid input type");
   }
 }
@@ -55,7 +67,8 @@ cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
   switch (type) {
     case io_type::VOID: return cudf::io::sink_info(&void_sink);
     case io_type::FILEPATH: return cudf::io::sink_info(file_name);
-    case io_type::HOST_BUFFER: return cudf::io::sink_info(&buffer);
+    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::DEVICE_BUFFER: return cudf::io::sink_info(&h_buffer);
     default: CUDF_FAIL("invalid output type");
   }
 }
@@ -67,7 +80,8 @@ size_t cuio_source_sink_pair::size()
     case io_type::FILEPATH:
       return static_cast<size_t>(
         std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());
-    case io_type::HOST_BUFFER: return buffer.size();
+    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::DEVICE_BUFFER: return h_buffer.size();
     default: CUDF_FAIL("invalid output type");
   }
 }

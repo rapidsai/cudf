@@ -112,7 +112,7 @@ class acquire_spill_lock(ContextDecorator):
     ---------------
     We use the global variable `_thread_spill_locks` to track the global spill
     lock state. To support concurrency, each thread tracks its own state by
-    pushing and poping from `_thread_spill_locks` using its thread ID.
+    pushing and popping from `_thread_spill_locks` using its thread ID.
     """
 
     def __enter__(self) -> Optional[SpillLock]:
