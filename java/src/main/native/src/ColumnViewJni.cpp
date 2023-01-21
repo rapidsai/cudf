@@ -1287,9 +1287,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContains(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(
-    JNIEnv *env, jobject j_object, jlong j_view_handle, jstring pattern_obj, jint regex_flags,
-    jint capture_groups) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv *env, jobject j_object,
+                                                                 jlong j_view_handle,
+                                                                 jstring pattern_obj,
+                                                                 jint regex_flags,
+                                                                 jint capture_groups) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, pattern_obj, "pattern is null", false);
 
@@ -1306,9 +1308,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(
-    JNIEnv *env, jobject j_object, jlong j_view_handle, jstring pattern_obj, jint regex_flags,
-    jint capture_groups) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, jobject j_object,
+                                                                  jlong j_view_handle,
+                                                                  jstring pattern_obj,
+                                                                  jint regex_flags,
+                                                                  jint capture_groups) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, pattern_obj, "pattern is null", false);
 
@@ -1673,9 +1677,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(
-    JNIEnv *env, jclass, jlong j_view_handle, jstring pattern_obj, jint regex_flags,
-    jint capture_groups) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *env, jclass,
+                                                                      jlong j_view_handle,
+                                                                      jstring pattern_obj,
+                                                                      jint regex_flags,
+                                                                      jint capture_groups) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
   JNI_NULL_CHECK(env, pattern_obj, "pattern is null", nullptr);
 
