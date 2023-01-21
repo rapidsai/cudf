@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 /**
  * Capture groups setting, closely following cudf::strings::capture_groups.
+ *
  * For processing a regex pattern containing capture groups. These can be used
  * to optimize the generated regex instructions where the capture groups do not
  * require extracting the groups.

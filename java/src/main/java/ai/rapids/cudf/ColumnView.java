@@ -2560,7 +2560,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg.pattern() != null : "pattern is null";
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+    return new Table(stringSplit(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                                  regexProg.capture().nativeId, limit, true));
   }
 
@@ -2597,7 +2597,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert delimiter != null : "delimiter is null";
     assert delimiter.length() > 0 : "empty delimiter is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), delimiter, RegexFlags.DEFAULT.nativeId,
+    return new Table(stringSplit(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
                                  CaptureGroups.NON_CAPTURE.nativeId, limit, false));
   }
 
@@ -2668,7 +2668,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+        stringSplitRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                           regexProg.capture().nativeId, limit, true));
   }
 
@@ -2702,7 +2702,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert delimiter.length() > 0 : "empty delimiter is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter, RegexFlags.DEFAULT.nativeId,
+        stringSplitRecord(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
                           CaptureGroups.NON_CAPTURE.nativeId, limit, false));
   }
 
@@ -3037,7 +3037,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
-    return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+    return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                                          regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
   }
 
@@ -3081,7 +3081,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringReplaceWithBackrefs(RegexProgram regexProg, String replace) {
     return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(),
-        regexProg.flags().nativeId, regexProg.capture().nativeId, replace));
+        regexProg.combinedFlags(), regexProg.capture().nativeId, replace));
   }
 
   /**
@@ -3379,7 +3379,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3424,7 +3424,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3460,7 +3460,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert regexProg.pattern() != null : "pattern may not be null";
-    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),regexProg.flags().nativeId, regexProg.capture().nativeId));
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3492,7 +3492,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
     return new ColumnVector(
-        extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+        extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                          regexProg.capture().nativeId, idx));
   }
 
