@@ -5204,48 +5204,37 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testReplaceRegex() {
-    try (ColumnVector v =
-             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
-         Scalar repl = Scalar.fromString("Repl");
-         ColumnVector actual = v.replaceRegex("[tT]itle", repl);
+    ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
+    Scalar repl = Scalar.fromString("Repl");
+    String pattern = "[tT]itle";
+    RegexProgram regexProg = new RegexProgram(pattern, CaptureGroups.NON_CAPTURE);
+    try (ColumnVector actual = v.replaceRegex(pattern, repl);
          ColumnVector expected =
              ColumnVector.fromStrings("Repl and Repl with Repl", "nothing", null, "Repl")) {
       assertColumnsAreEqual(expected, actual);
     }
 
-    try (ColumnVector v =
-             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
-         Scalar repl = Scalar.fromString("Repl");
-         ColumnVector actual = v.replaceRegex("[tT]itle", repl, 0)) {
+    try (ColumnVector actual = v.replaceRegex(pattern, repl, 0)) {
       assertColumnsAreEqual(v, actual);
     }
 
-    try (ColumnVector v =
-             ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
-         Scalar repl = Scalar.fromString("Repl");
-         ColumnVector actual = v.replaceRegex("[tT]itle", repl, 1);
+    try (ColumnVector actual = v.replaceRegex(pattern, repl, 1);
          ColumnVector expected =
              ColumnVector.fromStrings("Repl and Title with title", "nothing", null, "Repl")) {
       assertColumnsAreEqual(expected, actual);
     }
-  }
 
-  @Test
-  void testReplaceReRegexProg() {
-    ColumnVector v = ColumnVector.fromStrings("title and Title with title", "nothing", null, "Title");
-    Scalar repl = Scalar.fromString("Repl");
-    RegexProgram regexProg = new RegexProgram("[tT]itle", CaptureGroups.NON_CAPTURE);
-    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl);
+    try (ColumnVector actual = v.replaceRegex(regexProg, repl);
          ColumnVector expected =
              ColumnVector.fromStrings("Repl and Repl with Repl", "nothing", null, "Repl")) {
       assertColumnsAreEqual(expected, actual);
     }
 
-    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl, 0)) {
+    try (ColumnVector actual = v.replaceRegex(regexProg, repl, 0)) {
       assertColumnsAreEqual(v, actual);
     }
 
-    try (ColumnVector actual = v.replaceReRegexProg(regexProg, repl, 1);
+    try (ColumnVector actual = v.replaceRegex(regexProg, repl, 1);
          ColumnVector expected =
              ColumnVector.fromStrings("Repl and Title with title", "nothing", null, "Repl")) {
       assertColumnsAreEqual(expected, actual);
@@ -5267,45 +5256,56 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testStringReplaceWithBackrefs() {
 
-    try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>",
-        null);
+    try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>", null);
          ColumnVector expected = ColumnVector.fromStrings("<h2>title</h2>",
              "<h2>another title</h2>", null);
-         ColumnVector actual = v.stringReplaceWithBackrefs("<h1>(.*)</h1>", "<h2>\\1</h2>")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("<h1>(.*)</h1>", "<h2>\\1</h2>");
+         ColumnVector actualRe = 
+             v.stringReplaceWithBackrefs(new RegexProgram("<h1>(.*)</h1>"), "<h2>\\1</h2>")) {
       assertColumnsAreEqual(expected, actual);
+      assertColumnsAreEqual(expected, actualRe);
     }
 
     try (ColumnVector v = ColumnVector.fromStrings("2020-1-01", "2020-2-02", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
-         ColumnVector actual = v.stringReplaceWithBackrefs("-([0-9])-", "-0\\1-")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("-([0-9])-", "-0\\1-");
+         ColumnVector actualRe = 
+             v.stringReplaceWithBackrefs(new RegexProgram("-([0-9])-"), "-0\\1-")) {
       assertColumnsAreEqual(expected, actual);
+      assertColumnsAreEqual(expected, actualRe);
     }
 
     try (ColumnVector v = ColumnVector.fromStrings("2020-01-1", "2020-02-2",
-        "2020-03-3invalid", null);
+             "2020-03-3invalid", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02",
              "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackrefs(
-             "-([0-9])$", "-0\\1")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("-([0-9])$", "-0\\1");
+         ColumnVector actualRe = 
+             v.stringReplaceWithBackrefs(new RegexProgram("-([0-9])$"), "-0\\1")) {
       assertColumnsAreEqual(expected, actual);
+      assertColumnsAreEqual(expected, actualRe);
     }
 
     try (ColumnVector v = ColumnVector.fromStrings("2020-01-1 random_text", "2020-02-2T12:34:56",
-        "2020-03-3invalid", null);
+             "2020-03-3invalid", null);
          ColumnVector expected = ColumnVector.fromStrings("2020-01-01 random_text",
              "2020-02-02T12:34:56", "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackrefs(
-             "-([0-9])([ T])", "-0\\1\\2")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("-([0-9])([ T])", "-0\\1\\2");
+         ColumnVector actualRe = 
+             v.stringReplaceWithBackrefs(new RegexProgram("-([0-9])([ T])"), "-0\\1\\2")) {
       assertColumnsAreEqual(expected, actual);
+      assertColumnsAreEqual(expected, actualRe);
     }
 
     // test zero as group index
     try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
          ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
              "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
-         ColumnVector actual = v.stringReplaceWithBackrefs(
-             "([a-z]+)-([0-9]+)", "${0}:${1}:${2};")) {
+         ColumnVector actual = v.stringReplaceWithBackrefs("([a-z]+)-([0-9]+)", "${0}:${1}:${2};");
+         ColumnVector actualRe = 
+             v.stringReplaceWithBackrefs(new RegexProgram("([a-z]+)-([0-9]+)"), "${0}:${1}:${2};")) {
       assertColumnsAreEqual(expected, actual);
+      assertColumnsAreEqual(expected, actualRe);
     }
 
     // group index exceeds group count
@@ -5315,61 +5315,12 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     });
 
-  }
-
-  @Test
-  void testStringReplaceWithBackrefsRegexProg() {
-
-    try (ColumnVector v = ColumnVector.fromStrings("<h1>title</h1>", "<h1>another title</h1>", null);
-         ColumnVector expected = ColumnVector.fromStrings("<h2>title</h2>",
-             "<h2>another title</h2>", null);
-         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("<h1>(.*)</h1>"),
-             "<h2>\\1</h2>")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-
-    try (ColumnVector v = ColumnVector.fromStrings("2020-1-01", "2020-2-02", null);
-         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02", null);
-         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])-"),
-             "-0\\1-")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-
-    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1", "2020-02-2",
-             "2020-03-3invalid", null);
-         ColumnVector expected = ColumnVector.fromStrings("2020-01-01", "2020-02-02",
-             "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])$"),
-             "-0\\1")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-
-    try (ColumnVector v = ColumnVector.fromStrings("2020-01-1 random_text", "2020-02-2T12:34:56",
-             "2020-03-3invalid", null);
-         ColumnVector expected = ColumnVector.fromStrings("2020-01-01 random_text",
-             "2020-02-02T12:34:56", "2020-03-3invalid", null);
-         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("-([0-9])([ T])"),
-             "-0\\1\\2")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-
-    // test zero as group index
-    try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
-         ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
-             "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
-         ColumnVector actual = v.stringReplaceWithBackrefsRegexProg(new RegexProgram("([a-z]+)-([0-9]+)"),
-             "${0}:${1}:${2};")) {
-      assertColumnsAreEqual(expected, actual);
-    }
-
-    // group index exceeds group count
     assertThrows(CudfException.class, () -> {
       try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
-           ColumnVector r = v.stringReplaceWithBackrefsRegexProg(
+           ColumnVector r = v.stringReplaceWithBackrefs(
                new RegexProgram("([A-Z]+)([0-9]+)([a-z]+)"), "\\4")) {
       }
     });
-
   }
 
   @Test

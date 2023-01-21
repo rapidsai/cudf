@@ -2993,6 +2993,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl The string scalar to replace for each pattern match.
    * @return A new column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl) {
     return replaceRegex(pattern, repl, -1);
   }
@@ -3005,8 +3006,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl The string scalar to replace for each pattern match.
    * @return A new column vector containing the string results.
    */
-  public final ColumnVector replaceReRegexProg(RegexProgram regexProg, Scalar repl) {
-    return replaceReRegexProg(regexProg, repl, -1);
+  public final ColumnVector replaceRegex(RegexProgram regexProg, Scalar repl) {
+    return replaceRegex(regexProg, repl, -1);
   }
 
   /**
@@ -3018,12 +3019,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxRepl The maximum number of times a replacement should occur within each string.
    * @return A new column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl, int maxRepl) {
-    if (!repl.getType().equals(DType.STRING)) {
-      throw new IllegalArgumentException("Replacement must be a string scalar");
-    }
-    return new ColumnVector(replaceRegex(getNativeView(), pattern, repl.getScalarHandle(),
-        maxRepl));
+    return replaceRegex(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), repl, maxRepl);
   }
 
   /**
@@ -3035,12 +3033,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxRepl The maximum number of times a replacement should occur within each string.
    * @return A new column vector containing the string results.
    */
-  public final ColumnVector replaceReRegexProg(RegexProgram regexProg, Scalar repl, int maxRepl) {
+  public final ColumnVector replaceRegex(RegexProgram regexProg, Scalar repl, int maxRepl) {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
-    return new ColumnVector(replaceReRegexProg(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
-        regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
+    return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.flags().nativeId,
+                                         regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
   }
 
   /**
@@ -3066,9 +3064,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return A new java column vector containing the string results.
    */
+  @Deprecated
   public final ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
-    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
-        replace));
+    return stringReplaceWithBackrefs(new RegexProgram(pattern), replace);
   }
 
   /**
@@ -3081,8 +3079,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return A new java column vector containing the string results.
    */
-  public final ColumnVector stringReplaceWithBackrefsRegexProg(RegexProgram regexProg, String replace) {
-    return new ColumnVector(stringReplaceWithBackrefsRegexProg(getNativeView(), regexProg.pattern(),
+  public final ColumnVector stringReplaceWithBackrefs(RegexProgram regexProg, String replace) {
+    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(),
         regexProg.flags().nativeId, regexProg.capture().nativeId, replace));
   }
 
@@ -4237,18 +4235,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for replacing each regular expression pattern match with the specified
    * replacement string.
    * @param columnView native handle of the cudf::column_view being operated on.
-   * @param pattern The regular expression pattern to search within each string.
-   * @param repl native handle of the cudf::scalar containing the replacement string.
-   * @param maxRepl maximum number of times to replace the pattern within a string
-   * @return native handle of the resulting cudf column containing the string results.
-   */
-  private static native long replaceRegex(long columnView, String pattern,
-                                          long repl, long maxRepl) throws CudfException;
-
-  /**
-   * Native method for replacing each regular expression pattern match with the specified
-   * replacement string.
-   * @param columnView native handle of the cudf::column_view being operated on.
    * @param pattern regular expression pattern to search within each string.
    * @param flags regex flags setting.
    * @param capture capture groups setting.
@@ -4256,8 +4242,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxRepl maximum number of times to replace the pattern within a string
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private static native long replaceReRegexProg(long columnView, String pattern, int flags, int capture,
-                                                long repl, long maxRepl) throws CudfException;
+  private static native long replaceRegex(long columnView, String pattern, int flags, int capture,
+                                          long repl, long maxRepl) throws CudfException;
 
   /**
    * Native method for multiple instance regular expression replacement.
@@ -4270,17 +4256,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                long repls) throws CudfException;
 
   /**
-   * Native method for replacing any character sequence matching the given pattern
-   * using the replace template for back-references.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param pattern The regular expression patterns to search within each string.
-   * @param replace The replacement template for creating the output string.
-   * @return native handle of the resulting cudf column containing the string results.
-   */
-  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
-                                                       String replace) throws CudfException;
-
-  /**
    * Native method for replacing any character sequence matching the given regex program
    * pattern using the replace template for back-references.
    * @param columnView native handle of the cudf::column_view being operated on.
@@ -4290,8 +4265,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private static native long stringReplaceWithBackrefsRegexProg(long columnView, String pattern, int flags,
-                                                                int capture, String replace) throws CudfException;
+  private static native long stringReplaceWithBackrefs(long columnView, String pattern, int flags,
+                                                       int capture, String replace) throws CudfException;
 
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.
