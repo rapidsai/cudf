@@ -20,42 +20,6 @@
 
 #include <limits>
 
-__device__ __forceinline__ double atomicMax(double* address, double val)
-{
-  unsigned long long old = __double_as_longlong(*address);
-  while (val > __longlong_as_double(old)) {
-    unsigned long long assumed = old;
-    if ((old = atomicCAS(
-           reinterpret_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
-        assumed)
-      break;
-  }
-  return __longlong_as_double(old);
-}
-
-__device__ __forceinline__ int64_t atomicMax(int64_t* address, int64_t val)
-{
-  return atomicMax(reinterpret_cast<long long*>(address), static_cast<long long>(val));
-}
-
-__device__ __forceinline__ double atomicMin(double* address, double val)
-{
-  unsigned long long old = __double_as_longlong(*address);
-  while (val < __longlong_as_double(old)) {
-    unsigned long long assumed = old;
-    if ((old = atomicCAS(
-           reinterpret_cast<unsigned long long*>(address), assumed, __double_as_longlong(val))) ==
-        assumed)
-      break;
-  }
-  return __longlong_as_double(old);
-}
-
-__device__ __forceinline__ int64_t atomicMin(int64_t* address, int64_t val)
-{
-  return atomicMin(reinterpret_cast<long long*>(address), static_cast<long long>(val));
-}
-
 template <typename T>
 __device__ void device_sum(cooperative_groups::thread_block const& block,
                            T const* data,
@@ -177,7 +141,9 @@ __device__ T BlockMax(T const* data, int64_t size)
     local_max = max(local_max, data[idx]);
   }
 
-  atomicMax(&block_max, local_max);
+  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_max};
+  ref.fetch_max(local_max, cuda::std::memory_order_relaxed);
+
   block.sync();
 
   return block_max;
@@ -198,7 +164,9 @@ __device__ T BlockMin(T const* data, int64_t size)
     local_min = min(local_min, data[idx]);
   }
 
-  atomicMin(&block_min, local_min);
+  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_min};
+  ref.fetch_min(local_min, cuda::std::memory_order_relaxed);
+
   block.sync();
 
   return block_min;
@@ -233,10 +201,14 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
     }
   }
 
-  atomicMax(&block_max, local_max);
+  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_max};
+  ref.fetch_max(local_max, cuda::std::memory_order_relaxed);
   block.sync();
 
-  if (local_max == block_max) { atomicMin(&block_idx_max, local_idx_max); }
+  cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_max};
+  if (local_max == block_max) {
+    ref_idx.fetch_min(local_idx_max, cuda::std::memory_order_relaxed);
+  }
   block.sync();
 
   return block_idx_max;
@@ -268,143 +240,91 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
     }
   }
 
-  atomicMin(&block_min, local_min);
+  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_min};
+  ref.fetch_min(local_min, cuda::std::memory_order_relaxed);
   block.sync();
 
-  if (local_min == block_min) { atomicMin(&block_idx_min, local_idx_min); }
+  cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_min};
+  if (local_min == block_min) { 
+    ref_idx.fetch_min(local_idx_min, cuda::std::memory_order_relaxed);
+  }
   block.sync();
 
   return block_idx_min;
 }
 
-extern "C" __device__ int BlockSum_int64(int64_t* numba_return_value,
-                                         int64_t const* data,
-                                         int64_t size)
-{
-  *numba_return_value = BlockSum<int64_t>(data, size);
-  return 0;
+extern "C" {
+#define make_definition(name, cname, type) \
+    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t size) { \
+        *numba_return_value = name<type>(data, size); \
+        return 0; \
+    }
+
+// make_definition(BlockSum, int8, int8_t);
+// make_definition(BlockSum, int16, int16_t);
+make_definition(BlockSum, int32, int);
+make_definition(BlockSum, int64, int64_t);
+make_definition(BlockSum, float32, float);
+make_definition(BlockSum, float64, double);
+// make_definition(BlockSum, bool, bool);
+// make_definition(BlockMean, int8, int8_t);
+// make_definition(BlockMean, int16, int16_t);
+make_definition(BlockMean, int32, int);
+make_definition(BlockMean, int64, int64_t);
+make_definition(BlockMean, float32, float);
+make_definition(BlockMean, float64, double);
+// make_definition(BlockMean, bool, bool);
+// make_definition(BlockStd, int8, int8_t);
+// make_definition(BlockStd, int16, int16_t);
+make_definition(BlockStd, int32, int);
+make_definition(BlockStd, int64, int64_t);
+make_definition(BlockStd, float32, float);
+make_definition(BlockStd, float64, double);
+// make_definition(BlockStd, bool, bool);
+// make_definition(BlockVar, int8, int8_t);
+// make_definition(BlockVar, int16, int16_t);
+make_definition(BlockVar, int32, int);
+make_definition(BlockVar, int64, int64_t);
+make_definition(BlockVar, float32, float);
+make_definition(BlockVar, float64, double);
+// make_definition(BlockVar, bool, bool);
+// make_definition(BlockMin, int8, int8_t);
+// make_definition(BlockMin, int16, int16_t);
+make_definition(BlockMin, int32, int);
+make_definition(BlockMin, int64, int64_t);
+make_definition(BlockMin, float32, float);
+make_definition(BlockMin, float64, double);
+// make_definition(BlockMin, bool, bool);
+// make_definition(BlockMax, int8, int8_t);
+// make_definition(BlockMax, int16, int16_t);
+make_definition(BlockMax, int32, int);
+make_definition(BlockMax, int64, int64_t);
+make_definition(BlockMax, float32, float);
+make_definition(BlockMax, float64, double);
+// make_definition(BlockMax, bool, bool);
+#undef make_definition
 }
 
-extern "C" __device__ int BlockSum_float64(double* numba_return_value,
-                                           double const* data,
-                                           int64_t size)
-{
-  *numba_return_value = BlockSum<double>(data, size);
-  return 0;
-}
+extern "C" {
+#define make_definition_idx(name, cname, type) \
+    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) { \
+        *numba_return_value = name<type>(data, index, size); \
+        return 0; \
+    }
 
-extern "C" __device__ int BlockMean_int64(int64_t* numba_return_value,
-                                          int64_t const* data,
-                                          int64_t size)
-{
-  *numba_return_value = BlockMean<int64_t>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockMean_float64(double* numba_return_value,
-                                            double const* data,
-                                            int64_t size)
-{
-  *numba_return_value = BlockMean<double>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockStd_int64(double* numba_return_value,
-                                         int64_t const* data,
-                                         int64_t size)
-{
-  *numba_return_value = BlockStd<int64_t>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockStd_float64(double* numba_return_value,
-                                           double const* data,
-                                           int64_t size)
-{
-  *numba_return_value = BlockStd<double>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockVar_int64(double* numba_return_value,
-                                         int64_t const* data,
-                                         int64_t size)
-{
-  *numba_return_value = BlockVar<int64_t>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockVar_float64(double* numba_return_value,
-                                           double const* data,
-                                           int64_t size)
-{
-  *numba_return_value = BlockVar<double>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockMax_int64(int64_t* numba_return_value,
-                                         int64_t const* data,
-                                         int64_t size)
-{
-  *numba_return_value = BlockMax<int64_t>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockMax_float64(double* numba_return_value,
-                                           double const* data,
-                                           int64_t size)
-{
-  *numba_return_value = BlockMax<double>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockMin_int64(int64_t* numba_return_value,
-                                         int64_t const* data,
-                                         int64_t size)
-{
-  *numba_return_value = BlockMin<int64_t>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockMin_float64(double* numba_return_value,
-                                           double const* data,
-                                           int64_t size)
-{
-  *numba_return_value = BlockMin<double>(data, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockIdxMax_int64(int64_t* numba_return_value,
-                                            int64_t const* data,
-                                            int64_t* index,
-                                            int64_t size)
-{
-  *numba_return_value = BlockIdxMax<int64_t>(data, index, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockIdxMax_float64(int64_t* numba_return_value,
-                                              double const* data,
-                                              int64_t* index,
-                                              int64_t size)
-{
-  *numba_return_value = BlockIdxMax<double>(data, index, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockIdxMin_int64(int64_t* numba_return_value,
-                                            int64_t const* data,
-                                            int64_t* index,
-                                            int64_t size)
-{
-  *numba_return_value = BlockIdxMin<int64_t>(data, index, size);
-  return 0;
-}
-
-extern "C" __device__ int BlockIdxMin_float64(int64_t* numba_return_value,
-                                              double const* data,
-                                              int64_t* index,
-                                              int64_t size)
-{
-  *numba_return_value = BlockIdxMin<double>(data, index, size);
-  return 0;
+// make_definition_idx(BlockIdxMin, int8, int8_t);
+// make_definition_idx(BlockIdxMin, int16, int16_t);
+make_definition_idx(BlockIdxMin, int32, int);
+make_definition_idx(BlockIdxMin, int64, int64_t);
+make_definition_idx(BlockIdxMin, float32, float);
+make_definition_idx(BlockIdxMin, float64, double);
+// make_definition_idx(BlockIdxMin, bool, bool);
+// make_definition_idx(BlockIdxMax, int8, int8_t);
+// make_definition_idx(BlockIdxMax, int16, int16_t);
+make_definition_idx(BlockIdxMax, int32, int);
+make_definition_idx(BlockIdxMax, int64, int64_t);
+make_definition_idx(BlockIdxMax, float32, float);
+make_definition_idx(BlockIdxMax, float64, double);
+// make_definition_idx(BlockIdxMax, bool, bool);
+#undef make_definition_idx
 }
