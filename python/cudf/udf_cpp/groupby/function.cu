@@ -67,7 +67,7 @@ __device__ void device_var(cooperative_groups::thread_block const& block,
   ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
   block.sync();
 
-  *var = *var / static_cast<double>(size - 1);
+  if (block.thread_rank() == 0) *var = *var / static_cast<double>(size - 1);
   block.sync();
 }
 
@@ -85,7 +85,7 @@ __device__ T BlockSum(T const* data, int64_t size)
 }
 
 template <typename T>
-__device__ T BlockMean(T const* data, int64_t size)
+__device__ double BlockMean(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
@@ -250,49 +250,46 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
 }
 
 extern "C" {
-#define make_definition(name, cname, type)                                                   \
-  __device__ int name##_##cname(int64_t* numba_return_value, type* const data, int64_t size) \
-  {                                                                                          \
-    *numba_return_value = name<type>(data, size);                                            \
-    return 0;                                                                                \
+#define make_definition(name, cname, type, return_type)                                                   \
+  __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
+  {                                                               \
+    *numba_return_value = name<type>(data, size);                    \
+    return 0;                                                     \
   }
 
-make_definition(BlockSum, int32, int);
-make_definition(BlockSum, int64, int64_t);
-make_definition(BlockSum, float32, float);
-make_definition(BlockSum, float64, double);
-make_definition(BlockMean, int32, int);
-make_definition(BlockMean, int64, int64_t);
-make_definition(BlockMean, float32, float);
-make_definition(BlockMean, float64, double);
-make_definition(BlockStd, int32, int);
-make_definition(BlockStd, int64, int64_t);
-make_definition(BlockStd, float32, float);
-make_definition(BlockStd, float64, double);
-make_definition(BlockVar, int32, int);
-make_definition(BlockVar, int64, int64_t);
-make_definition(BlockVar, float32, float);
-make_definition(BlockVar, float64, double);
-make_definition(BlockMin, int32, int);
-make_definition(BlockMin, int64, int64_t);
-make_definition(BlockMin, float32, float);
-make_definition(BlockMin, float64, double);
-make_definition(BlockMax, int32, int);
-make_definition(BlockMax, int64, int64_t);
-make_definition(BlockMax, float32, float);
-make_definition(BlockMax, float64, double);
+make_definition(BlockSum, int32, int, int);
+make_definition(BlockSum, int64, int64_t, int64_t);
+make_definition(BlockSum, float32, float, float);
+make_definition(BlockSum, float64, double, double);
+make_definition(BlockMean, int32, int, double);
+make_definition(BlockMean, int64, int64_t, double);
+make_definition(BlockMean, float32, float, double);
+make_definition(BlockMean, float64, double, double);
+make_definition(BlockStd, int32, int, double);
+make_definition(BlockStd, int64, int64_t, double);
+make_definition(BlockStd, float32, float, double);
+make_definition(BlockStd, float64, double, double);
+make_definition(BlockVar, int32, int, double);
+make_definition(BlockVar, int64, int64_t, double);
+make_definition(BlockVar, float32, float, double);
+make_definition(BlockVar, float64, double, double);
+make_definition(BlockMin, int32, int, int);
+make_definition(BlockMin, int64, int64_t, int64_t);
+make_definition(BlockMin, float32, float, float);
+make_definition(BlockMin, float64, double, double);
+make_definition(BlockMax, int32, int, int);
+make_definition(BlockMax, int64, int64_t, int64_t);
+make_definition(BlockMax, float32, float, float);
+make_definition(BlockMax, float64, double, double);
 #undef make_definition
 }
 
 extern "C" {
-#define make_definition_idx(name, cname, type)                                   \
-  __device__ int name##_##cname(                                                 \
-    int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) \
-  {                                                                              \
-    *numba_return_value = name<type>(data, index, size);                         \
-    return 0;                                                                    \
-  }
-
+#define make_definition_idx(name, cname, type) \
+    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) { \
+        *numba_return_value = name<type>(data, index, size);    \
+        return 0; \
+    }
 make_definition_idx(BlockIdxMin, int32, int);
 make_definition_idx(BlockIdxMin, int64, int64_t);
 make_definition_idx(BlockIdxMin, float32, float);
