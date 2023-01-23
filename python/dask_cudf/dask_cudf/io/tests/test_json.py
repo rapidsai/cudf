@@ -85,3 +85,5 @@ def test_read_json_nested(tmp_path):
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
         actual_pd = pd.read_json(f, **kwargs)
         dd.assert_eq(actual, actual_pd)
+        actual = dask_cudf.read_json(f, **kwargs)
+        dd.assert_eq(actual, actual_pd)
