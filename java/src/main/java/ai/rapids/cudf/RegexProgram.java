@@ -64,6 +64,7 @@ public class RegexProgram {
    * @param capture Capture groups setting
    */
   public RegexProgram(String pattern, EnumSet<RegexFlag> flags, CaptureGroups capture) {
+    assert pattern != null : "pattern may not be null";
     this.pattern = pattern;
     this.flags = flags;
     this.capture = capture;
@@ -92,7 +93,7 @@ public class RegexProgram {
    *
    * @param flags Regex flags setting
    */
-  public void setCapture(EnumSet<RegexFlag> flags) {
+  public void setFlags(EnumSet<RegexFlag> flags) {
     this.flags = flags;
   }
 

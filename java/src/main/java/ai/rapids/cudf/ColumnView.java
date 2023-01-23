@@ -2557,7 +2557,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final Table stringSplit(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program is null";
-    assert regexProg.pattern() != null : "pattern is null";
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new Table(stringSplit(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
@@ -2664,7 +2663,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector stringSplitRecord(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be String";
     assert regexProg != null : "regex program is null";
-    assert regexProg.pattern() != null : "pattern is null";
     assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
@@ -3317,7 +3315,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector matchesRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
-    assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
     return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
@@ -3362,7 +3359,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector containsRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
-    assert regexProg.pattern() != null : "pattern may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
     return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
@@ -3399,7 +3395,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
-    assert regexProg.pattern() != null : "pattern may not be null";
     return new Table(extractRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
