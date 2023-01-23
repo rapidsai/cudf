@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import numba
 import numpy as np
@@ -10,6 +10,7 @@ from numba.types import CPointer, void
 
 import cudf
 import rmm
+from cudf.core.buffer import acquire_spill_lock
 from cudf.testing._utils import assert_eq
 
 import strings_udf
@@ -68,7 +69,8 @@ def run_udf_test(data, func, dtype):
     str_views = column_to_string_view_array(cudf_column)
 
     kernel = get_kernel(func, dtype, len(data))
-    kernel.forall(len(data))(str_views, output)
+    with acquire_spill_lock():
+        kernel.forall(len(data))(str_views, output)
 
     if dtype == "str":
         output = column_from_udf_string_array(output)
