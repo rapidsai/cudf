@@ -144,7 +144,6 @@ struct column_name_info {
  * f5    f6
  */
 struct table_metadata {
-  std::vector<std::string> column_names;  //!< Names of columns contained in the table
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
