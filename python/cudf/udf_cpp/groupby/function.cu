@@ -33,7 +33,7 @@ __device__ void device_sum(cooperative_groups::thread_block const& block,
     local_sum += data[idx];
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_device> ref{*sum};
+  cuda::atomic_ref<T, cuda::thread_scope_block> ref{*sum};
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   block.sync();
@@ -63,7 +63,7 @@ __device__ void device_var(cooperative_groups::thread_block const& block,
     local_var += temp;
   }
 
-  cuda::atomic_ref<double, cuda::thread_scope_device> ref{*var};
+  cuda::atomic_ref<double, cuda::thread_scope_block> ref{*var};
   ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
   block.sync();
 
@@ -141,7 +141,7 @@ __device__ T BlockMax(T const* data, int64_t size)
     local_max = max(local_max, data[idx]);
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_max};
+  cuda::atomic_ref<T, cuda::thread_scope_block> ref{block_max};
   ref.fetch_max(local_max, cuda::std::memory_order_relaxed);
 
   block.sync();
@@ -164,7 +164,7 @@ __device__ T BlockMin(T const* data, int64_t size)
     local_min = min(local_min, data[idx]);
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_min};
+  cuda::atomic_ref<T, cuda::thread_scope_block> ref{block_min};
   ref.fetch_min(local_min, cuda::std::memory_order_relaxed);
 
   block.sync();
@@ -201,11 +201,11 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
     }
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_max};
+  cuda::atomic_ref<T, cuda::thread_scope_block> ref{block_max};
   ref.fetch_max(local_max, cuda::std::memory_order_relaxed);
   block.sync();
 
-  cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_max};
+  cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref_idx{block_idx_max};
   if (local_max == block_max) { ref_idx.fetch_min(local_idx_max, cuda::std::memory_order_relaxed); }
   block.sync();
 
@@ -238,11 +238,11 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
     }
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_device> ref{block_min};
+  cuda::atomic_ref<T, cuda::thread_scope_block> ref{block_min};
   ref.fetch_min(local_min, cuda::std::memory_order_relaxed);
   block.sync();
 
-  cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_min};
+  cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref_idx{block_idx_min};
   if (local_min == block_min) { ref_idx.fetch_min(local_idx_min, cuda::std::memory_order_relaxed); }
   block.sync();
 
