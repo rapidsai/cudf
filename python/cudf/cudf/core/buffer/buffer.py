@@ -246,7 +246,7 @@ class Buffer(Serializable):
         Parameters
         ----------
         mode : str, default 'write'
-            Supported values are {"read", "write", "internal_write"}
+            Supported values are {"read", "write"}
             If "write", the modification to the buffer
             is allowed. Hence can pass it onto a
             third-party library as well.
@@ -254,9 +254,6 @@ class Buffer(Serializable):
             isn't expected to be done by the user via this pointer.
             Hence mostly intended for internal read purposes or
             device to host copies.
-            If "internal_write", then modification to the buffer
-            is allowed and strictly for internal libcudf function
-            call usage only.
 
         Notes
         -----

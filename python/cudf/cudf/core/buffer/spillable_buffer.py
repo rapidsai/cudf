@@ -279,25 +279,8 @@ class SpillableBuffer(Buffer):
         If this is *not* called within a `acquire_spill_lock` context,
         this buffer is marked as unspillable permanently.
 
-        Parameters
-        ----------
-        mode : str, default 'write'
-            Supported values are {"read", "write", "internal_write"}
-            If "write" is passed, the SpillableBuffer
-            is marked as exposed and make it un-spillable
-            permanently. This mode is to be used if the
-            buffer is being handed off to an external library.
-            If "read" is passed, the SpillableBuffer
-            returns a pointer by not marking it as
-            exposed, this mode is intended for internal
-            use only.
-            If "internal_write" is passed, a spill lock is
-            created if none exists and we ensure that doesn't
-            escape to the user, hence to be used only for internal
-            write purposes like in `mutable_view` for example.
-
-        Return
-        ------
+        Returns
+        -------
         int
             The device pointer as an integer
         """
