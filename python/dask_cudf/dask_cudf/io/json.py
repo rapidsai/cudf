@@ -49,7 +49,7 @@ def read_json(url_path, engine="auto", **kwargs):
 
     Load nested JSON data
 
-    >>> read_json('myfile.json', engine='cudf')  # doctest: +SKIP
+    >>> read_json('myfile.json')  # doctest: +SKIP
 
     See Also
     --------
