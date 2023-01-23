@@ -250,11 +250,11 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
 }
 
 extern "C" {
-#define make_definition(name, cname, type, return_type)                                                   \
+#define make_definition(name, cname, type, return_type)                                          \
   __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
-  {                                                               \
-    *numba_return_value = name<type>(data, size);                    \
-    return 0;                                                     \
+  {                                                                                              \
+    *numba_return_value = name<type>(data, size);                                                \
+    return 0;                                                                                    \
   }
 
 make_definition(BlockSum, int32, int, int);
@@ -285,11 +285,13 @@ make_definition(BlockMax, float64, double, double);
 }
 
 extern "C" {
-#define make_definition_idx(name, cname, type) \
-    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) { \
-        *numba_return_value = name<type>(data, index, size);    \
-        return 0; \
-    }
+#define make_definition_idx(name, cname, type)                                   \
+  __device__ int name##_##cname(                                                 \
+    int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) \
+  {                                                                              \
+    *numba_return_value = name<type>(data, index, size);                         \
+    return 0;                                                                    \
+  }
 make_definition_idx(BlockIdxMin, int32, int);
 make_definition_idx(BlockIdxMin, int64, int64_t);
 make_definition_idx(BlockIdxMin, float32, float);
