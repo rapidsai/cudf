@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ struct segmented_reduce_dispatch_functor {
           col, offsets, output_dtype, null_handling, init, stream, mr);
       default:
         CUDF_FAIL("Unsupported aggregation type.");
-        // TODO: Add support for compound_ops
+        // TODO: Add support for compound_ops. GH #10432
     }
   }
 };

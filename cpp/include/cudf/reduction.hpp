@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,11 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 /**
  * @brief  Computes the reduction of the values in all rows of a column.
  *
- * This function does not detect overflows in reductions.
- * Using a higher precision for output_dtype may prevent overflow.
+ * This function does not detect overflows in reductions. When `output_dtype`
+ * does not match the `col.type()`, their values may be promoted to
+ * `int64_t` or `double` for computing aggregations and then cast to
+ * `output_dtype` before returning.
+ *
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (e.g. timestamp or string).
  *
@@ -50,27 +53,27 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * for reduction type `all`. For all other reductions, the output scalar
  * returns with `is_valid()==false`.
  *
- * If the input column is an arithmetic type, the output_dtype can be any arithmetic
+ * If the input column is an arithmetic type, the `output_dtype` can be any arithmetic
  * type. If the input column is a non-arithmetic type (e.g. timestamp or string)
- * the output_dtype must match the column type. If the reduction type is `any` or
- * `all`, the output_dtype must be type BOOL8.
+ * the `output_dtype` must match the `col.type()`. If the reduction type is `any` or
+ * `all`, the `output_dtype` must be type BOOL8.
  *
  * If the reduction fails, the output scalar returns with `is_valid()==false`.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
  * @throw cudf::logic_error if input column data type is not convertible to
- * output data type.
+ * `output_dtype`.
  * @throw cudf::logic_error if `min` or `max` reduction is called and the
  * output type does not match the input column data type.
  * @throw cudf::logic_error if `any` or `all` reduction is called and the
  * output type is not BOOL8.
  * @throw cudf::logic_error if `mean`, `var`, or `std` reduction is called and
- * the output type is not floating point.
+ * the `output_dtype` is not floating point.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype The computation and output precision
+ * @param output_dtype The output scalar type
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output scalar with reduce result
  */
@@ -90,7 +93,7 @@ std::unique_ptr<scalar> reduce(
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype The computation and output precision
+ * @param output_dtype The output scalar type
  * @param init The initial value of the reduction
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output scalar with reduce result
@@ -105,38 +108,39 @@ std::unique_ptr<scalar> reduce(
 /**
  * @brief  Compute reduction of each segment in the input column
  *
- * This function does not detect overflows in reductions. When given integral and
- * floating point inputs, their values are promoted to `int64_t` and `double`
- * respectively to compute, and casted to @p output_dtype before returning.
+ * This function does not detect overflows in reductions. When `output_dtype`
+ * does not match the `segmented_values.type()`, their values may be promoted to
+ * `int64_t` or `double` for computing aggregations and then cast to
+ * `output_dtype` before returning.
  *
  * Null values are treated as identities during reduction.
  *
  * If the segment is empty, the row corresponding to the result of the
  * segment is null.
  *
- * If any index in @p offsets is out of bound of @p segmented_values , the behavior
+ * If any index in `offsets` is out of bound of `segmented_values`, the behavior
  * is undefined.
  *
- * @note If the input column has arithmetic type, output_dtype can be any arithmetic
+ * If the input column has arithmetic type, `output_dtype` can be any arithmetic
  * type. If the input column has non-arithmetic type, e.g. timestamp, the same
  * output type must be specified.
  *
- * @note If input is not empty, the result is always nullable.
+ * If input is not empty, the result is always nullable.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
  * @throw cudf::logic_error if input column data type is not convertible to
- * output data type.
+ * `output_dtype` type.
  * @throw cudf::logic_error if `min` or `max` reduction is called and the
- * output type does not match the input column data type.
+ * `output_dtype` does not match the input column data type.
  * @throw cudf::logic_error if `any` or `all` reduction is called and the
- * output type is not bool8.
+ * `output_dtype` is not BOOL8.
  *
  * @param segmented_values Column view of segmented inputs
- * @param offsets Each segment's offset of @p segmented_values. A list of offsets with size
+ * @param offsets Each segment's offset of `segmented_values`. A list of offsets with size
  * `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype  The output precision
+ * @param output_dtype  The output column type
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
  * otherwise null. If `EXCLUDE`, the reduction is valid if any element in the segment is valid,
  * otherwise null.
@@ -156,10 +160,10 @@ std::unique_ptr<column> segmented_reduce(
  * PRODUCT, MIN, MAX, ANY, and ALL aggregations are supported.
  *
  * @param segmented_values Column view of segmented inputs
- * @param offsets Each segment's offset of @p segmented_values. A list of offsets with size
+ * @param offsets Each segment's offset of `segmented_values`. A list of offsets with size
  * `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype  The output precision
+ * @param output_dtype  The output column type
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
  * otherwise null. If `EXCLUDE`, the reduction is valid if any element in the segment is valid,
  * otherwise null.

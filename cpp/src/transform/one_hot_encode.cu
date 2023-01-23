@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -36,72 +36,6 @@
 namespace cudf {
 namespace detail {
 
-namespace {
-
-template <typename InputType>
-struct one_hot_encode_functor {
-  one_hot_encode_functor(column_device_view input, column_device_view category, bool nulls)
-    : _equality_comparator{nullate::DYNAMIC{nulls}, input, category, null_equality::EQUAL},
-      _input_size{input.size()}
-  {
-  }
-
-  bool __device__ operator()(size_type i)
-  {
-    size_type const element_index  = i % _input_size;
-    size_type const category_index = i / _input_size;
-    return _equality_comparator.template operator()<InputType>(element_index, category_index);
-  }
-
- private:
-  element_equality_comparator<nullate::DYNAMIC> const _equality_comparator;
-  size_type const _input_size;
-};
-
-}  // anonymous namespace
-
-struct one_hot_encode_launcher {
-  template <typename InputType, CUDF_ENABLE_IF(is_equality_comparable<InputType, InputType>())>
-  std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input_column,
-                                                            column_view const& categories,
-                                                            rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
-  {
-    auto const total_size = input_column.size() * categories.size();
-    auto all_encodings    = make_numeric_column(
-      data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
-
-    auto d_input_column    = column_device_view::create(input_column, stream);
-    auto d_category_column = column_device_view::create(categories, stream);
-    one_hot_encode_functor<InputType> one_hot_encoding_compute_f(
-      *d_input_column, *d_category_column, input_column.nullable() || categories.nullable());
-
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(total_size),
-                      all_encodings->mutable_view().begin<bool>(),
-                      one_hot_encoding_compute_f);
-
-    auto split_iter = make_counting_transform_iterator(
-      1, [width = input_column.size()](auto i) { return i * width; });
-    std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
-
-    // TODO: use detail interface, gh9226
-    auto views = cudf::split(all_encodings->view(), split_indices);
-    table_view encodings_view{views};
-
-    return std::pair(std::move(all_encodings), encodings_view);
-  }
-
-  template <typename InputType,
-            typename... Args,
-            CUDF_ENABLE_IF(not is_equality_comparable<InputType, InputType>())>
-  std::pair<std::unique_ptr<column>, table_view> operator()(Args&&...)
-  {
-    CUDF_FAIL("Cannot encode column type without well-defined equality operator.");
-  }
-};
-
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
@@ -117,7 +51,35 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     return std::pair(std::move(empty_data), table_view{views});
   }
 
-  return type_dispatcher(input.type(), one_hot_encode_launcher{}, input, categories, stream, mr);
+  auto const total_size = input.size() * categories.size();
+  auto all_encodings =
+    make_numeric_column(data_type{type_id::BOOL8}, total_size, mask_state::UNALLOCATED, stream, mr);
+
+  auto const t_lhs = table_view{{input}};
+  auto const t_rhs = table_view{{categories}};
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
+  auto const d_equal =
+    comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(total_size),
+    all_encodings->mutable_view().begin<bool>(),
+    [input_size = input.size(), d_equal] __device__(size_type i) {
+      auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
+      auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
+      return d_equal(element_index, category_index);
+    });
+
+  auto const split_iter =
+    make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });
+  std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
+
+  auto encodings_view = table_view{split(all_encodings->view(), split_indices, stream)};
+
+  return std::pair(std::move(all_encodings), encodings_view);
 }
 
 }  // namespace detail
