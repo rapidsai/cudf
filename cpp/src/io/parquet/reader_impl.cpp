@@ -150,11 +150,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
       // the final offset for a list at level N is the size of it's child
       int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-      cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
-                      &offset,
-                      sizeof(offset),
-                      cudaMemcpyDefault,
-                      _stream.value());
+      CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
+                                    &offset,
+                                    sizeof(offset),
+                                    cudaMemcpyDefault,
+                                    _stream.value()));
       out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
     }
   }

@@ -886,7 +886,7 @@ thrown exception includes a description of the CUDA error code in its `what()` m
 Example:
 
 ```c++
-CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
+CUDF_CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
 ```
 
 ## Compile-Time Conditions
