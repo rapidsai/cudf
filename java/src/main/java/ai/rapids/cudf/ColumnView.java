@@ -2975,6 +2975,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     if (!repl.getType().equals(DType.STRING)) {
       throw new IllegalArgumentException("Replacement must be a string scalar");
     }
+    assert regexProg != null : "regex program may not be null";
     return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                                          regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
   }
@@ -3018,6 +3019,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the string results.
    */
   public final ColumnVector stringReplaceWithBackrefs(RegexProgram regexProg, String replace) {
+    assert regexProg != null : "regex program may not be null";
     return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(),
         regexProg.combinedFlags(), regexProg.capture().nativeId, replace));
   }
@@ -3426,6 +3428,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector extractAllRecord(RegexProgram regexProg, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
+    assert regexProg != null : "regex program may not be null";
     return new ColumnVector(
         extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                          regexProg.capture().nativeId, idx));
