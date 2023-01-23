@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -48,6 +48,8 @@ from cudf._lib.io.utils cimport make_sink_info, make_source_info
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
+
+from cudf.api.types import is_hashable
 
 ctypedef int32_t underlying_type_t_compression
 
@@ -248,7 +250,7 @@ cdef csv_reader_options make_csv_reader_options(
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
                 col_type = v
-                if v in CSV_HEX_TYPE_MAP:
+                if is_hashable(v) and v in CSV_HEX_TYPE_MAP:
                     col_type = CSV_HEX_TYPE_MAP[v]
                     c_hex_col_names.push_back(str(k).encode())
 
@@ -264,7 +266,7 @@ cdef csv_reader_options make_csv_reader_options(
             ))
         ):
             c_dtypes_list.reserve(1)
-            if dtype in CSV_HEX_TYPE_MAP:
+            if is_hashable(dtype) and dtype in CSV_HEX_TYPE_MAP:
                 dtype = CSV_HEX_TYPE_MAP[dtype]
                 c_hex_col_indexes.push_back(0)
 
@@ -276,7 +278,7 @@ cdef csv_reader_options make_csv_reader_options(
         elif isinstance(dtype, abc.Collection):
             c_dtypes_list.reserve(len(dtype))
             for index, col_dtype in enumerate(dtype):
-                if col_dtype in CSV_HEX_TYPE_MAP:
+                if is_hashable(col_dtype) and col_dtype in CSV_HEX_TYPE_MAP:
                     col_dtype = CSV_HEX_TYPE_MAP[col_dtype]
                     c_hex_col_indexes.push_back(index)
 
@@ -429,6 +431,25 @@ def read_csv(
         column_names=meta_names
     ))
 
+    if dtype is not None:
+        if isinstance(dtype, abc.Mapping):
+            for k, v in dtype.items():
+                if cudf.api.types.is_categorical_dtype(v):
+                    df._data[str(k)] = df._data[str(k)].astype(v)
+        elif (
+            cudf.api.types.is_scalar(dtype) or
+            isinstance(dtype, (
+                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+            ))
+        ):
+            if cudf.api.types.is_categorical_dtype(dtype):
+                df = df.astype(dtype)
+        elif isinstance(dtype, abc.Collection):
+            for index, col_dtype in enumerate(dtype):
+                if cudf.api.types.is_categorical_dtype(col_dtype):
+                    col_name = df._data.names[index]
+                    df._data[col_name] = df._data[col_name].astype(col_dtype)
+
     if names is not None and isinstance(names[0], (int)):
         df.columns = [int(x) for x in df._data]
 
@@ -517,14 +538,14 @@ def write_csv(
 
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
-    # TODO: Remove this Error message once the
-    # following issue is fixed:
+    # TODO: Remove this work-around Dictionary types
+    # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
     if cudf.api.types.is_categorical_dtype(dtype):
-        raise NotImplementedError(
-            "CategoricalDtype as dtype is not yet "
-            "supported in CSV reader"
-        )
+        if isinstance(dtype, str):
+            dtype = "str"
+        else:
+            dtype = dtype.categories.dtype
 
     if isinstance(dtype, str):
         if str(dtype) == "date32":

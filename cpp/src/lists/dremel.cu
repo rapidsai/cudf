@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,7 +126,8 @@ dremel_data get_dremel_data(column_view h_col,
   std::unique_ptr<column> empty_list_offset_col;
   if (has_empty_list_offsets) {
     empty_list_offset_col = make_fixed_width_column(data_type(type_id::INT32), 1);
-    cudaMemsetAsync(empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream);
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream.value()));
     std::function<column_view(column_view const&)> normalize_col = [&](column_view const& col) {
       auto children = [&]() -> std::vector<column_view> {
         if (col.type().id() == type_id::LIST) {
