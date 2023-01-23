@@ -544,9 +544,8 @@ cdef class Column:
                             f"{data_owner} is spilled, which invalidates "
                             f"the exposed data_ptr ({hex(data_ptr)})"
                         )
-                    # accessing the pointer marks it exposed.
-                    data_owner.get_ptr(mode="write")
-
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
         else:
             data = as_buffer(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)

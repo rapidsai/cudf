@@ -304,11 +304,7 @@ class SpillableBuffer(Buffer):
         from cudf.core.buffer.utils import get_spill_lock
 
         spill_lock = get_spill_lock()
-
-        if mode == "internal_write":
-            if spill_lock is None:
-                spill_lock = SpillLock()
-        if spill_lock is None or mode == "write":
+        if spill_lock is None:
             self.mark_exposed()
         else:
             self.spill_lock(spill_lock)
