@@ -166,18 +166,18 @@ std::vector<std::string> create_key_strings(char const* h_data,
 {
   auto const num_cols = sorted_info.num_rows();
   std::vector<uint64_t> h_offsets(num_cols);
-  cudaMemcpyAsync(h_offsets.data(),
-                  sorted_info.column(0).data<uint64_t>(),
-                  sizeof(uint64_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
+                                sorted_info.column(0).data<uint64_t>(),
+                                sizeof(uint64_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<uint16_t> h_lens(num_cols);
-  cudaMemcpyAsync(h_lens.data(),
-                  sorted_info.column(1).data<uint16_t>(),
-                  sizeof(uint16_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_lens.data(),
+                                sorted_info.column(1).data<uint16_t>(),
+                                sizeof(uint16_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<std::string> names(num_cols);
   std::transform(h_offsets.cbegin(),

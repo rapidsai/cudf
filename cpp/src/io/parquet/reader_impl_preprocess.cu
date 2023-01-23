@@ -817,10 +817,11 @@ void print_cumulative_page_info(hostdevice_vector<gpu::PageInfo>& pages,
 
   std::vector<int> schemas(pages.size());
   std::vector<int> h_page_index(pages.size());
-  cudaMemcpy(h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDefault);
+  CUDF_CUDA_TRY(cudaMemcpy(
+    h_page_index.data(), page_index.data(), sizeof(int) * pages.size(), cudaMemcpyDefault));
   std::vector<cumulative_row_info> h_cinfo(pages.size());
-  cudaMemcpy(
-    h_cinfo.data(), c_info.data(), sizeof(cumulative_row_info) * pages.size(), cudaMemcpyDefault);
+  CUDF_CUDA_TRY(cudaMemcpy(
+    h_cinfo.data(), c_info.data(), sizeof(cumulative_row_info) * pages.size(), cudaMemcpyDefault));
   auto schema_iter = cudf::detail::make_counting_transform_iterator(
     0, [&](size_type i) { return pages[h_page_index[i]].src_col_schema; });
   thrust::copy(thrust::seq, schema_iter, schema_iter + pages.size(), schemas.begin());
@@ -1107,11 +1108,11 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
                  return a.row_count < b.row_count;
                });
 
-  std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
-  cudaMemcpy(h_c_info_sorted.data(),
-             c_info_sorted.data(),
-             sizeof(cumulative_row_info) * c_info_sorted.size(),
-             cudaMemcpyDefault);
+  // std::vector<cumulative_row_info> h_c_info_sorted(c_info_sorted.size());
+  // CUDF_CUDA_TRY(cudaMemcpy(h_c_info_sorted.data(),
+  //                          c_info_sorted.data(),
+  //                          sizeof(cumulative_row_info) * c_info_sorted.size(),
+  //                          cudaMemcpyDefault));
   // print_cumulative_row_info(h_c_info_sorted, "raw");
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
@@ -1147,11 +1148,11 @@ std::vector<gpu::chunk_read_info> compute_splits(hostdevice_vector<gpu::PageInfo
 
   // bring back to the cpu
   std::vector<cumulative_row_info> h_aggregated_info(aggregated_info.size());
-  cudaMemcpyAsync(h_aggregated_info.data(),
-                  aggregated_info.data(),
-                  sizeof(cumulative_row_info) * c_info.size(),
-                  cudaMemcpyDefault,
-                  stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_aggregated_info.data(),
+                                aggregated_info.data(),
+                                sizeof(cumulative_row_info) * c_info.size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
   stream.synchronize();
 
   return find_splits(h_aggregated_info, num_rows, chunk_read_limit);
