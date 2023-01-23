@@ -3533,7 +3533,7 @@ public class TableTest extends CudfTestBase {
           try (Table found = JCudfSerialization.readAndConcat(
               headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
               buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, true, false);
           }
         } finally {
           for (HostMemoryBuffer buff: buffers) {
@@ -3629,7 +3629,7 @@ public class TableTest extends CudfTestBase {
         try (Table result = JCudfSerialization.readAndConcat(
             new JCudfSerialization.SerializedTableHeader[] {header, header},
             new HostMemoryBuffer[] {buff, buff})) {
-          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false, false);
+          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, true, false);
         }
       }
     }
@@ -3670,7 +3670,7 @@ public class TableTest extends CudfTestBase {
               buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), true, false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
