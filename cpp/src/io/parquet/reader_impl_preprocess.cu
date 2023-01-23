@@ -556,7 +556,9 @@ void reader::impl::allocate_nesting_info()
     target_page_index += chunks[idx].num_dict_pages;
     for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
       pages[target_page_index + p_idx].nesting = page_nesting_info.device_ptr() + src_info_index;
-      pages[target_page_index + p_idx].num_nesting_levels = per_page_nesting_info_size;
+      pages[target_page_index + p_idx].nesting_info_size = per_page_nesting_info_size;
+      pages[target_page_index + p_idx].num_output_nesting_levels =
+        _metadata->get_output_nesting_depth(src_col_schema);
 
       src_info_index += per_page_nesting_info_size;
     }
@@ -964,9 +966,10 @@ struct get_cumulative_row_info {
       });
 
     size_t const row_count = static_cast<size_t>(page.nesting[0].size);
-    return {row_count,
-            thrust::reduce(thrust::seq, iter, iter + page.num_nesting_levels) + page.str_bytes,
-            page.src_col_schema};
+    return {
+      row_count,
+      thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes,
+      page.src_col_schema};
   }
 };
 
