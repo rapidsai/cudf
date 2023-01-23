@@ -257,48 +257,30 @@ extern "C" {
     return 0;                                                                                \
   }
 
-// make_definition(BlockSum, int8, int8_t);
-// make_definition(BlockSum, int16, int16_t);
 make_definition(BlockSum, int32, int);
 make_definition(BlockSum, int64, int64_t);
 make_definition(BlockSum, float32, float);
 make_definition(BlockSum, float64, double);
-// make_definition(BlockSum, bool, bool);
-// make_definition(BlockMean, int8, int8_t);
-// make_definition(BlockMean, int16, int16_t);
 make_definition(BlockMean, int32, int);
 make_definition(BlockMean, int64, int64_t);
 make_definition(BlockMean, float32, float);
 make_definition(BlockMean, float64, double);
-// make_definition(BlockMean, bool, bool);
-// make_definition(BlockStd, int8, int8_t);
-// make_definition(BlockStd, int16, int16_t);
 make_definition(BlockStd, int32, int);
 make_definition(BlockStd, int64, int64_t);
 make_definition(BlockStd, float32, float);
 make_definition(BlockStd, float64, double);
-// make_definition(BlockStd, bool, bool);
-// make_definition(BlockVar, int8, int8_t);
-// make_definition(BlockVar, int16, int16_t);
 make_definition(BlockVar, int32, int);
 make_definition(BlockVar, int64, int64_t);
 make_definition(BlockVar, float32, float);
 make_definition(BlockVar, float64, double);
-// make_definition(BlockVar, bool, bool);
-// make_definition(BlockMin, int8, int8_t);
-// make_definition(BlockMin, int16, int16_t);
 make_definition(BlockMin, int32, int);
 make_definition(BlockMin, int64, int64_t);
 make_definition(BlockMin, float32, float);
 make_definition(BlockMin, float64, double);
-// make_definition(BlockMin, bool, bool);
-// make_definition(BlockMax, int8, int8_t);
-// make_definition(BlockMax, int16, int16_t);
 make_definition(BlockMax, int32, int);
 make_definition(BlockMax, int64, int64_t);
 make_definition(BlockMax, float32, float);
 make_definition(BlockMax, float64, double);
-// make_definition(BlockMax, bool, bool);
 #undef make_definition
 }
 
@@ -311,19 +293,13 @@ extern "C" {
     return 0;                                                                    \
   }
 
-// make_definition_idx(BlockIdxMin, int8, int8_t);
-// make_definition_idx(BlockIdxMin, int16, int16_t);
 make_definition_idx(BlockIdxMin, int32, int);
 make_definition_idx(BlockIdxMin, int64, int64_t);
 make_definition_idx(BlockIdxMin, float32, float);
 make_definition_idx(BlockIdxMin, float64, double);
-// make_definition_idx(BlockIdxMin, bool, bool);
-// make_definition_idx(BlockIdxMax, int8, int8_t);
-// make_definition_idx(BlockIdxMax, int16, int16_t);
 make_definition_idx(BlockIdxMax, int32, int);
 make_definition_idx(BlockIdxMax, int64, int64_t);
 make_definition_idx(BlockIdxMax, float32, float);
 make_definition_idx(BlockIdxMax, float64, double);
-// make_definition_idx(BlockIdxMax, bool, bool);
 #undef make_definition_idx
 }
