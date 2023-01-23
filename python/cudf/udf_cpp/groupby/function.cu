@@ -206,9 +206,7 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   block.sync();
 
   cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_max};
-  if (local_max == block_max) {
-    ref_idx.fetch_min(local_idx_max, cuda::std::memory_order_relaxed);
-  }
+  if (local_max == block_max) { ref_idx.fetch_min(local_idx_max, cuda::std::memory_order_relaxed); }
   block.sync();
 
   return block_idx_max;
@@ -245,20 +243,19 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   block.sync();
 
   cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref_idx{block_idx_min};
-  if (local_min == block_min) { 
-    ref_idx.fetch_min(local_idx_min, cuda::std::memory_order_relaxed);
-  }
+  if (local_min == block_min) { ref_idx.fetch_min(local_idx_min, cuda::std::memory_order_relaxed); }
   block.sync();
 
   return block_idx_min;
 }
 
 extern "C" {
-#define make_definition(name, cname, type) \
-    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t size) { \
-        *numba_return_value = name<type>(data, size); \
-        return 0; \
-    }
+#define make_definition(name, cname, type)                                                   \
+  __device__ int name##_##cname(int64_t* numba_return_value, type* const data, int64_t size) \
+  {                                                                                          \
+    *numba_return_value = name<type>(data, size);                                            \
+    return 0;                                                                                \
+  }
 
 // make_definition(BlockSum, int8, int8_t);
 // make_definition(BlockSum, int16, int16_t);
@@ -306,11 +303,13 @@ make_definition(BlockMax, float64, double);
 }
 
 extern "C" {
-#define make_definition_idx(name, cname, type) \
-    __device__ int name ## _ ## cname (int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) { \
-        *numba_return_value = name<type>(data, index, size); \
-        return 0; \
-    }
+#define make_definition_idx(name, cname, type)                                   \
+  __device__ int name##_##cname(                                                 \
+    int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) \
+  {                                                                              \
+    *numba_return_value = name<type>(data, index, size);                         \
+    return 0;                                                                    \
+  }
 
 // make_definition_idx(BlockIdxMin, int8, int8_t);
 // make_definition_idx(BlockIdxMin, int16, int16_t);
