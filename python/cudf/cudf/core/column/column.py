@@ -207,7 +207,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view(mode="read").copy_to_host()
+        with acquire_spill_lock():
+             return self.data_array_view(mode="read").copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
