@@ -215,6 +215,20 @@ class Buffer(Serializable):
         return self._get_cuda_array_interface(readonly=False)
 
     def _get_cuda_array_interface(self, readonly=False):
+        """Helper function to create a CUDA Array Interface.
+
+        Parameters
+        ----------
+        readonly : bool, default False
+            If True, returns a CUDA Array Interface with
+            readonly flag set to True.
+            If False, returns a CUDA Array Interface with
+            readonly flag set to False.
+
+        Returns
+        -------
+        dict
+        """
         return {
             "data": (
                 self.get_ptr(mode="read" if readonly else "write"),
