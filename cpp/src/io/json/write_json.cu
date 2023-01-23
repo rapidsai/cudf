@@ -585,7 +585,7 @@ std::unique_ptr<column> make_column_names_column(host_span<column_name_info cons
                  });
   if (escaped_column_names.empty()) {
     std::generate_n(std::back_inserter(escaped_column_names), num_columns, [v = 0]() mutable {
-      return std::to_string(v++);
+      return "\"" + std::to_string(v++) + "\"";
     });
   }
   return make_strings_column_from_host(escaped_column_names, stream);

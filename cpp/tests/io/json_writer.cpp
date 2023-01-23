@@ -209,14 +209,15 @@ TEST_F(JsonWriterTest, WriteReadNested)
   mt.schema_info[2].children = {{"d"}, {"e"}};
 
   std::vector<char> out_buffer;
-  auto destination     = cudf::io::sink_info(&out_buffer);
-  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
-                           .include_nulls(false)
-                           .metadata(mt)
-                           .lines(true)
-                           .na_rep("null");
+  auto destination = cudf::io::sink_info(&out_buffer);
+  auto out_options = cudf::io::json_writer_options_builder(destination, tbl_view)
+                       .include_nulls(false)
+                       .metadata(mt)
+                       .lines(true)
+                       .na_rep("null")
+                       .build();
 
-  cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
+  cudf::io::write_json(out_options, rmm::mr::get_current_device_resource());
   std::string const expected = R"({"a":1,"b":2,"c":{"d":3},"f":5.5,"g":[1]}
 {"a":6,"b":7,"c":{"d":8},"f":10.5}
 {"a":1,"b":2,"c":{"e":4},"f":5.5,"g":[2,null]}
@@ -242,8 +243,9 @@ TEST_F(JsonWriterTest, WriteReadNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, tbl_out.column(2));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*cudf::cast(f, double_dtype), tbl_out.column(3));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(g, tbl_out.column(4));
-  EXPECT_EQ(mt.schema_info.size(), result.metadata.schema_info.size());
+
   mt.schema_info[4].children = {{"offsets"}, {"element"}};  // list child column names
+  EXPECT_EQ(mt.schema_info.size(), result.metadata.schema_info.size());
   for (auto i = 0UL; i < mt.schema_info.size(); i++) {
     EXPECT_EQ(mt.schema_info[i].name, result.metadata.schema_info[i].name) << "[" << i << "]";
     EXPECT_EQ(mt.schema_info[i].children.size(), result.metadata.schema_info[i].children.size())
@@ -275,6 +277,54 @@ TEST_F(JsonWriterTest, WriteReadNested)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, tbl_out.column(2));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(f, tbl_out.column(3));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(g, tbl_out.column(4));
+  EXPECT_EQ(mt.schema_info.size(), result.metadata.schema_info.size());
+  for (auto i = 0UL; i < mt.schema_info.size(); i++) {
+    EXPECT_EQ(mt.schema_info[i].name, result.metadata.schema_info[i].name) << "[" << i << "]";
+    EXPECT_EQ(mt.schema_info[i].children.size(), result.metadata.schema_info[i].children.size())
+      << "[" << i << "]";
+    for (auto j = 0UL; j < mt.schema_info[i].children.size(); j++) {
+      EXPECT_EQ(mt.schema_info[i].children[j].name, result.metadata.schema_info[i].children[j].name)
+        << "[" << i << "][" << j << "]";
+    }
+  }
+
+  // Without children column names
+  mt.schema_info[2].children.clear();
+  out_options.set_metadata(mt);
+  out_buffer.clear();
+  cudf::io::write_json(out_options, rmm::mr::get_current_device_resource());
+
+  in_options = cudf::io::json_reader_options::builder(
+                 cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+                 .lines(true)
+                 .build();
+  result = cudf::io::read_json(in_options);
+
+  mt.schema_info[2].children = {{"0"}, {"1"}};
+  EXPECT_EQ(mt.schema_info.size(), result.metadata.schema_info.size());
+  for (auto i = 0UL; i < mt.schema_info.size(); i++) {
+    EXPECT_EQ(mt.schema_info[i].name, result.metadata.schema_info[i].name) << "[" << i << "]";
+    EXPECT_EQ(mt.schema_info[i].children.size(), result.metadata.schema_info[i].children.size())
+      << "[" << i << "]";
+    for (auto j = 0UL; j < mt.schema_info[i].children.size(); j++) {
+      EXPECT_EQ(mt.schema_info[i].children[j].name, result.metadata.schema_info[i].children[j].name)
+        << "[" << i << "][" << j << "]";
+    }
+  }
+
+  // without column names
+  out_options.set_metadata(cudf::io::table_metadata{});
+  out_buffer.clear();
+  cudf::io::write_json(out_options, rmm::mr::get_current_device_resource());
+  in_options = cudf::io::json_reader_options::builder(
+                 cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+                 .lines(true)
+                 .build();
+  result = cudf::io::read_json(in_options);
+
+  mt.schema_info             = {{"0"}, {"1"}, {"2"}, {"3"}, {"4"}};
+  mt.schema_info[2].children = {{"0"}, {"1"}};
+  mt.schema_info[4].children = {{"offsets"}, {"element"}};  // list child column names
   EXPECT_EQ(mt.schema_info.size(), result.metadata.schema_info.size());
   for (auto i = 0UL; i < mt.schema_info.size(); i++) {
     EXPECT_EQ(mt.schema_info[i].name, result.metadata.schema_info[i].name) << "[" << i << "]";
