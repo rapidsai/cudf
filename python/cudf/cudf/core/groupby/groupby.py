@@ -852,6 +852,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "jit":
+            # Nulls are not yet supported
+            for colname in self.grouping.values._data.keys():
+                if self.obj._data[colname].has_nulls():
+                    raise ValueError(
+                        "Nulls not yet supported with groupby JIT engine"
+                    )
+
             chunk_results = jit_groupby_apply(
                 offsets, grouped_values, function, *args
             )

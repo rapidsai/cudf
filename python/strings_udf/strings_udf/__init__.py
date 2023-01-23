@@ -4,11 +4,7 @@ import os
 from cuda import cudart
 from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
-from cudf.core.udf.utils import (
-    _get_cuda_version_from_ptx_file,
-    _get_ptx_file,
-    maybe_patch_numba_linker,
-)
+from cudf.core.udf.utils import _get_cuda_version_from_ptx_file, _get_ptx_file
 
 from . import _version
 
@@ -45,7 +41,4 @@ def set_malloc_heap_size(size=None):
 ptxpath = None
 versions = safe_get_versions()
 if versions != NO_DRIVER:
-    driver_version, runtime_version = versions
     ptxpath = _get_ptx_file(path, "shim_")
-    strings_udf_ptx_version = _get_cuda_version_from_ptx_file(ptxpath)
-    maybe_patch_numba_linker(driver_version, strings_udf_ptx_version)
