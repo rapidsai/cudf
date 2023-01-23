@@ -5395,7 +5395,7 @@ class StringColumn(column.ColumnBase):
         else:
             return self.base_children[0].size - 1
 
-    def data_array_view(self, mode="read") -> cuda.devicearray.DeviceNDArray:
+    def data_array_view(self, mode="write") -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
     def to_arrow(self) -> pa.Array:

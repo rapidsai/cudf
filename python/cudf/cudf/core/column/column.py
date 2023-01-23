@@ -127,6 +127,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             with readonly flag set to False in CAI is returned.
             If 'read' is passed, a device array object
             with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
 
         Returns
         -------
@@ -155,6 +158,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             with readonly flag set to False in CAI is returned.
             If 'read' is passed, a device array object
             with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
 
         Returns
         -------

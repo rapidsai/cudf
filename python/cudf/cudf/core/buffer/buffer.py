@@ -261,19 +261,21 @@ class Buffer(Serializable):
         ----------
         mode : str, default 'write'
             Supported values are {"read", "write"}
-            If "write", the modification to the buffer
-            is allowed. Hence can pass it onto a
-            third-party library as well.
-            If "read", then modification to the buffer
-            isn't expected to be done by the user via this pointer.
-            Hence mostly intended for internal read purposes or
-            device to host copies.
+            If "write", the data pointed to may be modified
+            by the caller. If "read", the data pointed to
+            must not be modified by the caller.
+            Failure to fulfil this contract will cause
+            incorrect behavior.
 
         Notes
         -----
         In case of `Buffer` class, any value passed to `mode` is a no-op.
         The significance of each value explained above is a
         guidance for any implementation of `Buffer` class.
+
+        See Also
+        --------
+        SpillableBuffer.get_ptr
         """
         return self._ptr
 
