@@ -1009,6 +1009,74 @@ def test_json_round_trip_gzip():
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        # # empty input
+        # assert failing due to missing index size information
+        "",
+        "[]",
+        "[]\n[]\n[]",
+        # simple values
+        """[1]\n[2]\n[3]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nulls
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, null]\n[7, 8, 9]\n[null, null, null]""",
+        """[1, 2, 3]\n[4, 5, null]\n[]""",
+        # missing
+        """[1, 2, 3]\n[4, 5   ]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9, 10]""",
+        """[1, 2, 3]\n[4, 5, 6, {}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, []]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, {"a": 10}]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, 6, [10]]\n[7, 8, 9]""",
+        # mixed
+        """[1, 2, 3]\n[4, 5, {}]\n[7, 8, 9]""",
+        """[1, 2, {}]\n[4, 5, 6]\n[7, 8, 9]""",
+        """[1, 2, 3]\n[4, 5, [6]]\n[7, 8, 9]""",
+        """[1, 2, [3]]\n[4, 5, 6]\n[7, 8, 9]""",
+        # nested
+        """[1, 2, [3]]\n[4, 5, [6]]\n[7, 8, [9]]""",
+        """[1, 2, {"a": 3}]\n[4, 5, {"b": 6}]\n[7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": 3}]]
+           [4, 5, [{"b": 6}, {"b": 6}, {}, {"b": 6}]]
+           [7, 8, [{}]]""",
+        """[1, 2, {"a": [3, 3, 3]}]
+           [4, 5, {"b": [6, 6]}]
+           [7, 8, {"c": 9}]""",
+        """[1, 2, [{"a": 3}, {"a": null}]]
+           [4, 5, [{"b": [6.0, 6, 06]}, {"b": [6]}, {}, {"b": null}]]
+           [7, 8, [{}]]""",
+    ],
+)
+@pytest.mark.parametrize("lines", [True, False])
+def test_json_array_of_arrays(data, lines):
+    data = data if lines else "[" + data.replace("\n", ",") + "]"
+    pdf = pd.read_json(data, orient="values", lines=lines)
+    df = cudf.read_json(
+        StringIO(data),
+        engine="cudf_experimental",
+        orient="values",
+        lines=lines,
+    )
+    # if mixed with dict/list type, replace other types with None.
+    if 2 in pdf.columns and any(
+        pdf[2].apply(lambda x: isinstance(x, dict) or isinstance(x, list))
+    ):
+        pdf[2] = pdf[2].apply(
+            lambda x: x if isinstance(x, dict) or isinstance(x, list) else None
+        )
+    # TODO: Replace string column names with integer column names
+    # for values orient in cudf json reader
+    pdf.rename(columns={name: str(name) for name in pdf.columns}, inplace=True)
+    # assert_eq(pdf, df)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
+    assert df.to_arrow().equals(pa_table_pdf)
+
+
+@pytest.mark.parametrize(
     "jsonl_string",
     [
         # simple list with mixed types
