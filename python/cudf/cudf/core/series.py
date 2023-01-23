@@ -39,6 +39,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -4855,6 +4856,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@acquire_spill_lock()
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.

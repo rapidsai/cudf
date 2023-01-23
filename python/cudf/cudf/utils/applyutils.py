@@ -9,6 +9,7 @@ from numba.core.utils import pysignature
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
@@ -140,6 +141,7 @@ class ApplyKernelCompilerBase:
         self.cache_key = cache_key
         self.kernel = self.compile(func, sig.parameters.keys(), kwargs.keys())
 
+    @acquire_spill_lock()
     def run(self, df, **launch_params):
         # Get input columns
         if isinstance(self.incols, dict):

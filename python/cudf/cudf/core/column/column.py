@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -214,7 +214,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column must have no nulls.")
 
         with acquire_spill_lock():
-             return self.data_array_view(mode="read").copy_to_host()
+            return self.data_array_view(mode="read").copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":

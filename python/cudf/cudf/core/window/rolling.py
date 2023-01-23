@@ -11,6 +11,7 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
@@ -487,9 +488,11 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         if is_integer(window):
             return window
         else:
-            return cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view(mode="write"), window
-            )
+            with acquire_spill_lock():
+                return cudautils.window_sizes_from_offset(
+                    self.obj.index._values.data_array_view(mode="write"),
+                    window,
+                )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
@@ -524,6 +527,7 @@ class RollingGroupby(Rolling):
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
+    @acquire_spill_lock()
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(

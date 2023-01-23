@@ -125,7 +125,7 @@ class TimeDeltaColumn(ColumnBase):
             "TimeDelta Arrays is not yet implemented in cudf"
         )
 
-    @acquire_spill_lock
+    @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         mask = None
         if self.nullable:
