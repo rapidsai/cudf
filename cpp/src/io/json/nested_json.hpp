@@ -204,6 +204,8 @@ tree_meta_t get_tree_representation(
  * @param d_input The JSON input
  * @param d_tree A tree representation of the input JSON string as vectors of node type, parent
  * index, level, begin index, and end index in the input JSON string
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param is_enabled_lines Whether the input is a line-delimited JSON
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return A tuple of the output column indices and the row offsets within each column for each node
@@ -212,9 +214,30 @@ std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
 records_orient_tree_traversal(
   device_span<SymbolT const> d_input,
   tree_meta_t const& d_tree,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
+ * node, the function outputs the original index of that node (i.e., the nodes index within
+ * `node_levels`) and also generates the child index of that node relative to other children of the
+ * same parent. E.g., the child indices of the following string nodes relative to their respective
+ * list parents are: `[["a", "b", "c"], ["d", "e"]]`: `"a": 0, "b": 1, "c": 2, "d": 0, "e": 1`.
+ *
+ * @param row_array_children_level Level of the nodes to search for
+ * @param node_levels Levels of each node in the tree
+ * @param parent_node_ids Parent node ids of each node in the tree
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A pair of device_uvector containing the original node indices and their corresponding
+ * child index
+ */
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
+get_array_children_indices(TreeDepthT row_array_children_level,
+                           device_span<TreeDepthT const> node_levels,
+                           device_span<NodeIndexT const> parent_node_ids,
+                           rmm::cuda_stream_view stream);
 /**
  * @brief Reduce node tree into column tree by aggregating each property of column.
  *

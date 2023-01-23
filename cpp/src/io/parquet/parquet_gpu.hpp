@@ -114,6 +114,13 @@ struct PageNestingDecodeInfo {
 
 /**
  * @brief Nesting information
+ *
+ * This struct serves two purposes:
+ *
+ * - It stores information about output (cudf) columns
+ * - It provides a mapping from input column depth to output column depth via
+ * the start_depth and end_depth fields.
+ *
  */
 struct PageNestingInfo {
   // set at initialization (see start_offset_output_iterator in reader_impl_preprocess.cu)
@@ -173,10 +180,14 @@ struct PageInfo {
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
 
-  // nesting information (input/output) for each page
+  // nesting information (input/output) for each page. this array contains
+  // input column nesting information, output column nesting information and
+  // mappings between the two. the length of the array, nesting_info_size is
+  // max(num_output_nesting_levels, max_definition_levels + 1)
+  int num_output_nesting_levels;
+  int nesting_info_size;
   PageNestingInfo* nesting;
   PageNestingDecodeInfo* nesting_decode;
-  int num_nesting_levels;
 };
 
 /**

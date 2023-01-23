@@ -148,8 +148,8 @@ auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stre
   auto d_scalar         = cudf::strings::repeat_string(d_string_scalar, repeat_times);
 
   auto data = const_cast<char*>(d_scalar->data());
-  cudaMemsetAsync(data, '[', 1, stream.value());
-  cudaMemsetAsync(data + d_scalar->size() - 1, ']', 1, stream.value());
+  CUDF_CUDA_TRY(cudaMemsetAsync(data, '[', 1, stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(data + d_scalar->size() - 1, ']', 1, stream.value()));
 
   return d_scalar;
 }
