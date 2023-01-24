@@ -17,7 +17,7 @@ from cudf.core.udf.groupby_typing import (
 )
 
 
-def lowering_function(context, builder, sig, args, function):
+def group_reduction_impl_basic(context, builder, sig, args, function):
     """
     Instruction boilerplate used for calling a groupby reduction
     __device__ function. Centers around a forward declaration of
@@ -72,14 +72,14 @@ def group_constructor(context, builder, sig, args):
     return grp._getvalue()
 
 
-def cuda_Group_idx_max_or_min(context, builder, sig, args, function):
+def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
     """
     Instruction boilerplate used for calling a groupby reduction
     __device__ function in the case where the function is either
-    `idxmax` or `idxmin`. See `lowering_function` for details. This
-    lowering differs from other reductions due to the presence of
-    the index. This results in the forward declaration expecting
-    an extra arg.
+    `idxmax` or `idxmin`. See `group_reduction_impl_basic` for
+    details. This lowering differs from other reductions due to
+    the presence of the index. This results in the forward
+    declaration expecting an extra arg.
     """
     retty = sig.return_type
 
@@ -112,15 +112,19 @@ def cuda_Group_idx_max_or_min(context, builder, sig, args, function):
     )
 
 
-cuda_Group_max = partial(lowering_function, function="max")
-cuda_Group_min = partial(lowering_function, function="min")
-cuda_Group_sum = partial(lowering_function, function="sum")
-cuda_Group_mean = partial(lowering_function, function="mean")
-cuda_Group_std = partial(lowering_function, function="std")
-cuda_Group_var = partial(lowering_function, function="var")
+cuda_Group_max = partial(group_reduction_impl_basic, function="max")
+cuda_Group_min = partial(group_reduction_impl_basic, function="min")
+cuda_Group_sum = partial(group_reduction_impl_basic, function="sum")
+cuda_Group_mean = partial(group_reduction_impl_basic, function="mean")
+cuda_Group_std = partial(group_reduction_impl_basic, function="std")
+cuda_Group_var = partial(group_reduction_impl_basic, function="var")
 
-cuda_Group_idxmax = partial(cuda_Group_idx_max_or_min, function="idxmax")
-cuda_Group_idxmin = partial(cuda_Group_idx_max_or_min, function="idxmin")
+cuda_Group_idxmax = partial(
+    group_reduction_impl_idx_max_or_min, function="idxmax"
+)
+cuda_Group_idxmin = partial(
+    group_reduction_impl_idx_max_or_min, function="idxmin"
+)
 
 
 def cuda_Group_size(context, builder, sig, args):

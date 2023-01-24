@@ -881,7 +881,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             if ngroups > self._MAX_GROUPS_BEFORE_WARN:
                 warnings.warn(
                     f"GroupBy.apply() performance scales poorly with "
-                    f"number of groups. Got {ngroups} groups."
+                    f"number of groups. Got {ngroups} groups. Some functions "
+                    "may perform better by passing engine='jit'"
                 )
 
             chunks = [

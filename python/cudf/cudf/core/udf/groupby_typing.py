@@ -33,12 +33,7 @@ class Group:
     in python code and accessing their attributes
     """
 
-    def __init__(self, group_data, size, index, dtype, index_dtype):
-        self.group_data = group_data
-        self.size = size
-        self.index = index
-        self.dtype = dtype
-        self.index_dtype = index_dtype
+    pass
 
 
 class GroupType(numba.types.Type):
@@ -103,24 +98,24 @@ class GroupModel(models.StructModel):
 call_cuda_functions: Dict[Any, Any] = {}
 
 
-def _register_cuda_reduction_caller(func, inputty, retty):
+def _register_cuda_reduction_caller(funcname, inputty, retty):
     cuda_func = cuda.declare_device(
-        f"Block{func}_{inputty}", retty(types.CPointer(inputty), types.int64)
+        f"Block{funcname}_{inputty}",
+        retty(types.CPointer(inputty), types.int64),
     )
 
     def caller(data, size):
         return cuda_func(data, size)
 
-    if call_cuda_functions.get(func.lower()) is None:
-        call_cuda_functions[func.lower()] = {}
+    call_cuda_functions.setdefault(funcname.lower(), {})
 
     type_key = (retty, inputty)
-    call_cuda_functions[func.lower()][type_key] = caller
+    call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-def _register_cuda_idxreduction_caller(func, inputty):
+def _register_cuda_idxreduction_caller(funcname, inputty):
     cuda_func = cuda.declare_device(
-        f"Block{func}_{inputty}",
+        f"Block{funcname}_{inputty}",
         types.int64(
             types.CPointer(inputty), types.CPointer(types.int64), types.int64
         ),
@@ -131,9 +126,8 @@ def _register_cuda_idxreduction_caller(func, inputty):
 
     # only support default index type right now
     type_key = (index_default_type, inputty)
-    if call_cuda_functions.get(func.lower()) is None:
-        call_cuda_functions[func.lower()] = {}
-    call_cuda_functions[func.lower()][type_key] = caller
+    call_cuda_functions.setdefault(funcname.lower(), {})
+    call_cuda_functions[funcname.lower()][type_key] = caller
 
 
 def _create_reduction_attr(name, retty=None):
