@@ -241,7 +241,7 @@ class Buffer(Serializable):
         }
 
     @property
-    def _get_readonly_proxy_obj(self):
+    def _readonly_proxy_cai_obj(self):
         """
         Returns a proxy object with a read-only CUDA Array Interface.
         """

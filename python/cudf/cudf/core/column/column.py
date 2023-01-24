@@ -137,7 +137,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.data is not None:
             if mode == "read":
-                obj = self.data._get_readonly_proxy_obj
+                obj = self.data._readonly_proxy_cai_obj
             elif mode == "write":
                 obj = self.data
             else:
@@ -170,7 +170,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.mask is not None:
             if mode == "read":
-                obj = self.mask._get_readonly_proxy_obj
+                obj = self.mask._readonly_proxy_cai_obj
             elif mode == "write":
                 obj = self.mask
             else:
