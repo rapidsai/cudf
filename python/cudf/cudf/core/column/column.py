@@ -114,7 +114,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     def data_array_view(
-        self, mode="write"
+        self, *, mode="write"
     ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
@@ -146,7 +146,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             obj = None
         return cuda.as_cuda_array(obj).view(self.dtype)
 
-    def mask_array_view(self, mode="read") -> "cuda.devicearray.DeviceNDArray":
+    def mask_array_view(
+        self, *, mode="read"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
 
