@@ -1,6 +1,5 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-import math
 import os
 
 import cupy as cp
