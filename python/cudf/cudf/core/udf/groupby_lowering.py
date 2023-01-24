@@ -49,7 +49,7 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     return context.compile_internal(
         builder,
         func,
-        nb_signature(retty, group_dataty, grp_type.size_type),
+        nb_signature(retty, group_dataty, grp_type.group_size_type),
         (builder.load(group_data_ptr), grp.size),
     )
 
@@ -107,7 +107,9 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
     return context.compile_internal(
         builder,
         func,
-        nb_signature(retty, group_dataty, index_dataty, grp_type.size_type),
+        nb_signature(
+            retty, group_dataty, index_dataty, grp_type.group_size_type
+        ),
         (builder.load(group_data_ptr), builder.load(index_ptr), grp.size),
     )
 

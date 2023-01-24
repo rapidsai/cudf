@@ -47,7 +47,7 @@ class GroupType(numba.types.Type):
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
         self.group_data_type = types.CPointer(group_scalar_type)
-        self.size_type = types.int64
+        self.group_size_type = types.int64
         self.group_index_type = types.CPointer(index_type)
         super().__init__(
             name=f"Group({self.group_scalar_type}, {self.index_type})"
