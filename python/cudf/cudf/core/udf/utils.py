@@ -276,7 +276,11 @@ def _post_process_output_col(col, retty):
     return as_column(col, retty)
 
 
-def _get_appropriate_file(sms, cc):
+def _get_best_ptx_file(sms, cc):
+    """
+    Determine of the available PTX files which one is
+    the most recent up to and including the device cc
+    """
     filtered_sms = [x for x in sms if x[0] <= cc]
     if filtered_sms:
         return max(filtered_sms, key=lambda y: y[0])
@@ -312,7 +316,7 @@ def _get_ptx_file(path, prefix):
     regular_result = None
 
     if regular_sms:
-        regular_result = _get_appropriate_file(regular_sms, cc)
+        regular_result = _get_best_ptx_file(regular_sms, cc)
 
     if regular_result is None:
         raise RuntimeError(
