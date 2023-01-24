@@ -50,22 +50,23 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         COVARIANCE 'cudf::aggregation::COVARIANCE'
 
     cdef cppclass aggregation:
-        Kind kind
+        aggregation.Kind kind
+        unique_ptr[aggregation] clone()
 
     cdef cppclass rolling_aggregation(aggregation):
-        aggregation.Kind kind
+        pass
 
     cdef cppclass groupby_aggregation(aggregation):
-        aggregation.Kind kind
+        pass
 
     cdef cppclass groupby_scan_aggregation(aggregation):
-        aggregation.Kind kind
+        pass
 
     cdef cppclass reduce_aggregation(aggregation):
-        aggregation.Kind kind
+        pass
 
     cdef cppclass scan_aggregation(aggregation):
-        aggregation.Kind kind
+        pass
 
     ctypedef enum udf_type:
         CUDA 'cudf::udf_type::CUDA'
