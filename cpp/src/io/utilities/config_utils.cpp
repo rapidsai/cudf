@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ enum class usage_policy : uint8_t { OFF, GDS, ALWAYS, KVIKIO };
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "GDS");
+  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "GDS") return usage_policy::GDS;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;

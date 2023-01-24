@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case cudf::io::io_type::FILEPATH: return "FILEPATH";
       case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case cudf::io::io_type::DEVICE_BUFFER: return "DEVICE_BUFFER";
       case cudf::io::io_type::VOID: return "VOID";
       default: return "Unknown";
     }
