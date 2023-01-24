@@ -1361,6 +1361,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
         out->set_null_mask(std::move(new_mask), null_count);
       }
 
+      if (cudf::may_have_nonempty_nulls(*out)) {
+        out = cudf::purge_nonempty_nulls(*out);
+      }
+
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
           out_view, *lhs, *rhs, false, false, op, cudf::get_default_stream());
@@ -1405,6 +1409,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
       } else {
         auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
         out->set_null_mask(std::move(new_mask), new_null_count);
+      }
+
+      if (cudf::may_have_nonempty_nulls(*out)) {
+        out = cudf::purge_nonempty_nulls(*out);
       }
 
       auto rhsv = cudf::make_column_from_scalar(*rhs, 1);
@@ -1768,6 +1776,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
         break;
       }
       default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
+    }
+
+    if (cudf::may_have_nonempty_nulls(*copy)) {
+      copy = cudf::purge_nonempty_nulls(*copy);
     }
 
     return release_as_jlong(copy);
