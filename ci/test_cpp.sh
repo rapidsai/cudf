@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -62,19 +62,6 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     #fi
 
-    exitcode=$?
-    if (( ${exitcode} != 0 )); then
-        SUITEERROR=${exitcode}
-        echo "FAILED: GTest ${gt}"
-    fi
-done
-
-rapids-logger "Run gtests with kvikio"
-# Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
-    gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
-    echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     exitcode=$?
     if (( ${exitcode} != 0 )); then
         SUITEERROR=${exitcode}

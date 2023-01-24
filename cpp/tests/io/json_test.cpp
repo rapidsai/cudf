@@ -164,18 +164,26 @@ struct JsonReaderTest : public cudf::test::BaseFixture {
  * @brief Enum class to be used to specify the test case of parametrized tests
  */
 enum class json_test_t {
-  // Run test with the nested JSON lines reader using record-orient input data
-  record_orient,
-  // Run test with the legacy JSON lines reader using row-orient input data
+  // Run test with the existing JSON lines reader using row-orient input data
   legacy_lines_row_orient,
-  // Run test with the legacy JSON lines reader using record-orient input data
-  legacy_lines_record_orient
+  // Run test with the existing JSON lines reader using record-orient input data
+  legacy_lines_record_orient,
+  // Run test with the nested JSON lines reader using record-orient input data
+  json_experimental_record_orient,
+  // Run test with the nested JSON lines reader using row-orient input data
+  json_experimental_row_orient
 };
 
 constexpr bool is_legacy_test(json_test_t test_opt)
 {
   return test_opt == json_test_t::legacy_lines_row_orient or
          test_opt == json_test_t::legacy_lines_record_orient;
+}
+
+constexpr bool is_row_orient_test(json_test_t test_opt)
+{
+  return test_opt == json_test_t::legacy_lines_row_orient or
+         test_opt == json_test_t::json_experimental_row_orient;
 }
 
 /**
@@ -272,15 +280,16 @@ TYPED_TEST_SUITE(JsonValidFixedPointReaderTest, cudf::test::FixedPointTypes);
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
                         JsonReaderParamTest,
-                        ::testing::Values(json_test_t::record_orient,
-                                          json_test_t::legacy_lines_row_orient,
-                                          json_test_t::legacy_lines_record_orient));
+                        ::testing::Values(json_test_t::legacy_lines_row_orient,
+                                          json_test_t::legacy_lines_record_orient,
+                                          json_test_t::json_experimental_record_orient,
+                                          json_test_t::json_experimental_row_orient));
 
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
-                                          json_test_t::record_orient));
+                                          json_test_t::json_experimental_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
 {
@@ -288,8 +297,7 @@ TEST_P(JsonReaderParamTest, BasicJsonLines)
   std::string row_orient    = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
   std::string record_orient = to_records_orient(
     {{{"0", "1"}, {"1", "1.1"}}, {{"0", "2"}, {"1", "2.2"}}, {{"0", "3"}, {"1", "3.3"}}}, "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
@@ -329,8 +337,7 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
                                                  {{"0", "3.1e-001"}},
                                                  {{"0", "-73.98007199999998"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   auto filepath = temp_env->get_temp_dir() + "FloatingPoint.json";
   {
@@ -367,8 +374,7 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
   std::string record_orient = to_records_orient({{{"0", "1"}, {"1", "1.1"}, {"2", R"("aa ")"}},
                                                  {{"0", "2"}, {"1", "2.2"}, {"2", R"("  bbb")"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
@@ -400,7 +406,7 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
 TEST_P(JsonReaderParamTest, MultiColumn)
 {
   auto const test_opt   = GetParam();
-  bool const row_orient = (test_opt == json_test_t::legacy_lines_row_orient);
+  bool const row_orient = is_row_orient_test(test_opt);
 
   constexpr auto num_rows = 10;
   auto int8_values        = random_values<int8_t>(num_rows);
@@ -453,6 +459,7 @@ TEST_P(JsonReaderParamTest, MultiColumn)
 
   const auto view = result.tbl->view();
 
+  EXPECT_EQ(view.num_columns(), 6);
   EXPECT_EQ(view.column(0).type().id(), cudf::type_id::INT8);
   EXPECT_EQ(view.column(1).type().id(), cudf::type_id::INT16);
   EXPECT_EQ(view.column(2).type().id(), cudf::type_id::INT32);
@@ -485,8 +492,7 @@ TEST_P(JsonReaderParamTest, Booleans)
       {{"0", "true"}},
     },
     "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   auto filepath = temp_env->get_temp_dir() + "Booleans.json";
   {
@@ -517,8 +523,8 @@ TEST_P(JsonReaderParamTest, Dates)
   auto const test_opt = GetParam();
   std::string row_orient =
     "[05/03/2001]\n[31/10/2010]\n[20/10/1994]\n[18/10/1990]\n[1/1/1970]\n"
-    "[18/04/1995]\n[14/07/1994]\n[07/06/2006 11:20:30.400]\n"
-    "[16/09/2005T1:2:30.400PM]\n[2/2/1970]\n";
+    "[18/04/1995]\n[14/07/1994]\n[\"07/06/2006 11:20:30.400\"]\n"
+    "[\"16/09/2005T1:2:30.400PM\"]\n[2/2/1970]\n[null]";
   std::string record_orient = to_records_orient({{{"0", R"("05/03/2001")"}},
                                                  {{"0", R"("31/10/2010")"}},
                                                  {{"0", R"("20/10/1994")"}},
@@ -528,10 +534,10 @@ TEST_P(JsonReaderParamTest, Dates)
                                                  {{"0", R"("14/07/1994")"}},
                                                  {{"0", R"("07/06/2006 11:20:30.400")"}},
                                                  {{"0", R"("16/09/2005T1:2:30.400PM")"}},
-                                                 {{"0", R"("2/2/1970")"}}},
+                                                 {{"0", R"("2/2/1970")"}},
+                                                 {{"0", R"(null)"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   auto filepath = temp_env->get_temp_dir() + "Dates.json";
   {
@@ -551,7 +557,7 @@ TEST_P(JsonReaderParamTest, Dates)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::nulls_at({10});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
                                  timestamp_ms_wrapper{{983750400000,
@@ -563,7 +569,8 @@ TEST_P(JsonReaderParamTest, Dates)
                                                        774144000000,
                                                        1149679230400,
                                                        1126875750400,
-                                                       2764800000},
+                                                       2764800000,
+                                                       0L},
                                                       validity});
 }
 
@@ -572,9 +579,9 @@ TEST_P(JsonReaderParamTest, Durations)
   auto const test_opt = GetParam();
   std::string row_orient =
     "[-2]\n[-1]\n[0]\n"
-    "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n"
-    "[0:0:0.000123]\n[0:0:0.000123000]\n[00:00:00.100000001]\n"
-    "[-2147483648]\n[2147483647]\n";
+    "[\"1 days\"]\n[\"0 days 23:01:00\"]\n[\"0 days 00:00:00.000000123\"]\n"
+    "[\"0:0:0.000123\"]\n[\"0:0:0.000123000\"]\n[\"00:00:00.100000001\"]\n"
+    "[-2147483648]\n[2147483647]\n[null]";
   std::string record_orient = to_records_orient({{{"0", "-2"}},
                                                  {{"0", "-1"}},
                                                  {{"0", "0"}},
@@ -585,11 +592,11 @@ TEST_P(JsonReaderParamTest, Durations)
                                                  {{"0", R"("0:0:0.000123000")"}},
                                                  {{"0", R"("00:00:00.100000001")"}},
                                                  {{"0", R"(-2147483648)"}},
-                                                 {{"0", R"(2147483647)"}}},
+                                                 {{"0", R"(2147483647)"}},
+                                                 {{"0", R"(null)"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
-  auto filepath = temp_env->get_temp_dir() + "Durations.json";
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
+  auto filepath             = temp_env->get_temp_dir() + "Durations.json";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << data;
@@ -606,7 +613,7 @@ TEST_P(JsonReaderParamTest, Durations)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::DURATION_NANOSECONDS);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::nulls_at({11});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
@@ -620,7 +627,8 @@ TEST_P(JsonReaderParamTest, Durations)
                                                         123000L,
                                                         100000001L,
                                                         -2147483648L,
-                                                        2147483647L},
+                                                        2147483647L,
+                                                        0L},
                                                        validity});
 }
 
@@ -631,8 +639,7 @@ TEST_P(JsonReaderParamTest, JsonLinesDtypeInference)
   std::string record_orient = to_records_orient({{{"0", "100"}, {"1", "1.1"}, {"2", R"("aa ")"}},
                                                  {{"0", "200"}, {"1", "2.2"}, {"2", R"("  bbb")"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
@@ -666,8 +673,7 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
   std::string row_orient = "[11, 1.1]\n[22, 2.2]";
   std::string record_orient =
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
@@ -896,6 +902,23 @@ TEST_F(JsonReaderTest, NoDataFile)
   EXPECT_EQ(0, view.num_columns());
 }
 
+// empty input in values orient
+TEST_F(JsonReaderTest, NoDataFileValues)
+{
+  auto filepath = temp_env->get_temp_dir() + "NoDataFileValues.csv";
+  {
+    std::ofstream outfile{filepath, std::ofstream::out};
+    outfile << "[]\n";
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath}).lines(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(0, view.num_columns());
+}
+
 TEST_F(JsonReaderTest, ArrowFileSource)
 {
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
@@ -936,8 +959,7 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
                                                  {{"0", "9.0Be1"}},
                                                  {{"0", "1C.2"}}},
                                                 "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   const auto filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.json";
   {
@@ -964,8 +986,7 @@ TEST_P(JsonReaderParamTest, StringInference)
   auto const test_opt       = GetParam();
   std::string row_orient    = "[\"-1\"]";
   std::string record_orient = to_records_orient({{{"0", R"("-1")"}}}, "\n");
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data          = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.c_str(), data.size()})
@@ -980,7 +1001,7 @@ TEST_P(JsonReaderParamTest, StringInference)
 TEST_P(JsonReaderParamTest, ParseInRangeIntegers)
 {
   auto const test_opt   = GetParam();
-  bool const row_orient = (test_opt == json_test_t::legacy_lines_row_orient);
+  bool const row_orient = is_row_orient_test(test_opt);
 
   constexpr auto num_rows                      = 4;
   std::vector<int64_t> small_int               = {0, -10, 20, -30};
@@ -1075,7 +1096,7 @@ TEST_P(JsonReaderParamTest, ParseInRangeIntegers)
 TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
 {
   auto const test_opt   = GetParam();
-  bool const row_orient = (test_opt == json_test_t::legacy_lines_row_orient);
+  bool const row_orient = is_row_orient_test(test_opt);
 
   constexpr auto num_rows                        = 4;
   std::vector<std::string> out_of_range_positive = {"111111111111111111111",
@@ -1182,8 +1203,7 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
   std::vector<std::string> record_orient{
     to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n") + "\n",
     to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n") + "\n"};
-  auto const& data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
   std::ofstream outfile(file1, std::ofstream::out);
@@ -1226,7 +1246,8 @@ TEST_F(JsonReaderTest, BadDtypeParams)
   cudf::io::json_reader_options options_vec =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
       .lines(true)
-      .dtypes({dtype<int8_t>()});
+      .dtypes({dtype<int8_t>()})
+      .legacy(true);
 
   // should throw because there are four columns and only one dtype
   EXPECT_THROW(cudf::io::read_json(options_vec), cudf::logic_error);
@@ -1234,6 +1255,7 @@ TEST_F(JsonReaderTest, BadDtypeParams)
   cudf::io::json_reader_options options_map =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
       .lines(true)
+      .legacy(true)
       .dtypes(std::map<std::string, cudf::data_type>{{"0", dtype<int8_t>()},
                                                      {"1", dtype<int8_t>()},
                                                      {"2", dtype<int8_t>()},
@@ -1422,8 +1444,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
                                                  {{"0", "2"}, {"1", "2.2"}, {"2", R"("  bbb")"}}},
                                                 "\n");
 
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   std::map<std::string, cudf::io::schema_element> dtype_schema{
     {"2", {dtype<cudf::string_view>()}}, {"0", {dtype<int32_t>()}}, {"1", {dtype<double>()}}};
@@ -1546,8 +1567,7 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                                  {{"0", "\"nan\""}}},
                                                 "\n");
 
-  std::string data =
-    (test_opt == json_test_t::legacy_lines_row_orient) ? row_orient : record_orient;
+  std::string data = is_row_orient_test(test_opt) ? row_orient : record_orient;
 
   auto make_validity = [](std::vector<int> const& validity) {
     return cudf::detail::make_counting_transform_iterator(
