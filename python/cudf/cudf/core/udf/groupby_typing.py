@@ -97,7 +97,7 @@ class GroupModel(models.StructModel):
             ("size", types.int64),
             ("index", types.CPointer(fe_type.index_type)),
         ]
-        super().__init__(self, dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 call_cuda_functions: Dict[Any, Any] = {}
