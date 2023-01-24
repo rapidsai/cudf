@@ -167,13 +167,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
-
-        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
-            gt="$WORKSPACE/cpp/build/gtests/$test_name"
-            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
-        done
     fi
 else
     #Project Flash
@@ -229,13 +222,6 @@ else
         else
             GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         fi
-    done
-
-    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
-        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
-        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"

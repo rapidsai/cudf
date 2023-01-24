@@ -575,7 +575,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {{}, column_infos}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_infos}};
 }
 
 /**

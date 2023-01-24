@@ -474,7 +474,7 @@ In order to aid in performance optimization and debugging, all compute intensive
 should have a corresponding NVTX range. In libcudf, we have a convenience macro `CUDF_FUNC_RANGE()`
 that will automatically annotate the lifetime of the enclosing function and use the function's name
 as the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/cpp).
+[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
  ### Stream Creation
 
