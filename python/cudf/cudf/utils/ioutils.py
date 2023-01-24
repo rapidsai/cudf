@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -533,9 +533,9 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_experimental', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
-    automatically selected based on the other parameters.
+    automatically selected based on the other parameters. See notes below.
 orient : string
 
     .. admonition:: Not GPU-accelerated
@@ -676,11 +676,11 @@ byte_range : list or tuple, default None
     even if it ends after the end of the range.
 keep_quotes : bool, default False
 
-    .. admonition:: GPU-accelerated experimental feature
+    .. admonition:: GPU-accelerated feature
 
-       This parameter is only supported with ``engine='cudf_experimental'``.
+       This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf_experimental`` engine.
+    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -695,6 +695,12 @@ storage_options : dict, optional, default None
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
+
+Notes
+-----
+When `engine='auto'`, and `line=False`, the `pandas` json
+reader will be used. To override the selection, please
+use `engine='cudf'`.
 
 See Also
 --------
@@ -718,7 +724,7 @@ Examples
 
 To read the strings with additional set of quotes:
 
->>> cudf.read_json(json_str,  engine="cudf_experimental", lines=True,
+>>> cudf.read_json(json_str,  engine="cudf", lines=True,
 ...                keep_quotes=True)
           a         b
 0   "hello"   "hello"
@@ -727,7 +733,7 @@ To read the strings with additional set of quotes:
 Reading a JSON string containing ordered lists and name/value pairs:
 
 >>> json_str = '[{"list": [0,1,2], "struct": {"k":"v1"}}, {"list": [3,4,5], "struct": {"k":"v2"}}]'
->>> cudf.read_json(json_str, engine='cudf_experimental')
+>>> cudf.read_json(json_str, engine='cudf')
         list       struct
 0  [0, 1, 2]  {'k': 'v1'}
 1  [3, 4, 5]  {'k': 'v2'}
@@ -735,7 +741,7 @@ Reading a JSON string containing ordered lists and name/value pairs:
 Reading JSON Lines data containing ordered lists and name/value pairs:
 
 >>> json_str = '{"a": [{"k1": "v1"}]}\n{"a": [{"k1":"v2"}]}'
->>> cudf.read_json(json_str, engine='cudf_experimental', lines=True)
+>>> cudf.read_json(json_str, engine='cudf', lines=True)
                 a
 0  [{'k1': 'v1'}]
 1  [{'k1': 'v2'}]
@@ -743,7 +749,7 @@ Reading JSON Lines data containing ordered lists and name/value pairs:
 Using the `dtype` argument to specify type casting:
 
 >>> json_str = '{"k1": 1, "k2":[1.5]}'
->>> cudf.read_json(json_str, engine='cudf_experimental', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
+>>> cudf.read_json(json_str, engine='cudf', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
     k1   k2
 0  1.0  [1]
 """  # noqa: E501
@@ -1959,12 +1965,9 @@ def _fsspec_data_transfer(
         try:
             file_size = path_or_fob.size
         except AttributeError:
-            # Find file size if there is no `size`
-            # attribute
-            old_file_position = path_or_fob.tell()
-            path_or_fob.seek(0, os.SEEK_END)
-            file_size = path_or_fob.tell()
-            path_or_fob.seek(old_file_position, os.SEEK_SET)
+            # If we cannot find the size of path_or_fob
+            # just read it.
+            return path_or_fob.read()
     file_size = file_size or fs.size(path_or_fob)
 
     # Check if a direct read makes the most sense

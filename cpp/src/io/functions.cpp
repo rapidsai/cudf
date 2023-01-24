@@ -123,7 +123,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
       }
       return sources;
     }
-    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers());
+    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.host_buffers());
+    case io_type::DEVICE_BUFFER: return cudf::io::datasource::create(info.device_buffers());
     case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }
@@ -251,8 +252,13 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_EXPECTS(src_info.filepaths().size() == 1, "Only a single source is currently supported.");
     source = cudf::io::datasource::create(src_info.filepaths()[0]);
   } else if (src_info.type() == io_type::HOST_BUFFER) {
-    CUDF_EXPECTS(src_info.buffers().size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.buffers()[0]);
+    CUDF_EXPECTS(src_info.host_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.host_buffers()[0]);
+  } else if (src_info.type() == io_type::DEVICE_BUFFER) {
+    CUDF_EXPECTS(src_info.device_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.device_buffers()[0]);
   } else if (src_info.type() == io_type::USER_IMPLEMENTED) {
     CUDF_EXPECTS(src_info.user_sources().size() == 1,
                  "Only a single source is currently supported.");
