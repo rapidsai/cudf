@@ -414,7 +414,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
-        return self.mask_array_view(mode="write")
+        return self.mask_array_view(mode="read")
 
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the

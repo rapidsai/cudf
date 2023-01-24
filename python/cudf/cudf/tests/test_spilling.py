@@ -119,7 +119,7 @@ def test_spillable_buffer(manager: SpillManager):
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
     assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
-    buf.get_ptr(mode="write")  # Expose pointer
+    buf.mark_exposed()
     assert buf.exposed
     assert not buf.spillable
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
@@ -209,7 +209,7 @@ def test_spilling_buffer(manager: SpillManager):
     buf = as_buffer(rmm.DeviceBuffer(size=10), exposed=False)
     buf.spill(target="cpu")
     assert buf.is_spilled
-    buf.get_ptr(mode="write")  # Expose pointer and trigger unspill
+    buf.mark_exposed()  # Expose pointer and trigger unspill
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
         buf.spill(target="cpu")
@@ -588,7 +588,7 @@ def test_statistics_expose(manager: SpillManager):
     ]
 
     # Expose the first buffer
-    buffers[0].get_ptr(mode="write")
+    buffers[0].mark_exposed()
     assert len(manager.statistics.exposes) == 1
     stat = list(manager.statistics.exposes.values())[0]
     assert stat.count == 1
@@ -597,7 +597,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose all 10 buffers
     for i in range(10):
-        buffers[i].get_ptr(mode="write")
+        buffers[i].mark_exposed()
 
     # The rest of the ptr accesses should accumulate to a single stat
     # because they resolve to the same traceback.
@@ -617,7 +617,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Expose the new buffers and check that they are counted as spilled
     for i in range(10):
-        buffers[i].get_ptr(mode="write")
+        buffers[i].mark_exposed()
     assert len(manager.statistics.exposes) == 3
     stat = list(manager.statistics.exposes.values())[2]
     assert stat.count == 10
