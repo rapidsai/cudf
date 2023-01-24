@@ -115,7 +115,7 @@ class datasource {
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(host_buffer const& buffer);
+  static std::unique_ptr<datasource> create(host_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a device memory buffer.

@@ -99,9 +99,9 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
 TEST_F(DataChunkSourceTest, DataSourceHost)
 {
   std::string const content = "host buffer source";
-  auto const datasource =
-    cudf::io::datasource::create(cudf::io::host_buffer{content.data(), content.size()});
-  auto const source = cudf::io::text::make_source(*datasource);
+  auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(content.data()), content.size()));
+  auto const source         = cudf::io::text::make_source(*datasource);
 
   test_source(content, *source);
 }

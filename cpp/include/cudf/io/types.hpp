@@ -148,25 +148,6 @@ struct table_with_metadata {
 };
 
 /**
- * @brief Non-owning view of a host memory buffer
- *
- * Used to describe buffer input in `source_info` objects.
- */
-struct host_buffer {
-  // TODO: to be replaced by `host_span`
-  char const* data = nullptr;  //!< Pointer to the buffer
-  size_t size      = 0;        //!< Size of the buffer
-  host_buffer()    = default;
-  /**
-   * @brief Construct a new host buffer object
-   *
-   * @param data Pointer to the buffer
-   * @param size Size of the buffer
-   */
-  host_buffer(const char* data, size_t size) : data(data), size(size) {}
-};
-
-/**
  * @brief Source information for read interfaces
  */
 struct source_info {
@@ -193,7 +174,7 @@ struct source_info {
    *
    * @param host_buffers Input buffers in host memory
    */
-  explicit source_info(std::vector<host_buffer> const& host_buffers)
+  explicit source_info(std::vector<cudf::host_span<std::byte const>> const& host_buffers)
     : _type(io_type::HOST_BUFFER), _host_buffers(host_buffers)
   {
   }
@@ -204,8 +185,8 @@ struct source_info {
    * @param host_data Input buffer in host memory
    * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _host_buffers({{host_data, size}})
+  explicit source_info(cudf::host_span<std::byte const> host_data)
+    : _type(io_type::HOST_BUFFER), _host_buffers({{host_data}})
   {
   }
 
@@ -289,7 +270,7 @@ struct source_info {
  private:
   io_type _type = io_type::FILEPATH;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _host_buffers;
+  std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
