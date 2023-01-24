@@ -183,22 +183,36 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
 
   /// `SUM` returns 64-bit promoted types for integral/decimal input.
   /// For other fixed-width input types, the same type is returned.
+  /// Timestamp types are not supported.
   {
     auto aggs = agg_vector_t{};
     aggs.emplace_back(sum());
 
     using expected_type = cudf::detail::target_type_t<InputType, cudf::aggregation::SUM>;
-    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
+    if constexpr (cudf::is_timestamp<InputType>()) {
+      EXPECT_THROW(
+        rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>()),
+        cudf::logic_error);
+    } else {
+      rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
+    }
   }
 
   /// `MEAN` returns float64 for all numeric types,
-  /// except for chrono-types, which yield the same chrono-type.
+  /// except for duration-types, which yield the same duration-type.
+  /// Timestamp types are not supported.
   {
     auto aggs = agg_vector_t{};
     aggs.emplace_back(mean());
 
     using expected_type = cudf::detail::target_type_t<InputType, cudf::aggregation::MEAN>;
-    rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
+    if constexpr (cudf::is_timestamp<InputType>()) {
+      EXPECT_THROW(
+        rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>()),
+        cudf::logic_error);
+    } else {
+      rolling_output_type_matches(empty_input, aggs, cudf::type_to_id<expected_type>());
+    }
   }
 
   /// For an input type `T`, `COLLECT_LIST` returns a column of type `list<T>`.
