@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1512,10 +1512,21 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
   // Verify column "b" is an int column
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT32);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(0), int_wrapper{{0, 2, 2, 2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(1).child(0),
                                  float_wrapper{{0.0, 123.0}, {false, true}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
                                  int_wrapper{{1, 1, 2}, {true, true, true}});
+  // List column expected
+  auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
+  auto const validity = {1, 0, 0};
+  auto expected       = cudf::make_lists_column(
+    3,
+    int_wrapper{{0, 2, 2, 2}}.release(),
+    cudf::test::structs_column_wrapper{{leaf_child}, {false, true}}.release(),
+    2,
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), *expected);
 }
 
 TEST_P(JsonReaderParamTest, JsonDtypeParsing)
@@ -1698,6 +1709,64 @@ TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
     cudf::io::json_reader_options::builder(src).experimental(false).compression(
       cudf::io::compression_type::GZIP);
   EXPECT_THROW(cudf::io::read_json(comp_opts), cudf::logic_error);
+}
+
+TEST_F(JsonReaderTest, TrailingCommas)
+{
+  std::vector<std::string> const json_lines_valid{
+    R"({"a":"a0",}
+    {"a":"a2", "b":"b2",}
+    {"a":"a4",})",
+    R"({"a":"a0"}
+    {"a":"a2", "b": [1, 2,]})",
+    R"({"a":"a0",}
+    {"a":"a2", "b": [1, 2,],})",
+  };
+  for (size_t i = 0; i < json_lines_valid.size(); i++) {
+    auto const& json_string = json_lines_valid[i];
+    // Initialize parsing options (reading json lines)
+    cudf::io::json_reader_options json_parser_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .lines(true)
+        .experimental(true);
+    EXPECT_NO_THROW(cudf::io::read_json(json_parser_options)) << "Failed on test case " << i;
+  }
+
+  std::vector<std::string> const json_valid{
+    R"([{"a":"a0",},  {"a":"a2", "b":"b2",}, {"a":"a4"},])",
+    R"([{"a":"a0"},  {"a":"a2", "b": [1, 2,]}])",
+    R"([{"a":"a0",}, {"a":"a2", "b": [1, 2,],}])",
+    R"([{"a": 1,}, {"a": null, "b": [null,],}])",
+  };
+  for (size_t i = 0; i < json_valid.size(); i++) {
+    auto const& json_string = json_valid[i];
+    cudf::io::json_reader_options json_parser_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .experimental(true);
+    EXPECT_NO_THROW(cudf::io::read_json(json_parser_options)) << "Failed on test case " << i;
+  }
+
+  std::vector<std::string> const json_invalid{
+    R"([{"a":"a0",,}])",
+    R"([{"a":"a0"},,])",
+    R"([,{"a":"a0"}])",
+    R"([{,"a":"a0"}])",
+    R"([{,}])",
+    R"([,])",
+    R"([,,])",
+    R"([{,,}])",
+  };
+  for (size_t i = 0; i < json_invalid.size(); i++) {
+    auto const& json_string = json_invalid[i];
+    cudf::io::json_reader_options json_parser_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.c_str(), json_string.size()})
+        .experimental(true);
+    EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
+      << "Failed on test case " << i;
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

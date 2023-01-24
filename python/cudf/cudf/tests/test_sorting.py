@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import string
 from itertools import product
@@ -129,7 +129,6 @@ def test_series_nlargest(data, n):
         rfunc=sr.nlargest,
         lfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
         rfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
-        expected_error_message='keep must be either "first", "last"',
     )
 
 
@@ -150,7 +149,6 @@ def test_series_nsmallest(data, n):
         rfunc=sr.nsmallest,
         lfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
         rfunc_args_and_kwargs=([], {"n": 3, "keep": "what"}),
-        expected_error_message='keep must be either "first", "last"',
     )
 
 

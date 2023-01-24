@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/lists/detail/extract.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
@@ -133,10 +135,34 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
                                                     {},
                                                     stream);
 
-  auto extracted_lists = segmented_gather(
-    lists_column, index_lists_column->view(), out_of_bounds_policy::NULLIFY, stream, mr);
+  // We want the output of `segmented_gather` to be a lists column in which each list has exactly
+  // one element, even for the null lists.
+  // Thus, the input into `segmented_gather` should not be nullable.
+  auto const lists_column_removed_null_mask = lists_column_view{
+    column_view{data_type{type_id::LIST},
+                lists_column.size(),
+                nullptr,  // data
+                nullptr,  // null_mask
+                0,        // null_count
+                lists_column.offset(),
+                std::vector<column_view>{lists_column.child_begin(), lists_column.child_end()}}};
 
-  return std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
+  auto extracted_lists = segmented_gather(lists_column_removed_null_mask,
+                                          index_lists_column->view(),
+                                          out_of_bounds_policy::NULLIFY,
+                                          stream,
+                                          mr);
+
+  auto output =
+    std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
+  if (!lists_column.has_nulls()) { return output; }
+
+  // The input lists column may have non-empty nulls if it is nullable, although this is rare.
+  // In such cases, the extracted elements corresponding to these non-empty nulls may not be null.
+  // Thus, we need to superimpose nulls from the input column into the output to make sure each
+  // input null list always results in a null output row.
+  return cudf::structs::detail::superimpose_nulls(
+    lists_column.null_mask(), lists_column.null_count(), std::move(output), stream, mr);
 }
 
 /**
