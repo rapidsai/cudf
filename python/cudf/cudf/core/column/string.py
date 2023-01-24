@@ -5339,6 +5339,11 @@ class StringColumn(column.ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
+    def copy(self, deep: bool = True):
+        # Since string columns are immutable, both deep
+        # and shallow copies share the underlying device data and mask.
+        return super().copy(deep=False)
+
     @property
     def start_offset(self) -> int:
         if self._start_offset is None:
