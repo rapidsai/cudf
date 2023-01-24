@@ -210,7 +210,7 @@ def test_cudf_json_writer_read(gdf_writer_types):
     gdf2 = cudf.read_json(
         StringIO(gdf_string),
         lines=True,
-        engine="cudf_experimental",
+        engine="cudf",
         dtype=dict(dtypes),
     )
     pdf2 = pd.read_json(StringIO(gdf_string), lines=True, dtype=dict(dtypes))

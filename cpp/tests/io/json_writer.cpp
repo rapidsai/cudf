@@ -37,7 +37,7 @@ TEST_F(JsonWriterTest, EmptyInput)
   cudf::test::fixed_width_column_wrapper<float> col4;
   cudf::test::fixed_width_column_wrapper<int16_t> col5;
   cudf::table_view tbl_view{{col1, col2, col3, col4}};
-  cudf::io::table_metadata mt{{}, {{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
 
   std::vector<char> out_buffer;
   auto destination = cudf::io::sink_info(&out_buffer);
@@ -77,7 +77,7 @@ TEST_F(JsonWriterTest, ErrorCases)
   cudf::test::fixed_width_column_wrapper<int16_t> col5{{1, 2, 3},
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
-  cudf::io::table_metadata mt{{}, {{"col1"}, {"col2"}, {"int"}, {"float"}}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}}};
 
   std::vector<char> out_buffer;
   auto destination = cudf::io::sink_info(&out_buffer);
@@ -111,7 +111,7 @@ TEST_F(JsonWriterTest, PlainTable)
   cudf::test::fixed_width_column_wrapper<int16_t> col5{{1, 2, 3},
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
-  cudf::io::table_metadata mt{{}, {{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
 
   std::vector<char> out_buffer;
   auto destination     = cudf::io::sink_info(&out_buffer);
@@ -205,7 +205,7 @@ TEST_F(JsonWriterTest, WriteReadNested)
   LCW g{{LCW{1}, LCW{0}, LCW{{2, 0}, null_at(1)}, LCW{3, 4, 5}}, null_at(1)};
   // cudf::test::strings_column_wrapper h{"a", "b", "c", "d"};
   cudf::table_view tbl_view{{a, b, c, f, g}};
-  cudf::io::table_metadata mt{{}, {{"a"}, {"b"}, {"c"}, {"f"}, {"g"}}};
+  cudf::io::table_metadata mt{{{"a"}, {"b"}, {"c"}, {"f"}, {"g"}}};
   mt.schema_info[2].children = {{"d"}, {"e"}};
 
   std::vector<char> out_buffer;
