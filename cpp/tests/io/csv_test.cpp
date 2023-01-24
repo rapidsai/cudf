@@ -1814,7 +1814,9 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, StringsWithWriterSimple)
@@ -1839,7 +1841,9 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
@@ -1860,7 +1864,9 @@ TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
@@ -1888,7 +1894,9 @@ TEST_F(CsvReaderTest, HeaderEmbeddedDelimiter)
   auto result = cudf::io::read_csv(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, EmptyFileWithWriter)
@@ -1994,7 +2002,9 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
-  ASSERT_EQ(names, result.metadata.column_names);
+  ASSERT_EQ(result.metadata.schema_info.size(), names.size());
+  for (auto i = 0ul; i < names.size(); ++i)
+    EXPECT_EQ(names[i], result.metadata.schema_info[i].name);
 }
 
 TEST_F(CsvReaderTest, ParseInRangeIntegers)
@@ -2269,8 +2279,8 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   // verify that the tables are identical, or as identical as expected.
   const auto new_table_view = new_table_and_metadata.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
-  EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
-  EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
+  EXPECT_EQ(new_table_and_metadata.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(new_table_and_metadata.metadata.schema_info[1].name, "1");
 }
 
 TEST_F(CsvReaderTest, UseColsValidation)

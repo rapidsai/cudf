@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -37,16 +37,33 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
-    if engine != "cudf_experimental" and keep_quotes:
+    if engine == "cudf_experimental":
         raise ValueError(
-            "keep_quotes='True' is supported only with"
-            " engine='cudf_experimental'"
+            "engine='cudf_experimental' support has been removed, "
+            "use `engine='cudf'`"
         )
+
+    if engine == "cudf_legacy":
+        # TODO: Deprecated in 23.02, please
+        # give some time until(more than couple of
+        # releases from now) `cudf_legacy`
+        # support can be removed completely.
+        warnings.warn(
+            "engine='cudf_legacy' is a deprecated engine."
+            "This will be removed in a future release."
+            "Please switch to using engine='cudf'.",
+            FutureWarning,
+        )
+    if engine == "cudf_legacy" and not lines:
+        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if engine == "cudf" or engine == "cudf_experimental":
+    if engine != "cudf" and keep_quotes:
+        raise ValueError(
+            "keep_quotes='True' is supported only with engine='cudf'"
+        )
+
+    if engine == "cudf_legacy" or engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -97,7 +114,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf_experimental",
+            engine == "cudf_legacy",
             keep_quotes,
         )
     else:
