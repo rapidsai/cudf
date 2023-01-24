@@ -19,6 +19,7 @@ from numba.np import numpy_support
 index_default_type = numpy_support.from_dtype(
     pd.RangeIndex(0, 0).dtype
 )  # int64
+group_size_type = types.int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in [types.int64, types.float64]
@@ -47,7 +48,7 @@ class GroupType(numba.types.Type):
         self.group_scalar_type = group_scalar_type
         self.index_type = index_type
         self.group_data_type = types.CPointer(group_scalar_type)
-        self.size_type = types.int64
+        self.group_size_type = group_size_type
         self.group_index_type = types.CPointer(index_type)
         super().__init__(
             name=f"Group({self.group_scalar_type}, {self.index_type})"
@@ -84,12 +85,15 @@ def type_group(context):
 
 @register_model(GroupType)
 class GroupModel(models.StructModel):
-    def __init__(
-        self, dmm, fe_type
-    ):  # fe_type is fully instantiated group type
+    """
+    Model backing GroupType instances. See the link below for details.
+    https://github.com/numba/numba/blob/main/numba/core/datamodel/models.py
+    """
+
+    def __init__(self, dmm, fe_type):
         members = [
             ("group_data", types.CPointer(fe_type.group_scalar_type)),
-            ("size", types.int64),
+            ("size", group_size_type),
             ("index", types.CPointer(fe_type.index_type)),
         ]
         super().__init__(dmm, fe_type, members)
@@ -101,7 +105,7 @@ call_cuda_functions: Dict[Any, Any] = {}
 def _register_cuda_reduction_caller(funcname, inputty, retty):
     cuda_func = cuda.declare_device(
         f"Block{funcname}_{inputty}",
-        retty(types.CPointer(inputty), types.int64),
+        retty(types.CPointer(inputty), group_size_type),
     )
 
     def caller(data, size):
@@ -117,7 +121,9 @@ def _register_cuda_idx_reduction_caller(funcname, inputty):
     cuda_func = cuda.declare_device(
         f"Block{funcname}_{inputty}",
         types.int64(
-            types.CPointer(inputty), types.CPointer(types.int64), types.int64
+            types.CPointer(inputty),
+            types.CPointer(index_default_type),
+            group_size_type,
         ),
     )
 
@@ -172,7 +178,9 @@ class GroupAttr(AttributeTemplate):
     resolve_min = _create_reduction_attr("GroupType.min")
     resolve_sum = _create_reduction_attr("GroupType.sum")
 
-    resolve_size = _create_reduction_attr("GroupType.size", retty=types.int64)
+    resolve_size = _create_reduction_attr(
+        "GroupType.size", retty=group_size_type
+    )
     resolve_count = _create_reduction_attr(
         "GroupType.count", retty=types.int64
     )
@@ -212,6 +220,5 @@ _register_cuda_idx_reduction_caller("IdxMin", types.int64)
 _register_cuda_idx_reduction_caller("IdxMin", types.float64)
 
 
-make_attribute_wrapper(GroupType, "group_data", "group_data")
-make_attribute_wrapper(GroupType, "index", "index")
-make_attribute_wrapper(GroupType, "size", "size")
+for attr in ("group_data", "index", "size"):
+    make_attribute_wrapper(GroupType, attr, attr)

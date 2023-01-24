@@ -1,6 +1,5 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-import math
 import os
 
 import cupy as cp
@@ -72,7 +71,9 @@ def _get_frame_groupby_type(dtype, index_dtype):
         # Align the next member of the struct to be a multiple of the
         # memory access size, per PTX ISA 7.4/5.4.5
         if i < len(sizes) - 1:
-            offset = int(math.ceil(offset / 8) * 8)
+            alignment = offset % 8
+            if alignment != 0:
+                offset += 8 - alignment
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
@@ -145,8 +146,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     grouped_values : DataFrame
         A DataFrame representing the source data
         sorted by group keys
-    function: callable
-        The user UDF defined on a DataFrame
+    function : callable
+        The user-defined function to execute
     """
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1

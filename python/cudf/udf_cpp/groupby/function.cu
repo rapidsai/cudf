@@ -254,7 +254,9 @@ extern "C" {
 #define make_definition(name, cname, type, return_type)                                          \
   __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
   {                                                                                              \
-    *numba_return_value = name<type>(data, size);                                                \
+    return_type const res = name<type>(data, size);                                              \
+    if (threadIdx.x == 0) *numba_return_value = res;                                             \
+    __syncthreads();                                                                             \
     return 0;                                                                                    \
   }
 
@@ -278,9 +280,12 @@ extern "C" {
   __device__ int name##_##cname(                                                 \
     int64_t* numba_return_value, type* const data, int64_t* index, int64_t size) \
   {                                                                              \
-    *numba_return_value = name<type>(data, index, size);                         \
+    auto const res = name<type>(data, index, size);                              \
+    if (threadIdx.x == 0) *numba_return_value = res;                             \
+    __syncthreads();                                                             \
     return 0;                                                                    \
   }
+
 make_definition_idx(BlockIdxMin, int64, int64_t);
 make_definition_idx(BlockIdxMin, float64, double);
 make_definition_idx(BlockIdxMax, int64, int64_t);

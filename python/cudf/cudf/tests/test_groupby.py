@@ -393,9 +393,9 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
     got_groupby_obj = data.groupby(keys)
 
+    # compare cuDF jit to pandas
     cudf_jit_result = got_groupby_obj.apply(func, *args, engine="jit")
     pandas_result = expect_groupby_obj.apply(func, *args)
-    # compare cuDF jit to pandas
 
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 

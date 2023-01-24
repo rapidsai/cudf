@@ -23,7 +23,7 @@ rapids_cuda_init_architectures(groupby-udf-cpp)
 # Create a project so that we can enable CUDA architectures in this file.
 project(
   groupby-udf-cpp
-  VERSION 0.0.0 # Placeholder since this isn't a real project
+  VERSION 23.02.00
   LANGUAGES CUDA
 )
 

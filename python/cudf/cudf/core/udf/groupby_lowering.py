@@ -13,6 +13,7 @@ from cudf.core.udf.groupby_typing import (
     Group,
     GroupType,
     call_cuda_functions,
+    group_size_type,
     index_default_type,
 )
 
@@ -49,12 +50,12 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     return context.compile_internal(
         builder,
         func,
-        nb_signature(retty, group_dataty, grp_type.size_type),
+        nb_signature(retty, group_dataty, grp_type.group_size_type),
         (builder.load(group_data_ptr), grp.size),
     )
 
 
-@lower_builtin(Group, types.Array, types.int64, types.Array)
+@lower_builtin(Group, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
     Instruction boilerplate used for instantiating a Group
@@ -101,13 +102,15 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
     index_dataty = grp_type.group_index_type
     index_ptr = builder.alloca(grp.index.type)
     builder.store(grp.index, index_ptr)
-    type_key = (types.int64, grp_type.group_scalar_type)
+    type_key = (index_default_type, grp_type.group_scalar_type)
     func = call_cuda_functions[function][type_key]
 
     return context.compile_internal(
         builder,
         func,
-        nb_signature(retty, group_dataty, index_dataty, grp_type.size_type),
+        nb_signature(
+            retty, group_dataty, index_dataty, grp_type.group_size_type
+        ),
         (builder.load(group_data_ptr), builder.load(index_ptr), grp.size),
     )
 
