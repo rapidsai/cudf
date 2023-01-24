@@ -58,9 +58,8 @@ __device__ void device_var(cooperative_groups::thread_block const& block,
 
 #pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto temp = static_cast<double>(data[idx]) - mean;
-    temp *= temp;
-    local_var += temp;
+    auto delta = static_cast<double>(data[idx]) - mean;
+    local_var += delta * delta;
   }
 
   cuda::atomic_ref<double, cuda::thread_scope_block> ref{*var};
@@ -129,8 +128,8 @@ __device__ T BlockMax(T const* data, int64_t size)
   auto block = cooperative_groups::this_thread_block();
 
   auto local_max = []() {
-    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::max(); }
-    return std::numeric_limits<T>::min();
+    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::infinity(); }
+    return std::numeric_limits<T>::lowest();
   }();
   __shared__ T block_max;
   if (block.thread_rank() == 0) { block_max = local_max; }
@@ -181,8 +180,8 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   __shared__ int64_t block_idx_max;
 
   auto local_max = []() {
-    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::max(); }
-    return std::numeric_limits<T>::min();
+    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::infinity(); }
+    return std::numeric_limits<T>::lowest();
   }();
   auto local_idx_max = std::numeric_limits<int64_t>::max();
 
