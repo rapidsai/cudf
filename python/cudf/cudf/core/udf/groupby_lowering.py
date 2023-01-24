@@ -13,6 +13,7 @@ from cudf.core.udf.groupby_typing import (
     Group,
     GroupType,
     call_cuda_functions,
+    group_size_type,
     index_default_type,
 )
 
@@ -54,7 +55,7 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     )
 
 
-@lower_builtin(Group, types.Array, types.int64, types.Array)
+@lower_builtin(Group, types.Array, group_size_type, types.Array)
 def group_constructor(context, builder, sig, args):
     """
     Instruction boilerplate used for instantiating a Group
