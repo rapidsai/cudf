@@ -172,19 +172,27 @@ def to_json(
 ):
     """{docstring}"""
 
+    if engine == "auto":
+        engine = "pandas"
+
     if engine == "cudf":
-        return_as_string = False
+        orient = kwargs.pop("orient", None)
+        if orient not in {"records", None}:
+            raise ValueError(
+                f"Only the `orient='records'` is supported for JSON writer"
+                f" with `engine='cudf'`, got {orient}"
+            )
+
         if path_or_buf is None:
             path_or_buf = StringIO()
             return_as_string = True
-        path_or_buf = ioutils.get_writer_filepath_or_buffer(
-            path_or_data=path_or_buf, mode="w", storage_options=storage_options
-        )
-        orient = kwargs.pop("orient", "records")
-        if orient != "records":
-            raise ValueError(
-                "Only the 'records' orient is supported for cudf JSON writer"
+        else:
+            path_or_buf = ioutils.get_writer_filepath_or_buffer(
+                path_or_data=path_or_buf,
+                mode="w",
+                storage_options=storage_options,
             )
+            return_as_string = False
 
         if ioutils.is_fsspec_open_file(path_or_buf):
             with path_or_buf as file_obj:
@@ -200,9 +208,13 @@ def to_json(
         if return_as_string:
             path_or_buf.seek(0)
             return path_or_buf.read()
-        return
-    warnings.warn("Using CPU via Pandas to write JSON dataset")
-    pd_value = cudf_val.to_pandas(nullable=True)
-    return pd.io.json.to_json(
-        path_or_buf, pd_value, *args, storage_options=storage_options, **kwargs
-    )
+    else:
+        warnings.warn("Using CPU via Pandas to write JSON dataset")
+        pd_value = cudf_val.to_pandas(nullable=True)
+        return pd.io.json.to_json(
+            path_or_buf,
+            pd_value,
+            storage_options=storage_options,
+            *args,
+            **kwargs,
+        )
