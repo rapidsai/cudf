@@ -213,16 +213,13 @@ def test_cudf_json_writer_read(gdf_writer_types):
         engine="cudf_experimental",
         dtype=dict(dtypes),
     )
-    # zero size columns to_json() does not contain column names.
-    # So we need to add them manually
-    if len(gdf_writer_types) == 0:
-        gdf2 = cudf.DataFrame(
-            gdf2,
-            columns=gdf_writer_types.columns,
-            dtype=dict(gdf_writer_types.dtypes),
-        )
+    pdf2 = pd.read_json(StringIO(gdf_string), lines=True, dtype=dict(dtypes))
 
-    assert_eq(gdf_writer_types, gdf2)
+    # Bug in pandas https://github.com/pandas-dev/pandas/issues/28558
+    if pdf2.empty:
+        pdf2.reset_index(drop=True, inplace=True)
+        pdf2.columns = pdf2.columns.astype("object")
+    assert_eq(pdf2, gdf2)
 
 
 @pytest.mark.parametrize("sink", ["string", "file"])
