@@ -102,7 +102,7 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
     index_dataty = grp_type.group_index_type
     index_ptr = builder.alloca(grp.index.type)
     builder.store(grp.index, index_ptr)
-    type_key = (types.int64, grp_type.group_scalar_type)
+    type_key = (index_default_type, grp_type.group_scalar_type)
     func = call_cuda_functions[function][type_key]
 
     return context.compile_internal(
