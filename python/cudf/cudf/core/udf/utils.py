@@ -277,7 +277,7 @@ def _post_process_output_col(col, retty):
 
 
 def _get_appropriate_file(sms, cc):
-    filtered_sms = list(filter(lambda x: x[0] <= cc, sms))
+    filtered_sms = [x for x in sms if x[0] <= cc]
     if filtered_sms:
         return max(filtered_sms, key=lambda y: y[0])
     else:

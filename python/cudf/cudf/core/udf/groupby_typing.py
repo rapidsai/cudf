@@ -212,6 +212,5 @@ _register_cuda_idx_reduction_caller("IdxMin", types.int64)
 _register_cuda_idx_reduction_caller("IdxMin", types.float64)
 
 
-make_attribute_wrapper(GroupType, "group_data", "group_data")
-make_attribute_wrapper(GroupType, "index", "index")
-make_attribute_wrapper(GroupType, "size", "size")
+for attr in ("group_data", "index", "size")
+    make_attribute_wrapper(GroupType, attr, attr)

@@ -792,7 +792,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Parameters
         ----------
-        func : function
+        function : callable
           The python transformation function that will be applied
           on the grouped chunk.
         engine: {'cudf', 'jit'}, default 'cudf'
