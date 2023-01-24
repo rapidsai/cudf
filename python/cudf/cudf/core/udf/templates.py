@@ -74,5 +74,7 @@ def _kernel(offset, out, index, {input_columns}, {extra_args}):
 
 {group_initializers}
 
-        out[block_id] = f_(dataframe_group, {extra_args})
+        result = f_(dataframe_group, {extra_args})
+        if cuda.threadIdx.x == 0:
+                out[block_id] = result
 """
