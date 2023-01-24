@@ -264,14 +264,14 @@ class Buffer(Serializable):
             If "write", the data pointed to may be modified
             by the caller. If "read", the data pointed to
             must not be modified by the caller.
-            Failure to fulfil this contract will cause
+            Failure to fulfill this contract will cause
             incorrect behavior.
 
         Notes
         -----
         In case of `Buffer` class, any value passed to `mode` is a no-op.
         The significance of each value explained above is a
-        guidance for any implementation of `Buffer` class.
+        guidance for any subclass of `Buffer`.
 
         See Also
         --------
