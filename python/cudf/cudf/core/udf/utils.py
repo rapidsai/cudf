@@ -276,14 +276,14 @@ def _post_process_output_col(col, retty):
     return as_column(col, retty)
 
 
-def _get_best_ptx_file(sms, cc):
+def _get_best_ptx_file(archs, max_compute_capability):
     """
     Determine of the available PTX files which one is
     the most recent up to and including the device cc
     """
-    filtered_sms = [x for x in sms if x[0] <= cc]
-    if filtered_sms:
-        return max(filtered_sms, key=lambda y: y[0])
+    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
+    if filtered_archs:
+        return max(filtered_archs, key=lambda y: y[0])
     else:
         return None
 
