@@ -20,7 +20,6 @@ from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 import rmm
 
 from cudf.core.column.column import as_column
-from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -97,17 +96,10 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     return result
 
 
-def _is_jit_supported_type(dtype, supported_types):
-    # category dtype isn't hashable
-    if isinstance(dtype, CategoricalDtype):
-        return False
-    return str(dtype) in supported_types
-
-
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
-        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
+        if str(col.dtype) in supported_types
         else np.dtype("O")
         for colname, col in frame._data.items()
     }
@@ -117,7 +109,7 @@ def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
+        if str(col.dtype) in supported_types
     }
 
 
@@ -125,7 +117,7 @@ def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype, supported_types=supported_types)
+        if str(col.dtype) in supported_types
     }
 
 
