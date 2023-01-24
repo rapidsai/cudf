@@ -60,30 +60,15 @@ def group_constructor(context, builder, sig, args):
     Instruction boilerplate used for instantiating a Group
     struct from a data pointer, an index pointer, and a size
     """
-
-    group_data, size, index = args
-
     # a variable logically corresponding to the calling `Group`
     grp = cgutils.create_struct_proxy(sig.return_type)(context, builder)
-
-    # the group data array and its pointer
-    arr_group_data = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=group_data
-    )
-    group_data_ptr = arr_group_data.data
-
-    # the group index array and its pointer
-    arr_index = cgutils.create_struct_proxy(sig.args[2])(
-        context, builder, value=index
-    )
-    index_ptr = arr_index.data
-
-    # fill the struct explicitly
-    grp.group_data = group_data_ptr
-    grp.index = index_ptr
-    grp.size = size
-
-    # return the struct by value
+    grp.group_data = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    ).data
+    grp.index = cgutils.create_struct_proxy(sig.args[2])(
+        context, builder, value=args[2]
+    ).data
+    grp.size = args[1]
     return grp._getvalue()
 
 
