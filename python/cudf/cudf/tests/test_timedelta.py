@@ -915,20 +915,6 @@ def test_timedelta_index_ops_with_scalars(
             reason="Related to https://github.com/rapidsai/cudf/issues/5938",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                op == "floordiv"
-                and (None not in ptdi)
-                and np.nan not in expected
-                and (
-                    expected.astype("float64").astype("int64")
-                    != expected.astype("int64")
-                ).any()
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/12393",
-        )
-    )
     assert_eq(expected, actual)
 
 
@@ -1008,20 +994,6 @@ def test_timedelta_index_ops_with_cudf_scalars(
                 and np.timedelta64(cpu_scalar).item() is not None
             ),
             reason="https://github.com/rapidsai/cudf/issues/5938",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                op == "floordiv"
-                and (None not in ptdi)
-                and np.nan not in expected
-                and (
-                    expected.astype("float64").astype("int64")
-                    != expected.astype("int64")
-                ).any()
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/12393",
         )
     )
     assert_eq(expected, actual)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -428,7 +428,7 @@ auto get_transition_table(bool newline_delimited_json)
   //  {       [       }       ]       "       \       ,       :     space   newline other
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOV)] = {
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
-    PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
+    PD_BOA, PD_BOA, PD_ERR, PD_PVL, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON,
     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_BOV, PD_LON};
   pda_tt[static_cast<StateT>(pda_state_t::PD_BOA)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -453,7 +453,7 @@ auto get_transition_table(bool newline_delimited_json)
   pda_tt[static_cast<StateT>(pda_state_t::PD_BFN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
-    PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
+    PD_ERR, PD_ERR, PD_PVL, PD_ERR, PD_FLN, PD_ERR, PD_ERR, PD_ERR, PD_BFN, PD_BFN, PD_ERR};
   pda_tt[static_cast<StateT>(pda_state_t::PD_FLN)] = {
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
     PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR, PD_ERR,
@@ -509,7 +509,7 @@ auto get_translation_table()
                                                         {StructBegin},  // OPENING_BRACE
                                                         {ListBegin},    // OPENING_BRACKET
                                                         {ErrorBegin},   // CLOSING_BRACE
-                                                        {ErrorBegin},   // CLOSING_BRACKET
+                                                        {ListEnd},      // CLOSING_BRACKET
                                                         {StringBegin},  // QUOTE
                                                         {ErrorBegin},   // ESCAPE
                                                         {ErrorBegin},   // COMMA
@@ -744,7 +744,7 @@ auto get_translation_table()
      /*STRUCT*/
      {ErrorBegin},                         // OPENING_BRACE
      {ErrorBegin},                         // OPENING_BRACKET
-     {ErrorBegin},                         // CLOSING_BRACE
+     {StructEnd},                          // CLOSING_BRACE
      {ErrorBegin},                         // CLOSING_BRACKET
      {StructMemberBegin, FieldNameBegin},  // QUOTE
      {ErrorBegin},                         // ESCAPE
@@ -1725,7 +1725,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   return {};
 }
 
-table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
+table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
                                            cudf::io::json_reader_options const& options,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -1733,10 +1733,9 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
 
-  auto const new_line_delimited_json = options.is_enabled_lines();
+  auto const h_input = cudf::detail::make_std_vector_async(d_input, stream);
 
-  // Allocate device memory for the JSON input & copy over to device
-  rmm::device_uvector<SymbolT> d_input = cudf::detail::make_device_uvector_async(input, stream);
+  auto const new_line_delimited_json = options.is_enabled_lines();
 
   // Get internal JSON column
   json_column root_column{};
@@ -1765,7 +1764,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
   data_path.push({&root_column, row_offset_zero, nullptr, node_init_child_count_zero});
 
   make_json_column(
-    root_column, data_path, input, d_input, options, include_quote_chars, stream, mr);
+    root_column, data_path, h_input, d_input, options, include_quote_chars, stream, mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto const& data_root =
@@ -1773,8 +1772,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
 
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
-                               {{}, std::vector<column_name_info>{}}};
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
@@ -1849,8 +1847,7 @@ table_with_metadata host_parse_nested_json(host_span<SymbolT const> input,
     column_index++;
   }
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
-                             {{}, out_column_names}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail

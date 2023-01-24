@@ -18,6 +18,7 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -109,12 +110,20 @@ class datasource {
                                             size_t size   = 0);
 
   /**
-   * @brief Creates a source from a memory buffer.
+   * @brief Creates a source from a host memory buffer.
    *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
+
+  /**
+   * @brief Creates a source from a device memory buffer.
+   *
+   * @param buffer Device buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
@@ -301,7 +310,7 @@ class datasource {
      * @param data The data buffer
      * @param size The size of the data buffer
      */
-    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+    non_owning_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
 
     /**
      * @brief Returns the size of the buffer.
@@ -318,8 +327,8 @@ class datasource {
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{nullptr};
-    size_t const _size{0};
+    uint8_t const* _data{nullptr};
+    size_t _size{0};
   };
 
   /**

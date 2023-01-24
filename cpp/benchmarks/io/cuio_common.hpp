@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,9 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
 
-using cudf::io::io_type;
+#include <rmm/device_uvector.hpp>
 
-#define RD_BENCHMARK_DEFINE_ALL_SOURCES(benchmark, name, type_or_group)                  \
-  benchmark(name##_file_input, type_or_group, static_cast<uint32_t>(io_type::FILEPATH)); \
-  benchmark(name##_buffer_input, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER));
+using cudf::io::io_type;
 
 #define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group)                          \
   benchmark(name##_file_output, type_or_group, static_cast<uint32_t>(io_type::FILEPATH));      \
@@ -68,8 +66,10 @@ class cuio_source_sink_pair {
   /**
    * @brief Created a sink info of the set type
    *
-   * The `data_sink` created using the returned `source_info` will write data to the same location
+   * The `data_sink` created using the returned `sink_info` will write data to the same location
    * that the result of a @ref `make_source_info` call reads from.
+   *
+   * `io_type::DEVICE_BUFFER` source/sink is an exception where a host buffer sink will be created.
    *
    * @return The description of the data sink
    */
@@ -81,7 +81,8 @@ class cuio_source_sink_pair {
   static temp_directory const tmpdir;
 
   io_type const type;
-  std::vector<char> buffer;
+  std::vector<char> h_buffer;
+  rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
   bytes_written_only_sink void_sink;
 };

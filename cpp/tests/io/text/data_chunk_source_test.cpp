@@ -36,7 +36,7 @@ struct DataChunkSourceTest : public BaseFixture {
 std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
 {
   std::string result(chunk.size(), '\0');
-  cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDefault);
+  CUDF_CUDA_TRY(cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDefault));
   return result;
 }
 

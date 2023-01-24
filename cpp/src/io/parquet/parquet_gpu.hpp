@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,6 +85,13 @@ enum level_type {
 
 /**
  * @brief Nesting information
+ *
+ * This struct serves two purposes:
+ *
+ * - It stores information about output (cudf) columns
+ * - It provides a mapping from input column depth to output column depth via
+ * the start_depth and end_depth fields.
+ *
  */
 struct PageNestingInfo {
   // input repetition/definition levels are remapped with these values
@@ -159,8 +166,12 @@ struct PageInfo {
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
 
-  // nesting information (input/output) for each page
-  int num_nesting_levels;
+  // nesting information (input/output) for each page. this array contains
+  // input column nesting information, output column nesting information and
+  // mappings between the two. the length of the array, nesting_info_size is
+  // max(num_output_nesting_levels, max_definition_levels + 1)
+  int num_output_nesting_levels;
+  int nesting_info_size;
   PageNestingInfo* nesting;
 };
 
@@ -292,8 +303,6 @@ struct parquet_column_device_view : stats_column_desc {
                                //!< col.nullable() in case of chunked writing.
   bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
 };
-
-constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
 struct EncColumnChunk;
 
