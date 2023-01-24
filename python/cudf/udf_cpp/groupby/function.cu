@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/device_operators.cuh>
+
 #include <cuda/atomic>
 
 #include <cooperative_groups.h>
-
-#include <limits>
 
 template <typename T>
 __device__ void device_sum(cooperative_groups::thread_block const& block,
@@ -127,10 +127,7 @@ __device__ T BlockMax(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  auto local_max = []() {
-    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::infinity(); }
-    return std::numeric_limits<T>::lowest();
-  }();
+  auto local_max = cudf::DeviceMax::identity<T>();
   __shared__ T block_max;
   if (block.thread_rank() == 0) { block_max = local_max; }
   block.sync();
@@ -153,13 +150,13 @@ __device__ T BlockMin(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  auto local_min = []() {
-    if constexpr (std::is_floating_point_v<T>) { return std::numeric_limits<T>::infinity(); }
-    return std::numeric_limits<T>::max();
-  }();
+  auto local_min = cudf::DeviceMin::identity<T>();
 
   __shared__ T block_min;
-  if (block.thread_rank() == 0) { block_min = local_min; }
+  if (block.thread_rank() == 0) {
+    block_min = local_min;
+    printf("min: %lld\n", int64_t(local_min));
+  }
   block.sync();
 
 #pragma unroll
@@ -183,11 +180,8 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   __shared__ T block_max;
   __shared__ int64_t block_idx_max;
 
-  auto local_max = []() {
-    if constexpr (std::is_floating_point_v<T>) { return -std::numeric_limits<T>::infinity(); }
-    return std::numeric_limits<T>::lowest();
-  }();
-  auto local_idx_max = std::numeric_limits<int64_t>::max();
+  auto local_max     = cudf::DeviceMax::identity<T>();
+  auto local_idx_max = cudf::DeviceMin::identity<int64_t>();
 
   if (block.thread_rank() == 0) {
     block_max     = local_max;
@@ -225,11 +219,8 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   __shared__ T block_min;
   __shared__ int64_t block_idx_min;
 
-  auto local_min = []() {
-    if constexpr (std::is_floating_point_v<T>) { return std::numeric_limits<T>::infinity(); }
-    return std::numeric_limits<T>::max();
-  }();
-  auto local_idx_min = std::numeric_limits<int64_t>::max();
+  auto local_min     = cudf::DeviceMin::identity<T>();
+  auto local_idx_min = cudf::DeviceMin::identity<int64_t>();
 
   if (block.thread_rank() == 0) {
     block_min     = local_min;
