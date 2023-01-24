@@ -25,7 +25,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
 ]
 
 
-class Group(object):
+class Group:
     """
     A piece of python code whose purpose is to be replaced
     during compilation. After being registered to GroupType,
@@ -97,7 +97,7 @@ class GroupModel(models.StructModel):
             ("size", types.int64),
             ("index", types.CPointer(fe_type.index_type)),
         ]
-        models.StructModel.__init__(self, dmm, fe_type, members)
+        super().__init__(self, dmm, fe_type, members)
 
 
 call_cuda_functions: Dict[Any, Any] = {}

@@ -29,7 +29,6 @@ project(
             # that is fixed we need to keep C.
             C
             CXX
-            # Temporarily enabling for groupby UDFs compilation until we come up with a better
             # solution.
             CUDA
 )

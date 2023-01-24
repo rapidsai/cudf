@@ -145,11 +145,7 @@ def cuda_Group_size(context, builder, sig, args):
     return grp.size
 
 
-def cuda_Group_count(context, builder, sig, args):
-    grp = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
-    return grp.size
+cuda_Group_count = cuda_Group_size
 
 
 for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
