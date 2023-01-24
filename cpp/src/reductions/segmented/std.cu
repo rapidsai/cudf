@@ -27,7 +27,7 @@ std::unique_ptr<cudf::column> segmented_standard_deviation(column_view const& co
                                                            device_span<size_type const> offsets,
                                                            cudf::data_type const output_dtype,
                                                            null_policy null_handling,
-                                                           cudf::size_type ddof,
+                                                           size_type ddof,
                                                            rmm::cuda_stream_view stream,
                                                            rmm::mr::device_memory_resource* mr)
 {

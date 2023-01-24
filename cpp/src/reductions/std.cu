@@ -25,7 +25,7 @@ namespace reduction {
 
 std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
                                                  cudf::data_type const output_dtype,
-                                                 cudf::size_type ddof,
+                                                 size_type ddof,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {

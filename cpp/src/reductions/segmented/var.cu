@@ -27,7 +27,7 @@ std::unique_ptr<cudf::column> segmented_variance(column_view const& col,
                                                  device_span<size_type const> offsets,
                                                  cudf::data_type const output_dtype,
                                                  null_policy null_handling,
-                                                 cudf::size_type ddof,
+                                                 size_type ddof,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {

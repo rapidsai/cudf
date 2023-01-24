@@ -779,16 +779,15 @@ TEST_F(SegmentedReductionTestUntyped, Mean)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT32};
+
   auto const expected =
     cudf::test::fixed_width_column_wrapper<float>{{10, 0, 30, 70}, {1, 0, 1, 1}};
-
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT32},
-                           cudf::null_policy::INCLUDE);
-
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -799,23 +798,16 @@ TEST_F(SegmentedReductionTestUntyped, MeanNulls)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT64};
 
   auto expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 30, 70}, {1, 0, 1, 1}};
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT64},
-                           cudf::null_policy::EXCLUDE);
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
   expected = cudf::test::fixed_width_column_wrapper<double>{{10, 0, 30, 0}, {1, 0, 1, 0}};
-  result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT64},
-                           cudf::null_policy::INCLUDE);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -826,16 +818,16 @@ TEST_F(SegmentedReductionTestUntyped, SumOfSquares)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg = cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::INT32};
+
   auto const expected =
     cudf::test::fixed_width_column_wrapper<int32_t>{{100, 0, 2900, 25500}, {1, 0, 1, 1}};
 
-  auto result = cudf::segmented_reduce(
-    input,
-    d_offsets,
-    *cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>(),
-    cudf::data_type{cudf::type_id::INT32},
-    cudf::null_policy::INCLUDE);
-
+  auto result =
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -846,24 +838,17 @@ TEST_F(SegmentedReductionTestUntyped, SumOfSquaresNulls)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg = cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::INT64};
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 2900, 20600}, {1, 0, 1, 1}};
-  auto result = cudf::segmented_reduce(
-    input,
-    d_offsets,
-    *cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>(),
-    cudf::data_type{cudf::type_id::INT64},
-    cudf::null_policy::EXCLUDE);
+  auto result =
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
   expected = cudf::test::fixed_width_column_wrapper<int64_t>{{100, 0, 2900, 0}, {1, 0, 1, 0}};
-  result   = cudf::segmented_reduce(
-    input,
-    d_offsets,
-    *cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>(),
-    cudf::data_type{cudf::type_id::INT64},
-    cudf::null_policy::INCLUDE);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -875,15 +860,15 @@ TEST_F(SegmentedReductionTestUntyped, StandardDeviation)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT32};
 
   auto expected = cudf::test::fixed_width_column_wrapper<float>{
     {NaN, 0.f, 10.f, static_cast<float>(std::sqrt(250.))}, {1, 0, 1, 1}};
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT32},
-                           cudf::null_policy::INCLUDE);
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -895,23 +880,17 @@ TEST_F(SegmentedReductionTestUntyped, StandardDeviationNulls)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT64};
 
   auto expected = cudf::test::fixed_width_column_wrapper<double>{
     {NaN, 0., std::sqrt(50.), std::sqrt(135.)}, {1, 0, 1, 1}};
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT64},
-                           cudf::null_policy::EXCLUDE);
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
   expected = cudf::test::fixed_width_column_wrapper<double>{{NaN, 0., 0., 0.}, {1, 0, 0, 0}};
-  result   = cudf::segmented_reduce(input,
-                                  d_offsets,
-                                  *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
-                                  cudf::data_type{cudf::type_id::FLOAT64},
-                                  cudf::null_policy::INCLUDE);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -923,15 +902,15 @@ TEST_F(SegmentedReductionTestUntyped, Variance)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT32};
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<float>{{NaN, 0.f, 100.f, 250.f}, {1, 0, 1, 1}};
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT32},
-                           cudf::null_policy::INCLUDE);
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
@@ -943,24 +922,50 @@ TEST_F(SegmentedReductionTestUntyped, VarianceNulls)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg         = cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>();
+  auto const output_type = cudf::data_type{cudf::type_id::FLOAT64};
 
   auto expected =
     cudf::test::fixed_width_column_wrapper<double>{{NaN, 0., 50., 135.}, {1, 0, 1, 1}};
   auto result =
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>(),
-                           cudf::data_type{cudf::type_id::FLOAT64},
-                           cudf::null_policy::EXCLUDE);
+    cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 
   expected = cudf::test::fixed_width_column_wrapper<double>{{NaN, 0., 0., 0.}, {1, 0, 0, 0}};
-  result   = cudf::segmented_reduce(input,
-                                  d_offsets,
-                                  *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
-                                  cudf::data_type{cudf::type_id::FLOAT64},
-                                  cudf::null_policy::INCLUDE);
+  result = cudf::segmented_reduce(input, d_offsets, *agg, output_type, cudf::null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
+TEST_F(SegmentedReductionTestUntyped, Errors)
+{
+  auto const input = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {10, 0, 20, 30, 54, 63, 0, 72, 81}, {1, 0, 1, 1, 1, 1, 0, 1, 1});
+  auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const bad_output_type = cudf::data_type{cudf::type_id::INT64};
+
+  EXPECT_THROW(
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
+                           bad_output_type,
+                           cudf::null_policy::EXCLUDE),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
+                           bad_output_type,
+                           cudf::null_policy::EXCLUDE),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf::segmented_reduce(input,
+                           d_offsets,
+                           *cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>(),
+                           bad_output_type,
+                           cudf::null_policy::EXCLUDE),
+    cudf::logic_error);
 }
 
 TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
