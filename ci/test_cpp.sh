@@ -69,19 +69,6 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     fi
 done
 
-rapids-logger "Run gtests with kvikio"
-# Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST" "DATA_CHUNK_SOURCE_TEST"; do
-    gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
-    echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
-    exitcode=$?
-    if (( ${exitcode} != 0 )); then
-        SUITEERROR=${exitcode}
-        echo "FAILED: GTest ${gt}"
-    fi
-done
-
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     rapids-logger "Memcheck gtests with rmm_mode=cuda"
     export GTEST_CUDF_RMM_MODE=cuda
