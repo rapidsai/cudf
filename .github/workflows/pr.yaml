@@ -102,7 +102,7 @@ jobs:
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
       test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
-    needs: wheel-build-cudf
+    needs: wheel-tests-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@cuda-118
     with:
