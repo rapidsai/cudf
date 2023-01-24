@@ -421,6 +421,28 @@ def func(df):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
 
 
+@pytest.mark.parametrize("dtype", ["float64"])
+@pytest.mark.parametrize("func", ["min", "max", "idxmin", "idxmax"])
+@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+def test_groupby_apply_jit_reductions_special_vals(
+    func, groupby_jit_data, dtype, special_val
+):
+    # dynamically generate to avoid pickling error.
+
+    funcstr = f"""
+def func(df):
+    return df['val1'].{func}()
+    """
+    lcl = {}
+    exec(funcstr, lcl)
+    func = lcl["func"]
+
+    groupby_jit_data["val1"] = special_val
+    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+
+    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
 @pytest.mark.parametrize(
     "func",
     [
