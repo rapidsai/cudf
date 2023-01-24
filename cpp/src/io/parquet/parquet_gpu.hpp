@@ -109,7 +109,7 @@ struct PageNestingDecodeInfo {
   int32_t valid_count;
   int32_t value_count;
   uint8_t* data_out;
-  uint32_t* valid_map;
+  bitmask_type* valid_map;
 };
 
 /**
@@ -173,9 +173,9 @@ struct PageInfo {
   // skipped_leaf_values will always be 0.
   //
   // # of values skipped in the repetition/definition level stream
-  int skipped_values;
+  int32_t skipped_values;
   // # of values skipped in the actual data stream.
-  int skipped_leaf_values;
+  int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
@@ -184,8 +184,8 @@ struct PageInfo {
   // input column nesting information, output column nesting information and
   // mappings between the two. the length of the array, nesting_info_size is
   // max(num_output_nesting_levels, max_definition_levels + 1)
-  int num_output_nesting_levels;
-  int nesting_info_size;
+  int32_t num_output_nesting_levels;
+  int32_t nesting_info_size;
   PageNestingInfo* nesting;
   PageNestingDecodeInfo* nesting_decode;
 };
@@ -257,7 +257,7 @@ struct ColumnChunkDesc {
   PageInfo* page_info;                        // output page info for up to num_dict_pages +
                                               // num_data_pages (dictionary pages first)
   string_index_pair* str_dict_index;          // index for string dictionary
-  uint32_t** valid_map_base;                  // base pointers of valid bit map for this column
+  bitmask_type** valid_map_base;              // base pointers of valid bit map for this column
   void** column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
