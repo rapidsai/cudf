@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -19,49 +19,52 @@ ctypedef int32_t underlying_type_t_rank_method
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
-    cdef cppclass aggregation:
-        ctypedef enum Kind:
-            SUM 'cudf::aggregation::SUM'
-            PRODUCT 'cudf::aggregation::PRODUCT'
-            MIN 'cudf::aggregation::MIN'
-            MAX 'cudf::aggregation::MAX'
-            COUNT_VALID 'cudf::aggregation::COUNT_VALID'
-            COUNT_ALL 'cudf::aggregation::COUNT_ALL'
-            ANY 'cudf::aggregation::ANY'
-            ALL 'cudf::aggregation::ALL'
-            SUM_OF_SQUARES 'cudf::aggregation::SUM_OF_SQUARES'
-            MEAN 'cudf::aggregation::MEAN'
-            VARIANCE 'cudf::aggregation::VARIANCE'
-            STD 'cudf::aggregation::STD'
-            MEDIAN 'cudf::aggregation::MEDIAN'
-            QUANTILE 'cudf::aggregation::QUANTILE'
-            ARGMAX 'cudf::aggregation::ARGMAX'
-            ARGMIN 'cudf::aggregation::ARGMIN'
-            NUNIQUE 'cudf::aggregation::NUNIQUE'
-            NTH_ELEMENT 'cudf::aggregation::NTH_ELEMENT'
-            RANK 'cudf::aggregation::RANK'
-            COLLECT 'cudf::aggregation::COLLECT_LIST'
-            COLLECT_SET 'cudf::aggregation::COLLECT_SET'
-            PTX 'cudf::aggregation::PTX'
-            CUDA 'cudf::aggregation::CUDA'
-            CORRELATION 'cudf::aggregation::CORRELATION'
-            COVARIANCE 'cudf::aggregation::COVARIANCE'
+    # TODO: The Cython compiler crashes when this enum is defined within the
+    # aggregation class. I'm not yet sure why, but this is the simplest
+    # solution that works for now.
+    ctypedef enum Kind 'cudf::aggregation::Kind':
+        SUM 'cudf::aggregation::SUM'
+        PRODUCT 'cudf::aggregation::PRODUCT'
+        MIN 'cudf::aggregation::MIN'
+        MAX 'cudf::aggregation::MAX'
+        COUNT_VALID 'cudf::aggregation::COUNT_VALID'
+        COUNT_ALL 'cudf::aggregation::COUNT_ALL'
+        ANY 'cudf::aggregation::ANY'
+        ALL 'cudf::aggregation::ALL'
+        SUM_OF_SQUARES 'cudf::aggregation::SUM_OF_SQUARES'
+        MEAN 'cudf::aggregation::MEAN'
+        VARIANCE 'cudf::aggregation::VARIANCE'
+        STD 'cudf::aggregation::STD'
+        MEDIAN 'cudf::aggregation::MEDIAN'
+        QUANTILE 'cudf::aggregation::QUANTILE'
+        ARGMAX 'cudf::aggregation::ARGMAX'
+        ARGMIN 'cudf::aggregation::ARGMIN'
+        NUNIQUE 'cudf::aggregation::NUNIQUE'
+        NTH_ELEMENT 'cudf::aggregation::NTH_ELEMENT'
+        RANK 'cudf::aggregation::RANK'
+        COLLECT 'cudf::aggregation::COLLECT_LIST'
+        COLLECT_SET 'cudf::aggregation::COLLECT_SET'
+        PTX 'cudf::aggregation::PTX'
+        CUDA 'cudf::aggregation::CUDA'
+        CORRELATION 'cudf::aggregation::CORRELATION'
+        COVARIANCE 'cudf::aggregation::COVARIANCE'
 
+    cdef cppclass aggregation:
         Kind kind
 
-    cdef cppclass rolling_aggregation:
+    cdef cppclass rolling_aggregation(aggregation):
         aggregation.Kind kind
 
-    cdef cppclass groupby_aggregation:
+    cdef cppclass groupby_aggregation(aggregation):
         aggregation.Kind kind
 
-    cdef cppclass groupby_scan_aggregation:
+    cdef cppclass groupby_scan_aggregation(aggregation):
         aggregation.Kind kind
 
-    cdef cppclass reduce_aggregation:
+    cdef cppclass reduce_aggregation(aggregation):
         aggregation.Kind kind
 
-    cdef cppclass scan_aggregation:
+    cdef cppclass scan_aggregation(aggregation):
         aggregation.Kind kind
 
     ctypedef enum udf_type:
