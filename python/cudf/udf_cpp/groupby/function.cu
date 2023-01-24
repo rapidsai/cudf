@@ -58,7 +58,7 @@ __device__ void device_var(cooperative_groups::thread_block const& block,
 
 #pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto delta = static_cast<double>(data[idx]) - mean;
+    auto const delta = static_cast<double>(data[idx]) - mean;
     local_var += delta * delta;
   }
 
@@ -153,7 +153,11 @@ __device__ T BlockMin(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  auto local_min = std::numeric_limits<T>::max();
+  auto local_min = []() {
+    if constexpr (std::is_floating_point_v<T>) { return std::numeric_limits<T>::infinity(); }
+    return std::numeric_limits<T>::max();
+  }();
+
   __shared__ T block_min;
   if (block.thread_rank() == 0) { block_min = local_min; }
   block.sync();
@@ -221,7 +225,10 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   __shared__ T block_min;
   __shared__ int64_t block_idx_min;
 
-  auto local_min     = std::numeric_limits<T>::max();
+  auto local_min = []() {
+    if constexpr (std::is_floating_point_v<T>) { return std::numeric_limits<T>::infinity(); }
+    return std::numeric_limits<T>::max();
+  }();
   auto local_idx_min = std::numeric_limits<int64_t>::max();
 
   if (block.thread_rank() == 0) {
