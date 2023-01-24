@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
