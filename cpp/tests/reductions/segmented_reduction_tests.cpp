@@ -943,29 +943,67 @@ TEST_F(SegmentedReductionTestUntyped, Errors)
   auto const offsets = std::vector<cudf::size_type>{0, 1, 1, 4, 9};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
-  auto const bad_output_type = cudf::data_type{cudf::type_id::INT64};
+  auto const null_policy = cudf::null_policy::EXCLUDE;
+  auto const output_type = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
+  auto const str_input =
+    cudf::test::strings_column_wrapper({"10", "0", "20", "30", "54", "63", "", "72", "81"});
 
-  EXPECT_THROW(
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>(),
-                           bad_output_type,
-                           cudf::null_policy::EXCLUDE),
-    cudf::logic_error);
-  EXPECT_THROW(
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>(),
-                           bad_output_type,
-                           cudf::null_policy::EXCLUDE),
-    cudf::logic_error);
-  EXPECT_THROW(
-    cudf::segmented_reduce(input,
-                           d_offsets,
-                           *cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>(),
-                           bad_output_type,
-                           cudf::null_policy::EXCLUDE),
-    cudf::logic_error);
+  auto const sum_agg = cudf::make_sum_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *sum_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *sum_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const product_agg = cudf::make_product_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *product_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *product_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const min_agg = cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *min_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const max_agg = cudf::make_max_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *max_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const any_agg = cudf::make_any_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *any_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *any_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const all_agg = cudf::make_all_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *all_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *all_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const mean_agg = cudf::make_mean_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *mean_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *mean_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const std_agg = cudf::make_std_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *std_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *std_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const var_agg = cudf::make_variance_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *var_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *var_agg, output_type, null_policy),
+               cudf::logic_error);
+
+  auto const squares_agg =
+    cudf::make_sum_of_squares_aggregation<cudf::segmented_reduce_aggregation>();
+  EXPECT_THROW(cudf::segmented_reduce(input, d_offsets, *squares_agg, output_type, null_policy),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::segmented_reduce(str_input, d_offsets, *squares_agg, output_type, null_policy),
+               cudf::logic_error);
 }
 
 TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
