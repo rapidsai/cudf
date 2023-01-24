@@ -698,11 +698,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(
     auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
     auto const strings_column = cudf::strings_column_view{*column_view};
     auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
-    if (pattern_jstr.is_empty()) {
-      // Java's split API produces different behaviors than cudf when splitting with empty
-      // pattern.
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
-    }
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
     auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
@@ -735,11 +730,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(
     auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
     auto const strings_column = cudf::strings_column_view{*column_view};
     auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
-    if (pattern_jstr.is_empty()) {
-      // Java's split API produces different behaviors than cudf when splitting with empty
-      // pattern.
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
-    }
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups = static_cast<cudf::strings::capture_groups>(capture_groups);

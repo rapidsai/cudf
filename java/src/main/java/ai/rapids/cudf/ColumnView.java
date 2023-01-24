@@ -2557,7 +2557,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final Table stringSplit(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program is null";
-    assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new Table(stringSplit(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                                  regexProg.capture().nativeId, limit, true));
@@ -2594,7 +2593,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final Table stringSplit(String delimiter, int limit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 : "empty delimiter is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new Table(stringSplit(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
                                  CaptureGroups.NON_CAPTURE.nativeId, limit, false));
@@ -2663,7 +2661,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector stringSplitRecord(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be String";
     assert regexProg != null : "regex program is null";
-    assert regexProg.pattern().length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
         stringSplitRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
@@ -2697,7 +2694,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector stringSplitRecord(String delimiter, int limit) {
     assert type.equals(DType.STRING) : "column type must be String";
     assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 : "empty delimiter is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
         stringSplitRecord(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
