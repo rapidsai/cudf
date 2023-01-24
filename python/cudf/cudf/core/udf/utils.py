@@ -294,7 +294,7 @@ def _get_appropriate_file(sms, cc):
 
 def _get_ptx_file(path, prefix):
     if "RAPIDS_NO_INITIALIZE" in os.environ:
-        # shim_60.ptx is always built
+        # cc=60 ptx is always built
         cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
     else:
         dev = cuda.get_current_device()
@@ -324,7 +324,7 @@ def _get_ptx_file(path, prefix):
 
     if regular_result is None:
         raise RuntimeError(
-            "This strings_udf installation is missing the necessary PTX "
+            "This cuDF installation is missing the necessary PTX "
             f"files that are <={cc}."
         )
     else:
@@ -402,18 +402,17 @@ def _setup_numba_linker(path, prefix):
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
         ptxpath = _get_ptx_file(path, prefix)
-        strings_udf_ptx_version = _get_cuda_version_from_ptx_file(ptxpath)
-        maybe_patch_numba_linker(driver_version, strings_udf_ptx_version)
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(ptxpath)
+        maybe_patch_numba_linker(driver_version, ptx_toolkit_version)
 
 
 def maybe_patch_numba_linker(driver_version, ptx_toolkit_version):
     # Numba thinks cubinlinker is only needed if the driver is older than
-    # the ctk but when strings_udf is present, it might also need to patch
-    # because the PTX file strings_udf relies on may be newer than
-    # the driver as well
+    # the ctk, but when PTX files are present, it might also need to patch
+    # because those PTX files may newer than the driver as well
     if driver_version < ptx_toolkit_version:
         print(
-            "Driver version %s.%s needs patching due to strings_udf"
+            "Driver version %s.%s needs patching due to PTX files"
             % driver_version
         )
         if _numba_version_ok:
