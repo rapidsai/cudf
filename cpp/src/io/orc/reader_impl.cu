@@ -1283,13 +1283,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     create_columns(std::move(out_buffers), out_columns, schema_info, stream);
   }
 
-  // Return column names (must match order of returned columns)
-  out_metadata.column_names.reserve(schema_info.size());
-  std::transform(schema_info.cbegin(),
-                 schema_info.cend(),
-                 std::back_inserter(out_metadata.column_names),
-                 [](auto info) { return info.name; });
-
   out_metadata.schema_info = std::move(schema_info);
 
   std::transform(_metadata.per_file_metadata.cbegin(),

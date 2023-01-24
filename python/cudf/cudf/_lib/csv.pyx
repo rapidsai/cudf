@@ -425,7 +425,7 @@ def read_csv(
     with nogil:
         c_result = move(cpp_read_csv(read_csv_options_c))
 
-    meta_names = [name.decode() for name in c_result.metadata.column_names]
+    meta_names = [info.name.decode() for info in c_result.metadata.schema_info]
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_result.tbl),
         column_names=meta_names

@@ -931,8 +931,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.size() == 0) {
-    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
-                               {{}, std::vector<column_name_info>{}}};
+    return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)
@@ -1013,8 +1012,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     column_index++;
   }
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)),
-                             {{}, out_column_names}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
 }  // namespace detail
