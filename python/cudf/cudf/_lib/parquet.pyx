@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -176,17 +176,17 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         args.set_columns(cpp_columns)
 
     # Read Parquet
-    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_result
 
     with nogil:
-        c_out_table = move(parquet_reader(args))
+        c_result = move(parquet_reader(args))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
 
     # Access the Parquet per_file_user_data to find the index
     index_col = None
     cdef vector[unordered_map[string, string]] per_file_user_data = \
-        c_out_table.metadata.per_file_user_data
+        c_result.metadata.per_file_user_data
 
     index_col_names = None
     is_range_index = True
@@ -207,11 +207,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                             index_col_names[idx_col] = c['name']
 
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_out_table.tbl),
-        column_names=column_names
+        move(c_result.tbl),
+        column_names=names
     ))
 
-    update_struct_field_names(df, c_out_table.metadata.schema_info)
+    update_struct_field_names(df, c_result.metadata.schema_info)
 
     if meta is not None:
         # Book keep each column metadata as the order
@@ -222,7 +222,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         }
 
         # update the decimal precision of each column
-        for col in column_names:
+        for col in names:
             if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
@@ -286,7 +286,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 )
 
             df._index = idx
-        elif set(index_col).issubset(column_names):
+        elif set(index_col).issubset(names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
