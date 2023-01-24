@@ -9,7 +9,7 @@ files:
       - build
       - cudatoolkit
       - develop
-      - doc
+      - docs_build
       - notebooks
       - py_version
       - run
