@@ -389,20 +389,18 @@ def _get_cuda_version_from_ptx_file(path):
     return cuda_ver
 
 
-def _setup_numba_linker(path, prefix):
+def _setup_numba_linker(path):
     from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
     from cudf.core.udf.utils import (
         _get_cuda_version_from_ptx_file,
-        _get_ptx_file,
         maybe_patch_numba_linker,
     )
 
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        ptxpath = _get_ptx_file(path, prefix)
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(ptxpath)
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
         maybe_patch_numba_linker(driver_version, ptx_toolkit_version)
 
 

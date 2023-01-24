@@ -113,7 +113,7 @@ def _register_cuda_reduction_caller(funcname, inputty, retty):
     call_cuda_functions[funcname.lower()][type_key] = caller
 
 
-def _register_cuda_idxreduction_caller(funcname, inputty):
+def _register_cuda_idx_reduction_caller(funcname, inputty):
     cuda_func = cuda.declare_device(
         f"Block{funcname}_{inputty}",
         types.int64(
@@ -134,15 +134,11 @@ def _create_reduction_attr(name, retty=None):
     class Attr(AbstractTemplate):
         key = name
 
-    if retty:
-
-        def generic(self, args, kws):
-            return nb_signature(retty, recvr=self.this)
-
-    else:
-
-        def generic(self, args, kws):
-            return nb_signature(self.this.group_scalar_type, recvr=self.this)
+    def generic(self, args, kws):
+        return nb_signature(
+            self.this.group_scalar_type if not retty else retty,
+            recvr=self.this,
+        )
 
     Attr.generic = generic
 
@@ -210,10 +206,10 @@ _register_cuda_reduction_caller("Std", types.int64, types.float64)
 _register_cuda_reduction_caller("Std", types.float64, types.float64)
 _register_cuda_reduction_caller("Var", types.int64, types.float64)
 _register_cuda_reduction_caller("Var", types.float64, types.float64)
-_register_cuda_idxreduction_caller("IdxMax", types.int64)
-_register_cuda_idxreduction_caller("IdxMax", types.float64)
-_register_cuda_idxreduction_caller("IdxMin", types.int64)
-_register_cuda_idxreduction_caller("IdxMin", types.float64)
+_register_cuda_idx_reduction_caller("IdxMax", types.int64)
+_register_cuda_idx_reduction_caller("IdxMax", types.float64)
+_register_cuda_idx_reduction_caller("IdxMin", types.int64)
+_register_cuda_idx_reduction_caller("IdxMin", types.float64)
 
 
 make_attribute_wrapper(GroupType, "group_data", "group_data")
