@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "reduction_operators.cuh"
+#include <cudf/detail/reduction_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -142,7 +142,7 @@ void segmented_reduce(InputIterator d_in,
                       OffsetIterator d_offset_end,
                       OutputIterator d_out,
                       op::compound_op<Op> op,
-                      cudf::size_type ddof,
+                      size_type ddof,
                       size_type* d_valid_counts,
                       rmm::cuda_stream_view stream)
 {
