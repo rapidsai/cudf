@@ -267,11 +267,6 @@ class Buffer(Serializable):
             Failure to fulfill this contract will cause
             incorrect behavior.
 
-        Notes
-        -----
-        In case of `Buffer` class, any value passed to `mode` is a no-op.
-        The significance of each value explained above is a
-        guidance for any subclass of `Buffer`.
 
         See Also
         --------
