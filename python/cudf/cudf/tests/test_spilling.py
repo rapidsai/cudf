@@ -540,6 +540,40 @@ def test_df_transpose(manager: SpillManager):
     assert df2._data._data[1].data.exposed
 
 
+def test_as_buffer_of_spillable_buffer(manager: SpillManager):
+    data = cupy.arange(10, dtype="u1")
+    b1 = as_buffer(data, exposed=False)
+    assert isinstance(b1, SpillableBuffer)
+    assert b1.owner is data
+    b2 = as_buffer(b1)
+    assert b1 is b2
+
+    with pytest.raises(
+        ValueError,
+        match="buffer must either be exposed or spilled locked",
+    ):
+        # Use `memory_info` to access device point _without_ making
+        # the buffer unspillable.
+        b3 = as_buffer(b1.memory_info()[0], size=b1.size, owner=b1)
+
+    with acquire_spill_lock():
+        b3 = as_buffer(b1.get_ptr(), size=b1.size, owner=b1)
+    assert isinstance(b3, SpillableBufferSlice)
+    assert b3.owner is b1
+
+    b4 = as_buffer(
+        b1.ptr + data.itemsize, size=b1.size - data.itemsize, owner=b3
+    )
+    assert isinstance(b4, SpillableBufferSlice)
+    assert b4.owner is b1
+    assert all(cupy.array(b4.memoryview()) == data[1:])
+
+    b5 = as_buffer(b4.ptr, size=b4.size - 1, owner=b4)
+    assert isinstance(b5, SpillableBufferSlice)
+    assert b5.owner is b1
+    assert all(cupy.array(b5.memoryview()) == data[1:-1])
+
+
 @pytest.mark.parametrize("dtype", ["uint8", "uint64"])
 def test_memoryview_slice(manager: SpillManager, dtype):
     """Check .memoryview() of a sliced spillable buffer"""
