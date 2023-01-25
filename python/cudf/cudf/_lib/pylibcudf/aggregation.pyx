@@ -4,6 +4,7 @@ from cython.operator cimport dereference
 from libcpp.cast cimport dynamic_cast
 # from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -11,9 +12,12 @@ from cudf._lib.cpp.aggregation cimport (
     groupby_aggregation,
     make_sum_aggregation,
 )
-from cudf._lib.cpp.groupby cimport aggregation_request
+from cudf._lib.cpp.groupby cimport aggregation_request, aggregation_result
+from cudf._lib.cpp.table.table cimport table
 
+from .column cimport Column
 from .column_view cimport ColumnView
+from .table cimport Table
 #
 # from rmm._lib.device_buffer cimport DeviceBuffer
 #
@@ -108,12 +112,29 @@ cdef class GroupBy:
         # This copy is necessary because the aggregation request contains a
         # vector of unique_ptrs rather than references. We need to change that.
         cdef list new_requests = requests.copy()
+
         cdef AggregationRequest request
         cdef vector[aggregation_request] c_requests
         for request in new_requests:
             # TODO: Accessing c_obj directly isn't great.
             c_requests.push_back(move(request.c_obj))
-        self.get().aggregate(c_requests)
+
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
+            self.get().aggregate(c_requests)
+        )
+        cdef Table group_keys = Table.from_table(move(c_res.first))
+
+        # TODO: For now, I'm assuming that all aggregations produce a single
+        # column. I'm not sure what the exceptions are, but I know there must
+        # be some. I expect that to be obvious when I start replacing the
+        # existing libcudf code.
+        cdef int i
+        cdef list results = []
+        for i in range(c_res.second.size()):
+            results.append(
+                Column.from_column(move(c_res.second[i].results[0]))
+            )
+        return group_keys, results
 
     cdef groupby * get(self) nogil:
         """Get the underlying groupby object."""

@@ -29,5 +29,8 @@ cdef class Column:
     cpdef ColumnContents release(self)
     cdef int _raise_if_released(self) except 1
 
+    @staticmethod
+    cdef Column from_column(unique_ptr[column] col)
+
 
 cpdef Column Column_from_ColumnView(ColumnView cv)

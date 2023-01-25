@@ -68,6 +68,12 @@ cdef class Column:
         self.released = True
         return ret
 
+    @staticmethod
+    cdef Column from_column(unique_ptr[column] col):
+        cdef Column ret = Column.__new__()
+        ret.c_obj.swap(col)
+        return ret
+
 
 # Unfortunately we can't cpdef a staticmethod. Defining an external factory
 # separately is the best workaround for now.

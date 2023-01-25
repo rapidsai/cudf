@@ -77,7 +77,7 @@ cdef class ColumnView:
         return self.c_obj.get()
 
     @staticmethod
-    cdef from_column_view(column_view cv):
+    cdef ColumnView from_column_view(column_view cv):
         cdef ColumnView ret = ColumnView.__new__(ColumnView)
         ret.c_obj.reset(new column_view(cv))
         return ret

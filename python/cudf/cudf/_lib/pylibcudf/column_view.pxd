@@ -13,4 +13,4 @@ cdef class ColumnView:
     cpdef size_type null_count(self)
 
     @staticmethod
-    cdef from_column_view(column_view cv)
+    cdef ColumnView from_column_view(column_view cv)
