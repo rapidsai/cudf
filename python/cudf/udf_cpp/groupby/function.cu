@@ -255,7 +255,7 @@ extern "C" {
   __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
   {                                                                                              \
     return_type const res = name<type>(data, size);                                              \
-    if (threadIdx.x == 0) { *numba_return_value = res; }                                        \
+    if (threadIdx.x == 0) { *numba_return_value = res; }                                         \
     __syncthreads();                                                                             \
     return 0;                                                                                    \
   }
