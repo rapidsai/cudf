@@ -112,6 +112,11 @@ struct PageNestingDecodeInfo {
   bitmask_type* valid_map;
 };
 
+// Use up to 512 bytes of shared memory as a cache for nesting information.
+// As of 1/20/23, this gives us a max nesting depth of 10 (after which it falls back to
+// global memory). This handles all but the most extreme cases.
+constexpr int max_cacheable_nesting_decode_info = (512) / sizeof(PageNestingDecodeInfo);
+
 /**
  * @brief Nesting information
  *
