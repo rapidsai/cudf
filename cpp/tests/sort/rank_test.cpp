@@ -459,13 +459,15 @@ TEST_F(RankLarge, average_large)
 }
 
 // using input_arg_t = std::tuple<cudf::order, cudf::null_policy, cudf::null_order>;
-// input_arg_t asce_keep{cudf::order::ASCENDING, cudf::null_policy::EXCLUDE, cudf::null_order::AFTER};
-// input_arg_t asce_top{cudf::order::ASCENDING, cudf::null_policy::INCLUDE, cudf::null_order::BEFORE};
-// input_arg_t asce_bottom{cudf::order::ASCENDING, cudf::null_policy::INCLUDE, cudf::null_order::AFTER};
+// input_arg_t asce_keep{cudf::order::ASCENDING, cudf::null_policy::EXCLUDE,
+// cudf::null_order::AFTER}; input_arg_t asce_top{cudf::order::ASCENDING,
+// cudf::null_policy::INCLUDE, cudf::null_order::BEFORE}; input_arg_t
+// asce_bottom{cudf::order::ASCENDING, cudf::null_policy::INCLUDE, cudf::null_order::AFTER};
 
-// input_arg_t desc_keep{cudf::order::DESCENDING, cudf::null_policy::EXCLUDE, cudf::null_order::BEFORE};
-// input_arg_t desc_top{cudf::order::DESCENDING, cudf::null_policy::INCLUDE, cudf::null_order::AFTER};
-// input_arg_t desc_bottom{cudf::order::DESCENDING, cudf::null_policy::INCLUDE, cudf::null_order::BEFORE};
+// input_arg_t desc_keep{cudf::order::DESCENDING, cudf::null_policy::EXCLUDE,
+// cudf::null_order::BEFORE}; input_arg_t desc_top{cudf::order::DESCENDING,
+// cudf::null_policy::INCLUDE, cudf::null_order::AFTER}; input_arg_t
+// desc_bottom{cudf::order::DESCENDING, cudf::null_policy::INCLUDE, cudf::null_order::BEFORE};
 
 struct RankList : public cudf::test::BaseFixture {
   /*
@@ -475,15 +477,16 @@ struct RankList : public cudf::test::BaseFixture {
     [2, 2],
     [2, 3],
     [2, 2],
-    [1], 
+    [1],
     [],
     NULL
-    [2], 
+    [2],
     NULL,
     [1]
   ]
   */
-  lists_col col{{{}, {1}, {2, 2}, {2, 3}, {2, 2}, {1}, {}, {} /*NULL*/, {2}, {} /*NULL*/, {1}}, nulls_at({7, 9})};
+  lists_col col{{{}, {1}, {2, 2}, {2, 3}, {2, 2}, {1}, {}, {} /*NULL*/, {2}, {} /*NULL*/, {1}},
+                nulls_at({7, 9})};
 
   void run_all_tests(cudf::rank_method method,
                      input_arg_t input_arg,
@@ -507,52 +510,56 @@ struct RankList : public cudf::test::BaseFixture {
 TEST_F(RankList, first_asce_keep)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{1, 3, 7, 9, 8, 4, 2, -1, 6, -1, 5},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {1, 3, 7, 9, 8, 4, 2, -1, 6, -1, 5}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::FIRST, asce_keep, col_rank);
 }
 
 TEST_F(RankList, first_asce_top)
 {
   // ASCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{3, 5, 9, 11, 10, 6, 4, 1, 8, 2, 7};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    3, 5, 9, 11, 10, 6, 4, 1, 8, 2, 7};
   this->run_all_tests(cudf::rank_method::FIRST, asce_top, col_rank);
 }
 
 TEST_F(RankList, first_asce_bottom)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{1, 3, 7, 9, 8, 4, 2, 10, 6, 11, 5};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    1, 3, 7, 9, 8, 4, 2, 10, 6, 11, 5};
   this->run_all_tests(cudf::rank_method::FIRST, asce_bottom, col_rank);
 }
 
 TEST_F(RankList, first_desc_keep)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{8, 5, 2, 1, 3, 6, 9, -1, 4, -1, 7},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {8, 5, 2, 1, 3, 6, 9, -1, 4, -1, 7}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::FIRST, desc_keep, col_rank);
 }
 
 TEST_F(RankList, first_desc_top)
 {
   // DESCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{10, 7, 4, 3, 5, 8, 11, 1, 6, 2, 9};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    10, 7, 4, 3, 5, 8, 11, 1, 6, 2, 9};
   this->run_all_tests(cudf::rank_method::FIRST, desc_top, col_rank);
 }
 
 TEST_F(RankList, first_desc_bottom)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{8, 5, 2, 1, 3, 6, 9, 10, 4, 11, 7};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    8, 5, 2, 1, 3, 6, 9, 10, 4, 11, 7};
   this->run_all_tests(cudf::rank_method::FIRST, desc_bottom, col_rank);
 }
 
 TEST_F(RankList, dense_asce_keep)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{1, 2, 4, 5, 4, 2, 1, -1, 3, -1, 2},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {1, 2, 4, 5, 4, 2, 1, -1, 3, -1, 2}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::DENSE, asce_keep, col_rank);
 }
 
@@ -573,8 +580,8 @@ TEST_F(RankList, dense_asce_bottom)
 TEST_F(RankList, dense_desc_keep)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{5, 4, 2, 1, 2, 4, 5, -1, 3, -1, 4},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {5, 4, 2, 1, 2, 4, 5, -1, 3, -1, 4}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::DENSE, desc_keep, col_rank);
 }
 
@@ -595,175 +602,247 @@ TEST_F(RankList, dense_desc_bottom)
 TEST_F(RankList, min_asce_keep)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{1, 3, 7, 9, 7, 3, 1, -1, 6, -1, 3},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {1, 3, 7, 9, 7, 3, 1, -1, 6, -1, 3}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::MIN, asce_keep, col_rank);
 }
 
 TEST_F(RankList, min_asce_top)
 {
   // ASCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{3, 5, 9, 11, 9, 5, 3, 1, 8, 1, 5};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    3, 5, 9, 11, 9, 5, 3, 1, 8, 1, 5};
   this->run_all_tests(cudf::rank_method::MIN, asce_top, col_rank);
 }
 
 TEST_F(RankList, min_asce_bottom)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{1, 3, 7, 9, 7, 3, 1, 10, 6, 10, 3};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    1, 3, 7, 9, 7, 3, 1, 10, 6, 10, 3};
   this->run_all_tests(cudf::rank_method::MIN, asce_bottom, col_rank);
 }
 
 TEST_F(RankList, min_desc_keep)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{8, 5, 2, 1, 2, 5, 8, -1, 4, -1, 5},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {8, 5, 2, 1, 2, 5, 8, -1, 4, -1, 5}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::MIN, desc_keep, col_rank);
 }
 
 TEST_F(RankList, min_desc_top)
 {
   // DESCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{10, 7, 4, 3, 4, 7, 10, 1, 6, 1, 7};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    10, 7, 4, 3, 4, 7, 10, 1, 6, 1, 7};
   this->run_all_tests(cudf::rank_method::MIN, desc_top, col_rank);
 }
 
 TEST_F(RankList, min_desc_bottom)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{8, 5, 2, 1, 2, 5, 8, 10, 4, 10, 5};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    8, 5, 2, 1, 2, 5, 8, 10, 4, 10, 5};
   this->run_all_tests(cudf::rank_method::MIN, desc_bottom, col_rank);
 }
 
 TEST_F(RankList, max_asce_keep)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{2, 5, 8, 9, 8, 5, 2, -1, 6, -1, 5},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {2, 5, 8, 9, 8, 5, 2, -1, 6, -1, 5}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::MAX, asce_keep, col_rank);
 }
 
 TEST_F(RankList, max_asce_top)
 {
   // ASCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{4, 7, 10, 11, 10, 7, 4, 2, 8, 2, 7};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    4, 7, 10, 11, 10, 7, 4, 2, 8, 2, 7};
   this->run_all_tests(cudf::rank_method::MAX, asce_top, col_rank);
 }
 
 TEST_F(RankList, max_asce_bottom)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{2, 5, 8, 9, 8, 5, 2, 11, 6, 11, 5};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    2, 5, 8, 9, 8, 5, 2, 11, 6, 11, 5};
   this->run_all_tests(cudf::rank_method::MAX, asce_bottom, col_rank);
 }
 
 TEST_F(RankList, max_desc_keep)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{{9, 7, 3, 1, 3, 7, 9, -1, 4, -1, 7},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    {9, 7, 3, 1, 3, 7, 9, -1, 4, -1, 7}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::MAX, desc_keep, col_rank);
 }
 
 TEST_F(RankList, max_desc_top)
 {
   // DESCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{11, 9, 5, 3, 5, 9, 11, 2, 6, 2, 9};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    11, 9, 5, 3, 5, 9, 11, 2, 6, 2, 9};
   this->run_all_tests(cudf::rank_method::MAX, desc_top, col_rank);
 }
 
 TEST_F(RankList, max_desc_bottom)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{9, 7, 3, 1, 3, 7, 9, 11, 4, 11, 7};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> col_rank{
+    9, 7, 3, 1, 3, 7, 9, 11, 4, 11, 7};
   this->run_all_tests(cudf::rank_method::MAX, desc_bottom, col_rank);
 }
 
 TEST_F(RankList, average_asce_keep)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{{1.5, 4.0, 7.5, 9.0, 7.5, 4.0, 1.5, -1.0, 6.0, -1.0, 4.0},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    {1.5, 4.0, 7.5, 9.0, 7.5, 4.0, 1.5, -1.0, 6.0, -1.0, 4.0}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::AVERAGE, asce_keep, col_rank);
 }
 
 TEST_F(RankList, average_asce_top)
 {
   // ASCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{3.5, 6.0, 9.5, 11.0, 9.5, 6.0, 3.5, 1.5, 8.0, 1.5, 6.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    3.5, 6.0, 9.5, 11.0, 9.5, 6.0, 3.5, 1.5, 8.0, 1.5, 6.0};
   this->run_all_tests(cudf::rank_method::AVERAGE, asce_top, col_rank);
 }
 
 TEST_F(RankList, average_asce_bottom)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{1.5, 4.0, 7.5, 9.0, 7.5, 4.0, 1.5, 10.5, 6.0, 10.5, 4.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    1.5, 4.0, 7.5, 9.0, 7.5, 4.0, 1.5, 10.5, 6.0, 10.5, 4.0};
   this->run_all_tests(cudf::rank_method::AVERAGE, asce_bottom, col_rank);
 }
 
 TEST_F(RankList, average_desc_keep)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{{8.5, 6.0, 2.5, 1.0, 2.5, 6.0, 8.5, -1.0, 4.0, -1.0, 6.0},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    {8.5, 6.0, 2.5, 1.0, 2.5, 6.0, 8.5, -1.0, 4.0, -1.0, 6.0}, nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::AVERAGE, desc_keep, col_rank);
 }
 
 TEST_F(RankList, average_desc_top)
 {
   // DESCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{10.5, 8.0, 4.5, 3.0, 4.5, 8.0, 10.5, 1.5, 6.0, 1.5, 8.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    10.5, 8.0, 4.5, 3.0, 4.5, 8.0, 10.5, 1.5, 6.0, 1.5, 8.0};
   this->run_all_tests(cudf::rank_method::AVERAGE, desc_top, col_rank);
 }
 
 TEST_F(RankList, average_desc_bottom)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{8.5, 6.0, 2.5, 1.0, 2.5, 6.0, 8.5, 10.5, 4.0, 10.5, 6.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{
+    8.5, 6.0, 2.5, 1.0, 2.5, 6.0, 8.5, 10.5, 4.0, 10.5, 6.0};
   this->run_all_tests(cudf::rank_method::AVERAGE, desc_bottom, col_rank);
 }
 
 TEST_F(RankList, dense_asce_keep_pct)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{{1.0 / 5.0, 2.0 / 5.0, 4.0 / 5.0, 1.0, 4.0 / 5.0, 2.0 / 5.0, 1.0 / 5.0, -1.0, 3.0 / 5.0, -1.0, 2.0 / 5.0},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{{1.0 / 5.0,
+                                                           2.0 / 5.0,
+                                                           4.0 / 5.0,
+                                                           1.0,
+                                                           4.0 / 5.0,
+                                                           2.0 / 5.0,
+                                                           1.0 / 5.0,
+                                                           -1.0,
+                                                           3.0 / 5.0,
+                                                           -1.0,
+                                                           2.0 / 5.0},
+                                                          nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::DENSE, asce_keep, col_rank, true);
 }
 
 TEST_F(RankList, dense_asce_top_pct)
 {
   // ASCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 3.0, 1.0 / 2.0, 5.0 / 6.0, 1.0, 5.0 / 6.0, 1.0 / 2.0, 1.0 / 3.0, 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0, 1.0 / 2.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 3.0,
+                                                          1.0 / 2.0,
+                                                          5.0 / 6.0,
+                                                          1.0,
+                                                          5.0 / 6.0,
+                                                          1.0 / 2.0,
+                                                          1.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          2.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          1.0 / 2.0};
   this->run_all_tests(cudf::rank_method::DENSE, asce_top, col_rank, true);
 }
 
 TEST_F(RankList, dense_asce_bottom_pct)
 {
   // ASCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 6.0, 1.0 / 3.0, 2.0 / 3.0, 5.0 / 6.0, 2.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0, 1.0, 1.0 / 2.0, 1.0, 1.0 / 3.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 6.0,
+                                                          1.0 / 3.0,
+                                                          2.0 / 3.0,
+                                                          5.0 / 6.0,
+                                                          2.0 / 3.0,
+                                                          1.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          1.0,
+                                                          1.0 / 2.0,
+                                                          1.0,
+                                                          1.0 / 3.0};
   this->run_all_tests(cudf::rank_method::DENSE, asce_bottom, col_rank, true);
 }
 
 TEST_F(RankList, min_desc_keep_pct)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{{8.0 / 9.0, 5.0 / 9.0, 2.0 / 9.0, 1.0 / 9.0, 2.0/ 9.0, 5.0 / 9.0, 8.0 / 9.0, -1.0, 4.0 / 9.0, -1.0, 5.0 / 9.0},
-                                                                   nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{{8.0 / 9.0,
+                                                           5.0 / 9.0,
+                                                           2.0 / 9.0,
+                                                           1.0 / 9.0,
+                                                           2.0 / 9.0,
+                                                           5.0 / 9.0,
+                                                           8.0 / 9.0,
+                                                           -1.0,
+                                                           4.0 / 9.0,
+                                                           -1.0,
+                                                           5.0 / 9.0},
+                                                          nulls_at({7, 9})};
   this->run_all_tests(cudf::rank_method::MIN, desc_keep, col_rank, true);
 }
 
 TEST_F(RankList, min_desc_top_pct)
 {
   // DESCENDING and null_order::AFTER
-  cudf::test::fixed_width_column_wrapper<double> col_rank{10.0 / 11.0, 7.0 / 11.0, 4.0 / 11.0, 3.0 / 11.0, 4.0 / 11.0, 7.0 / 11.0, 10.0 / 11.0, 1.0 / 11.0, 6.0 / 11.0, 1.0 / 11.0, 7.0 / 11.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{10.0 / 11.0,
+                                                          7.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          3.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          7.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          6.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          7.0 / 11.0};
   this->run_all_tests(cudf::rank_method::MIN, desc_top, col_rank, true);
 }
 
 TEST_F(RankList, min_desc_bottom_pct)
 {
   // DESCENDING and null_order::BEFORE
-  cudf::test::fixed_width_column_wrapper<double> col_rank{8.0 / 11.0, 5.0 / 11.0, 2.0 / 11.0, 1.0 / 11.0, 2.0 / 11.0, 5.0 / 11.0, 8.0 / 11.0, 10.0 / 11.0, 4.0 / 11.0, 10.0 / 11.0, 5.0 / 11.0};
+  cudf::test::fixed_width_column_wrapper<double> col_rank{8.0 / 11.0,
+                                                          5.0 / 11.0,
+                                                          2.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          2.0 / 11.0,
+                                                          5.0 / 11.0,
+                                                          8.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          5.0 / 11.0};
   this->run_all_tests(cudf::rank_method::MIN, desc_bottom, col_rank, true);
 }
