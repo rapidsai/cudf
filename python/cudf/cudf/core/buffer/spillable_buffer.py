@@ -7,7 +7,16 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 import numpy
 
@@ -16,6 +25,7 @@ import rmm
 from cudf.core.buffer.buffer import (
     Buffer,
     cuda_array_interface_wrapper,
+    get_ptr_and_size,
     host_memory_allocation,
 )
 from cudf.utils.string import format_bytes
@@ -25,6 +35,86 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T", bound="SpillableBuffer")
+
+
+def get_spillable_owner(data) -> Optional[SpillableBuffer]:
+    """Get the spillable owner of `data`, if any exist
+
+    Search through the stack of data owners in order to find an
+    owner of type `SpillableBuffer` (not subclasses).
+
+    Parameters
+    ----------
+    data : buffer-like or array-like
+        A buffer-like or array-like object that represent C-contiguous memory.
+
+    Return
+    ------
+    SpillableBuffer or None
+        The owner of `data` if spillable or None.
+    """
+
+    if type(data) is SpillableBuffer:
+        return data
+    if hasattr(data, "owner"):
+        return get_spillable_owner(data.owner)
+    return None
+
+
+def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
+    """Factory function to wrap `data` in a SpillableBuffer object.
+
+    If `data` isn't a buffer already, a new buffer that points to the memory of
+    `data` is created. If `data` represents host memory, it is copied to a new
+    `rmm.DeviceBuffer` device allocation. Otherwise, the memory of `data` is
+    **not** copied, instead the new buffer keeps a reference to `data` in order
+    to retain its lifetime.
+
+    If `data` is owned by a spillable buffer, a "slice" of the buffer is
+    returned. In this case, the spillable buffer must either be "exposed" or
+    spilled locked (called within an acquire_spill_lock context). This is to
+    guarantee that the memory of `data` isn't spilled before this function gets
+    to calculate the offset of the new slice.
+
+    It is illegal for a spillable buffer to own another spillable buffer.
+
+    Parameters
+    ----------
+    data : buffer-like or array-like
+        A buffer-like or array-like object that represent C-contiguous memory.
+    exposed : bool, optional
+        Mark the buffer as permanently exposed (unspillable).
+
+    Return
+    ------
+    SpillableBuffer
+        A spillabe buffer instance that represents the device memory of `data`.
+    """
+
+    from cudf.core.buffer.utils import get_spill_lock
+
+    if not hasattr(data, "__cuda_array_interface__"):
+        if exposed:
+            raise ValueError("cannot created exposed host memory")
+        return SpillableBuffer._from_host_memory(data)
+
+    spillable_owner = get_spillable_owner(data)
+    if spillable_owner is None:
+        return SpillableBuffer._from_device_memory(data, exposed=exposed)
+
+    if not spillable_owner.exposed and get_spill_lock() is None:
+        raise ValueError(
+            "A owning spillable buffer must "
+            "either be exposed or spilled locked."
+        )
+
+    # At this point, we know that `data` is owned by a spillable buffer,
+    # which is exposed or spilled locked.
+    ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+    base_ptr = spillable_owner.memory_info()[0]
+    return SpillableBufferSlice(
+        spillable_owner, offset=ptr - base_ptr, size=size
+    )
 
 
 class SpillLock:
