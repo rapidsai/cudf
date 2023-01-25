@@ -30,7 +30,8 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
 {
   __shared__ bool result;
 
-  if (block.thread_rank()) { result = true; }
+  if (block.thread_rank() == 0) { result = true; }
+  block.sync();
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     if (not std::isnan(data[idx])) {
