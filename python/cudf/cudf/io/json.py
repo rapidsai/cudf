@@ -183,6 +183,7 @@ def to_json(
     cudf_val,
     path_or_buf=None,
     engine="auto",
+    orient=None,
     storage_options=None,
     *args,
     **kwargs,
@@ -193,7 +194,6 @@ def to_json(
         engine = "pandas"
 
     if engine == "cudf":
-        orient = kwargs.pop("orient", None)
         if orient not in {"records", None}:
             raise ValueError(
                 f"Only the `orient='records'` is supported for JSON writer"
@@ -231,6 +231,7 @@ def to_json(
         return pd.io.json.to_json(
             path_or_buf,
             pd_value,
+            orient=orient,
             storage_options=storage_options,
             *args,
             **kwargs,
