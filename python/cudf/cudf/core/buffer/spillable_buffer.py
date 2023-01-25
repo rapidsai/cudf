@@ -72,7 +72,9 @@ def as_spillable_buffer(data, exposed: bool) -> SpillableBuffer:
 
     If `data` is owned by a spillable buffer, a "slice" of the buffer is
     returned. In this case, the spillable buffer must either be "exposed" or
-    spilled locked (called within an acquire_spill_lock context).
+    spilled locked (called within an acquire_spill_lock context). This is to
+    guarantee that the memory of `data` isn't spilled before this function gets
+    to calculate the offset of the new slice.
 
     It is illegal for a spillable buffer to own another spillable buffer.
 
