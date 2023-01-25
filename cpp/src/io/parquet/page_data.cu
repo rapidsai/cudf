@@ -1975,12 +1975,14 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
   // if we are using the nesting decode cache, copy null count back
   if (s->nesting_info == s->nesting_decode_cache) {
-    int d = 0;
-    while (d < s->page.num_output_nesting_levels) {
-      if (d + t < s->page.num_output_nesting_levels) {
-        s->page.nesting_decode[d + t].null_count = s->nesting_decode_cache[d + t].null_count;
+    int depth = 0;
+    while (depth < s->page.num_output_nesting_levels) {
+      int const thread_depth = depth + t;
+      if (thread_depth < s->page.num_output_nesting_levels) {
+        s->page.nesting_decode[thread_depth].null_count =
+          s->nesting_decode_cache[thread_depth].null_count;
       }
-      d += blockDim.x;
+      depth += blockDim.x;
     }
   }
 }
