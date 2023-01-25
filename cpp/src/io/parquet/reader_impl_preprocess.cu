@@ -607,7 +607,7 @@ void reader::impl::allocate_nesting_info()
           gpu::PageNestingInfo* pni =
             &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
 
-          gpu::PageNestingDecodeInfo* pndi =
+          gpu::PageNestingDecodeInfo* nesting_info =
             &page_nesting_decode_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
 
           // if we have lists, set our start and end depth remappings
@@ -619,16 +619,16 @@ void reader::impl::allocate_nesting_info()
             std::vector<int> const& def_depth_remap = (remap->second.second);
 
             for (size_t m = 0; m < rep_depth_remap.size(); m++) {
-              pndi[m].start_depth = rep_depth_remap[m];
+              nesting_info[m].start_depth = rep_depth_remap[m];
             }
             for (size_t m = 0; m < def_depth_remap.size(); m++) {
-              pndi[m].end_depth = def_depth_remap[m];
+              nesting_info[m].end_depth = def_depth_remap[m];
             }
           }
 
           // values indexed by output column index
-          pndi[cur_depth].max_def_level = cur_schema.max_definition_level;
-          pni[cur_depth].size           = 0;
+          nesting_info[cur_depth].max_def_level = cur_schema.max_definition_level;
+          pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
             to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
           pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;

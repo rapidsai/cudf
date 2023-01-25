@@ -1852,7 +1852,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
 
-  PageNestingDecodeInfo* pni_base = s->nesting_info;
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
@@ -1921,7 +1921,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
         int leaf_level_index = s->col.max_nesting_depth - 1;
 
         uint32_t dtype_len = s->dtype_len;
-        void* dst = pni_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        void* dst =
+          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (dtype == BYTE_ARRAY) {
           if (s->col.converted_type == DECIMAL) {
             auto const [ptr, len]        = gpuGetStringData(s, val_src_pos);
