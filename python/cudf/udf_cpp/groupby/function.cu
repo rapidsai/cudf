@@ -20,6 +20,29 @@
 
 #include <cooperative_groups.h>
 
+#include <limits>
+#include <type_traits>
+
+template <typename T>
+__device__ bool are_all_nans(cooperative_groups::thread_block const& block,
+                             T const* data,
+                             int64_t size)
+{
+  __shared__ bool result;
+
+  if (block.thread_rank()) { result = true; }
+
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
+    if (not std::isnan(data[idx])) {
+      result = false;
+      break;
+    }
+  }
+
+  block.sync();
+  return result;
+}
+
 template <typename T>
 __device__ void device_sum(cooperative_groups::thread_block const& block,
                            T const* data,
@@ -75,6 +98,10 @@ __device__ T BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
+  if constexpr (std::is_floating_point_v<T>) {
+    if (are_all_nans(block, data, size)) { return 0; }
+  }
+
   __shared__ T block_sum;
   if (block.thread_rank() == 0) { block_sum = 0; }
   block.sync();
@@ -127,6 +154,10 @@ __device__ T BlockMax(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
+  if constexpr (std::is_floating_point_v<T>) {
+    if (are_all_nans(block, data, size)) { return std::numeric_limits<T>::quiet_NaN(); }
+  }
+
   auto local_max = cudf::DeviceMax::identity<T>();
   __shared__ T block_max;
   if (block.thread_rank() == 0) { block_max = local_max; }
@@ -149,6 +180,10 @@ template <typename T>
 __device__ T BlockMin(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
+
+  if constexpr (std::is_floating_point_v<T>) {
+    if (are_all_nans(block, data, size)) { return std::numeric_limits<T>::quiet_NaN(); }
+  }
 
   auto local_min = cudf::DeviceMin::identity<T>();
 
