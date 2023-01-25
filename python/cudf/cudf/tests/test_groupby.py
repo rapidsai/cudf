@@ -482,10 +482,11 @@ def func(df):
     "func",
     [
         lambda df: df["val1"].max() + df["val2"].min(),
-        lambda df: df["val1"].idxmax() + df["val2"].idxmin(),
+        lambda df: df["val1"].sum() + df["val2"].var(),
+        lambda df: df["val1"].mean() + df["val2"].std(),
     ],
 )
-def test_groupby_apply_jit(func, groupby_jit_data):
+def test_groupby_apply_jit_basic(func, groupby_jit_data):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"])
 
 
