@@ -396,7 +396,6 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     # compare cuDF jit to pandas
     cudf_jit_result = got_groupby_obj.apply(func, *args, engine="jit")
     pandas_result = expect_groupby_obj.apply(func, *args)
-
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
@@ -405,7 +404,11 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )
 def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
-    # dynamically generate to avoid pickling error
+    # ideally we'd just have:
+    # lambda group: getattr(group, func)()
+    # but the current kernel caching mechanism relies on pickle which
+    # does not play nice with local functions. What's below uses
+    # exec as a workaround to write the test functions dynamically
 
     funcstr = f"""
 def func(df):
@@ -422,15 +425,13 @@ def func(df):
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize(
-    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
-)
+@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 def test_groupby_apply_jit_reductions_special_vals(
     func, groupby_jit_data, dtype, special_val
 ):
     # dynamically generate to avoid pickling error.
-
+    # see test_groupby_apply_jit_reductions for details.
     funcstr = f"""
 def func(df):
     return df['val1'].{func}()
@@ -443,6 +444,38 @@ def func(df):
     groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
 
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["float64"])
+@pytest.mark.parametrize("func", ["idxmax", "idxmin"])
+@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+def test_groupby_apply_jit_idx_reductions_special_vals(
+    func, groupby_jit_data, dtype, special_val
+):
+    # dynamically generate to avoid pickling error.
+    # see test_groupby_apply_jit_reductions for details.
+    funcstr = f"""
+def func(df):
+    return df['val1'].{func}()
+    """
+    lcl = {}
+    exec(funcstr, lcl)
+    func = lcl["func"]
+
+    groupby_jit_data["val1"] = special_val
+    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+
+    expect = (
+        groupby_jit_data.to_pandas()
+        .groupby("key1", as_index=False)
+        .apply(func)
+    )
+
+    # for all nans or infs, return the first occurrence
+    expect[None] = 0
+
+    got = groupby_jit_data.groupby("key1").apply(func, engine="jit")
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
