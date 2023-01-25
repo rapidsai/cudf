@@ -471,10 +471,13 @@ def func(df):
         .apply(func)
     )
 
-    # for all nans or infs, return the first occurrence
-    expect[None] = 0
+    grouped = groupby_jit_data.groupby("key1")
 
-    got = groupby_jit_data.groupby("key1").apply(func, engine="jit")
+    # for all nans or infs, return the first occurrence
+    # this is equivalent to the offsets except the last one
+    expect[None] = grouped._grouped()[1][:-1]
+
+    got = grouped.apply(func, engine="jit")
     assert_eq(expect, got)
 
 
