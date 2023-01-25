@@ -311,11 +311,11 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   }
 
   if (!_output_metadata) {
-    // Return column names (must match order of returned columns)
-    out_metadata.column_names.resize(_output_buffers.size());
+    // Return column names
+    out_metadata.schema_info.resize(_output_buffers.size());
     for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-      auto const& schema           = _metadata->get_schema(_output_column_schemas[i]);
-      out_metadata.column_names[i] = schema.name;
+      auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+      out_metadata.schema_info[i].name = schema.name;
     }
 
     // Return user metadata
