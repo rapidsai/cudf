@@ -52,7 +52,6 @@ __device__ void device_sum(cooperative_groups::thread_block const& block,
 {
   T local_sum = 0;
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_sum += data[idx];
   }
@@ -80,7 +79,6 @@ __device__ void device_var(cooperative_groups::thread_block const& block,
 
   auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto const delta = static_cast<double>(data[idx]) - mean;
     local_var += delta * delta;
@@ -164,7 +162,6 @@ __device__ T BlockMax(T const* data, int64_t size)
   if (block.thread_rank() == 0) { block_max = local_max; }
   block.sync();
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_max = max(local_max, data[idx]);
   }
@@ -195,7 +192,6 @@ __device__ T BlockMin(T const* data, int64_t size)
   }
   block.sync();
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     local_min = min(local_min, data[idx]);
   }
@@ -227,7 +223,6 @@ __device__ int64_t BlockIdxMax(T const* data, int64_t* index, int64_t size)
   }
   block.sync();
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto const current_data = data[idx];
     if (current_data > local_max) {
@@ -273,7 +268,6 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   }
   block.sync();
 
-#pragma unroll
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     auto const current_data = data[idx];
     if (current_data < local_min) {
