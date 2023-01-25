@@ -31,15 +31,9 @@ std::unique_ptr<cudf::column> segmented_mean(column_view const& col,
                                              rmm::mr::device_memory_resource* mr)
 {
   using reducer = compound::detail::compound_segmented_dispatcher<cudf::reduction::op::mean>;
-  return cudf::type_dispatcher(col.type(),
-                               reducer{},
-                               col,
-                               offsets,
-                               output_dtype,
-                               null_handling,
-                               1,  // ddof is not used for mean
-                               stream,
-                               mr);
+  constexpr size_type ddof = 1;  // ddof for mean calculation
+  return cudf::type_dispatcher(
+    col.type(), reducer{}, col, offsets, output_dtype, null_handling, ddof, stream, mr);
 }
 
 }  // namespace reduction

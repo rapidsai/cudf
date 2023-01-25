@@ -49,7 +49,7 @@ template <typename InputType, typename ResultType, typename Op>
 std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
                                                      device_span<size_type const> offsets,
                                                      null_policy null_handling,
-                                                     cudf::size_type ddof,
+                                                     size_type ddof,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
@@ -110,13 +110,11 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
 };
 
 template <typename ElementType, typename Op>
-struct segmented_result_dispatcher {
+struct compound_float_output_dispatcher {
  private:
   template <typename ResultType>
   static constexpr bool is_supported_v()
   {
-    // the operator `mean`, `var`, `std` only accepts
-    // floating points as output dtype
     return std::is_floating_point_v<ResultType>;
   }
 
@@ -125,7 +123,7 @@ struct segmented_result_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -137,7 +135,7 @@ struct segmented_result_dispatcher {
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
-                                     cudf::size_type,
+                                     size_type,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -160,12 +158,12 @@ struct compound_segmented_dispatcher {
                                      device_span<size_type const> offsets,
                                      cudf::data_type const output_dtype,
                                      null_policy null_handling,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return cudf::type_dispatcher(output_dtype,
-                                 segmented_result_dispatcher<ElementType, Op>(),
+                                 compound_float_output_dispatcher<ElementType, Op>(),
                                  col,
                                  offsets,
                                  null_handling,
@@ -179,7 +177,7 @@ struct compound_segmented_dispatcher {
                                      device_span<size_type const>,
                                      cudf::data_type const,
                                      null_policy,
-                                     cudf::size_type,
+                                     size_type,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

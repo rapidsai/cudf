@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -29,23 +29,26 @@ namespace cudf {
 namespace reduction {
 
 /**
- * @brief Compute sum of each segment in input column.
+ * @brief Compute sum of each segment in the input column
  *
  * If an input segment is empty, the segment result is null.
+ *
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
  *
- * @param col Input column to compute sum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each sum
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sums of segments in type `output_dtype`
+ * @return Sums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_sum(
   column_view const& col,
@@ -57,23 +60,26 @@ std::unique_ptr<column> segmented_sum(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes product of each segment in input column.
+ * @brief Computes product of each segment in the input column
  *
  * If an input segment is empty, the segment result is null.
+ *
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
  *
- * @param col Input column to compute product
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each product
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Product as scalar of type `output_dtype`
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Product of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_product(
   column_view const& col,
@@ -85,22 +91,25 @@ std::unique_ptr<column> segmented_product(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute minimum of each segment in input column.
+ * @brief Compute minimum of each segment in the input column
  *
  * If an input segment is empty, the segment result is null.
  *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
- *
- * @param col Input column to compute minimum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
  * in the segment is valid.
- * @param init Initial value of each minimum
+ *
+ * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
+ *
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Minimums of segments in type `output_dtype`
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Minimums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_min(
   column_view const& col,
@@ -112,22 +121,25 @@ std::unique_ptr<column> segmented_min(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute maximum of each segment in input column.
+ * @brief Compute maximum of each segment in the input column
  *
  * If an input segment is empty, the segment result is null.
  *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
- *
- * @param col Input column to compute maximum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
  * in the segment is valid.
- * @param init Initial value of each maximum
+ *
+ * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
+ *
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Maximums of segments in type `output_dtype`
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Maximums of segments as type `output_dtype`
  */
 std::unique_ptr<column> segmented_max(
   column_view const& col,
@@ -139,23 +151,26 @@ std::unique_ptr<column> segmented_max(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute if any of the values in the segment are true when typecasted to bool.
+ * @brief Compute if any of the values in the segment are true when typecasted to bool
  *
  * If an input segment is empty, the segment result is null.
  *
- * @throw cudf::logic_error if input column type is not convertible to bool.
- * @throw cudf::logic_error if `output_dtype` is not bool8.
- *
- * @param col Input column to compute any
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
  * in the segment is valid.
- * @param init Initial value of each any
+ *
+ * @throw cudf::logic_error if input column type is not convertible to bool.
+ * @throw cudf::logic_error if `output_dtype` is not BOOL8.
+ *
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Column of bool8 for the results of the segments
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column of type BOOL8 for the results of the segments
  */
 std::unique_ptr<column> segmented_any(
   column_view const& col,
@@ -167,23 +182,26 @@ std::unique_ptr<column> segmented_any(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute if all of the values in the segment are true when typecasted to bool.
+ * @brief Compute if all of the values in the segment are true when typecasted to bool
  *
  * If an input segment is empty, the segment result is null.
  *
- * @throw cudf::logic_error if input column type is not convertible to bool.
- * @throw cudf::logic_error if `output_dtype` is not bool8.
- *
- * @param col Input column to compute all
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * If `null_handling==null_policy::INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid.
+ * If `null_handling==null_policy::EXCLUDE`, the reduced value is valid if any element
  * in the segment is valid.
- * @param init Initial value of each all
+ *
+ * @throw cudf::logic_error if input column type is not convertible to bool.
+ * @throw cudf::logic_error if `output_dtype` is not BOOL8.
+ *
+ * @param col Input column data
+ * @param offsets Indices to identify segment boundaries within input `col`
+ * @param output_dtype Data type of the output column
+ * @param null_handling Specifies how null elements are processed for each segment
+ * @param init Initial value of each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Column of bool8 for the results of the segments
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column of BOOL8 for the results of the segments
  */
 std::unique_ptr<column> segmented_all(
   column_view const& col,
@@ -212,7 +230,7 @@ std::unique_ptr<column> segmented_all(
  * @param output_dtype Data type of the output column
  * @param null_handling Specifies how null elements are processed for each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_mean(
@@ -241,7 +259,7 @@ std::unique_ptr<column> segmented_mean(
  * @param output_dtype Data type of the output column
  * @param null_handling Specifies how null elements are processed for each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_sum_of_squares(
@@ -272,7 +290,7 @@ std::unique_ptr<column> segmented_sum_of_squares(
  * @param ddof Delta degrees of freedom.
  *             The divisor used is N - ddof, where N the number of elements in each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_standard_deviation(
@@ -304,7 +322,7 @@ std::unique_ptr<column> segmented_standard_deviation(
  * @param ddof Delta degrees of freedom.
  *             The divisor used is N - ddof, where N the number of elements in each segment
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of `output_dtype` for the reduction results of the segments
  */
 std::unique_ptr<column> segmented_variance(
