@@ -225,7 +225,7 @@ def to_json(
         if return_as_string:
             path_or_buf.seek(0)
             return path_or_buf.read()
-    else:
+    elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
         pd_value = cudf_val.to_pandas(nullable=True)
         return pd.io.json.to_json(
@@ -236,3 +236,5 @@ def to_json(
             *args,
             **kwargs,
         )
+    else:
+        raise ValueError(f"`engine` only support {{'auto', 'cudf', 'pandas'}}, got: {engine}")
