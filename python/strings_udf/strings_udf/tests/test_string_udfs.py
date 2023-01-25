@@ -69,8 +69,7 @@ def run_udf_test(data, func, dtype):
     str_views = column_to_string_view_array(cudf_column)
 
     kernel = get_kernel(func, dtype, len(data))
-    with acquire_spill_lock():
-        kernel.forall(len(data))(str_views, output)
+    kernel.forall(len(data))(str_views, output)
 
     if dtype == "str":
         output = column_from_udf_string_array(output)
