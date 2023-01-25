@@ -201,23 +201,15 @@ class GroupAttr(AttributeTemplate):
         )
 
 
-_register_cuda_reduction_caller("Max", types.float64, types.float64)
-_register_cuda_reduction_caller("Max", types.int64, types.int64)
-_register_cuda_reduction_caller("Min", types.float64, types.float64)
-_register_cuda_reduction_caller("Min", types.int64, types.int64)
-_register_cuda_reduction_caller("Min", types.float64, types.float64)
-_register_cuda_reduction_caller("Sum", types.int64, types.int64)
-_register_cuda_reduction_caller("Sum", types.float64, types.float64)
-_register_cuda_reduction_caller("Mean", types.int64, types.float64)
-_register_cuda_reduction_caller("Mean", types.float64, types.float64)
-_register_cuda_reduction_caller("Std", types.int64, types.float64)
-_register_cuda_reduction_caller("Std", types.float64, types.float64)
-_register_cuda_reduction_caller("Var", types.int64, types.float64)
-_register_cuda_reduction_caller("Var", types.float64, types.float64)
-_register_cuda_idx_reduction_caller("IdxMax", types.int64)
-_register_cuda_idx_reduction_caller("IdxMax", types.float64)
-_register_cuda_idx_reduction_caller("IdxMin", types.int64)
-_register_cuda_idx_reduction_caller("IdxMin", types.float64)
+for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
+    _register_cuda_reduction_caller("Max", ty, ty)
+    _register_cuda_reduction_caller("Min", ty, ty)
+    _register_cuda_reduction_caller("Sum", ty, ty)
+    _register_cuda_reduction_caller("Mean", ty, types.float64)
+    _register_cuda_reduction_caller("Std", ty, types.float64)
+    _register_cuda_reduction_caller("Var", ty, types.float64)
+    _register_cuda_idx_reduction_caller("IdxMax", ty)
+    _register_cuda_idx_reduction_caller("IdxMin", ty)
 
 
 for attr in ("group_data", "index", "size"):
