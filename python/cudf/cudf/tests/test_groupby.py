@@ -422,7 +422,9 @@ def func(df):
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize("func", ["min", "max", "idxmin", "idxmax"])
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
+)
 @pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
 def test_groupby_apply_jit_reductions_special_vals(
     func, groupby_jit_data, dtype, special_val
