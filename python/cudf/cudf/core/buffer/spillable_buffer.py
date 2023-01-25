@@ -269,7 +269,7 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self, *, mode="write") -> int:
+    def get_ptr(self, *, mode) -> int:
         """Get a device pointer to the memory of the buffer.
 
         If this is called within an `acquire_spill_lock` context,
@@ -457,7 +457,7 @@ class SpillableBufferSlice(SpillableBuffer):
         self._owner = base
         self.lock = base.lock
 
-    def get_ptr(self, *, mode="write") -> int:
+    def get_ptr(self, *, mode) -> int:
         """
         A passthrough method to `SpillableBuffer.get_ptr`
         with factoring in the `offset`.
