@@ -237,4 +237,7 @@ def to_json(
             **kwargs,
         )
     else:
-        raise ValueError(f"`engine` only support {{'auto', 'cudf', 'pandas'}}, got: {engine}")
+        raise ValueError(
+            f"`engine` only support {{'auto', 'cudf', 'pandas'}}, "
+            f"got: {engine}"
+        )
