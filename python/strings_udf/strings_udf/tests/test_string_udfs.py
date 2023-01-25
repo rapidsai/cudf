@@ -10,7 +10,6 @@ from numba.types import CPointer, void
 
 import cudf
 import rmm
-from cudf.core.buffer import acquire_spill_lock
 from cudf.testing._utils import assert_eq
 
 import strings_udf
