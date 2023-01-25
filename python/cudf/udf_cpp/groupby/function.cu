@@ -188,7 +188,6 @@ __device__ T BlockMin(T const* data, int64_t size)
   __shared__ T block_min;
   if (block.thread_rank() == 0) {
     block_min = local_min;
-    printf("min: %lld\n", int64_t(local_min));
   }
   block.sync();
 
