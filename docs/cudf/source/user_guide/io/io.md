@@ -102,7 +102,7 @@ There are four valid values for the environment variable:
 - "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio).
 - "OFF": Completely disable GDS use.
 
-If no value is set, behavior will be the same as the "GDS" option.
+If no value is set, behavior will be the same as the "KVIKIO" option.
 
 This environment variable also affects how cuDF treats GDS errors.
 
