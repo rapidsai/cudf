@@ -27,6 +27,14 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound="SpillableBuffer")
 
 
+def as_spillable_buffer(obj, exposed) -> SpillableBuffer:
+    if hasattr(obj, "__cuda_array_interface__"):
+        return SpillableBuffer._from_device_memory(obj, exposed=exposed)
+    if exposed:
+        raise ValueError("cannot created exposed host memory")
+    return SpillableBuffer._from_host_memory(obj)
+
+
 class SpillLock:
     pass
 
