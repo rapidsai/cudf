@@ -5,18 +5,22 @@ from libcpp.cast cimport dynamic_cast
 # from libcpp cimport bool as cbool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
+from cudf._lib.cpp.aggregation cimport (
+    groupby_aggregation,
+    make_sum_aggregation,
+)
+from cudf._lib.cpp.groupby cimport aggregation_request
+
+from .column_view cimport ColumnView
 #
 # from rmm._lib.device_buffer cimport DeviceBuffer
 #
 # from cudf._lib.cpp.column.column cimport column, column_contents
 # from cudf._lib.cpp.types cimport size_type
 #
-# from .column_view cimport ColumnView
-from cudf._lib.cpp.aggregation cimport (
-    groupby_aggregation,
-    make_sum_aggregation,
-)
+from .table_view cimport TableView
 
 
 # In libcudf we benefit from compile-time checks around which types of
@@ -75,3 +79,42 @@ cdef class AggregationRequest:
                     )
                 )
             )
+
+    # TODO: This API shouldn't be necessary yet, but is currently required
+    # because aggregation requests accept a vector of unique pointers rather
+    # than a vector of references (should be changed).
+    cdef AggregationRequest copy(self):
+        cdef AggregationRequest obj = AggregationRequest.__new__()
+        obj.c_obj.values = self.c_obj.values
+        cdef int i
+        for i in range(self.c_obj.aggregations.size()):
+            obj.c_obj.aggregations.push_back(
+                move(
+                    unique_ptr[groupby_aggregation](
+                        dynamic_cast[gba_ptr](
+                            self.c_obj.aggregations[i].get().clone().release()
+                        )
+                    )
+                )
+            )
+        return obj
+
+
+cdef class GroupBy:
+    def __init__(self, TableView keys):
+        self.c_obj.reset(new groupby(dereference(keys.get())))
+
+    cpdef aggregate(self, list requests):
+        # This copy is necessary because the aggregation request contains a
+        # vector of unique_ptrs rather than references. We need to change that.
+        cdef list new_requests = requests.copy()
+        cdef AggregationRequest request
+        cdef vector[aggregation_request] c_requests
+        for request in new_requests:
+            # TODO: Accessing c_obj directly isn't great.
+            c_requests.push_back(move(request.c_obj))
+        self.get().aggregate(c_requests)
+
+    cdef groupby * get(self) nogil:
+        """Get the underlying groupby object."""
+        return self.c_obj.get()
