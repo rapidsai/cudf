@@ -172,7 +172,7 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
 
     max_group_size = cp.diff(offsets).max()
 
-    if max_group_size >= 1000:
+    if max_group_size >= 256:
         blocklim = 256
     else:
         blocklim = ((max_group_size + 32 - 1) // 32) * 32

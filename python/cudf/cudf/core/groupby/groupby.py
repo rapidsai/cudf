@@ -853,7 +853,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             Optional positional arguments to pass to the function.
         engine: {'cudf', 'jit'}, default 'cudf'
           Selects the GroupBy.apply implementation. Use `jit` to
-          select the numba JIT pipeline.
+          select the numba JIT pipeline. Only certain operations are allowed
+          within the function when using this option: min, max, sum, mean, var,
+          std, idxmax, and idxmin and any arithmetic formula involving them are
+          allowed. Binary operations are not yet supported, so syntax like
+          `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
           <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
@@ -912,6 +916,23 @@ class GroupBy(Serializable, Reducible, Scannable):
                    a  b  c
                 0  1  1  1
                 2  2  1  3
+
+            ``engine='jit'`` can be used to accelerate certain functions,
+            initially those that contain reductions and arithmetic operations
+            between results of those reductions:
+
+            .. code-block::
+
+                >>> import cudf
+                >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
+                >>> df.groupby('a').apply(
+                    lambda group: group['b'].max() - group['b'].min(),
+                    engine='jit'
+                )
+                a  None
+                0  1     1
+                1  2     1
+                2  3     1
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")

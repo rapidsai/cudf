@@ -3,7 +3,6 @@
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
-import os
 
 import cupy
 from numba import config as numba_config, cuda

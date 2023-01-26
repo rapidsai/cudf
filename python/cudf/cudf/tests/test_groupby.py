@@ -2,6 +2,7 @@
 
 import datetime
 import itertools
+import textwrap
 from decimal import Decimal
 
 import numpy as np
@@ -410,10 +411,12 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     # does not play nice with local functions. What's below uses
     # exec as a workaround to write the test functions dynamically
 
-    funcstr = f"""
-def func(df):
-    return df['val1'].{func}()
-    """
+    funcstr = textwrap.dedent(
+        f"""
+        def func(df):
+            return df['val1'].{func}()
+        """
+    )
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
@@ -432,10 +435,12 @@ def test_groupby_apply_jit_reductions_special_vals(
 ):
     # dynamically generate to avoid pickling error.
     # see test_groupby_apply_jit_reductions for details.
-    funcstr = f"""
-def func(df):
-    return df['val1'].{func}()
-    """
+    funcstr = textwrap.dedent(
+        f"""
+            def func(df):
+                return df['val1'].{func}()
+        """
+    )
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
@@ -454,10 +459,12 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
 ):
     # dynamically generate to avoid pickling error.
     # see test_groupby_apply_jit_reductions for details.
-    funcstr = f"""
-def func(df):
-    return df['val1'].{func}()
-    """
+    funcstr = textwrap.dedent(
+        f"""
+            def func(df):
+                return df['val1'].{func}()
+        """
+    )
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
