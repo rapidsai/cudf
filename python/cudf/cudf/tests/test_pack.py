@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -129,7 +129,9 @@ def assert_packed_frame_unique_pointers(df):
 
     for col in df:
         if df._data[col].data:
-            assert df._data[col].data.ptr != unpacked._data[col].data.ptr
+            assert df._data[col].data.get_ptr(mode="read") != unpacked._data[
+                col
+            ].data.get_ptr(mode="read")
 
 
 def test_packed_dataframe_unique_pointers_numeric():
