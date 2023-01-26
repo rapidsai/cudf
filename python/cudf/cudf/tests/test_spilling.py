@@ -556,7 +556,7 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
         b3 = as_buffer(b1.memory_info()[0], size=b1.size, owner=b1)
 
     with acquire_spill_lock():
-        b3 = as_buffer(b1.get_ptr(), size=b1.size, owner=b1)
+        b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
     assert isinstance(b3, SpillableBufferSlice)
     assert b3.owner is b1
 
