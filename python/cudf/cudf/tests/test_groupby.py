@@ -479,10 +479,9 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
     )
 
     grouped = groupby_jit_data.groupby("key1")
-
-    # for all nans or infs, return the first occurrence
-    # this is equivalent to the offsets except the last one
-    expect[None] = grouped._grouped()[1][:-1]
+    sorted = grouped._grouped()[3].to_pandas()
+    expect_vals = sorted["key1"].drop_duplicates().index
+    expect[None] = expect_vals
 
     got = grouped.apply(func, engine="jit")
     assert_eq(expect, got)
