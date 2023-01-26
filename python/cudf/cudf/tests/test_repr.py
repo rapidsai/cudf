@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -31,7 +31,7 @@ def test_null_series(nrows, dtype):
     sr[np.random.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
-            sr._column.data_array_view.copy_to_host(),
+            sr._column.data_array_view(mode="read").copy_to_host(),
             dtype=np_dtypes_to_pandas_dtypes.get(
                 cudf.dtype(dtype), cudf.dtype(dtype)
             ),

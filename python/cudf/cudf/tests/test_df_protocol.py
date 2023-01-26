@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from typing import Any, Tuple
 
@@ -41,7 +41,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
 
     if dtype[0] != _DtypeKind.BOOL:
         array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
-        col_array = cp.asarray(cudfcol.data_array_view).get()
+        col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
         assert_eq(
             array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
             col_array[non_null_idxs.to_numpy()].flatten(),
