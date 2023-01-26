@@ -1,13 +1,15 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import functools
 from typing import Any, Dict
 
+import cupy as cp
 from numba import cuda
 from numba.core.utils import pysignature
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
@@ -139,21 +141,25 @@ class ApplyKernelCompilerBase:
         self.cache_key = cache_key
         self.kernel = self.compile(func, sig.parameters.keys(), kwargs.keys())
 
+    @acquire_spill_lock()
     def run(self, df, **launch_params):
         # Get input columns
         if isinstance(self.incols, dict):
             inputs = {
-                v: df[k]._column.data_array_view
+                v: df[k]._column.data_array_view(mode="read")
                 for (k, v) in self.incols.items()
             }
         else:
-            inputs = {k: df[k]._column.data_array_view for k in self.incols}
+            inputs = {
+                k: df[k]._column.data_array_view(mode="read")
+                for k in self.incols
+            }
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
                 len(df), dt, False
-            ).data_array_view
+            ).data_array_view(mode="write")
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -174,7 +180,7 @@ class ApplyKernelCompilerBase:
             )
             if out_mask is not None:
                 outdf._data[k] = outdf[k]._column.set_mask(
-                    out_mask.data_array_view
+                    out_mask.data_array_view(mode="write")
                 )
 
         return outdf
@@ -213,11 +219,12 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return column.arange(0, size, chunks).data_array_view
+            return cuda.as_cuda_array(
+                cp.arange(start=0, stop=size, step=chunks)
+            ).view("int64")
         else:
             # *chunks* is an array of chunk leading offset
-            chunks = column.as_column(chunks)
-            return chunks.data_array_view
+            return cuda.as_cuda_array(cp.asarray(chunks)).view("int64")
 
 
 def _make_row_wise_kernel(func, argnames, extras):

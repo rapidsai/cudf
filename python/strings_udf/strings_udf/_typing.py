@@ -10,6 +10,8 @@ from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 from cudf.core.udf.utils import _get_extensionty_size
+import rmm
+
 
 # libcudf size_type
 size_type = types.int32
@@ -102,7 +104,9 @@ class StrViewArgHandler:
         if isinstance(ty, types.CPointer) and isinstance(
             ty.dtype, (StringView, UDFString)
         ):
-            return types.uint64, val.ptr
+            return types.uint64, val.ptr if isinstance(
+                val, rmm._lib.device_buffer.DeviceBuffer
+            ) else val.get_ptr(mode="read")
         else:
             return ty, val
 
