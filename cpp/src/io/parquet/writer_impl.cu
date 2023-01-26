@@ -31,6 +31,7 @@
 #include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -40,7 +41,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/detail/get_value.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -1350,27 +1350,25 @@ void writer::impl::init_state()
 size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.num_children() <= 1) {
-    // TODO need actual data size. 
+    // TODO need actual data size.
     return 16 * column.size();
   }
 
   if (column.type().id() == type_id::STRING) {
-    auto const& child0 = column.child(0); // should be offsets
-    size_type colsize = cudf::detail::get_value<size_type>(child0, column.size(), stream);
+    auto const& child0 = column.child(0);  // should be offsets
+    size_type colsize  = cudf::detail::get_value<size_type>(child0, column.size(), stream);
     return colsize;
-  }
-  else if (column.type().id() == type_id::STRUCT) {
-    auto scol = structs_column_view(column);
+  } else if (column.type().id() == type_id::STRUCT) {
+    auto scol     = structs_column_view(column);
     size_type ret = 0;
     for (int i = 0; i < scol.num_children(); i++)
       ret += column_size(scol.get_sliced_child(i), stream);
     return ret;
-  }
-  else if (column.type().id() == type_id::LIST) {
+  } else if (column.type().id() == type_id::LIST) {
     auto lcol = lists_column_view(column);
     return column_size(lcol.get_sliced_child(stream), stream);
   }
-  
+
   return 0;
 }
 
@@ -1446,16 +1444,15 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
                               cudf::io::default_max_page_size_bytes;
 
-    for (auto col = 0; col < table.num_columns(); col++) {
-      auto const& column = table.column(col);
-      auto const colsize = column_size(column, stream);
-      auto avg_len = colsize / table.num_rows();
+    std::for_each(
+      table.begin(), table.end(), [this, num_rows = table.num_rows()](auto const& column) {
+        auto const avg_len = column_size(column, stream) / num_rows;
 
-      if (avg_len > 0) {
-        size_type frag_size = max_page_size_bytes / avg_len;
-        max_page_fragment_size_ = std::min(frag_size, max_page_fragment_size_);
-      }
-    }
+        if (avg_len > 0) {
+          size_type frag_size     = max_page_size_bytes / avg_len;
+          max_page_fragment_size_ = std::min(frag_size, max_page_fragment_size_);
+        }
+      });
   }
 
   std::vector<int> num_frag_in_part;
