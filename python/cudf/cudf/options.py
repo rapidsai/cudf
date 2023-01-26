@@ -251,11 +251,9 @@ _register_option(
     textwrap.dedent(
         """
         Default behavior of performing shallow copies.
-        If set to `False`, each shallow copy will perform a true shallow copy.
-        If set to `True`, each shallow copy will perform a shallow copy
-        with underlying data actually referring to the actual column, in this
-        case a copy is only made when there is a write operation performed on
-        the column.
+        If set to `False`, disables copy-on-write.
+        If set to `True`, enables copy-on-write.
+        Read more at: :ref: copy-on-write-user-doc
         \tValid values are True or False. Default is False.
     """
     ),
