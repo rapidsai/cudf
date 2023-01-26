@@ -34,7 +34,11 @@ from cudf.api.types import (
     is_number,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -564,6 +568,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return super(NumericalColumn, col).fillna(fill_value, method)
 
+    @acquire_spill_lock()
     def _find_value(
         self, value: ScalarLike, closest: bool, find: Callable, compare: str
     ) -> int:
@@ -573,14 +578,14 @@ class NumericalColumn(NumericalBaseColumn):
         found = 0
         if len(self):
             found = find(
-                self._data_array_view,
+                self.data_array_view(mode="read"),
                 value,
                 mask=self.mask,
             )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
-                    self._data_array_view,
+                    self.data_array_view(mode="read"),
                     value,
                     mask=self.mask,
                     compare=compare,

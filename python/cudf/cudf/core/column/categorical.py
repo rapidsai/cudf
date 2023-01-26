@@ -956,9 +956,10 @@ class CategoricalColumn(column.ColumnBase):
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view(mode=mode)
 
     def unique(self, preserve_order=False) -> CategoricalColumn:
         codes = self.as_numerical.unique(preserve_order=preserve_order)

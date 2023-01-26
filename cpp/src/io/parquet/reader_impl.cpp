@@ -24,9 +24,10 @@ namespace cudf::io::detail::parquet {
 
 void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 {
-  auto& chunks       = _file_itm_data.chunks;
-  auto& pages        = _file_itm_data.pages_info;
-  auto& page_nesting = _file_itm_data.page_nesting_info;
+  auto& chunks              = _file_itm_data.chunks;
+  auto& pages               = _file_itm_data.pages_info;
+  auto& page_nesting        = _file_itm_data.page_nesting_info;
+  auto& page_nesting_decode = _file_itm_data.page_nesting_decode_info;
 
   // Should not reach here if there is no page data.
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
@@ -39,7 +40,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths, _stream);
+  auto chunk_nested_valids = hostdevice_vector<bitmask_type*>(sum_max_depths, _stream);
   auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, _stream);
   auto chunk_offsets       = std::vector<size_t>();
 
@@ -124,6 +125,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   pages.device_to_host(_stream);
   page_nesting.device_to_host(_stream);
+  page_nesting_decode.device_to_host(_stream);
   _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
@@ -166,8 +168,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     gpu::ColumnChunkDesc* col          = &chunks[pi->chunk_idx];
     input_column_info const& input_col = _input_columns[col->src_col_index];
 
-    int index                 = pi->nesting - page_nesting.device_ptr();
-    gpu::PageNestingInfo* pni = &page_nesting[index];
+    int index                        = pi->nesting_decode - page_nesting_decode.device_ptr();
+    gpu::PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
 
     auto* cols = &_output_buffers;
     for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
@@ -178,7 +180,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       if (chunk_nested_valids.host_ptr(chunk_offsets[pi->chunk_idx])[l_idx] == nullptr) {
         continue;
       }
-      out_buf.null_count() += pni[l_idx].null_count;
+      out_buf.null_count() += pndi[l_idx].null_count;
     }
   }
 
