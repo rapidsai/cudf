@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import enum
 from collections import abc
@@ -89,7 +89,7 @@ class _CuDFBuffer:
         """
         Pointer to start of the buffer as an integer.
         """
-        return self._buf.ptr
+        return self._buf.get_ptr(mode="write")
 
     def __dlpack__(self):
         # DLPack not implemented in NumPy yet, so leave it out here.

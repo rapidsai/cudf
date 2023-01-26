@@ -145,7 +145,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
     def __getitem__(self, i):
         if i == 0:
-            return self._buf.ptr
+            return self._buf.get_ptr(mode="write")
         elif i == 1:
             return False
         raise IndexError("tuple index out of range")
@@ -359,7 +359,7 @@ class SpillableBuffer(Buffer):
             self.spill(target="gpu")
             self._spill_locks.add(spill_lock)
 
-    def get_ptr(self) -> int:
+    def get_ptr(self, *, mode) -> int:
         """Get a device pointer to the memory of the buffer.
 
         If this is called within an `acquire_spill_lock` context,
@@ -369,8 +369,8 @@ class SpillableBuffer(Buffer):
         If this is *not* called within a `acquire_spill_lock` context,
         this buffer is marked as unspillable permanently.
 
-        Return
-        ------
+        Returns
+        -------
         int
             The device pointer as an integer
         """
@@ -408,18 +408,6 @@ class SpillableBuffer(Buffer):
                 self._ptr_desc["memoryview"], copy=False
             ).__array_interface__["data"][0]
         return (ptr, self.nbytes, self._ptr_desc["type"])
-
-    @property
-    def ptr(self) -> int:
-        """Access the memory directly
-
-        Notice, this will mark the buffer as "exposed" and make
-        it unspillable permanently.
-
-        Consider using `.get_ptr()` instead.
-        """
-        self.mark_exposed()
-        return self._ptr
 
     @property
     def owner(self) -> Any:
@@ -559,12 +547,12 @@ class SpillableBufferSlice(SpillableBuffer):
         self._owner = base
         self.lock = base.lock
 
-    @property
-    def ptr(self) -> int:
-        return self._base.ptr + self._offset
-
-    def get_ptr(self) -> int:
-        return self._base.get_ptr() + self._offset
+    def get_ptr(self, *, mode) -> int:
+        """
+        A passthrough method to `SpillableBuffer.get_ptr`
+        with factoring in the `offset`.
+        """
+        return self._base.get_ptr(mode=mode) + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         return SpillableBufferSlice(
