@@ -89,13 +89,11 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
-  if (column.num_children() == 0) {
-    return size_of(column.type()) * column.size();
-  }
+  if (column.num_children() == 0) { return size_of(column.type()) * column.size(); }
 
   if (column.type().id() == type_id::STRING) {
-    auto const& child0 = column.child(0);  // should be offsets
-    size_type colsize  = cudf::detail::get_value<size_type>(child0, column.size(), stream);
+    auto scol         = strings_column_view(column);
+    size_type colsize = cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream);
     return colsize;
   } else if (column.type().id() == type_id::STRUCT) {
     auto scol     = structs_column_view(column);
