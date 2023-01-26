@@ -211,7 +211,7 @@ class Buffer(Serializable):
         """
         if deep:
             return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self.get_ptr(), size=self.size)
+                rmm.DeviceBuffer(ptr=self.get_ptr("read"), size=self.size)
             )
         else:
             return self[:]
@@ -276,12 +276,12 @@ class Buffer(Serializable):
             version=0,
         )
 
-    def get_ptr(self, *, mode="write") -> int:
+    def get_ptr(self, *, mode) -> int:
         """Device pointer to the start of the buffer.
 
         Parameters
         ----------
-        mode : str, default 'write'
+        mode : str
             Supported values are {"read", "write"}
             If "write", the data pointed to may be modified
             by the caller. If "read", the data pointed to
@@ -289,11 +289,6 @@ class Buffer(Serializable):
             Failure to fulfill this contract will cause
             incorrect behavior.
 
-        Notes
-        -----
-        In case of `Buffer` class, any value passed to `mode` is a no-op.
-        The significance of each value explained above is a
-        guidance for any subclass of `Buffer`.
 
         See Also
         --------

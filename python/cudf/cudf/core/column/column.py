@@ -135,7 +135,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         numba.cuda.cudadrv.devicearray.DeviceNDArray
         """
-
         if self.data is not None:
             if mode == "read":
                 obj = self.data._readonly_proxy_cai_obj
@@ -1917,6 +1916,8 @@ def as_column(
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
         data = as_buffer(arbitrary)
+        if cudf.get_option("copy_on_write"):
+            data._zero_copied = True
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
