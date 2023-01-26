@@ -561,13 +561,15 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     assert b3.owner is b1
 
     b4 = as_buffer(
-        b1.ptr + data.itemsize, size=b1.size - data.itemsize, owner=b3
+        b1.get_ptr(mode="write") + data.itemsize,
+        size=b1.size - data.itemsize,
+        owner=b3,
     )
     assert isinstance(b4, SpillableBufferSlice)
     assert b4.owner is b1
     assert all(cupy.array(b4.memoryview()) == data[1:])
 
-    b5 = as_buffer(b4.ptr, size=b4.size - 1, owner=b4)
+    b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
     assert isinstance(b5, SpillableBufferSlice)
     assert b5.owner is b1
     assert all(cupy.array(b5.memoryview()) == data[1:-1])
