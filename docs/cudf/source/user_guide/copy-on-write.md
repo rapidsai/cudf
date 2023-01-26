@@ -81,9 +81,7 @@ the original object it was viewing and thus a separate copy is created and then 
 
 ## Advantages
 
-1. With copy-on-write enabled and by requesting `.copy(deep=False)`, the GPU memory usage can be reduced drastically if you are not performing
-write operations on all of those copies. This will also increase the speed at which objects are created for execution of your ETL workflow.
-2. With the concept of views going away, every object is a copy of it's original object. This will bring consistency across operations and cudf closer to parity with
+1. With the concept of views going away, every object is a copy of it's original object. This will bring consistency across operations and cudf closer to parity with
 pandas. Following is one of the inconsistency:
 
 ```python
@@ -158,6 +156,8 @@ dtype: int64
 4    5
 dtype: int64
 ```
+2. There are numerous other inconsistencies, which are solved by copy-on-write. Read more about them [here](https://phofl.github.io/cow-introduction.html).
+
 
 ## How to disable it
 

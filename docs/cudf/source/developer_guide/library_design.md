@@ -325,9 +325,9 @@ the public usage [here](copy-on-write-user-doc) of this functionality before rea
 below.
 
 The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer.ptr` we generate [weak references](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
+With the help of `CopyOnWriteBuffer._ptr` we generate [weak references](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
 This is a mapping from `ptr` keys to `WeakSet`s containing references to `CopyOnWriterBuffer` objects. This
-means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `.ptr`
+means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `._ptr`
 i.e., if they are all pointing to the same device memory.
 
 When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
