@@ -119,7 +119,7 @@ __device__ double BlockMean(T const* data, int64_t size)
   block.sync();
 
   device_sum<T>(block, data, size, &block_sum);
-  return block_sum / static_cast<T>(size);
+  return static_cast<double>(block_sum) / static_cast<double>(size);
 }
 
 template <typename T>
