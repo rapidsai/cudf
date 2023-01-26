@@ -9,9 +9,8 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 
-from cudf.core.udf.utils import _get_extensionty_size
 import rmm
-
+from cudf.core.udf.utils import _get_extensionty_size
 
 # libcudf size_type
 size_type = types.int32
