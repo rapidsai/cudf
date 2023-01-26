@@ -87,6 +87,30 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
+{
+  if (column.num_children() <= 1) {
+    return size_of(column.type()) * column.size();
+  }
+
+  if (column.type().id() == type_id::STRING) {
+    auto const& child0 = column.child(0);  // should be offsets
+    size_type colsize  = cudf::detail::get_value<size_type>(child0, column.size(), stream);
+    return colsize;
+  } else if (column.type().id() == type_id::STRUCT) {
+    auto scol     = structs_column_view(column);
+    size_type ret = 0;
+    for (int i = 0; i < scol.num_children(); i++)
+      ret += column_size(scol.get_sliced_child(i), stream);
+    return ret;
+  } else if (column.type().id() == type_id::LIST) {
+    auto lcol = lists_column_view(column);
+    return column_size(lcol.get_sliced_child(stream), stream);
+  }
+
+  return 0;
+}
+
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1345,31 +1369,6 @@ void writer::impl::init_state()
     sink->host_write(&fhdr, sizeof(fhdr));
   }
   std::fill_n(current_chunk_offset.begin(), current_chunk_offset.size(), sizeof(file_header_s));
-}
-
-size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
-{
-  if (column.num_children() <= 1) {
-    // TODO need actual data size.
-    return 16 * column.size();
-  }
-
-  if (column.type().id() == type_id::STRING) {
-    auto const& child0 = column.child(0);  // should be offsets
-    size_type colsize  = cudf::detail::get_value<size_type>(child0, column.size(), stream);
-    return colsize;
-  } else if (column.type().id() == type_id::STRUCT) {
-    auto scol     = structs_column_view(column);
-    size_type ret = 0;
-    for (int i = 0; i < scol.num_children(); i++)
-      ret += column_size(scol.get_sliced_child(i), stream);
-    return ret;
-  } else if (column.type().id() == type_id::LIST) {
-    auto lcol = lists_column_view(column);
-    return column_size(lcol.get_sliced_child(stream), stream);
-  }
-
-  return 0;
 }
 
 void writer::impl::write(table_view const& table, std::vector<partition_info> const& partitions)
