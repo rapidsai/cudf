@@ -176,7 +176,9 @@ class Buffer(Serializable):
         """
         return self._from_device_memory(
             cuda_array_interface_wrapper(
-                ptr=self.ptr + offset, size=size, owner=self.owner
+                ptr=self.get_ptr(mode="read") + offset,
+                size=size,
+                owner=self.owner,
             )
         )
 
@@ -203,11 +205,6 @@ class Buffer(Serializable):
         return self._size
 
     @property
-    def ptr(self) -> int:
-        """Device pointer to the start of the buffer."""
-        return self._ptr
-
-    @property
     def owner(self) -> Any:
         """Object owning the memory of the buffer."""
         return self._owner
@@ -215,18 +212,74 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> Mapping:
         """Implementation of the CUDA Array Interface."""
+        return self._get_cuda_array_interface(readonly=False)
+
+    def _get_cuda_array_interface(self, readonly=False):
+        """Helper function to create a CUDA Array Interface.
+
+        Parameters
+        ----------
+        readonly : bool, default False
+            If True, returns a CUDA Array Interface with
+            readonly flag set to True.
+            If False, returns a CUDA Array Interface with
+            readonly flag set to False.
+
+        Returns
+        -------
+        dict
+        """
         return {
-            "data": (self.ptr, False),
+            "data": (
+                self.get_ptr(mode="read" if readonly else "write"),
+                readonly,
+            ),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
 
+    @property
+    def _readonly_proxy_cai_obj(self):
+        """
+        Returns a proxy object with a read-only CUDA Array Interface.
+        """
+        return cuda_array_interface_wrapper(
+            ptr=self.get_ptr(mode="read"),
+            size=self.size,
+            owner=self,
+            readonly=True,
+            typestr="|u1",
+            version=0,
+        )
+
+    def get_ptr(self, *, mode) -> int:
+        """Device pointer to the start of the buffer.
+
+        Parameters
+        ----------
+        mode : str
+            Supported values are {"read", "write"}
+            If "write", the data pointed to may be modified
+            by the caller. If "read", the data pointed to
+            must not be modified by the caller.
+            Failure to fulfill this contract will cause
+            incorrect behavior.
+
+
+        See Also
+        --------
+        SpillableBuffer.get_ptr
+        """
+        return self._ptr
+
     def memoryview(self) -> memoryview:
         """Read-only access to the buffer through host memory."""
         host_buf = host_memory_allocation(self.size)
-        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, host_buf)
+        rmm._lib.device_buffer.copy_ptr_to_host(
+            self.get_ptr(mode="read"), host_buf
+        )
         return memoryview(host_buf).toreadonly()
 
     def serialize(self) -> Tuple[dict, list]:

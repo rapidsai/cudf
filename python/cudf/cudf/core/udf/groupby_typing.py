@@ -2,7 +2,6 @@
 from typing import Any, Dict
 
 import numba
-import pandas as pd
 from numba import cuda, types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -16,9 +15,7 @@ from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_registry
 from numba.np import numpy_support
 
-index_default_type = numpy_support.from_dtype(
-    pd.RangeIndex(0, 0).dtype
-)  # int64
+index_default_type = types.int64
 group_size_type = types.int64
 SUPPORTED_GROUPBY_NUMBA_TYPES = [types.int64, types.float64]
 SUPPORTED_GROUPBY_NUMPY_TYPES = [

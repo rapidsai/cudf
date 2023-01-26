@@ -41,7 +41,7 @@ function(copy_ptx_to_location target destination)
     CONTENT
       "
 set(ptx_paths \"$<TARGET_OBJECTS:${target}>\")
-file(COPY \${ptx_paths} DESTINATION \"${destination}\")"
+file(COPY_FILE \${ptx_paths} \"${destination}/${target}.ptx\")"
   )
 
   add_custom_target(
