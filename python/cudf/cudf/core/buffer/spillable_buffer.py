@@ -343,10 +343,6 @@ class SpillableBuffer(Buffer):
             self._exposed = True
             self._last_accessed = time.monotonic()
 
-    @property
-    def mutable_ptr(self) -> int:
-        return self.get_ptr()
-
     def spill_lock(self, spill_lock: SpillLock) -> None:
         """Spill lock the buffer
 
@@ -556,6 +552,7 @@ class SpillableBufferSlice(SpillableBuffer):
         A passthrough method to `SpillableBuffer.get_ptr`
         with factoring in the `offset`.
         """
+
         return self._base.get_ptr(mode=mode) + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:

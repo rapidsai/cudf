@@ -211,7 +211,7 @@ cdef class Column:
             mask = None
         elif type(value_cai) is property:
             if isinstance(value, CopyOnWriteBuffer):
-                value = value._get_readonly_proxy_obj
+                value = value._readonly_proxy_cai_obj
             if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view(mode="write")

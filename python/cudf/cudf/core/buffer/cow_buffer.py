@@ -95,28 +95,32 @@ class CopyOnWriteBuffer(Buffer):
         """
         return len(self._instances) > 1
 
-    @property
-    def ptr(self) -> int:
+    def get_ptr(self, mode: str = "write") -> int:
         """Device pointer to the start of the buffer.
 
-        This will trigger a deep copy if there are any weak references.
-        The Buffer would be marked as zero copied.
-        """
-        self._unlink_shared_buffers()
-        self._zero_copied = True
-        return self._ptr
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {"read", "write"}
+            If "write", when weak-references exist, they
+            are unlinked and the data pointed to may be modified
+            by the caller. If "read", the data pointed to
+            must not be modified by the caller.
+            Failure to fulfill this contract will cause
+            incorrect behavior.
 
-    @property
-    def mutable_ptr(self) -> int:
-        """Device pointer to the start of the buffer.
-
-        This will trigger a deep copy if there are any weak references.
+        See Also
+        --------
+        Buffer.get_ptr
+        SpillableBuffer.get_ptr
         """
-        # Shouldn't need to mark the Buffer as zero copied,
-        # because this API is used by libcudf only to create
-        # mutable views.
-        self._unlink_shared_buffers()
-        return self._ptr
+        if mode == "read":
+            return self._ptr
+        elif mode == "write":
+            self._unlink_shared_buffers()
+            return self._ptr
+        else:
+            raise ValueError(f"Incorrect mode passed : {mode}")
 
     def _getitem(self, offset: int, size: int) -> Buffer:
         """
@@ -179,7 +183,7 @@ class CopyOnWriteBuffer(Buffer):
         }
 
     @property
-    def _get_readonly_proxy_obj(self) -> dict:
+    def _readonly_proxy_cai_obj(self) -> dict:
         """
         Returns a proxy object with a read-only CUDA Array Interface.
 

@@ -418,13 +418,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view(mode="read")
 
-    @property
-    def _nullmask(self) -> Buffer:
-        """The gpu buffer for the null-mask"""
-        if not self.nullable:
-            raise ValueError("Column has no null mask")
-        return self._mask_array_view
-
     def force_deep_copy(self: T) -> T:
         """
         A method to create deep copy irrespective of whether
@@ -1923,6 +1916,8 @@ def as_column(
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
         data = as_buffer(arbitrary)
+        if cudf.get_option("copy_on_write"):
+            data._zero_copied = True
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:

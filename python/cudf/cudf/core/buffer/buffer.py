@@ -209,12 +209,15 @@ class Buffer(Serializable):
         -------
         Buffer
         """
-        if not deep:
-            return self[:]
+        if deep:
+            with cudf.core.buffer.acquire_spill_lock():
+                return self._from_device_memory(
+                    rmm.DeviceBuffer(
+                        ptr=self.get_ptr(mode="read"), size=self.size
+                    )
+                )
         else:
-            return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self.ptr, size=self.size)
-            )
+            return self[:]
 
     @property
     def size(self) -> int:
@@ -293,6 +296,7 @@ class Buffer(Serializable):
         See Also
         --------
         SpillableBuffer.get_ptr
+        CopyOnWriteBuffer.get_ptr
         """
         return self._ptr
 
