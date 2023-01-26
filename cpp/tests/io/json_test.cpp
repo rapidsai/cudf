@@ -1717,8 +1717,7 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<std::byte const>(
-        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size())})
+      cudf::io::source_info{cudf::host_span<char const>(buffer)})
       .dtypes({data_type{type_to_id<TypeParam>(), 0}})
       .lines(true)
       .legacy(true);  // Legacy behavior; not aligned with JSON specs
@@ -1737,7 +1736,8 @@ TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
   std::string const data = "{\"col\":0}";
   auto const buffer =
     cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(data.data()), data.size());
-  auto const src = cudf::io::source_info{{buffer, buffer}};
+  auto const src =
+    cudf::io::source_info{std::vector<cudf::host_span<std::byte const>>{buffer, buffer}};
 
   cudf::io::json_reader_options const not_lines_opts = cudf::io::json_reader_options::builder(src);
   EXPECT_THROW(cudf::io::read_json(not_lines_opts), cudf::logic_error);
@@ -1780,10 +1780,9 @@ TEST_F(JsonReaderTest, TrailingCommas)
     R"([{"a": 1,}, {"a": null, "b": [null,],}])",
   };
   for (size_t i = 0; i < json_valid.size(); i++) {
-    auto const& json_string = json_valid[i];
-    cudf::io::json_reader_options json_parser_options =
-      cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>(
-        reinterpret_cast<std::byte const*>(json_string.data()), json_string.size())});
+    auto const& json_string                           = json_valid[i];
+    cudf::io::json_reader_options json_parser_options = cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_string.data(), json_string.size()});
     EXPECT_NO_THROW(cudf::io::read_json(json_parser_options)) << "Failed on test case " << i;
   }
 
