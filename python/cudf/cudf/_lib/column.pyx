@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
-import inspect
 
 import cupy as cp
 import numpy as np
@@ -198,20 +197,9 @@ cdef class Column:
             "expected " + str(required_num_bytes) + " bytes."
         )
 
-        # Because hasattr will trigger invocation of
-        # `__cuda_array_interface__` which could
-        # be expensive in CopyOnWriteBuffer case.
-        value_cai = inspect.getattr_static(
-            value,
-            "__cuda_array_interface__",
-            None
-        )
-
         if value is None:
             mask = None
-        elif type(value_cai) is property:
-            if isinstance(value, CopyOnWriteBuffer):
-                value = value._readonly_proxy_cai_obj
+        elif hasattr(value, "__cuda_array_interface__"):
             if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
                 if isinstance(value, Column):
                     value = value.data_array_view(mode="write")
