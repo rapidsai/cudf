@@ -1441,15 +1441,17 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
                               cudf::io::default_max_page_size_bytes;
 
-    std::for_each(
-      table.begin(), table.end(), [this, num_rows = table.num_rows()](auto const& column) {
-        auto const avg_len = column_size(column, stream) / num_rows;
+    if (table.num_rows() > 0) {
+      std::for_each(
+        table.begin(), table.end(), [this, num_rows = table.num_rows()](auto const& column) {
+          auto const avg_len = column_size(column, stream) / num_rows;
 
-        if (avg_len > 0) {
-          size_type frag_size     = max_page_size_bytes / avg_len;
-          max_page_fragment_size_ = std::min(frag_size, max_page_fragment_size_);
-        }
-      });
+          if (avg_len > 0) {
+            size_type frag_size     = max_page_size_bytes / avg_len;
+            max_page_fragment_size_ = std::min(frag_size, max_page_fragment_size_);
+          }
+        });
+    }
   }
 
   std::vector<int> num_frag_in_part;
