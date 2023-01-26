@@ -89,7 +89,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
-  if (column.num_children() <= 1) {
+  if (column.num_children() == 0) {
     return size_of(column.type()) * column.size();
   }
 
