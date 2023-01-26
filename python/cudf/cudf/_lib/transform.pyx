@@ -62,7 +62,9 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
                         "cudf.core.buffer.Buffer")
-    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
+    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(
+        mask_buffer.get_ptr(mode="read")
+    )
 
     cdef unique_ptr[column] result
     with nogil:
