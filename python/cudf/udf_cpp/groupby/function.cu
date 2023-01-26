@@ -186,9 +186,7 @@ __device__ T BlockMin(T const* data, int64_t size)
   auto local_min = cudf::DeviceMin::identity<T>();
 
   __shared__ T block_min;
-  if (block.thread_rank() == 0) {
-    block_min = local_min;
-  }
+  if (block.thread_rank() == 0) { block_min = local_min; }
   block.sync();
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
