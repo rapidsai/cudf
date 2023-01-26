@@ -64,7 +64,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, as_buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -113,19 +113,71 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             {None: self.copy(deep=False)}
         )
 
-    @property
-    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+    def data_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
-        """
-        return cuda.as_cuda_array(self.data).view(self.dtype)
 
-    @property
-    def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
+        """
+        if self.data is not None:
+            if mode == "read":
+                obj = self.data._readonly_proxy_cai_obj
+            elif mode == "write":
+                obj = self.data
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(self.dtype)
+
+    def mask_array_view(
+        self, *, mode="write"
+    ) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
+
+        Parameters
+        ----------
+        mode : str, default 'write'
+            Supported values are {'read', 'write'}
+            If 'write' is passed, a device array object
+            with readonly flag set to False in CAI is returned.
+            If 'read' is passed, a device array object
+            with readonly flag set to True in CAI is returned.
+            This also means, If the caller wishes to modify
+            the data returned through this view, they must
+            pass mode="write", else pass mode="read".
+
+        Returns
+        -------
+        numba.cuda.cudadrv.devicearray.DeviceNDArray
         """
-        return cuda.as_cuda_array(self.mask).view(mask_dtype)
+        if self.mask is not None:
+            if mode == "read":
+                obj = self.mask._readonly_proxy_cai_obj
+            elif mode == "write":
+                obj = self.mask
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+        else:
+            obj = None
+        return cuda.as_cuda_array(obj).view(mask_dtype)
 
     def __len__(self) -> int:
         return self.size
@@ -163,7 +215,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return self.data_array_view.copy_to_host()
+        with acquire_spill_lock():
+            return self.data_array_view(mode="read").copy_to_host()
 
     @property
     def values(self) -> "cupy.ndarray":
@@ -176,7 +229,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self.data_array_view)
+        return cupy.asarray(self.data_array_view(mode="write"))
 
     def find_and_replace(
         self: T,
@@ -363,7 +416,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
-        return self.mask_array_view
+        return self.mask_array_view(mode="read")
 
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
