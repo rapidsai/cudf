@@ -210,9 +210,12 @@ class Buffer(Serializable):
         Buffer
         """
         if deep:
-            return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self.get_ptr("read"), size=self.size)
-            )
+            with cudf.core.buffer.acquire_spill_lock():
+                return self._from_device_memory(
+                    rmm.DeviceBuffer(
+                        ptr=self.get_ptr(mode="read"), size=self.size
+                    )
+                )
         else:
             return self[:]
 
