@@ -569,7 +569,7 @@ public class Rmm {
   static native long newEventHandlerResourceAdaptor(long handle, long trackerHandle,
       RmmEventHandler handler, long[] allocThresholds, long[] deallocThresholds, boolean debug);
 
-  static native long releaseEventHandlerResourceAdaptor(long hande, boolean debug);
+  static native long releaseEventHandlerResourceAdaptor(long handle, boolean debug);
 
   private static native void setCurrentDeviceResourceInternal(long newHandle);
 }
