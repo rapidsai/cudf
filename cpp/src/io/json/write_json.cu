@@ -19,7 +19,7 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
-#include "io/csv/durations.hpp"
+#include <io/csv/durations.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -191,10 +191,11 @@ struct concat_structs_base {
 
       write_separator = write_separator || include_element;
     }
-    if (d_buffer) d_buffer = strings::detail::copy_string(d_buffer, row_suffix);
-    bytes += row_suffix.size_bytes();
-
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (d_buffer) {
+      d_buffer = strings::detail::copy_string(d_buffer, row_suffix);
+    } else {
+      d_offsets[idx] = bytes + row_suffix.size_bytes();
+    }
   }
 };
 
@@ -230,14 +231,14 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns == column_names.size(),
                "Number of column names should be equal to number of columns in the table");
+  auto const strings_count = strings_columns.num_rows();
+  if (strings_count == 0)  // empty begets empty
+    return make_empty_column(type_id::STRING);
   // check all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
                            strings_columns.end(),
                            [](auto const& c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
-  auto const strings_count = strings_columns.num_rows();
-  if (strings_count == 0)  // empty begets empty
-    return make_empty_column(type_id::STRING);
 
   // Create device views from the strings columns.
   auto d_table        = table_device_view::create(strings_columns, stream);
@@ -284,7 +285,6 @@ struct column_to_strings_fn {
   {
     // Note: the case (not std::is_same_v<column_type, bool>)  is already covered by is_integral)
     return not((std::is_same_v<column_type, cudf::string_view>) ||
-               //  (std::is_same_v<column_type, cudf::struct_view>) ||
                (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
                (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
                (cudf::is_duration<column_type>()));
