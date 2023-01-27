@@ -92,17 +92,18 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
   if (column.num_children() == 0) { return size_of(column.type()) * column.size(); }
 
   if (column.type().id() == type_id::STRING) {
-    auto scol = strings_column_view(column);
+    auto const scol = strings_column_view(column);
     return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
            cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
   } else if (column.type().id() == type_id::STRUCT) {
-    auto scol     = structs_column_view(column);
-    size_type ret = 0;
-    for (int i = 0; i < scol.num_children(); i++)
+    auto const scol = structs_column_view(column);
+    size_type ret   = 0;
+    for (int i = 0; i < scol.num_children(); i++) {
       ret += column_size(scol.get_sliced_child(i), stream);
+    }
     return ret;
   } else if (column.type().id() == type_id::LIST) {
-    auto lcol = lists_column_view(column);
+    auto const lcol = lists_column_view(column);
     return column_size(lcol.get_sliced_child(stream), stream);
   }
 
