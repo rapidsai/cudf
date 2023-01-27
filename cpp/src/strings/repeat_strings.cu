@@ -176,7 +176,7 @@ namespace {
  * separate number of times.
  */
 template <class Iterator>
-struct compute_size_and_repeat_separately_fn {
+struct compute_sizes_and_repeat_fn {
   column_device_view const strings_dv;
   column_device_view const repeat_times_dv;
   Iterator const repeat_times_iter;
@@ -201,15 +201,15 @@ struct compute_size_and_repeat_separately_fn {
       return;
     }
 
-    auto const repeat_times = repeat_times_iter[idx];
-    auto const d_str        = strings_dv.element<string_view>(idx);
+    auto repeat_times = repeat_times_iter[idx];
+    auto const d_str  = strings_dv.element<string_view>(idx);
 
     if (!d_chars) {
       // repeat_times could be negative
       d_offsets[idx] = (repeat_times > 0) ? (repeat_times * d_str.size_bytes()) : 0;
     } else {
       auto output_ptr = d_chars + d_offsets[idx];
-      for (size_type repeat_idx = 0; repeat_idx < repeat_times; ++repeat_idx) {
+      while (repeat_times-- > 0) {
         output_ptr = copy_and_increment(output_ptr, d_str.data(), d_str.size_bytes());
       }
     }
@@ -235,17 +235,17 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto const repeat_times_iter =
     cudf::detail::indexalator_factory::make_input_iterator(repeat_times);
   auto const fn =
-    compute_size_and_repeat_separately_fn<decltype(repeat_times_iter)>{*strings_dv_ptr,
-                                                                       *repeat_times_dv_ptr,
-                                                                       repeat_times_iter,
-                                                                       input.has_nulls(),
-                                                                       repeat_times.has_nulls()};
+    compute_sizes_and_repeat_fn<decltype(repeat_times_iter)>{*strings_dv_ptr,
+                                                             *repeat_times_dv_ptr,
+                                                             repeat_times_iter,
+                                                             input.has_nulls(),
+                                                             repeat_times.has_nulls()};
 
   auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
 
-  // We generate new bitmask by AND of the input columns' bitmasks.
-  // Note that if the input columns are nullable, the output column will also be nullable (which may
-  // not have nulls).
+  // We generate new bitmask by AND of the two input columns' bitmasks.
+  // Note that if either of the input columns are nullable, the output column will also be nullable
+  // but may not have nulls.
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
 
