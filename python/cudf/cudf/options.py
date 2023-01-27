@@ -166,7 +166,7 @@ def _spill_validator(val):
     try:
         if get_option("copy_on_write") and val:
             raise ValueError(
-                "Spilling is not supported when Copy-on-write is enabled. "
+                "Spilling is not supported when copy-on-write is enabled. "
                 "Please set `copy_on_write` to `False`"
             )
     except KeyError:
@@ -250,7 +250,6 @@ _register_option(
     _env_get_bool("CUDF_COPY_ON_WRITE", False),
     textwrap.dedent(
         """
-        Default behavior of performing shallow copies.
         If set to `False`, disables copy-on-write.
         If set to `True`, enables copy-on-write.
         Read more at: :ref: copy-on-write-user-doc

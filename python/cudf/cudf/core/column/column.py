@@ -421,7 +421,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def force_deep_copy(self: T) -> T:
         """
         A method to create deep copy irrespective of whether
-        `copy-on-write` is enable.
+        `copy-on-write` is enabled.
         """
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
@@ -438,7 +438,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             If False and `copy_on_write` is False, the same
             memory is shared between the buffers of the Column
             and changes made to one Column will propagate to
-            it's copy and vice-versa.
+            its copy and vice-versa.
             If False and `copy_on_write` is True, the same
             memory is shared between the buffers of the Column
             until there is a write operation being performed on
@@ -1382,7 +1382,6 @@ def column_empty_like(
     ):
         column = cast("cudf.core.column.CategoricalColumn", column)
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
-
         return build_column(
             data=None,
             dtype=dtype,

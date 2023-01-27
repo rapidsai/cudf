@@ -2,8 +2,11 @@
 
 # Copy-on-write
 
-Copy-on-write reduces GPU memory usage when copies(`.copy(deep=False)`) of a column
-are made.
+Copy-on-write is a memory management strategy that allows multiple cudf objects containing the same data to refer to the same memory address as long as neither of them modify the underlying data.
+With this approach, any operation that generates an unmodified view of an object (such as copies, slices, or methods like `DataFrame.head`) returns a new object that points to the same memory as the original.
+However, when either the new object is modified, a new copy of the data is made prior to the modification, ensuring that the changes do not propagate back to the original object.
+The same behavior also works in the other direction, i.e. modifications of the original object will not propagate to the new object.
+This behavior is best understood by looking at the examples below.
 
 |                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
 |---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
@@ -76,13 +79,11 @@ dtype: int64
 
 ## Notes
 
-When copy-on-write is enabled, there is no concept of views. i.e., modifying any view created inside cudf will not actually not modify
-the original object it was viewing and thus a separate copy is created and then modified.
+When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cudf will always trigger a copy and will not modify the original object.
 
 ## Advantages
 
-1. With the concept of views going away, every object is a copy of it's original object. This will bring consistency across operations and cudf closer to parity with
-pandas. Following is one of the inconsistency:
+1. Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
 
 ```python
 
@@ -118,7 +119,7 @@ dtype: int64
 dtype: int64
 ```
 
-The above inconsistency is solved when Copy-on-write is enabled:
+The above inconsistency is solved when copy-on-write is enabled:
 
 ```python
 >>> import pandas as pd

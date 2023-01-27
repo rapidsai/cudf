@@ -27,7 +27,7 @@ def _keys_cleanup(ptr):
 
 
 class CopyOnWriteBuffer(Buffer):
-    """A Copy-on-write buffer that implements Buffer.
+    """A copy-on-write buffer that implements Buffer.
 
     This buffer enables making copies of data only when there
     is a write operation being performed.
@@ -39,11 +39,11 @@ class CopyOnWriteBuffer(Buffer):
     instance.
     """
 
-    # This dict keeps track of all instances that have the same `ptr`
-    # and `size` attributes.  Each key of the dict is a `(ptr, size)`
-    # tuple and the corresponding value is a set of weak references to
-    # instances with that `ptr` and `size`.
     _instances: DefaultDict[Tuple, WeakSet] = defaultdict(WeakSet)
+    """This dict keeps track of all instances that have the same `ptr`
+    and `size` attributes.  Each key of the dict is a `(ptr, size)`
+    tuple and the corresponding value is a set of weak references to
+    instances with that `ptr` and `size`."""    
 
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.
@@ -133,24 +133,8 @@ class CopyOnWriteBuffer(Buffer):
         )
 
     def copy(self, deep: bool = True):
-        """
-        Return a copy of Buffer.
-
-        Parameters
-        ----------
-        deep : bool, default True
-            If True, returns a deep-copy of the underlying Buffer data.
-            If False, returns a shallow-copy of the Buffer pointing to
-            the same underlying data.
-
-        Returns
-        -------
-        Buffer
-        """
         if deep or self._zero_copied:
-            return self._from_device_memory(
-                rmm.DeviceBuffer(ptr=self._ptr, size=self.size)
-            )
+            return super().copy(deep=True)
         else:
             copied_buf = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
             copied_buf._ptr = self._ptr

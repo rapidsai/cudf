@@ -168,7 +168,6 @@ class NumericalColumn(NumericalBaseColumn):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
-
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),

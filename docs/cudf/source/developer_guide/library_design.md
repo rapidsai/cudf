@@ -318,49 +318,43 @@ However, for performance reasons they frequently access internal attributes and 
 
 ## Copy-on-write
 
-
-Copy-on-write (COW) is designed to reduce memory footprint on GPUs. With this feature, a copy (`.copy(deep=False)`) is only really made whenever
-there is a write operation on a column. It is first recommended to see
-the public usage [here](copy-on-write-user-doc) of this functionality before reading through the internals
+This section describes the internal implementation details of the copy-on-write feature.
+It is recommended that developers familiarize themselves with [the user-facing documentation](copy-on-write-user-doc) of this functionality before reading through the internals
 below.
 
-The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class. This class stores the pointer to the device memory and size.
-With the help of `CopyOnWriteBuffer._ptr` we generate [weak references](https://docs.python.org/3/library/weakref.html) of `CopyOnWriteBuffer` and store it in `CopyOnWriteBuffer._instances`.
-This is a mapping from `ptr` keys to `WeakSet`s containing references to `CopyOnWriterBuffer` objects. This
-means all the new `CopyOnWriteBuffer`s that are created map to the same key in `CopyOnWriteBuffer._instances` if they have same `._ptr`
-i.e., if they are all pointing to the same device memory.
-
-When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`. This class contains all the
-mechanisms to enable copy-on-write for all buffers. When a `CopyOnWriteBuffer` is created, its weakref is generated and added to the `WeakSet` which is in turn stored in `CopyOnWriterBuffer._instances`. This will later serve as an indication of whether or not to make a copy when a
-when write operation is performed on a `Column` (see below).
+The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class.
+When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`.
+This subclass of `cudf.Buffer` contains all the mechanisms to enable copy-on-write behavior.
+The class stores [weak references](https://docs.python.org/3/library/weakref.html) to every existing `CopyOnWriteBuffer` in `CopyOnWriteBuffer._instances`, a mapping from `ptr` keys to `WeakSet`s containing references to `CopyOnWriterBuffer` objects.
+This means that all `CopyOnWriteBuffer`s that point to the same device memory are contained in the same `WeakSet` (corresponding to the same `ptr` key) in `CopyOnWriteBuffer._instances`.
+This data structure is then used to determine whether or not to make a copy when a write operation is performed on a `Column` (see below).
+If multiple buffers point to the same underlying memory, then a copy must be made whenever a modification is attempted.
 
 
 ### Eager copies when exposing to third-party libraries
 
-If `Column`/`CopyOnWriteBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred without introspection. Hence whenever
+If `Column`/`CopyOnWriteBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred. Hence whenever
 someone accesses data through the `__cuda_array_interface__`, we eagerly trigger the copy by calling
 `_unlink_shared_buffers` which ensures a true copy of underlying device data is made and
-unlinks the buffer from any shared "weak" references. Any future shallow-copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object), to handle this we also mark the `Column`/`CopyOnWriteBuffer` as
-`obj._zero_copied=True` thus indicating any future shallow-copy requests will trigger a true physical copy
+unlinks the buffer from any shared "weak" references. Any future copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object). To handle this we also mark the `Column`/`CopyOnWriteBuffer` as
+`obj._zero_copied=True` thus indicating that any future shallow-copy requests will trigger a true physical copy
 rather than a copy-on-write shallow copy with weak references.
 
-### How to obtain read-only object?
+### Obtaining a read-only object
 
 A read-only object can be quite useful for operations that will not
-mutate the data. This can be achieved by calling `._readonly_proxy_cai_obj`
-API, this API will return a proxy object that has `__cuda_array_interface__`
+mutate the data. This can be achieved by calling `._readonly_proxy_cai_obj`.
+This function will return a proxy object that has `__cuda_array_interface__`
 implemented and will not trigger a deep copy even if the `CopyOnWriteBuffer`
-has weak references. It is only recommended to use this API as long as
-the objects/arrays created with this proxy object gets cleaned up during
-the developer code execution. We currently use this API for device to host
+has weak references. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
 
-Notes:
-1. Weak references are implemented only for fixed-width data types as these are only column
+### Variable width data types
+Weak references are implemented only for fixed-width data types as these are only column
 types that can be mutated in place.
-2. Deep copies of variable width data types return shallow-copies of the Columns, because these
-types don't support real in-place mutations to the data. We just mimic in such a way that it looks
-like an in-place operation using `_mimic_inplace`.
+Deep copies of variable width data types return shallow-copies of the Columns, because these
+types don't support real in-place mutations to the data.
+Internally, we mimic in-place mutations using `_mimic_inplace`, but the resulting data is always a deep copy of the underlying data.
 
 
 ### Examples
@@ -488,6 +482,6 @@ If we inspect the memory address of the data, the addresses of `s2` and `s3` rem
 139796315879723
 ```
 
-cudf Copy-on-write implementation is motivated by pandas Copy-on-write proposal here:
+cudf's copy-on-write implementation is motivated by the pandas proposals documented here:
 1. [Google doc](https://docs.google.com/document/d/1ZCQ9mx3LBMy-nhwRl33_jgcvWo9IWdEfxDNQ2thyTb0/edit#heading=h.iexejdstiz8u)
 2. [Github issue](https://github.com/pandas-dev/pandas/issues/36195)

@@ -196,7 +196,6 @@ cdef class Column:
             "The value for mask is smaller than expected, got {}  bytes, "
             "expected " + str(required_num_bytes) + " bytes."
         )
-
         if value is None:
             mask = None
         elif hasattr(value, "__cuda_array_interface__"):
@@ -297,7 +296,6 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
-
         if inplace:
             self._offset = other_col.offset
             self._size = other_col.size
@@ -313,7 +311,6 @@ cdef class Column:
             return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
-
         if is_categorical_dtype(self.dtype):
             col = self.base_children[0]
         else:

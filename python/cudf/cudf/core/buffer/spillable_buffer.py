@@ -552,7 +552,6 @@ class SpillableBufferSlice(SpillableBuffer):
         A passthrough method to `SpillableBuffer.get_ptr`
         with factoring in the `offset`.
         """
-
         return self._base.get_ptr(mode=mode) + self._offset
 
     def _getitem(self, offset: int, size: int) -> Buffer:
