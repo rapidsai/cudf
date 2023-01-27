@@ -306,7 +306,7 @@ struct column_to_strings_fn {
   explicit column_to_strings_fn(json_writer_options const& options,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
-    : options_(options), stream_(stream), mr_(mr)
+    : options_(options), stream_(stream), mr_(mr), narep(options.get_na_rep())
   {
   }
 
@@ -536,7 +536,7 @@ struct column_to_strings_fn {
   string_scalar const value_seperator{","};
   string_scalar const row_begin_wrap{"{"};
   string_scalar const row_end_wrap{"}"};
-  string_scalar narep{options_.get_na_rep()};
+  string_scalar const narep;
 };
 
 }  // namespace
