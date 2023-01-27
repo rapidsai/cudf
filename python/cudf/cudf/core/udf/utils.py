@@ -411,7 +411,7 @@ def maybe_patch_numba_linker(
     if (driver_version < ptx_toolkit_version) or (
         driver_version < runtime_version
     ):
-        print(
+        logger.debug(
             "Driver version %s.%s needs patching due to PTX files"
             % driver_version
         )
