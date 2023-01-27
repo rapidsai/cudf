@@ -30,8 +30,7 @@ template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T, int>;
 
 template <typename T>
-struct SegmentedSort : public cudf::test::BaseFixture {
-};
+struct SegmentedSort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SegmentedSort, cudf::test::NumericTypes);
 using SegmentedSortInt = SegmentedSort<int>;
@@ -319,7 +318,7 @@ TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
 }
 
 // Test specifically verifies the patch added in https://github.com/rapidsai/cudf/pull/12234
-// This test will fail if CUB bug fix is not available or the patch has not been applied.
+// This test will fail if the CUB bug fix is not available or the patch has not been applied.
 TEST_F(SegmentedSortInt, Bool)
 {
   cudf::test::fixed_width_column_wrapper<bool> col1{
