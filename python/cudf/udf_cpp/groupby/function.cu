@@ -30,20 +30,21 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
 {
   // TODO: to be refactored with CG vote functions once
   // block size is known at build time
-  __shared__ int result;
+  __shared__ int64_t count;
 
-  if (block.thread_rank() == 0) { result = 0; }
+  if (block.thread_rank() == 0) { count = 0; }
   block.sync();
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     if (not std::isnan(data[idx])) {
-      atomicAdd(&result, 1);
+      cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{count};
+      ref.fetch_add(1, cuda::std::memory_order_relaxed);
       break;
     }
   }
 
   block.sync();
-  return result == 0;
+  return count == 0;
 }
 
 template <typename T>
