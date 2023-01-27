@@ -534,9 +534,6 @@ def test_json_to_json_special_characters():
     df.to_json(actual, engine="cudf", lines=True, orient="records")
     expected = StringIO()
     df.to_pandas().to_json(expected, lines=True, orient="records")
-    print(expected.getvalue())
-    print(actual.getvalue())
-
     assert expected.getvalue() == actual.getvalue()
 
 
