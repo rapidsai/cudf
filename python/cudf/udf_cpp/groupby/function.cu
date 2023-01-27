@@ -63,36 +63,6 @@ __device__ void device_sum(cooperative_groups::thread_block const& block,
 }
 
 template <typename T>
-__device__ void device_var(cooperative_groups::thread_block const& block,
-                           T const* data,
-                           int64_t size,
-                           double* var)
-{
-  T local_sum      = 0;
-  double local_var = 0;
-
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
-  block.sync();
-
-  device_sum<T>(block, data, size, &block_sum);
-
-  auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
-
-  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto const delta = static_cast<double>(data[idx]) - mean;
-    local_var += delta * delta;
-  }
-
-  cuda::atomic_ref<double, cuda::thread_scope_block> ref{*var};
-  ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
-  block.sync();
-
-  if (block.thread_rank() == 0) { *var = *var / static_cast<double>(size - 1); }
-  block.sync();
-}
-
-template <typename T>
 __device__ T BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
@@ -123,29 +93,44 @@ __device__ double BlockMean(T const* data, int64_t size)
 }
 
 template <typename T>
-__device__ double BlockStd(T const* data, int64_t size)
-{
-  auto block = cooperative_groups::this_thread_block();
-
-  __shared__ double var;
-  if (block.thread_rank() == 0) { var = 0; }
-  block.sync();
-
-  device_var<T>(block, data, size, &var);
-  return sqrt(var);
-}
-
-template <typename T>
 __device__ double BlockVar(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
   __shared__ double block_var;
-  if (block.thread_rank() == 0) { block_var = 0; }
+  __shared__ T block_sum;
+  if (block.thread_rank() == 0) {
+    block_var = 0;
+    block_sum = 0;
+  }
   block.sync();
 
-  device_var<T>(block, data, size, &block_var);
+  T local_sum      = 0;
+  double local_var = 0;
+
+  device_sum<T>(block, data, size, &block_sum);
+
+  auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
+
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
+    auto const delta = static_cast<double>(data[idx]) - mean;
+    local_var += delta * delta;
+  }
+
+  cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_var};
+  ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
+  block.sync();
+
+  if (block.thread_rank() == 0) { block_var = block_var / static_cast<double>(size - 1); }
+  block.sync();
   return block_var;
+}
+
+template <typename T>
+__device__ double BlockStd(T const* data, int64_t size)
+{
+  auto const var = BlockVar(data, size);
+  return sqrt(var);
 }
 
 template <typename T>
