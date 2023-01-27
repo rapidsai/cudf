@@ -28,20 +28,22 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
                              T const* data,
                              int64_t size)
 {
-  __shared__ bool result;
+  // TODO: to be refactored with CG vote functions once
+  // block size is known at build time
+  __shared__ int result;
 
-  if (block.thread_rank() == 0) { result = true; }
+  if (block.thread_rank() == 0) { result = 0; }
   block.sync();
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
     if (not std::isnan(data[idx])) {
-      result = false;
+      atomicAdd(&result, 1);
       break;
     }
   }
 
   block.sync();
-  return result;
+  return result == 0;
 }
 
 template <typename T>
