@@ -136,7 +136,8 @@ class CopyOnWriteBuffer(Buffer):
         if deep or self._zero_copied:
             return super().copy(deep=True)
         else:
-            copied_buf = CopyOnWriteBuffer.__new__(CopyOnWriteBuffer)
+            cls = type(self)
+            copied_buf = cls.__new__(cls)
             copied_buf._ptr = self._ptr
             copied_buf._size = self._size
             copied_buf._owner = self._owner
