@@ -521,6 +521,25 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
             assert expected[col_name][i] == df[col_name][i]
 
 
+def test_json_to_json_special_characters():
+    df = cudf.DataFrame(
+        {
+            "'a'": ['ab"cd', "\\\b", "\r\\", "'"],
+            "b": ["a\tb\t", "\\", '\\"', "\t"],
+            "c": ["aeiou", "try", "json", "cudf"],
+        }
+    )
+
+    actual = StringIO()
+    df.to_json(actual, engine="cudf", lines=True, orient="records")
+    expected = StringIO()
+    df.to_pandas().to_json(expected, lines=True, orient="records")
+    print(expected.getvalue())
+    print(actual.getvalue())
+
+    assert expected.getvalue() == actual.getvalue()
+
+
 @pytest.mark.parametrize(
     "gdf,pdf",
     [

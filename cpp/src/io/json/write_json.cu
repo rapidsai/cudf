@@ -77,7 +77,6 @@ namespace {
  */
 struct escape_strings_fn {
   column_device_view const d_column;
-  string_view const d_delimiter;  // check for column delimiter
   offset_type* d_offsets{};
   char* d_chars{};
 
@@ -118,6 +117,20 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
 
     if (!d_chars) d_offsets[idx] = bytes;
+  }
+
+  std::unique_ptr<column> get_escaped_strings(column_view const& column_v,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+  {
+    auto children =
+      cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
+
+    return make_strings_column(column_v.size(),
+                               std::move(children.first),
+                               std::move(children.second),
+                               column_v.null_count(),
+                               cudf::detail::copy_bitmask(column_v, stream, mr));
   }
 };
 
@@ -322,18 +335,8 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, cudf::string_view>, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
-    // handle special characters: {delimiter, '\n', "} in row:
-    string_scalar delimiter{std::string{","}, true, stream_};
-
     auto d_column = column_device_view::create(column_v, stream_);
-    escape_strings_fn fn{*d_column, delimiter.value(stream_)};
-    auto children = cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
-
-    return make_strings_column(column_v.size(),
-                               std::move(children.first),
-                               std::move(children.second),
-                               column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream_, mr_));
+    return escape_strings_fn{*d_column}.get_escaped_strings(column_v, stream_, mr_);
   }
 
   // ints:
@@ -559,36 +562,21 @@ std::unique_ptr<column> make_column_names_column(host_span<column_name_info cons
                                                  size_type num_columns,
                                                  rmm::cuda_stream_view stream)
 {
-  std::vector<std::string> escaped_column_names;
-  std::transform(column_names.begin(),
-                 column_names.end(),
-                 std::back_inserter(escaped_column_names),
-                 [](column_name_info const& name_info) {
-                   std::string name = name_info.name;
-                   char const quote = '\"';
-                   if (name.empty() ||           // no header name
-                       name.front() == quote) {  // header already quoted
-                     return name;
-                   }
-
-                   // escape any quotes
-                   size_t pos = 0;
-                   while ((pos = name.find(quote, pos)) != name.npos) {
-                     name.insert(pos, 1, quote);
-                     pos += 2;
-                   }
-
-                   // check if overall quotes are required
-                   name.insert(name.begin(), quote);
-                   name.insert(name.end(), quote);
-                   return name;
-                 });
-  if (escaped_column_names.empty()) {
-    std::generate_n(std::back_inserter(escaped_column_names), num_columns, [v = 0]() mutable {
-      return "\"" + std::to_string(v++) + "\"";
+  std::vector<std::string> unescaped_column_names;
+  if (column_names.empty()) {
+    std::generate_n(std::back_inserter(unescaped_column_names), num_columns, [v = 0]() mutable {
+      return std::to_string(v++);
     });
+  } else {
+    std::transform(column_names.begin(),
+                   column_names.end(),
+                   std::back_inserter(unescaped_column_names),
+                   [](column_name_info const& name_info) { return name_info.name; });
   }
-  return make_strings_column_from_host(escaped_column_names, stream);
+  auto unescaped_string_col = make_strings_column_from_host(unescaped_column_names, stream);
+  auto d_column             = column_device_view::create(*unescaped_string_col, stream);
+  return escape_strings_fn{*d_column}.get_escaped_strings(
+    *unescaped_string_col, stream, rmm::mr::get_current_device_resource());
 }
 
 void write_chunked(data_sink* out_sink,

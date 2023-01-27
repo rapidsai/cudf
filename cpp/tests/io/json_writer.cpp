@@ -337,4 +337,30 @@ TEST_F(JsonWriterTest, WriteReadNested)
   }
 }
 
+TEST_F(JsonWriterTest, SpecialChars)
+{
+  cudf::test::fixed_width_column_wrapper<int> a{1, 6, 1, 6};
+  cudf::test::strings_column_wrapper b{"abcd", "b\b\f\n\r\t", "\"c\"", "/\\"};
+  cudf::table_view tbl_view{{a, b}};
+  cudf::io::table_metadata mt{{{"\"a\""}, {"\'b\'"}}};
+
+  std::vector<char> out_buffer;
+  auto destination = cudf::io::sink_info(&out_buffer);
+  auto out_options = cudf::io::json_writer_options_builder(destination, tbl_view)
+                       .include_nulls(false)
+                       .metadata(mt)
+                       .lines(true)
+                       .na_rep("null")
+                       .build();
+
+  cudf::io::write_json(out_options, rmm::mr::get_current_device_resource());
+  std::string const expected = R"({"\"a\"":1,"'b'":"abcd"}
+{"\"a\"":6,"'b'":"b\b\f\n\r\t"}
+{"\"a\"":1,"'b'":"\"c\""}
+{"\"a\"":6,"'b'":"\/\\"}
+)";
+  auto const output_string   = std::string(out_buffer.data(), out_buffer.size());
+  EXPECT_EQ(expected, output_string);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
