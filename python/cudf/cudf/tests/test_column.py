@@ -285,8 +285,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    gpu_ptr = gpu_data.data.ptr
-    assert gpu_ptr == got._column.data.ptr
+    gpu_ptr = gpu_data.data.get_ptr(mode="read")
+    assert gpu_ptr == got._column.data.get_ptr(mode="read")
     assert_eq(expect, got)
 
 
