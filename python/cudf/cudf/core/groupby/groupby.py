@@ -800,7 +800,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
-        result = cudf.Series(chunk_results, index=group_names)
+        result = cudf.Series._from_data(
+            {None: chunk_results}, index=group_names
+        )
         result.index.names = self.grouping.names
         result = result.reset_index()
         result[None] = result.pop(0)
@@ -826,7 +828,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             return self.obj.head(0)
 
         if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series(chunk_results, index=group_names)
+            result = cudf.Series._from_data(
+                {None: chunk_results}, index=group_names
+            )
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
@@ -917,22 +921,19 @@ class GroupBy(Serializable, Reducible, Scannable):
                 0  1  1  1
                 2  2  1  3
 
-            ``engine='jit'`` can be used to accelerate certain functions,
-            initially those that contain reductions and arithmetic operations
-            between results of those reductions:
-
-            .. code-block::
-
-                >>> import cudf
-                >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
-                >>> df.groupby('a').apply(
-                    lambda group: group['b'].max() - group['b'].min(),
-                    engine='jit'
-                )
-                a  None
-                0  1     1
-                1  2     1
-                2  3     1
+        ``engine='jit'`` may be used to accelerate certain functions,
+        initially those that contain reductions and arithmetic operations
+        between results of those reductions:
+        >>> import akdfsf
+        >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
+        >>> df.groupby('a').apply(
+        ...     lambda group: group['b'].max() - group['b'].min(),
+        ...     engine='jit'
+        ... )
+        a  None
+        0  1     1
+        1  2     1
+        2  3     1
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")

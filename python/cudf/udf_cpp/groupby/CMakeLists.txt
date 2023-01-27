@@ -14,20 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1)
 
-include(rapids-cmake)
-include(rapids-cuda)
 include(rapids-find)
-
-rapids_cuda_init_architectures(groupby-udf-cpp)
-
-# Create a project so that we can enable CUDA architectures in this file.
-project(
-  groupby-udf-cpp
-  VERSION 23.02.00
-  LANGUAGES CUDA
-)
-
-rapids_find_package(CUDAToolkit REQUIRED)
 
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.
