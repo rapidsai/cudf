@@ -924,7 +924,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
         between results of those reductions:
-        >>> import akdfsf
+        >>> import cudf
         >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
         >>> df.groupby('a').apply(
         ...     lambda group: group['b'].max() - group['b'].min(),
