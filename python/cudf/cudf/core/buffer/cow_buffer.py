@@ -43,7 +43,7 @@ class CopyOnWriteBuffer(Buffer):
     """This dict keeps track of all instances that have the same `ptr`
     and `size` attributes.  Each key of the dict is a `(ptr, size)`
     tuple and the corresponding value is a set of weak references to
-    instances with that `ptr` and `size`."""    
+    instances with that `ptr` and `size`."""
 
     # TODO: This is synonymous to SpillableBuffer._exposed attribute
     # and has to be merged.

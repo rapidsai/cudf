@@ -6542,9 +6542,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         col = cudf.core.column.build_struct_column(
             names=field_names,
-            children=tuple(
-                col.copy(deep=True) for col in self._data.columns
-            ),
+            children=tuple(col.copy(deep=True) for col in self._data.columns),
             size=len(self),
         )
         return cudf.Series._from_data(
