@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -1497,6 +1498,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             (
                 cudf.core.column.DecimalBaseColumn,
                 cudf.core.column.StructColumn,
+                cudf.core.column.ListColumn,
             ),
         ):
             col = col._with_type_metadata(objs[0].dtype)
@@ -2231,18 +2233,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
@@ -4854,6 +4856,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@acquire_spill_lock()
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.
@@ -4958,10 +4961,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         index = as_index(a.index)
 
     a_col = column.as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view)
+    a_array = cupy.asarray(a_col.data_array_view(mode="read"))
 
     b_col = column.as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view)
+    b_array = cupy.asarray(b_col.data_array_view(mode="read"))
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import os
 
@@ -17,9 +17,10 @@ install_requires = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=1.0,<1.6.0dev0",
-    "protobuf>=3.20.1,<3.21.0a0",
+    "protobuf==4.21",
     "typing_extensions",
-    "pyarrow==9.0.0",
+    # Allow floating minor versions for Arrow.
+    "pyarrow==10",
     f"rmm{cuda_suffix}",
     f"ptxcompiler{cuda_suffix}",
     f"cubinlinker{cuda_suffix}",
@@ -37,7 +38,7 @@ extras_require = {
         "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
-        "transformers<=4.10.3",
+        "transformers==4.24.0",
         "tzdata",
     ]
 }
@@ -69,6 +70,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     cmdclass=versioneer.get_cmdclass(),
     include_package_data=True,

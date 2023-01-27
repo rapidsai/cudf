@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/detail/column_utilities.hpp>
-
-#include <jit/type.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -892,13 +890,11 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
       CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
                                c.null_mask(),
                                num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
+                               cudaMemcpyDefault));
     } else {
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               mask.data(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
+      CUDF_CUDA_TRY(cudaMemcpy(
+        host_bitmask.data(), mask.data(), num_bitmasks * sizeof(bitmask_type), cudaMemcpyDefault));
     }
 
     return host_bitmask;
@@ -937,13 +933,13 @@ std::string get_nested_type_str(cudf::column_view const& view)
 {
   if (view.type().id() == cudf::type_id::LIST) {
     lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
+    return cudf::type_to_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
   }
 
   if (view.type().id() == cudf::type_id::STRUCT) {
     std::ostringstream out;
 
-    out << cudf::jit::get_type_name(view.type()) + "<";
+    out << cudf::type_to_name(view.type()) + "<";
     std::transform(view.child_begin(),
                    view.child_end(),
                    std::ostream_iterator<std::string>(out, ","),
@@ -952,7 +948,7 @@ std::string get_nested_type_str(cudf::column_view const& view)
     return out.str();
   }
 
-  return cudf::jit::get_type_name(view.type());
+  return cudf::type_to_name(view.type());
 }
 
 template <typename NestedColumnView>

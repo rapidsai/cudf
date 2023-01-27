@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,18 +166,18 @@ std::vector<std::string> create_key_strings(char const* h_data,
 {
   auto const num_cols = sorted_info.num_rows();
   std::vector<uint64_t> h_offsets(num_cols);
-  cudaMemcpyAsync(h_offsets.data(),
-                  sorted_info.column(0).data<uint64_t>(),
-                  sizeof(uint64_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
+                                sorted_info.column(0).data<uint64_t>(),
+                                sizeof(uint64_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<uint16_t> h_lens(num_cols);
-  cudaMemcpyAsync(h_lens.data(),
-                  sorted_info.column(1).data<uint16_t>(),
-                  sizeof(uint16_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_lens.data(),
+                                sorted_info.column(1).data<uint16_t>(),
+                                sizeof(uint16_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<std::string> names(num_cols);
   std::transform(h_offsets.cbegin(),
@@ -361,17 +361,14 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&first_row_len,
-                                  rec_starts.data() + 1,
-                                  sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &first_row_len, rec_starts.data() + 1, sizeof(uint64_t), cudaMemcpyDefault, stream.value()));
   }
   std::vector<char> first_row(first_row_len);
   CUDF_CUDA_TRY(cudaMemcpyAsync(first_row.data(),
                                 d_data.data(),
                                 first_row_len * sizeof(char),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
@@ -555,7 +552,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream, mr);
+    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
@@ -578,7 +575,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {{}, column_infos}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_infos}};
 }
 
 /**
@@ -596,7 +593,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  if (reader_opts.is_enabled_experimental()) {
+  if (not reader_opts.is_enabled_legacy()) {
     return experimental::read_json(sources, reader_opts, stream, mr);
   }
 

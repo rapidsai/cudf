@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtypes import ListDtype
@@ -193,7 +194,7 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic is False
+        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -1706,7 +1707,7 @@ class IndexedFrame(Frame):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
+            gather_map = gather_map.astype(size_type_dtype)
 
         if not libcudf.copying._gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify
@@ -2105,6 +2106,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
 
+    @acquire_spill_lock()
     @_cudf_nvtx_annotate
     def _apply(self, func, kernel_getter, *args, **kwargs):
         """Apply `func` across the rows of the frame."""

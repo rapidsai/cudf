@@ -1,6 +1,5 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-import re
 from decimal import Decimal
 
 import numpy as np
@@ -38,8 +37,8 @@ def make_frames(index=None, nulls="none"):
         mask = np.arange(10)
         np.random.shuffle(mask)
         mask = mask[:5]
-        df.y.loc[mask] = np.nan
-        df2.y.loc[mask] = np.nan
+        df.loc[mask, "y"] = np.nan
+        df2.loc[mask, "y"] = np.nan
     gdf = gd.DataFrame.from_pandas(df)
     gdf2 = gd.DataFrame.from_pandas(df2)
     if index:
@@ -138,10 +137,6 @@ def test_concat_errors():
         rfunc=gd.concat,
         lfunc_args_and_kwargs=([], {"objs": [df, df.index, df.x]}),
         rfunc_args_and_kwargs=([], {"objs": [gdf, gdf.index, gdf.x]}),
-        expected_error_message=re.escape(
-            "`concat` cannot concatenate objects of "
-            "types: ['DataFrame', 'RangeIndex', 'Series']."
-        ),
     )
 
     # Unknown type
@@ -150,9 +145,6 @@ def test_concat_errors():
         rfunc=gd.concat,
         lfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
         rfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
-        expected_error_message=re.escape(
-            "cannot concatenate object of type <class 'str'>"
-        ),
     )
 
     # Mismatched index dtypes
@@ -172,9 +164,6 @@ def test_concat_errors():
             {"objs": [gdf.to_pandas(), gdf2.to_pandas()], "axis": "bad_value"},
         ),
         rfunc_args_and_kwargs=([], {"objs": [gdf, gdf2], "axis": "bad_value"}),
-        expected_error_message=re.escape(
-            '`axis` must be 0 / "index"' ' or 1 / "columns", got: None'
-        ),
     )
 
 
@@ -376,12 +365,13 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=pd.concat,
-        rfunc=gd.concat,
-        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-    )
+    with pytest.warns(FutureWarning):
+        assert_exceptions_equal(
+            lfunc=pd.concat,
+            rfunc=gd.concat,
+            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+        )
 
 
 @pytest.mark.parametrize("name", [None, "a"])
@@ -1031,9 +1021,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
                 ),
                 None,
             ],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6821"
-            ),
         ),
     ],
 )
@@ -1777,6 +1764,48 @@ def test_concat_decimal_non_numeric(s1, s2, expected):
 def test_concat_struct_column(s1, s2, expected):
     s = gd.concat([s1, s2])
     assert_eq(s, expected, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "frame1, frame2, expected",
+    [
+        (
+            gd.Series([[{"b": 0}], [{"b": 1}], [{"b": 3}]]),
+            gd.Series([[{"b": 10}], [{"b": 12}], None]),
+            gd.Series(
+                [
+                    [{"b": 0}],
+                    [{"b": 1}],
+                    [{"b": 3}],
+                    [{"b": 10}],
+                    [{"b": 12}],
+                    None,
+                ],
+                index=[0, 1, 2, 0, 1, 2],
+            ),
+        ),
+        (
+            gd.DataFrame({"a": [[{"b": 0}], [{"b": 1}], [{"b": 3}]]}),
+            gd.DataFrame({"a": [[{"b": 10}], [{"b": 12}], None]}),
+            gd.DataFrame(
+                {
+                    "a": [
+                        [{"b": 0}],
+                        [{"b": 1}],
+                        [{"b": 3}],
+                        [{"b": 10}],
+                        [{"b": 12}],
+                        None,
+                    ]
+                },
+                index=[0, 1, 2, 0, 1, 2],
+            ),
+        ),
+    ],
+)
+def test_concat_list_column(frame1, frame2, expected):
+    actual = gd.concat([frame1, frame2])
+    assert_eq(actual, expected, check_index_type=True)
 
 
 def test_concat_categorical_ordering():

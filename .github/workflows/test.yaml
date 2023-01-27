@@ -1,7 +1,7 @@
 name: test
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       branch:
         required: true
@@ -16,19 +16,17 @@ on:
 jobs:
   conda-cpp-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@cuda-118
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
   conda-python-cudf-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@cuda-118
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
@@ -36,37 +34,55 @@ jobs:
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@cuda-118
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       test_script: "ci/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-495-1"
+      node_type: "gpu-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
     with:
       build_type: nightly
-      repo: rapidsai/cudf
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-495-1"
+      node_type: "gpu-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
       run_script: "ci/test_notebooks.sh"
+  wheel-tests-cudf:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@cuda-118
+    with:
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      package-name: cudf
+      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
+  wheel-tests-dask-cudf:
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@cuda-118
+    with:
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      package-name: dask_cudf
+      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"

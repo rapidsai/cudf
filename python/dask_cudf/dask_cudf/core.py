@@ -5,11 +5,8 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
 from tlz import partition_all
 
-import dask
-import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (

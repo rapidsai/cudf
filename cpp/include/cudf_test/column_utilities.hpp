@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,9 @@ namespace detail {
 /**
  * @brief Verifies the property equality of two columns.
  *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL`
+ * instead.
+ *
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
@@ -63,6 +66,9 @@ bool expect_column_properties_equal(cudf::column_view const& lhs,
  * i.e. the two columns are considered equivalent even if one has a null mask
  * and the other doesn't.
  *
+ * @note This function should not be used directly. Use
+ * `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT` instead.
+ *
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
@@ -78,6 +84,9 @@ bool expect_column_properties_equivalent(
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
+ *
+ * @note This function should not be used directly. Use
+ * `CUDF_TEST_EXPECT_COLUMNS_EQUAL` instead.
  *
  * @param lhs The first column
  * @param rhs The second column
@@ -95,6 +104,9 @@ bool expect_columns_equal(cudf::column_view const& lhs,
  * Uses machine epsilon to compare floating point types.
  * Treats null elements as equivalent.
  *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT`
+ * instead.
+ *
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
@@ -110,6 +122,8 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
+ *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_EQUAL_BUFFERS` instead.
  *
  * @param lhs The first buffer
  * @param rhs The second buffer
@@ -194,8 +208,7 @@ template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
-  CUDF_CUDA_TRY(
-    cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDefault));
   return {host_data, bitmask_to_host(c)};
 }
 
@@ -218,8 +231,8 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
-  CUDF_CUDA_TRY(cudaMemcpy(
-    host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
   auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import itertools
 import pickle
@@ -260,6 +260,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = _Grouping(obj, by, level)
 
     def __iter__(self):
+        if isinstance(self._by, list) and len(self._by) == 1:
+            warnings.warn(
+                "In a future version of cudf, a length 1 tuple will be "
+                "returned when iterating over a groupby with a grouper equal "
+                "to a list of length 1. To avoid this warning, do not supply "
+                "a list with a single grouper.",
+                FutureWarning,
+            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
@@ -449,6 +457,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  3.0  3.00  1.0   1.0
         """
         column_names, columns, normalized_aggs = self._normalize_aggs(func)
+        orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
@@ -465,8 +474,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         multilevel = _is_multi_agg(func)
         data = {}
-        for col_name, aggs, cols in zip(
-            column_names, included_aggregations, result_columns
+        for col_name, aggs, cols, orig_dtype in zip(
+            column_names,
+            included_aggregations,
+            result_columns,
+            orig_dtypes,
         ):
             for agg, col in zip(aggs, cols):
                 if multilevel:
@@ -474,6 +486,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                     key = (col_name, agg_name)
                 else:
                     key = col_name
+                if (
+                    agg in {list, "collect"}
+                    and orig_dtype != col.dtype.element_type
+                ):
+                    # Structs lose their labels which we reconstruct here
+                    col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
                 data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
@@ -1701,6 +1719,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise ValueError(
                 "fill_method must be one of 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
+            )
+
+        if fill_method in ("pad", "backfill"):
+            alternative = "ffill" if fill_method == "pad" else "bfill"
+            warnings.warn(
+                f"{fill_method} is deprecated and will be removed in a future "
+                f"version. Use f{alternative} instead.",
+                FutureWarning,
             )
 
         filled = self.fillna(method=fill_method, limit=limit)

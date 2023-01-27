@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     h_offsets[idx + 1] = offset;
   }
   auto d_strings = cudf::detail::make_device_uvector_sync(strings, cudf::get_default_stream());
-  CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyDefault));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), nulls);

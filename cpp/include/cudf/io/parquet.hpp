@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -38,10 +37,12 @@ namespace cudf::io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
-constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
+constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
+constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
+constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
 
 class parquet_reader_options_builder;
 
@@ -177,14 +178,7 @@ class parquet_reader_options {
    *
    * @param row_groups Vector of row groups to read
    */
-  void set_row_groups(std::vector<std::vector<size_type>> row_groups)
-  {
-    if ((!row_groups.empty()) and ((_skip_rows != 0) or (_num_rows != -1))) {
-      CUDF_FAIL("row_groups can't be set along with skip_rows and num_rows");
-    }
-
-    _row_groups = std::move(row_groups);
-  }
+  void set_row_groups(std::vector<std::vector<size_type>> row_groups);
 
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
@@ -216,28 +210,14 @@ class parquet_reader_options {
    *
    * @param val Number of rows to skip from start
    */
-  void set_skip_rows(size_type val)
-  {
-    if ((val != 0) and (!_row_groups.empty())) {
-      CUDF_FAIL("skip_rows can't be set along with a non-empty row_groups");
-    }
-
-    _skip_rows = val;
-  }
+  void set_skip_rows(size_type val);
 
   /**
    * @brief Sets number of rows to read.
    *
    * @param val Number of rows to read after skip
    */
-  void set_num_rows(size_type val)
-  {
-    if ((val != -1) and (!_row_groups.empty())) {
-      CUDF_FAIL("num_rows can't be set along with a non-empty row_groups");
-    }
-
-    _num_rows = val;
-  }
+  void set_num_rows(size_type val);
 
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
@@ -508,7 +488,13 @@ class parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  size_type _max_page_fragment_size = default_max_page_fragment_size;
 
   /**
    * @brief Constructor from sink and table.
@@ -663,17 +649,33 @@ class parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
    */
-  void set_partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    _partitions = std::move(partitions);
-  }
+  void set_partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata.
@@ -687,12 +689,7 @@ class parquet_writer_options {
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics.
@@ -722,73 +719,63 @@ class parquet_writer_options {
    * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
    * data sinks in sink info
    */
-  void set_column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    _column_chunks_file_paths = std::move(file_paths);
-  }
+  void set_column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows Maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows Maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
-  }
+  void set_column_index_truncate_length(int32_t size_bytes);
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows);
 };
 
 /**
@@ -823,13 +810,7 @@ class parquet_writer_options_builder {
    * be same size as number of sinks in sink_info
    * @return this for chaining
    */
-  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    options.set_partitions(std::move(partitions));
-    return *this;
-  }
+  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata in parquet_writer_options.
@@ -850,13 +831,7 @@ class parquet_writer_options_builder {
    * @return this for chaining
    */
   parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options._user_data = std::move(metadata);
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -889,13 +864,7 @@ class parquet_writer_options_builder {
    * data sinks
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    options.set_column_chunks_file_paths(std::move(file_paths));
-    return *this;
-  }
+  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -924,7 +893,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
-   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances.
    * Cannot be larger than the row group size in bytes, and will be adjusted to
    * match if it is.
    *
@@ -963,11 +932,55 @@ class parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
   }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   *
+   * The default value is dictionary_policy::ALWAYS.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_dictionary_size(size_t val);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_page_fragment_size(size_type val);
 
   /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
@@ -1057,7 +1070,13 @@ class chunked_parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  size_type _max_page_fragment_size = default_max_page_fragment_size;
 
   /**
    * @brief Constructor from sink.
@@ -1168,6 +1187,27 @@ class chunked_parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1179,12 +1219,7 @@ class chunked_parquet_writer_options {
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -1214,61 +1249,56 @@ class chunked_parquet_writer_options {
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows The maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows The maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
-  }
+  void set_column_index_truncate_length(int32_t size_bytes);
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows);
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1320,13 +1350,7 @@ class chunked_parquet_writer_options_builder {
    * @return this for chaining
    */
   chunked_parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options.set_key_value_metadata(std::move(metadata));
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
@@ -1432,11 +1456,55 @@ class chunked_parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  chunked_parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
   }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   *
+   * The default value is dictionary_policy::ALWAYS.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_dictionary_size(size_t val);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val);
 
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
@@ -1498,6 +1566,7 @@ class parquet_chunked_writer {
    * size as number of sinks.
    *
    * @throws cudf::logic_error If the number of partitions is not the same as number of sinks
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
   parquet_chunked_writer& write(table_view const& table,

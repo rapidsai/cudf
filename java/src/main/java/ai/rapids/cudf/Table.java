@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -220,6 +220,7 @@ public final class Table implements AutoCloseable {
    * @param length            the length of the buffer to read from.
    * @param headerRow         the 0 based index row of the header can be -1
    * @param delim             character deliminator (must be ASCII).
+   * @param quoteStyle        quote style expected to be used in the input (represented as int)
    * @param quote             character quote (must be ASCII).
    * @param comment           character that starts a comment line (must be ASCII) use '\0'
    * @param nullValues        values that should be treated as nulls
@@ -230,7 +231,7 @@ public final class Table implements AutoCloseable {
                                        int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       int headerRow, byte delim, byte quote,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
@@ -777,6 +778,7 @@ public final class Table implements AutoCloseable {
             0, 0,
             opts.getHeaderRow(),
             opts.getDelim(),
+            opts.getQuoteStyle().nativeId,
             opts.getQuote(),
             opts.getComment(),
             opts.getNullValues(),
@@ -850,11 +852,92 @@ public final class Table implements AutoCloseable {
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
+        opts.getQuoteStyle().nativeId,
         opts.getQuote(),
         opts.getComment(),
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  private static native void writeCSVToFile(long table,
+                                            String[] columnNames,
+                                            boolean includeHeader,
+                                            String rowDelimiter,
+                                            byte fieldDelimiter,
+                                            String nullValue,
+                                            String trueValue,
+                                            String falseValue,
+                                            int quoteStyle,
+                                            String outputPath) throws CudfException;
+
+  public void writeCSVToFile(CSVWriterOptions options, String outputPath) {
+    writeCSVToFile(nativeHandle,
+                   options.getColumnNames(),
+                   options.getIncludeHeader(),
+                   options.getRowDelimiter(),
+                   options.getFieldDelimiter(),
+                   options.getNullValue(),
+                   options.getTrueValue(),
+                   options.getFalseValue(),
+                   options.getQuoteStyle().nativeId,
+                   outputPath);
+  }
+
+  private static native long startWriteCSVToBuffer(String[] columnNames,
+                                                   boolean includeHeader,
+                                                   String rowDelimiter,
+                                                   byte fieldDelimiter,
+                                                   String nullValue,
+                                                   String trueValue,
+                                                   String falseValue,
+                                                   int quoteStyle,
+                                                   HostBufferConsumer buffer) throws CudfException;
+
+  private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
+
+  private static native void endWriteCSVToBuffer(long writerHandle);
+
+  private static class CSVTableWriter implements TableWriter {
+    private long writerHandle;
+    private HostBufferConsumer consumer;
+
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+      this.writerHandle = startWriteCSVToBuffer(options.getColumnNames(),
+                                                options.getIncludeHeader(),
+                                                options.getRowDelimiter(),
+                                                options.getFieldDelimiter(),
+                                                options.getNullValue(),
+                                                options.getTrueValue(),
+                                                options.getFalseValue(),
+                                                options.getQuoteStyle().nativeId,
+                                                consumer);
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (writerHandle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeCSVChunkToBuffer(writerHandle, table.nativeHandle);
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (writerHandle != 0) {
+        endWriteCSVToBuffer(writerHandle);
+        writerHandle = 0;
+      }
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
+  }
+
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
+    return new CSVTableWriter(options, bufferConsumer);
   }
 
   /**

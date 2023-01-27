@@ -1,7 +1,8 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -181,6 +182,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_ordered(), inplace=inplace
         )
@@ -248,6 +256,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_unordered(), inplace=inplace
         )
@@ -941,9 +956,10 @@ class CategoricalColumn(column.ColumnBase):
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view(mode=mode)
 
     def unique(self, preserve_order=False) -> CategoricalColumn:
         codes = self.as_numerical.unique(preserve_order=preserve_order)
@@ -1254,7 +1270,7 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype("int32").fillna(0)
+        gather_map = self.codes.astype(libcudf.types.size_type_dtype).fillna(0)
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out

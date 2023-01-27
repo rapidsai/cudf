@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import os
 
@@ -8,8 +8,8 @@ from setuptools import find_packages, setup
 cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
-    "dask==2022.11.1",
-    "distributed==2022.11.1",
+    "dask>=2022.12.0",
+    "distributed>=2022.12.0",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
@@ -54,6 +54,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),

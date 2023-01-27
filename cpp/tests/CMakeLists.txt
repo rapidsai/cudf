@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -153,7 +153,7 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST
+  REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
@@ -190,7 +190,7 @@ ConfigureTest(ROUND_TEST round/round_tests.cpp)
 # ##################################################################################################
 # * binary tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  BINARY_TEST
+  BINARYOP_TEST
   binaryop/binop-verify-input-test.cpp
   binaryop/binop-null-test.cpp
   binaryop/binop-compiled-test.cpp
@@ -202,7 +202,7 @@ ConfigureTest(
 # * unary transform tests -------------------------------------------------------------------------
 ConfigureTest(
   TRANSFORM_TEST
-  transform/integration/unary-transform-test.cpp
+  transform/integration/unary_transform_test.cpp
   transform/nans_to_null_test.cpp
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
@@ -295,17 +295,18 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 # * iterator tests --------------------------------------------------------------------------------
 ConfigureTest(
   ITERATOR_TEST
+  iterator/indexalator_test.cu
+  iterator/optional_iterator_test_chrono.cu
+  iterator/optional_iterator_test_numeric.cu
+  iterator/pair_iterator_test_chrono.cu
+  iterator/pair_iterator_test_numeric.cu
+  iterator/scalar_iterator_test.cu
+  iterator/sizes_to_offsets_iterator_test.cu
   iterator/value_iterator.cpp
   iterator/value_iterator_test_chrono.cu
   iterator/value_iterator_test_numeric.cu
   iterator/value_iterator_test_strings.cu
   iterator/value_iterator_test_transform.cu
-  iterator/pair_iterator_test_chrono.cu
-  iterator/pair_iterator_test_numeric.cu
-  iterator/scalar_iterator_test.cu
-  iterator/optional_iterator_test_chrono.cu
-  iterator/optional_iterator_test_numeric.cu
-  iterator/indexalator_test.cu
 )
 
 # ##################################################################################################
@@ -423,9 +424,9 @@ ConfigureTest(
   strings/replace_regex_tests.cpp
   strings/replace_tests.cpp
   strings/reverse_tests.cpp
+  strings/slice_tests.cpp
   strings/split_tests.cpp
   strings/strip_tests.cpp
-  strings/substring_tests.cpp
   strings/translate_tests.cpp
   strings/urls_tests.cpp
 )
@@ -491,6 +492,7 @@ ConfigureTest(
   lists/count_elements_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/reverse_tests.cpp
   lists/sequences_tests.cpp
   lists/set_operations/difference_distinct_tests.cpp
   lists/set_operations/have_overlap_tests.cpp

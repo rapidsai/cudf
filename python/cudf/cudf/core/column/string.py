@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ import cudf.api.types
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     is_integer,
     is_list_dtype,
@@ -987,10 +988,11 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
-            warnings.warn(
-                "`n` parameter is not supported when "
-                "`pat` and `repl` are list-like inputs"
-            )
+            if n != -1:
+                warnings.warn(
+                    "`n` parameter is not supported when "
+                    "`pat` and `repl` are list-like inputs"
+                )
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
@@ -3894,6 +3896,94 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(result_col)
 
+    def removesuffix(self, suffix: str) -> SeriesOrIndex:
+        """
+        Remove a suffix from an object series.
+
+        If the suffix is not present, the original string will be returned.
+
+        Parameters
+        ----------
+        suffix : str
+            Remove the suffix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given suffix removed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["foo_str", "bar_str", "no_suffix"])
+        >>> s
+        0    foo_str
+        1    bar_str
+        2    no_suffix
+        dtype: object
+        >>> s.str.removesuffix("_str")
+        0    foo
+        1    bar
+        2    no_suffix
+        dtype: object
+        """
+        if suffix is None or len(suffix) == 0:
+            return self._return_or_inplace(self._column)
+        ends_column = libstrings.endswith(
+            self._column, cudf.Scalar(suffix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, 0, -len(suffix), None
+        )
+        result = cudf._lib.copying.copy_if_else(
+            removed_column, self._column, ends_column
+        )
+        return self._return_or_inplace(result)
+
+    def removeprefix(self, prefix: str) -> SeriesOrIndex:
+        """
+        Remove a prefix from an object series.
+
+        If the prefix is not present, the original string will be returned.
+
+        Parameters
+        ----------
+        prefix : str
+            Remove the prefix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given prefix removed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["str_foo", "str_bar", "no_prefix"])
+        >>> s
+        0    str_foo
+        1    str_bar
+        2    no_prefix
+        dtype: object
+        >>> s.str.removeprefix("str_")
+        0    foo
+        1    bar
+        2    no_prefix
+        dtype: object
+        """
+        if prefix is None or len(prefix) == 0:
+            return self._return_or_inplace(self._column)
+        starts_column = libstrings.startswith(
+            self._column, cudf.Scalar(prefix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, len(prefix), None, None
+        )
+        result = cudf._lib.copying.copy_if_else(
+            removed_column, self._column, starts_column
+        )
+        return self._return_or_inplace(result)
+
     def find(self, sub: str, start: int = 0, end: int = None) -> SeriesOrIndex:
         """
         Return lowest indexes in each strings in the Series/Index
@@ -5231,7 +5321,7 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype="int32")
+            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)
@@ -5305,8 +5395,9 @@ class StringColumn(column.ColumnBase):
         else:
             return self.base_children[0].size - 1
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
     def to_arrow(self) -> pa.Array:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,60 +17,25 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
-/**
- * @brief Create an offsets column to be a child of a strings column.
- * This will set the offsets values by executing scan on the provided
- * Iterator.
- *
- * @tparam Iterator Used as input to scan to set the offset values.
- * @param begin The beginning of the input sequence
- * @param end The end of the input sequence
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return offsets child column for strings column
- */
-template <typename InputIterator>
-std::unique_ptr<column> make_offsets_child_column(InputIterator begin,
-                                                  InputIterator end,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(begin < end, "Invalid iterator range");
-  auto count = thrust::distance(begin, end);
-  auto offsets_column =
-    make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<int32_t>();
-  // Using inclusive-scan to compute last entry which is the total size.
-  // Exclusive-scan is possible but will not compute that last entry.
-  // Rather than manually computing the final offset using values in device memory,
-  // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
-  // offset values to zero manually.
-  thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
-  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
-  return offsets_column;
-}
 
 /**
  * @brief Creates child offsets and chars columns by applying the template function that
- * can be used for computing the output size of each string as well as create the output.
+ * can be used for computing the output size of each string as well as create the output
+ *
+ * @throws cudf::logic_error if the output strings column exceeds the column size limit
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must also have members d_offsets and d_chars which are set to
@@ -106,14 +71,18 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                        size_and_exec_fn);
   };
 
-  // Compute the offsets values
+  // Compute the output sizes
   for_each_fn(size_and_exec_fn);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  // Convert the sizes to offsets
+  auto const bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds column size limit");
 
   // Now build the chars column
-  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-  std::unique_ptr<column> chars_column = create_chars_child_column(bytes, stream, mr);
+  std::unique_ptr<column> chars_column =
+    create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
 
   // Execute the function fn again to fill the chars column.
   // Note that if the output chars column has zero size, the function fn should not be called to

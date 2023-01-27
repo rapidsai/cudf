@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -9,7 +9,7 @@ rapids-logger "Generate notebook testing dependencies"
 rapids-dependency-file-generator \
   --output conda \
   --file_key test_notebooks \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee env.yaml
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
 
 rapids-mamba-retry env create --force -f env.yaml -n test
 
@@ -25,9 +25,9 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 
 rapids-mamba-retry install \
-  -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
-  cudf
+  --channel "${CPP_CHANNEL}" \
+  --channel "${PYTHON_CHANNEL}" \
+  cudf libcudf
 
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
