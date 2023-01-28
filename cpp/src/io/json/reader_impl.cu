@@ -57,13 +57,7 @@
 
 using cudf::host_span;
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
-
-using namespace cudf::io;
-using namespace cudf::io::json;
+namespace cudf::io::json::detail {
 
 using col_map_type     = cudf::io::json::gpu::col_map_type;
 using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type*)>>;
@@ -503,7 +497,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   const auto num_records = rec_starts.size();
 
   // alloc output buffers.
-  std::vector<column_buffer> out_buffers;
+  std::vector<cudf::io::detail::column_buffer> out_buffers;
   for (size_t col = 0; col < num_columns; ++col) {
     out_buffers.emplace_back(dtypes[col], num_records, true, stream, mr);
   }
@@ -594,7 +588,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
 {
   CUDF_FUNC_RANGE();
   if (not reader_opts.is_enabled_legacy()) {
-    return experimental::read_json(sources, reader_opts, stream, mr);
+    return cudf::io::detail::json::experimental::read_json(sources, reader_opts, stream, mr);
   }
 
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
@@ -659,7 +653,4 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                                mr);
 }
 
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail

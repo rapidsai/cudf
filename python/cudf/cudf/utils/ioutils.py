@@ -764,6 +764,9 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
+    Parser engine to use. If 'auto' is passed, the `pandas` engine
+    will be selected.
 orient : string
     Indication of expected JSON string format.
 
