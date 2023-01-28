@@ -19,14 +19,11 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/null_mask.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/segmented_reduction.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -47,7 +44,31 @@ namespace simple {
 namespace detail {
 
 /**
- * @brief Segment reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
+ * @brief Compute the validity mask and set it on the result column
+ *
+ * If `null_handling == null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid.
+ * If `null_handling == null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
+ *
+ * @param result Result of segmented reduce to update the null mask
+ * @param col Input column before reduce
+ * @param offsets Indices to segment boundaries
+ * @param null_handling How null entries are processed within each segment
+ * @param init Optional initial value
+ * @param stream Used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+void update_validity(column& result,
+                     column_view const& col,
+                     device_span<size_type const> offsets,
+                     null_policy null_handling,
+                     std::optional<std::reference_wrapper<scalar const>> init,
+                     rmm::cuda_stream_view stream,
+                     rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Segment reduction for 'sum', 'product', 'min', 'max', 'sum of squares', etc
  * which directly compute the reduction by a single step reduction call.
  *
  * @tparam InputType    the input column data-type
@@ -56,9 +77,7 @@ namespace detail {
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
+ * @param null_handling How null entries are processed within each segment
  * @param init Optional initial value of the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -73,7 +92,6 @@ std::unique_ptr<column> simple_segmented_reduction(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // reduction by iterator
   auto dcol               = cudf::column_device_view::create(col, stream);
   auto simple_op          = Op{};
   auto const num_segments = offsets.size() - 1;
@@ -110,20 +128,7 @@ std::unique_ptr<column> simple_segmented_reduction(
   }
 
   // Compute the output null mask
-  auto const bitmask                         = col.null_mask();
-  auto const first_bit_indices_begin         = offsets.begin();
-  auto const first_bit_indices_end           = offsets.end() - 1;
-  auto const last_bit_indices_begin          = first_bit_indices_begin + 1;
-  auto [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
-    bitmask,
-    first_bit_indices_begin,
-    first_bit_indices_end,
-    last_bit_indices_begin,
-    null_handling,
-    init.has_value() ? std::optional(init.value().get().is_valid()) : std::nullopt,
-    stream,
-    mr);
-  result->set_null_mask(std::move(output_null_mask), output_null_count);
+  update_validity(*result, col, offsets, null_handling, init, stream, mr);
 
   return result;
 }
@@ -139,9 +144,7 @@ std::unique_ptr<column> simple_segmented_reduction(
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
+ * @param null_handling How null entries are processed within each segment
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -184,39 +187,9 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                stream,
                                                mr)
                             ->release()[0]);
-  auto [segmented_null_mask, segmented_null_count] =
-    cudf::detail::segmented_null_mask_reduction(col.null_mask(),
-                                                offsets.begin(),
-                                                offsets.end() - 1,
-                                                offsets.begin() + 1,
-                                                null_handling,
-                                                std::nullopt,
-                                                stream,
-                                                mr);
 
-  // If the segmented null mask contains any null values, the segmented null mask
-  // must be combined with the result null mask.
-  if (segmented_null_count > 0) {
-    if (result->null_count() == 0) {
-      // The result has no nulls. Use the segmented null mask.
-      result->set_null_mask(std::move(segmented_null_mask), segmented_null_count);
-    } else {
-      // Compute the logical AND of the segmented output null mask and the
-      // result null mask to update the result null mask and null count.
-      auto result_mview = result->mutable_view();
-      std::vector masks{static_cast<bitmask_type const*>(result_mview.null_mask()),
-                        static_cast<bitmask_type const*>(segmented_null_mask.data())};
-      std::vector<size_type> begin_bits{0, 0};
-      auto const valid_count = cudf::detail::inplace_bitmask_and(
-        device_span<bitmask_type>(static_cast<bitmask_type*>(result_mview.null_mask()),
-                                  num_bitmask_words(result->size())),
-        masks,
-        begin_bits,
-        result->size(),
-        stream);
-      result->set_null_count(result->size() - valid_count);
-    }
-  }
+  // Compute the output null mask
+  update_validity(*result, col, offsets, null_handling, std::nullopt, stream, mr);
 
   return result;
 }
@@ -242,9 +215,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
+ * @param null_handling How null entries are processed within each segment
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -390,7 +361,7 @@ struct same_column_type_dispatcher {
 /**
  * @brief Call reduce and return a column of the type specified.
  *
- * This is used by operations sum(), product(), and sum_of_squares().
+ * This is used by operations such as sum(), product(), sum_of_squares(), etc
  * It only supports numeric types. If the output type is not the
  * same as the input type, an extra cast operation may occur.
  *
@@ -456,10 +427,8 @@ struct column_type_dispatcher {
    * @tparam ElementType The input column type or key type
    * @param col Input column (must be numeric)
    * @param offsets Indices to segment boundaries
-   * @param output_type Requested type of the scalar result
-   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
-   * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
-   * in the segment is valid.
+   * @param output_type Requested type of the output column
+   * @param null_handling How null entries are processed within each segment
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
