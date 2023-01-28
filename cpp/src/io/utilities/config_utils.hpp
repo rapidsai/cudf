@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/utilities/logger.hpp>
+
 #include <sstream>
 #include <string>
 
@@ -28,6 +30,13 @@ template <typename T>
 T getenv_or(std::string_view env_var_name, T default_val)
 {
   auto const env_val = std::getenv(env_var_name.data());
+  if (env_val != nullptr) {
+    logger().debug("Environment variable {} read as {}", env_var_name, env_val);
+  } else {
+    logger().debug(
+      "Environment variable {} is not set, using default value {}", env_var_name, default_val);
+  }
+
   if (env_val == nullptr) { return default_val; }
 
   std::stringstream sstream(env_val);
