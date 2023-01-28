@@ -47,10 +47,18 @@ inline std::string default_log_filename()
   return (filename == nullptr) ? std::string{"cudf_log.txt"} : std::string{filename};
 }
 
-// Simple wrapper around a spdlog::logger that performs cuDF-specific initialization
+/**
+ * @brief Simple wrapper around a spdlog::logger that performs cuDF-specific initialization.
+ */
 struct logger_wrapper {
-  spdlog::logger logger_;
+  spdlog::logger logger_;  ///< wrapped `spdlog` logger
 
+  /**
+   * @brief Converts the level name into the `spdlog` level enum.
+   *
+   * @param str logging level name
+   * @return corresponding`spdlog` level enum; info if input string is invalid
+   */
   spdlog::level::level_enum spdlog_level_from_string(std::string_view str)
   {
     if (str == "TRACE") return spdlog::level::trace;
