@@ -342,8 +342,18 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
                         data + thrust::get<0>(offsets),
                         static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
                     });
-  auto d_column_names = cudf::make_strings_column(string_views, stream);
-  auto to_host        = [](auto const& col) {
+
+  cudf::io::parse_options_view options_view{};
+  options_view.quotechar  = '\0';  // no quotes
+  options_view.keepquotes = true;
+  auto d_column_names     = experimental::detail::parse_data(string_views.begin(),
+                                                         num_strings,
+                                                         data_type{type_id::STRING},
+                                                         rmm::device_buffer{0, stream},
+                                                         options_view,
+                                                         stream,
+                                                         rmm::mr::get_current_device_resource());
+  auto to_host            = [](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
