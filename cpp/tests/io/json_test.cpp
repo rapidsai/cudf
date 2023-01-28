@@ -749,7 +749,7 @@ TEST_P(JsonReaderDualTest, JsonLinesObjects)
   EXPECT_EQ(result.tbl->num_rows(), 1);
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "co\\\"l1");
+  EXPECT_EQ(result.metadata.schema_info[0].name, is_legacy_test(test_opt) ? "co\\\"l1" : "co\"l1");
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
 
