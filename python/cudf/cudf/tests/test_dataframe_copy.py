@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
 import numpy as np
@@ -160,7 +160,7 @@ def test_kernel_deep_copy():
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
 
-    add_one[1, len(sr)](sr._column.data_array_view)
+    add_one[1, len(sr)](sr._column.data_array_view(mode="write"))
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 

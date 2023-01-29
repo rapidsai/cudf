@@ -84,6 +84,40 @@ enum level_type {
 };
 
 /**
+ * @brief Nesting information specifically needed by the decode and preprocessing
+ * kernels.
+ *
+ * This data is kept separate from PageNestingInfo to keep it as small as possible.
+ * It is used in a cached form in shared memory when possible.
+ */
+struct PageNestingDecodeInfo {
+  // set up prior to decoding
+  int32_t max_def_level;
+  // input repetition/definition levels are remapped with these values
+  // into the corresponding real output nesting depths.
+  int32_t start_depth;
+  int32_t end_depth;
+
+  // computed during preprocessing
+  int32_t page_start_value;
+
+  // computed during decoding
+  int32_t null_count;
+
+  // used internally during decoding
+  int32_t valid_map_offset;
+  int32_t valid_count;
+  int32_t value_count;
+  uint8_t* data_out;
+  bitmask_type* valid_map;
+};
+
+// Use up to 512 bytes of shared memory as a cache for nesting information.
+// As of 1/20/23, this gives us a max nesting depth of 10 (after which it falls back to
+// global memory). This handles all but the most extreme cases.
+constexpr int max_cacheable_nesting_decode_info = (512) / sizeof(PageNestingDecodeInfo);
+
+/**
  * @brief Nesting information
  *
  * This struct serves two purposes:
@@ -94,30 +128,15 @@ enum level_type {
  *
  */
 struct PageNestingInfo {
-  // input repetition/definition levels are remapped with these values
-  // into the corresponding real output nesting depths.
-  int32_t start_depth;
-  int32_t end_depth;
-
-  // set at initialization
-  int32_t max_def_level;
-  int32_t max_rep_level;
+  // set at initialization (see start_offset_output_iterator in reader_impl_preprocess.cu)
   cudf::type_id type;  // type of the corresponding cudf output column
   bool nullable;
 
-  // set during preprocessing
+  // TODO: these fields might make sense to move into PageNestingDecodeInfo for memory performance
+  // reasons.
   int32_t size;  // this page/nesting-level's row count contribution to the output column, if fully
                  // decoded
-  int32_t batch_size;        // the size of the page for this batch
-  int32_t page_start_value;  // absolute output start index in output column data
-
-  // set during data decoding
-  int32_t valid_count;       // # of valid values decoded in this page/nesting-level
-  int32_t value_count;       // total # of values decoded in this page/nesting-level
-  int32_t null_count;        // null count
-  int32_t valid_map_offset;  // current offset in bits relative to valid_map
-  uint8_t* data_out;         // pointer into output buffer
-  uint32_t* valid_map;       // pointer into output validity buffer
+  int32_t batch_size;  // the size of the page for this batch
 };
 
 /**
@@ -159,9 +178,9 @@ struct PageInfo {
   // skipped_leaf_values will always be 0.
   //
   // # of values skipped in the repetition/definition level stream
-  int skipped_values;
+  int32_t skipped_values;
   // # of values skipped in the actual data stream.
-  int skipped_leaf_values;
+  int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
@@ -170,9 +189,10 @@ struct PageInfo {
   // input column nesting information, output column nesting information and
   // mappings between the two. the length of the array, nesting_info_size is
   // max(num_output_nesting_levels, max_definition_levels + 1)
-  int num_output_nesting_levels;
-  int nesting_info_size;
+  int32_t num_output_nesting_levels;
+  int32_t nesting_info_size;
   PageNestingInfo* nesting;
+  PageNestingDecodeInfo* nesting_decode;
 };
 
 /**
@@ -242,7 +262,7 @@ struct ColumnChunkDesc {
   PageInfo* page_info;                        // output page info for up to num_dict_pages +
                                               // num_data_pages (dictionary pages first)
   string_index_pair* str_dict_index;          // index for string dictionary
-  uint32_t** valid_map_base;                  // base pointers of valid bit map for this column
+  bitmask_type** valid_map_base;              // base pointers of valid bit map for this column
   void** column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
@@ -263,6 +283,7 @@ struct file_intermediate_data {
   hostdevice_vector<gpu::ColumnChunkDesc> chunks{};
   hostdevice_vector<gpu::PageInfo> pages_info{};
   hostdevice_vector<gpu::PageNestingInfo> page_nesting_info{};
+  hostdevice_vector<gpu::PageNestingDecodeInfo> page_nesting_decode_info{};
 };
 
 /**
