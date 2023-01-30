@@ -278,6 +278,11 @@ class SpillableBuffer(Buffer):
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
 
+    def copy(self, deep: bool = True):
+        spill_lock = SpillLock()
+        self.spill_lock(spill_lock=spill_lock)
+        return super().copy(deep=deep)
+
     def spill(self, target: str = "cpu") -> None:
         """Spill or un-spill this buffer in-place
 

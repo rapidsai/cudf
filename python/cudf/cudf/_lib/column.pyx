@@ -547,7 +547,8 @@ cdef class Column:
                     exposed=True,
                 )
                 if isinstance(data_owner, CopyOnWriteBuffer):
-                    data_owner.ptr  # accessing the pointer marks it exposed.
+                    data_owner.get_ptr(mode="write")
+                    # accessing the pointer marks it exposed.
                 elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(

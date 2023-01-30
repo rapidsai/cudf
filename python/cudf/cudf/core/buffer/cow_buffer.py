@@ -122,16 +122,6 @@ class CopyOnWriteBuffer(Buffer):
         else:
             raise ValueError(f"Incorrect mode passed : {mode}")
 
-    def _getitem(self, offset: int, size: int) -> Buffer:
-        """
-        Helper for `__getitem__`
-        """
-        return self._from_device_memory(
-            cuda_array_interface_wrapper(
-                ptr=self._ptr + offset, size=size, owner=self.owner
-            )
-        )
-
     def copy(self, deep: bool = True):
         if deep or self._zero_copied:
             return super().copy(deep=True)

@@ -15,6 +15,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils import dtypes as dtypeutils
 
@@ -325,6 +326,7 @@ def does_not_raise():
     yield
 
 
+@acquire_spill_lock()
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):

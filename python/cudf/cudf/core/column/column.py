@@ -461,9 +461,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     offset=self.offset,
                     children=tuple(
                         col.copy(deep=False) for col in self.base_children
-                    )
-                    if cudf.get_option("copy_on_write")
-                    else self.base_children,
+                    ),
                 ),
             )
 
