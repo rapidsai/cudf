@@ -1,15 +1,13 @@
 # Copyright (c) 2023, NVIDIA CORPORATION.
 
 import os
-import platform
 import subprocess
 import sys
 from shutil import which
 
 import pytest
 
-gdb = which("cuda-gdb")
-machine_arch = platform.uname().machine
+gdb = which("gdb")
 
 
 GDB_COMMANDS = b"""
@@ -23,14 +21,7 @@ exit
 
 pytestmark = [
     pytest.mark.skipif(
-        machine_arch != "x86_64",
-        reason=(
-            "cuda-gdb install is broken on nvidia/cuda aarch64 images "
-            "(libexpat is missing)"
-        ),
-    ),
-    pytest.mark.skipif(
-        gdb is None, reason="cuda-gdb not found, can't detect cuInit"
+        gdb is None, reason="gdb not found, can't detect cuInit"
     ),
 ]
 
@@ -47,7 +38,7 @@ def test_cudf_import_no_cuinit():
     # Instead, we just run under GDB and see if we hit a breakpoint
     env = os.environ.copy()
     env["RAPIDS_NO_INITIALIZE"] = "1"
-    output: str = subprocess.check_output(
+    output = subprocess.run(
         [
             gdb,
             "-x",
@@ -59,10 +50,17 @@ def test_cudf_import_no_cuinit():
         ],
         input=GDB_COMMANDS,
         env=env,
-        stderr=subprocess.DEVNULL,
-    ).decode()
+        text=True,
+        capture_output=True,
+    )
 
-    cuInit_called = output.find("in cuInit ()")
+    cuInit_called = output.stdout.find("in cuInit ()")
+    # Produce some useful log of interaction for CI debug
+    print("Command output:\n")
+    print("*** STDOUT ***")
+    print(output.stdout)
+    print("*** STDERR ***")
+    print(output.stderr)
     assert cuInit_called < 0
 
 
@@ -71,7 +69,7 @@ def test_cudf_create_series_cuinit():
     # when it definitely should have been called.
     env = os.environ.copy()
     env["RAPIDS_NO_INITIALIZE"] = "1"
-    output: str = subprocess.check_output(
+    output = subprocess.run(
         [
             gdb,
             "-x",
@@ -83,8 +81,15 @@ def test_cudf_create_series_cuinit():
         ],
         input=GDB_COMMANDS,
         env=env,
-        stderr=subprocess.DEVNULL,
-    ).decode()
+        text=True,
+        capture_output=True,
+    )
 
     cuInit_called = output.find("in cuInit ()")
+    # Produce some useful log of interaction for CI debug
+    print("Command output:\n")
+    print("*** STDOUT ***")
+    print(output.stdout)
+    print("*** STDERR ***")
+    print(output.stderr)
     assert cuInit_called >= 0
