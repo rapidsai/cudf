@@ -23,6 +23,7 @@ from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
+from cudf.core.udf.groupby_utils import jit_groupby_apply
 from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
@@ -786,14 +787,83 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function, *args):
+    def _jit_groupby_apply(
+        self, function, group_names, offsets, group_keys, grouped_values, *args
+    ):
+        # Nulls are not yet supported
+        for colname in self.grouping.values._data.keys():
+            if self.obj._data[colname].has_nulls():
+                raise ValueError(
+                    "Nulls not yet supported with groupby JIT engine"
+                )
+
+        chunk_results = jit_groupby_apply(
+            offsets, grouped_values, function, *args
+        )
+        result = cudf.Series._from_data(
+            {None: chunk_results}, index=group_names
+        )
+        result.index.names = self.grouping.names
+        result = result.reset_index()
+        result[None] = result.pop(0)
+        return result
+
+    def _iterative_groupby_apply(
+        self, function, group_names, offsets, group_keys, grouped_values, *args
+    ):
+        ngroups = len(offsets) - 1
+        if ngroups > self._MAX_GROUPS_BEFORE_WARN:
+            warnings.warn(
+                f"GroupBy.apply() performance scales poorly with "
+                f"number of groups. Got {ngroups} groups. Some functions "
+                "may perform better by passing engine='jit'",
+                RuntimeWarning,
+            )
+
+        chunks = [
+            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
+        ]
+        chunk_results = [function(chk, *args) for chk in chunks]
+        if not len(chunk_results):
+            return self.obj.head(0)
+
+        if cudf.api.types.is_scalar(chunk_results[0]):
+            result = cudf.Series._from_data(
+                {None: chunk_results}, index=group_names
+            )
+            result.index.names = self.grouping.names
+        elif isinstance(chunk_results[0], cudf.Series) and isinstance(
+            self.obj, cudf.DataFrame
+        ):
+            result = cudf.concat(chunk_results, axis=1).T
+            result.index.names = self.grouping.names
+        else:
+            result = cudf.concat(chunk_results)
+            if self._group_keys:
+                index_data = group_keys._data.copy(deep=True)
+                index_data[None] = grouped_values.index._column
+                result.index = cudf.MultiIndex._from_data(index_data)
+        return result
+
+    def apply(self, function, *args, engine="cudf"):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
         ----------
-        func : function
+        function : callable
           The python transformation function that will be applied
           on the grouped chunk.
+        args : tuple
+            Optional positional arguments to pass to the function.
+        engine: {'cudf', 'jit'}, default 'cudf'
+          Selects the GroupBy.apply implementation. Use `jit` to
+          select the numba JIT pipeline. Only certain operations are allowed
+          within the function when using this option: min, max, sum, mean, var,
+          std, idxmax, and idxmin and any arithmetic formula involving them are
+          allowed. Binary operations are not yet supported, so syntax like
+          `df['x'] * 2` is not yet allowed.
+          For more information, see the `cuDF guide to user defined functions
+          <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Examples
         --------
@@ -850,40 +920,45 @@ class GroupBy(Serializable, Reducible, Scannable):
                    a  b  c
                 0  1  1  1
                 2  2  1  3
+
+        ``engine='jit'`` may be used to accelerate certain functions,
+        initially those that contain reductions and arithmetic operations
+        between results of those reductions:
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[1,1,2,2,3,3], 'b':[1,2,3,4,5,6]})
+        >>> df.groupby('a').apply(
+        ...     lambda group: group['b'].max() - group['b'].min(),
+        ...     engine='jit'
+        ... )
+        a  None
+        0  1     1
+        1  2     1
+        2  3     1
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
-        ngroups = len(offsets) - 1
-        if ngroups > self._MAX_GROUPS_BEFORE_WARN:
-            warnings.warn(
-                f"GroupBy.apply() performance scales poorly with "
-                f"number of groups. Got {ngroups} groups."
+        if engine == "jit":
+            result = self._jit_groupby_apply(
+                function,
+                group_names,
+                offsets,
+                group_keys,
+                grouped_values,
+                *args,
             )
-
-        chunks = [
-            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
-        ]
-        chunk_results = [function(chk, *args) for chk in chunks]
-        if not len(chunk_results):
-            return self.obj.head(0)
-
-        if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series(chunk_results, index=group_names)
-            result.index.names = self.grouping.names
+        elif engine == "cudf":
+            result = self._iterative_groupby_apply(
+                function,
+                group_names,
+                offsets,
+                group_keys,
+                grouped_values,
+                *args,
+            )
         else:
-            if isinstance(chunk_results[0], cudf.Series) and isinstance(
-                self.obj, cudf.DataFrame
-            ):
-                result = cudf.concat(chunk_results, axis=1).T
-                result.index.names = self.grouping.names
-            else:
-                result = cudf.concat(chunk_results)
-                if self._group_keys:
-                    index_data = group_keys._data.copy(deep=True)
-                    index_data[None] = grouped_values.index._column
-                    result.index = cudf.MultiIndex._from_data(index_data)
+            raise ValueError(f"Unsupported engine '{engine}'")
 
         if self._sort:
             result = result.sort_index()
