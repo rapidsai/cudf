@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from functools import lru_cache
 
@@ -9,7 +9,7 @@ from cudf.core.dtypes import dtype
 from cudf.core.udf import api, row_function, utils
 from cudf.utils.dtypes import STRING_TYPES
 
-from . import masked_lowering, masked_typing
+from . import groupby_lowering, groupby_typing, masked_lowering, masked_typing
 
 _units = ["ns", "ms", "us", "s"]
 _datetime_cases = {types.NPDatetime(u) for u in _units}
