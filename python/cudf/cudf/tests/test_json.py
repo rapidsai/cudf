@@ -14,7 +14,12 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -50,6 +55,32 @@ def pdf(request):
 @pytest.fixture
 def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
+
+
+@pytest.fixture(params=[0, 1, 10, 100])
+def gdf_writer_types(request):
+    # datetime64[us], datetime64[ns] are unsupported due to a bug in parser
+    types = (
+        NUMERIC_TYPES
+        + ["datetime64[s]", "datetime64[ms]"]
+        + TIMEDELTA_TYPES
+        + ["bool", "str"]
+    )
+    typer = {"col_" + val: val for val in types}
+    ncols = len(types)
+    nrows = request.param
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = cudf.DataFrame(
+        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
+        columns=pd.Index([f"col_{typ}" for typ in types]),
+    )
+
+    # Cast all the column dtypes to objects, rename them, and then cast to
+    # appropriate types
+    test_pdf = test_pdf.astype(typer)
+
+    return test_pdf
 
 
 index_params = [True, False]
@@ -154,6 +185,60 @@ def test_json_writer(tmpdir, pdf, gdf):
         pdf_string = pdf[column].to_json()
         gdf_string = pdf[column].to_json()
         assert_eq(pdf_string, gdf_string)
+
+
+def test_cudf_json_writer(pdf):
+    # removing datetime column because pandas doesn't support it
+    for col_name in pdf.columns:
+        if "datetime" in col_name:
+            pdf.drop(col_name, axis=1, inplace=True)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf_string = pdf.to_json(orient="records", lines=True)
+    gdf_string = gdf.to_json(orient="records", lines=True, engine="cudf")
+
+    assert_eq(pdf_string, gdf_string)
+
+
+def test_cudf_json_writer_read(gdf_writer_types):
+    dtypes = {
+        col_name: col_name[len("col_") :]
+        for col_name in gdf_writer_types.columns
+    }
+    gdf_string = gdf_writer_types.to_json(
+        orient="records", lines=True, engine="cudf"
+    )
+    gdf2 = cudf.read_json(
+        StringIO(gdf_string),
+        lines=True,
+        engine="cudf",
+        dtype=dict(dtypes),
+    )
+    pdf2 = pd.read_json(StringIO(gdf_string), lines=True, dtype=dict(dtypes))
+
+    # Bug in pandas https://github.com/pandas-dev/pandas/issues/28558
+    if pdf2.empty:
+        pdf2.reset_index(drop=True, inplace=True)
+        pdf2.columns = pdf2.columns.astype("object")
+    assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize("sink", ["string", "file"])
+def test_cudf_json_writer_sinks(sink, tmp_path_factory):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    target = None
+    if sink == "string":
+        target = StringIO()
+    elif sink == "file":
+        target = tmp_path_factory.mktemp("json") / "test_df.json"
+    df.to_json(target, engine="cudf")
+    if sink == "string":
+        assert (
+            target.getvalue() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
+        )
+    elif sink == "file":
+        assert os.path.exists(target)
+        with open(target, "r") as f:
+            assert f.read() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
 
 
 @pytest.fixture(
@@ -434,6 +519,22 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
     for col_name in df._data:
         for i in range(num_rows):
             assert expected[col_name][i] == df[col_name][i]
+
+
+def test_json_to_json_special_characters():
+    df = cudf.DataFrame(
+        {
+            "'a'": ['ab"cd', "\\\b", "\r\\", "'"],
+            "b": ["a\tb\t", "\\", '\\"', "\t"],
+            "c": ["aeiou", "try", "json", "cudf"],
+        }
+    )
+
+    actual = StringIO()
+    df.to_json(actual, engine="cudf", lines=True, orient="records")
+    expected = StringIO()
+    df.to_pandas().to_json(expected, lines=True, orient="records")
+    assert expected.getvalue() == actual.getvalue()
 
 
 @pytest.mark.parametrize(
