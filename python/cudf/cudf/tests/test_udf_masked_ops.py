@@ -74,7 +74,7 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
 
 def run_masked_string_udf_test(func, data, args=(), **kwargs):
-    from strings_udf._typing import sv_to_udf_str
+    from strings_udf._testing import sv_to_udf_str
 
     gdf = data
     pdf = data.to_pandas(nullable=True)

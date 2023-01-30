@@ -18,12 +18,7 @@ from strings_udf._lib.tables import (
     get_character_flags_table_ptr,
     get_special_case_mapping_table_ptr,
 )
-from strings_udf._typing import (
-    size_type,
-    string_view,
-    sv_to_udf_str,
-    udf_string,
-)
+from strings_udf._typing import size_type, string_view, udf_string
 
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
@@ -564,10 +559,3 @@ def islower_impl(st, tbl):
 @create_unary_identifier_func("istitle")
 def istitle_impl(st, tbl):
     return _string_view_istitle(st, tbl)
-
-
-@cuda_lower(sv_to_udf_str, string_view)
-def sv_to_udf_str_testing_lowering(context, builder, sig, args):
-    return cast_string_view_to_udf_string(
-        context, builder, sig.args[0], sig.return_type, args[0]
-    )

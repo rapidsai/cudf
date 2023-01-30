@@ -112,18 +112,6 @@ class StrViewArgHandler:
 str_view_arg_handler = StrViewArgHandler()
 
 
-# for use in testing only
-def sv_to_udf_str(sv):
-    pass
-
-
-@cuda_decl_registry.register_global(sv_to_udf_str)
-class StringViewToUDFStringDecl(AbstractTemplate):
-    def generic(self, args, kws):
-        if isinstance(args[0], StringView) and len(args) == 1:
-            return nb_signature(udf_string, string_view)
-
-
 # String functions
 @cuda_decl_registry.register_global(len)
 class StringLength(AbstractTemplate):
