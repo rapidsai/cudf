@@ -2,27 +2,18 @@
 
 import operator
 
-import llvmlite.binding as ll
 import numpy as np
 from numba import types
-from numba.core.datamodel import default_manager
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.cuda.cudadrv import nvvm
 
 import rmm
-
-data_layout = nvvm.data_layout
+from cudf.core.udf.utils import _get_extensionty_size
 
 # libcudf size_type
 size_type = types.int32
-
-# workaround for numba < 0.56
-if isinstance(data_layout, dict):
-    data_layout = data_layout[64]
-target_data = ll.create_target_data(data_layout)
 
 
 # String object definitions
@@ -32,8 +23,7 @@ class UDFString(types.Type):
 
     def __init__(self):
         super().__init__(name="udf_string")
-        llty = default_manager[self].get_value_type()
-        self.size_bytes = llty.get_abi_size(target_data)
+        self.size_bytes = _get_extensionty_size(self)
 
     @property
     def return_type(self):
@@ -46,8 +36,7 @@ class StringView(types.Type):
 
     def __init__(self):
         super().__init__(name="string_view")
-        llty = default_manager[self].get_value_type()
-        self.size_bytes = llty.get_abi_size(target_data)
+        self.size_bytes = _get_extensionty_size(self)
 
     @property
     def return_type(self):
