@@ -89,6 +89,14 @@ public class Rmm {
   }
 
   /**
+   * Get the currently set RmmTrackingResourceAdaptor that is set. This might return null if
+   * RMM has nto been initialized.
+   */
+  public static synchronized RmmTrackingResourceAdaptor<RmmDeviceMemoryResource> getTracker() {
+    return tracker;
+  }
+
+  /**
    * Set the current device resource that RMM should use for all allocations and de-allocations.
    * This should only be done if you feel comfortable that the current device resource has no
    * pending allocations. Note that the caller of this is responsible for closing the current
