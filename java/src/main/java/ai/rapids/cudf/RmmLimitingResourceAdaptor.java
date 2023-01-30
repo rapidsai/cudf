@@ -20,8 +20,8 @@ package ai.rapids.cudf;
  */
 public class RmmLimitingResourceAdaptor<C extends RmmDeviceMemoryResource>
     extends RmmWrappingDeviceMemoryResource<C> {
-  private long limit;
-  private long alignment;
+  private final long limit;
+  private final long alignment;
   private long handle = 0;
 
   /**

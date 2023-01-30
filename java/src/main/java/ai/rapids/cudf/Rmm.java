@@ -404,6 +404,7 @@ public class Rmm {
       boolean success = false;
       try {
         setCurrentDeviceResource(orig.wrapped, orig, false);
+        success = true;
       } finally {
         if (success) {
           orig.releaseWrapped();

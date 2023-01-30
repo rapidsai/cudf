@@ -22,8 +22,8 @@ package ai.rapids.cudf;
  */
 public class RmmArenaMemoryResource<C extends RmmDeviceMemoryResource>
     extends RmmWrappingDeviceMemoryResource<C> {
-  private long size;
-  private boolean dumpLogOnFailure;
+  private final long size;
+  private final boolean dumpLogOnFailure;
   private long handle = 0;
 
 

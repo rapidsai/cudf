@@ -51,9 +51,9 @@ public class RmmTest {
     }
   }
 
-  static final long poolSize = 32 * 1024 * 1024; // 32 MiB
   @Test
   public void testCreateAdaptors() {
+    final long poolSize = 32 * 1024 * 1024; // 32 MiB
     try (RmmCudaMemoryResource r = new RmmCudaMemoryResource()) {
       assert(r.getHandle() != 0);
     }

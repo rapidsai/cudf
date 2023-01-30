@@ -23,8 +23,8 @@ import java.util.Arrays;
 public class RmmEventHandlerResourceAdaptor<C extends RmmDeviceMemoryResource>
     extends RmmWrappingDeviceMemoryResource<C> {
   private long handle = 0;
-  private long [] allocThresholds;
-  private long [] deallocThresholds;
+  private final long [] allocThresholds;
+  private final long [] deallocThresholds;
   private final boolean debug;
 
   /**

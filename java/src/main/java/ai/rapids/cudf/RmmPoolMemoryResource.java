@@ -22,8 +22,8 @@ package ai.rapids.cudf;
 public class RmmPoolMemoryResource<C extends RmmDeviceMemoryResource>
     extends RmmWrappingDeviceMemoryResource<C> {
   private long handle = 0;
-  private long initSize;
-  private long maxSize;
+  private final long initSize;
+  private final long maxSize;
 
   /**
    * Create a new pooled memory resource taking ownership of the RmmDeviceMemoryResource that it is

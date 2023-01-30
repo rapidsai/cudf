@@ -20,8 +20,8 @@ package ai.rapids.cudf;
  * deallocation.
  */
 public class RmmCudaAsyncMemoryResource implements RmmDeviceMemoryResource {
-  private long releaseThreshold;
-  private long size;
+  private final long releaseThreshold;
+  private final long size;
   private long handle = 0;
 
   /**
