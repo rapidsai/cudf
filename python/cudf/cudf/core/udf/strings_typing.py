@@ -58,7 +58,7 @@ def len_typing(self, args, kws):
     if isinstance(args[0], MaskedType) and isinstance(
         args[0].value_type, (StringView, UDFString)
     ):
-        return nb_signature(MaskedType(size_type), args[0])
+        return nb_signature(MaskedType(size_type), string_view)
     elif isinstance(args[0], types.StringLiteral) and len(args) == 1:
         return nb_signature(size_type, args[0])
 

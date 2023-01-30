@@ -137,7 +137,7 @@ class StringLength(AbstractTemplate):
             # string_view -> int32
             # udf_string -> int32
             # literal -> int32
-            return nb_signature(size_type, args[0])
+            return nb_signature(size_type, string_view)
 
 
 def register_stringview_binaryop(op, retty):
