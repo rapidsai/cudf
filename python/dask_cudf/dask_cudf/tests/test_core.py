@@ -6,6 +6,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+from packaging import version
 
 import dask
 from dask import dataframe as dd
@@ -33,8 +34,8 @@ def test_from_dict_backend_dispatch():
 
 def test_to_backend():
     # Test DataFrame.to_backend
-    # Depends on: https://github.com/dask/dask/pull/9758
-    if not hasattr(dd.core.DataFrame, "to_backend"):
+    # Requires Dask>=2023.1.1
+    if version.parse(dask.__version__) < version.parse("2023.1.1"):
         pytest.skip("to_backend not supported in this version of Dask.")
 
     np.random.seed(0)
@@ -569,8 +570,6 @@ def test_unary_ops(func, gdf, gddf):
 
     # Fixed in https://github.com/dask/dask/pull/4657
     if isinstance(p, cudf.Index):
-        from packaging import version
-
         if version.parse(dask.__version__) < version.parse("1.1.6"):
             pytest.skip(
                 "dask.dataframe assert_eq index check hardcoded to "
