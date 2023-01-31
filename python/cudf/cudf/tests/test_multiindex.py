@@ -848,6 +848,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
+    cudf.set_option("copy_on_write", False)
 
 
 @pytest.mark.parametrize(
