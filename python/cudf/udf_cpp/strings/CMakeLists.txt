@@ -63,7 +63,7 @@ target_compile_options(
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
 target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
-install(TARGETS cudf_strings_udf DESTINATION ./strings_udf/_lib/)
+install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # This function will copy the generated PTX file from its generator-specific location in the build
 # tree into a specified location in the build tree from which we can install it.
@@ -115,7 +115,7 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf" ${tgt}.ptx)
   install(
     FILES $<TARGET_OBJECTS:${tgt}>
-    DESTINATION ./strings_udf
+    DESTINATION ./cudf/core/udf/
     RENAME ${tgt}.ptx
   )
 endforeach()

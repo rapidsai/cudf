@@ -35,6 +35,7 @@ from . import (
     strings,
     text,
     transpose,
+    tables,
     unary,
 )
 

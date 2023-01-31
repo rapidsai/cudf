@@ -1,5 +1,15 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+
+from cudf._lib.cpp.strings_udf cimport (
+    get_character_cases_table as cpp_get_character_cases_table,
+    get_character_flags_table as cpp_get_character_flags_table,
+    get_special_case_mapping_table as cpp_get_special_case_mapping_table,
+)
+
+import numpy as np
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -9,7 +19,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-from strings_udf._lib.cpp.strings_udf cimport (
+from cudf._lib.cpp.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
     free_udf_string_array as cpp_free_udf_string_array,
     to_string_view_array as cpp_to_string_view_array,
@@ -39,3 +49,17 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
     result = Column.from_unique_ptr(move(c_result))
 
     return result
+
+def get_character_flags_table_ptr():
+    cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
+    return np.uintp(<uintptr_t>tbl_ptr)
+
+
+def get_character_cases_table_ptr():
+    cdef const uint16_t* tbl_ptr = cpp_get_character_cases_table()
+    return np.uintp(<uintptr_t>tbl_ptr)
+
+
+def get_special_case_mapping_table_ptr():
+    cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
+    return np.uintp(<uintptr_t>tbl_ptr)

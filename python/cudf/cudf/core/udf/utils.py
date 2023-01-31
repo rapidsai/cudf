@@ -4,6 +4,8 @@ import glob
 import os
 from typing import Any, Callable, Dict, List
 
+from cuda import cudart
+
 import cachetools
 import cupy as cp
 import llvmlite.binding as ll
@@ -29,6 +31,15 @@ from cudf.utils.dtypes import (
     TIMEDELTA_TYPES,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+
+# Maximum size of a string column is 2 GiB
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
+    "STRINGS_UDF_HEAP_SIZE", 2**31
+)
+heap_size = 0
+
+
 
 logger = get_logger()
 
@@ -420,3 +431,19 @@ def maybe_patch_numba_linker(
             Linker.new = new_patched_linker
         else:
             logger.debug("Cannot patch Numba Linker - unsupported version")
+
+def set_malloc_heap_size(size=None):
+    """
+    Heap size control for strings_udf, size in bytes.
+    """
+    global heap_size
+    if size is None:
+        size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
+    if size != heap_size:
+        (ret,) = cudart.cudaDeviceSetLimit(
+            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        )
+        if ret.value != 0:
+            raise RuntimeError("Unable to set cudaMalloc heap size")
+
+        heap_size = size

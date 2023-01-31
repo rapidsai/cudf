@@ -46,6 +46,7 @@ set(cython_sources
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
+    strings_udf.pyx
     text.pyx
     transform.pyx
     transpose.pyx
@@ -53,7 +54,7 @@ set(cython_sources
     unary.pyx
     utils.pyx
 )
-set(linked_libraries cudf::cudf)
+set(linked_libraries cudf::cudf cudf_strings_udf)
 
 rapids_cython_create_modules(
   CXX
