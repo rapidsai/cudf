@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(strings_udf_version 23.02.00)
+set(strings_udf_version 23.04.00)
 
 include(../../fetch_rapids.cmake)
 
