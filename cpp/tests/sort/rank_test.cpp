@@ -45,18 +45,13 @@ void run_rank_test(cudf::table_view input,
                    cudf::order column_order,
                    cudf::null_policy null_handling,
                    cudf::null_order null_precedence,
-                   bool percentage,
-                   bool debug = false)
+                   bool percentage)
 {
   int i = 0;
   for (auto&& input_column : input) {
     // Rank
     auto got_rank_column =
       cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
-    if (debug) {
-      cudf::test::print(got_rank_column->view());
-      std::cout << "\n";
-    }
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected.column(i), got_rank_column->view());
     i++;
   }
@@ -109,8 +104,7 @@ struct Rank : public cudf::test::BaseFixture {
                     std::get<0>(input_arg),
                     std::get<1>(input_arg),
                     std::get<2>(input_arg),
-                    percentage,
-                    false);
+                    percentage);
     }
   }
 };
