@@ -327,3 +327,29 @@ def test_series_cat_copy(copy_on_write):
     assert_eq(s1, cudf.Series([10, 20, 30, 40, 50], dtype=s.dtype))
     assert_eq(s2, cudf.Series([10, 20, 30, 10, 50], dtype=s.dtype))
     assert_eq(s3, cudf.Series([10, 20, 20, 20, 20], dtype=s.dtype))
+
+
+def test_dataframe_cow_slice_setitem():
+    cudf.set_option("copy_on_write", True)
+    df = cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]})
+    slice_df = df[1:4]
+
+    assert_eq(
+        slice_df,
+        cudf.DataFrame(
+            {"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+        ),
+    )
+
+    slice_df["a"][2] = 1111
+
+    assert_eq(
+        slice_df,
+        cudf.DataFrame(
+            {"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+        ),
+    )
+    assert_eq(
+        df,
+        cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}),
+    )
