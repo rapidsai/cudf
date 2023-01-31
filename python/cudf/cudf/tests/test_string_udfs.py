@@ -9,14 +9,18 @@ from numba.core.typing import signature as nb_signature
 from numba.types import CPointer, void
 
 import rmm
-import strings_udf
-from strings_udf._lib.cudf_jit_udf import (
+
+import cudf
+from cudf._lib.strings_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
 )
-from strings_udf._typing import str_view_arg_handler, string_view, udf_string
-
-import cudf
+from cudf.core.udf.strings_typing import (
+    str_view_arg_handler,
+    string_view,
+    udf_string,
+)
+from cudf.core.udf.utils import ptx_files
 from cudf.testing._utils import assert_eq
 
 
@@ -36,9 +40,7 @@ def get_kernel(func, dtype, size):
         outty = numba.np.numpy_support.from_dtype(dtype)[::1]
     sig = nb_signature(void, CPointer(string_view), outty)
 
-    @cuda.jit(
-        sig, link=[strings_udf.ptxpath], extensions=[str_view_arg_handler]
-    )
+    @cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])
     def kernel(input_strings, output_col):
         id = cuda.grid(1)
         if id < size:
