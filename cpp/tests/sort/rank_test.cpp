@@ -485,7 +485,7 @@ struct RankListAndStruct : public cudf::test::BaseFixture {
     */
     auto list_col =
       lists_col<T>{{{}, {1}, {2, 2}, {2, 3}, {2, 2}, {1}, {}, {} /*NULL*/, {2}, {} /*NULL*/, {1}},
-                nulls_at({7, 9})};
+                   nulls_at({7, 9})};
 
     // clang-format off
     /*
@@ -826,106 +826,120 @@ TYPED_TEST(RankListAndStruct, average_desc_bottom)
   this->run_all_tests(cudf::rank_method::AVERAGE, desc_bottom, col_rank, struct_rank);
 }
 
-// TYPED_TEST(RankListAndStruct, dense_asce_keep_pct)
-// {
-//   // ASCENDING and null_order::AFTER
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{{1.0 / 5.0,
-//                                                            2.0 / 5.0,
-//                                                            4.0 / 5.0,
-//                                                            1.0,
-//                                                            4.0 / 5.0,
-//                                                            2.0 / 5.0,
-//                                                            1.0 / 5.0,
-//                                                            -1.0,
-//                                                            3.0 / 5.0,
-//                                                            -1.0,
-//                                                            2.0 / 5.0},
-//                                                           nulls_at({7, 9})};
-//   this->run_all_tests(cudf::rank_method::DENSE, asce_keep, col_rank, true);
-// }
+TYPED_TEST(RankListAndStruct, dense_asce_keep_pct)
+{
+  // ASCENDING and null_order::AFTER
+  cudf::test::fixed_width_column_wrapper<double> col_rank{{1.0 / 5.0,
+                                                           2.0 / 5.0,
+                                                           4.0 / 5.0,
+                                                           1.0,
+                                                           4.0 / 5.0,
+                                                           2.0 / 5.0,
+                                                           1.0 / 5.0,
+                                                           -1.0,
+                                                           3.0 / 5.0,
+                                                           -1.0,
+                                                           2.0 / 5.0},
+                                                          nulls_at({7, 9})};
 
-// TYPED_TEST(RankListAndStruct, dense_asce_top_pct)
-// {
-//   // ASCENDING and null_order::BEFORE
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 3.0,
-//                                                           1.0 / 2.0,
-//                                                           5.0 / 6.0,
-//                                                           1.0,
-//                                                           5.0 / 6.0,
-//                                                           1.0 / 2.0,
-//                                                           1.0 / 3.0,
-//                                                           1.0 / 6.0,
-//                                                           2.0 / 3.0,
-//                                                           1.0 / 6.0,
-//                                                           1.0 / 2.0};
-//   this->run_all_tests(cudf::rank_method::DENSE, asce_top, col_rank, true);
-// }
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+    {1.0 / 5.0, 2.0 / 5.0, -1.0, 1.0, -1.0, 1.0, 4.0 / 5.0, 3.0 / 5.0}, nulls_at({2, 4})};
 
-// TYPED_TEST(RankListAndStruct, dense_asce_bottom_pct)
-// {
-//   // ASCENDING and null_order::AFTER
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 6.0,
-//                                                           1.0 / 3.0,
-//                                                           2.0 / 3.0,
-//                                                           5.0 / 6.0,
-//                                                           2.0 / 3.0,
-//                                                           1.0 / 3.0,
-//                                                           1.0 / 6.0,
-//                                                           1.0,
-//                                                           1.0 / 2.0,
-//                                                           1.0,
-//                                                           1.0 / 3.0};
-//   this->run_all_tests(cudf::rank_method::DENSE, asce_bottom, col_rank, true);
-// }
+  this->run_all_tests(cudf::rank_method::DENSE, asce_keep, col_rank, struct_rank, true);
+}
 
-// TYPED_TEST(RankListAndStruct, min_desc_keep_pct)
-// {
-//   // DESCENDING and null_order::BEFORE
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{{8.0 / 9.0,
-//                                                            5.0 / 9.0,
-//                                                            2.0 / 9.0,
-//                                                            1.0 / 9.0,
-//                                                            2.0 / 9.0,
-//                                                            5.0 / 9.0,
-//                                                            8.0 / 9.0,
-//                                                            -1.0,
-//                                                            4.0 / 9.0,
-//                                                            -1.0,
-//                                                            5.0 / 9.0},
-//                                                           nulls_at({7, 9})};
-//   this->run_all_tests(cudf::rank_method::MIN, desc_keep, col_rank, true);
-// }
+TYPED_TEST(RankListAndStruct, dense_asce_top_pct)
+{
+  // ASCENDING and null_order::BEFORE
+  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 3.0,
+                                                          1.0 / 2.0,
+                                                          5.0 / 6.0,
+                                                          1.0,
+                                                          5.0 / 6.0,
+                                                          1.0 / 2.0,
+                                                          1.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          2.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          1.0 / 2.0};
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+  5.0 / 6.0, 1.0, 1.0 / 6.0, 2.0 / 6.0, 1.0 / 6.0, 2.0 / 6.0, 4.0 / 6.0, 3.0 / 6.0};
+  this->run_all_tests(cudf::rank_method::DENSE, asce_top, col_rank, struct_rank, true);
+}
 
-// TYPED_TEST(RankListAndStruct, min_desc_top_pct)
-// {
-//   // DESCENDING and null_order::AFTER
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{10.0 / 11.0,
-//                                                           7.0 / 11.0,
-//                                                           4.0 / 11.0,
-//                                                           3.0 / 11.0,
-//                                                           4.0 / 11.0,
-//                                                           7.0 / 11.0,
-//                                                           10.0 / 11.0,
-//                                                           1.0 / 11.0,
-//                                                           6.0 / 11.0,
-//                                                           1.0 / 11.0,
-//                                                           7.0 / 11.0};
-//   this->run_all_tests(cudf::rank_method::MIN, desc_top, col_rank, true);
-// }
+TYPED_TEST(RankListAndStruct, dense_asce_bottom_pct)
+{
+  // ASCENDING and null_order::AFTER
+  cudf::test::fixed_width_column_wrapper<double> col_rank{1.0 / 6.0,
+                                                          1.0 / 3.0,
+                                                          2.0 / 3.0,
+                                                          5.0 / 6.0,
+                                                          2.0 / 3.0,
+                                                          1.0 / 3.0,
+                                                          1.0 / 6.0,
+                                                          1.0,
+                                                          1.0 / 2.0,
+                                                          1.0,
+                                                          1.0 / 3.0};
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+    1.0 / 6.0, 2.0 / 6.0, 1.0, 5.0 / 6.0, 1.0, 5.0 / 6.0, 4.0 / 6.0, 3.0 / 6.0};
+  this->run_all_tests(cudf::rank_method::DENSE, asce_bottom, col_rank, struct_rank, true);
+}
 
-// TYPED_TEST(RankListAndStruct, min_desc_bottom_pct)
-// {
-//   // DESCENDING and null_order::BEFORE
-//   cudf::test::fixed_width_column_wrapper<double> col_rank{8.0 / 11.0,
-//                                                           5.0 / 11.0,
-//                                                           2.0 / 11.0,
-//                                                           1.0 / 11.0,
-//                                                           2.0 / 11.0,
-//                                                           5.0 / 11.0,
-//                                                           8.0 / 11.0,
-//                                                           10.0 / 11.0,
-//                                                           4.0 / 11.0,
-//                                                           10.0 / 11.0,
-//                                                           5.0 / 11.0};
-//   this->run_all_tests(cudf::rank_method::MIN, desc_bottom, col_rank, true);
-// }
+TYPED_TEST(RankListAndStruct, min_desc_keep_pct)
+{
+  // DESCENDING and null_order::BEFORE
+  cudf::test::fixed_width_column_wrapper<double> col_rank{{8.0 / 9.0,
+                                                           5.0 / 9.0,
+                                                           2.0 / 9.0,
+                                                           1.0 / 9.0,
+                                                           2.0 / 9.0,
+                                                           5.0 / 9.0,
+                                                           8.0 / 9.0,
+                                                           -1.0,
+                                                           4.0 / 9.0,
+                                                           -1.0,
+                                                           5.0 / 9.0},
+                                                          nulls_at({7, 9})};
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+    {2.0 / 6.0, 1.0 / 6.0, -1.0, 5.0 / 6.0, -1.0, 5.0 / 6.0, 3.0 / 6.0, 4.0 / 6.0}, nulls_at({2, 4})};
+  this->run_all_tests(cudf::rank_method::MIN, desc_keep, col_rank, struct_rank, true);
+}
+
+TYPED_TEST(RankListAndStruct, min_desc_top_pct)
+{
+  // DESCENDING and null_order::AFTER
+  cudf::test::fixed_width_column_wrapper<double> col_rank{10.0 / 11.0,
+                                                          7.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          3.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          7.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          6.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          7.0 / 11.0};
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+    1.0, 7.0 / 8.0, 1.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0, 3.0 / 8.0, 5.0 / 8.0, 6.0 / 8.0};
+  this->run_all_tests(cudf::rank_method::MIN, desc_top, col_rank, struct_rank, true);
+}
+
+TYPED_TEST(RankListAndStruct, min_desc_bottom_pct)
+{
+  // DESCENDING and null_order::BEFORE
+  cudf::test::fixed_width_column_wrapper<double> col_rank{8.0 / 11.0,
+                                                          5.0 / 11.0,
+                                                          2.0 / 11.0,
+                                                          1.0 / 11.0,
+                                                          2.0 / 11.0,
+                                                          5.0 / 11.0,
+                                                          8.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          4.0 / 11.0,
+                                                          10.0 / 11.0,
+                                                          5.0 / 11.0};
+  cudf::test::fixed_width_column_wrapper<double> struct_rank{
+    2.0 / 8.0, 1.0 / 8.0, 7.0 / 8.0, 5.0 / 8.0, 7.0 / 8.0, 5.0 / 8.0, 3.0 / 8.0, 4.0 / 8.0};
+  this->run_all_tests(cudf::rank_method::MIN, desc_bottom, col_rank, struct_rank, true);
+}
