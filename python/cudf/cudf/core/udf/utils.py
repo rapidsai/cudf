@@ -2,15 +2,15 @@
 
 import glob
 import os
+from functools import lru_cache
 from typing import Any, Callable, Dict, List
-
-from cuda import cudart
 
 import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
+from cuda import cudart
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager
 from numba.core.errors import TypingError
@@ -21,41 +21,52 @@ from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
 import rmm
 
+from cudf._lib.strings_udf import (
+    column_from_udf_string_array,
+    column_to_string_view_array,
+)
 from cudf.core.column.column import as_column
+from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.strings_typing import (
+    str_view_arg_handler,
+    string_view,
+    udf_string,
+)
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
+    STRING_TYPES,
     TIMEDELTA_TYPES,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
     "STRINGS_UDF_HEAP_SIZE", 2**31
 )
 heap_size = 0
-
+cudf_str_dtype = dtype(str)
 
 
 logger = get_logger()
 
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
+    NUMERIC_TYPES
+    | BOOL_TYPES
+    | DATETIME_TYPES
+    | TIMEDELTA_TYPES
+    | STRING_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-arg_handlers: List[Any] = []
 ptx_files: List[Any] = []
-masked_array_types: Dict[Any, Any] = {}
 launch_arg_getters: Dict[Any, Any] = {}
-output_col_getters: Dict[Any, Any] = {}
 
 
 @_cudf_nvtx_annotate
@@ -140,9 +151,8 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    col_type = masked_array_types.get(col.dtype)
-    if col_type:
-        col_type = CPointer(col_type)
+    if col.dtype == cudf_str_dtype:
+        col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
         col_type = nb_scalar_ty[::1]
@@ -250,7 +260,9 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
+    kernel = cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])(
+        _kernel
+    )
 
     return kernel
 
@@ -259,9 +271,8 @@ def _get_input_args_from_frame(fr):
     args = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        getter = launch_arg_getters.get(col.dtype)
-        if getter:
-            data = getter(col)
+        if col.dtype == cudf_str_dtype:
+            data = column_to_string_view_array_init_heap(col)
         else:
             data = col.data
         if col.mask is not None:
@@ -275,15 +286,15 @@ def _get_input_args_from_frame(fr):
     return args + offsets
 
 
-def _return_arr_from_dtype(dt, size):
-    if extensionty := masked_array_types.get(dt):
-        return rmm.DeviceBuffer(size=size * extensionty.return_type.size_bytes)
-    return cp.empty(size, dtype=dt)
+def _return_arr_from_dtype(dtype, size):
+    if dtype == cudf_str_dtype:
+        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+    return cp.empty(size, dtype=dtype)
 
 
 def _post_process_output_col(col, retty):
-    if getter := output_col_getters.get(retty):
-        col = getter(col)
+    if retty == cudf_str_dtype:
+        return column_from_udf_string_array(col)
     return as_column(col, retty)
 
 
@@ -432,6 +443,7 @@ def maybe_patch_numba_linker(
         else:
             logger.debug("Cannot patch Numba Linker - unsupported version")
 
+
 def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
@@ -447,3 +459,18 @@ def set_malloc_heap_size(size=None):
             raise RuntimeError("Unable to set cudaMalloc heap size")
 
         heap_size = size
+
+
+@lru_cache(maxsize=None)
+def set_initial_malloc_heap_size():
+    set_malloc_heap_size()
+
+
+def column_to_string_view_array_init_heap(col):
+    # lazily allocate heap only when a string needs to be returned
+    set_initial_malloc_heap_size()
+    return column_to_string_view_array(col)
+
+
+strings_ptx_file = _get_ptx_file(os.path.dirname(__file__), "shim_")
+ptx_files.append(strings_ptx_file)

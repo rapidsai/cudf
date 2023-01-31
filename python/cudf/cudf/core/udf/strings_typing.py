@@ -1,7 +1,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import operator
-import os
 
 import numpy as np
 from numba import types
@@ -12,15 +11,12 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 
 import rmm
 
-from cudf.core.udf import masked_typing, utils
+from cudf.core.udf import masked_typing
 from cudf.core.udf._ops import comparison_ops
 from cudf.core.udf.masked_typing import MaskedType
 
 # libcudf size_type
 size_type = types.int32
-
-strings_ptx_file = utils._get_ptx_file(os.path.dirname(__file__), "shim_")
-utils.ptx_files.append(strings_ptx_file)
 
 
 # String object definitions
@@ -30,7 +26,6 @@ class UDFString(types.Type):
 
     def __init__(self):
         super().__init__(name="udf_string")
-        self.size_bytes = utils._get_extensionty_size(self)
 
     @property
     def return_type(self):
@@ -43,7 +38,6 @@ class StringView(types.Type):
 
     def __init__(self):
         super().__init__(name="string_view")
-        self.size_bytes = utils._get_extensionty_size(self)
 
     @property
     def return_type(self):
@@ -90,6 +84,8 @@ class udf_string_model(models.StructModel):
 any_string_ty = (StringView, UDFString, types.StringLiteral)
 string_view = StringView()
 udf_string = UDFString()
+
+masked_typing.MASKED_INIT_MAP[udf_string] = udf_string
 
 
 class StrViewArgHandler:
