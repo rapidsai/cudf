@@ -49,6 +49,41 @@ def test_to_backend():
         assert isinstance(gdf.to_backend()._meta, pd.DataFrame)
 
 
+def test_to_backend_kwargs():
+    data = {"x": [0, 2, np.nan, 3, 4, 5]}
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        dser = dd.from_dict(data, npartitions=2)["x"]
+        assert isinstance(dser._meta, pd.Series)
+
+        # Using `nan_as_null=False` will result in a cudf-backed
+        # Series with a NaN element (ranther than <NA>)
+        gser_nan = dser.to_backend("cudf", nan_as_null=False)
+        assert isinstance(gser_nan, dgd.Series)
+        assert np.isnan(gser_nan.compute()).sum() == 1
+
+        # Using `nan_as_null=True` will result in a cudf-backed
+        # Series with a <NA> element (ranther than NaN)
+        gser_null = dser.to_backend("cudf", nan_as_null=True)
+        assert isinstance(gser_null, dgd.Series)
+        assert np.isnan(gser_null.compute()).sum() == 0
+
+        # Check `nullable` argument for `cudf.Series.to_pandas`
+        dser_null = gser_null.to_backend("pandas", nullable=False)
+        assert dser_null.compute().dtype == "float"
+        dser_null = gser_null.to_backend("pandas", nullable=True)
+        assert isinstance(dser_null.compute().dtype, pd.Float64Dtype)
+
+        # Check unsupported arguments
+        with pytest.raises(ValueError, match="pandas-to-cudf"):
+            dser.to_backend("cudf", bad_arg=True)
+
+        with pytest.raises(ValueError, match="cudf-to-cudf"):
+            gser_null.to_backend("cudf", bad_arg=True)
+
+        with pytest.raises(ValueError, match="cudf-to-pandas"):
+            gser_null.to_backend("pandas", bad_arg=True)
+
+
 def test_from_cudf():
     np.random.seed(0)
 

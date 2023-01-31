@@ -450,27 +450,35 @@ def _default_backend(func, *args, **kwargs):
         return func(*args, **kwargs)
 
 
+def _unsupported_kwargs(old, new, kwargs):
+    # Utility to raise a meaningful error when
+    # unsupported kwargs are encountered within
+    # ``to_backend_dispatch``
+    if kwargs:
+        raise ValueError(
+            f"Unsupported key-word arguments used in `to_backend` "
+            f"for {old}-to-{new} conversion: {kwargs}"
+        )
+
+
 # Register cudf->pandas
 to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
 
 @to_pandas_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def to_pandas_dispatch_from_cudf(data, nullable=False):
+def to_pandas_dispatch_from_cudf(data, nullable=False, **kwargs):
+    _unsupported_kwargs("cudf", "pandas", kwargs)
     return data.to_pandas(nullable=nullable)
 
 
-# Register pandas->cudf and cudf->cudf
+# Register pandas->cudf
 to_cudf_dispatch = Dispatch("to_cudf_dispatch")
 
 
 @to_cudf_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def to_cudf_dispatch_from_pandas(data, nan_as_null=None):
+def to_cudf_dispatch_from_pandas(data, nan_as_null=None, **kwargs):
+    _unsupported_kwargs("pandas", "cudf", kwargs)
     return cudf.from_pandas(data, nan_as_null=nan_as_null)
-
-
-@to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def to_cudf_dispatch_from_cudf(data):
-    return data
 
 
 # Define "cudf" backend engine to be registered with Dask
@@ -501,6 +509,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     def to_backend(cls, data: dd.core._Frame, **kwargs):
         if isinstance(data._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
             # Already a cudf-backed collection
+            _unsupported_kwargs("cudf", "cudf", kwargs)
             return data
         return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
 
