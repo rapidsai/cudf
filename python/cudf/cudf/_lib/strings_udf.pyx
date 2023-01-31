@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t, uint16_t, uintptr_t
 
@@ -15,10 +15,10 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import as_buffer
 
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column, column_view
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
     free_udf_string_array as cpp_free_udf_string_array,
@@ -49,6 +49,7 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
     result = Column.from_unique_ptr(move(c_result))
 
     return result
+
 
 def get_character_flags_table_ptr():
     cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()

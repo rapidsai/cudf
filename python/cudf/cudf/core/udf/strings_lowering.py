@@ -1,27 +1,25 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import operator
 from functools import partial
 
 from numba import cuda, types
 from numba.core import cgutils
+from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
+from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
-from cudf.core.udf.strings_typing import size_type, string_view, udf_string
-from cudf.core.udf.masked_typing import MaskedType
-
-
-from numba.core.datamodel import default_manager
-from numba.cuda.cudadrv import nvvm
 
 from cudf._lib.strings_udf import (
     get_character_cases_table_ptr,
     get_character_flags_table_ptr,
     get_special_case_mapping_table_ptr,
 )
+from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.strings_typing import size_type, string_view, udf_string
 
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
@@ -570,7 +568,7 @@ def masked_string_view_replace_impl(context, builder, sig, args):
     return ret._getvalue()
 
 
-def create_binary_string_func(op, cuda_func, retty):
+def create_masked_binary_string_func(op, cuda_func, retty):
     """
     Provide a wrapper around numba's low-level extension API which
     produces the boilerplate needed to implement a binary function
@@ -650,19 +648,23 @@ def create_masked_upper_or_lower(op, cuda_func):
     cuda_lower(op, MaskedType(string_view))(upper_or_lower_impl)
 
 
-create_binary_string_func("MaskedType.strip", strip_impl, udf_string)
-create_binary_string_func("MaskedType.lstrip", lstrip_impl, udf_string)
-create_binary_string_func("MaskedType.rstrip", rstrip_impl, udf_string)
-create_binary_string_func(
+create_masked_binary_string_func("MaskedType.strip", strip_impl, udf_string)
+create_masked_binary_string_func("MaskedType.lstrip", lstrip_impl, udf_string)
+create_masked_binary_string_func("MaskedType.rstrip", rstrip_impl, udf_string)
+create_masked_binary_string_func(
     "MaskedType.startswith",
     startswith_impl,
     types.boolean,
 )
-create_binary_string_func("MaskedType.endswith", endswith_impl, types.boolean)
-create_binary_string_func("MaskedType.find", find_impl, size_type)
-create_binary_string_func("MaskedType.rfind", rfind_impl, size_type)
-create_binary_string_func("MaskedType.count", count_impl, size_type)
-create_binary_string_func(operator.contains, contains_impl, types.boolean)
+create_masked_binary_string_func(
+    "MaskedType.endswith", endswith_impl, types.boolean
+)
+create_masked_binary_string_func("MaskedType.find", find_impl, size_type)
+create_masked_binary_string_func("MaskedType.rfind", rfind_impl, size_type)
+create_masked_binary_string_func("MaskedType.count", count_impl, size_type)
+create_masked_binary_string_func(
+    operator.contains, contains_impl, types.boolean
+)
 
 
 create_masked_unary_identifier_func("MaskedType.isalnum", isalnum_impl)

@@ -1,15 +1,16 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import operator
-import numpy as np
-import rmm
 import os
+
+import numpy as np
 from numba import types
+from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.core.extending import models, register_model
 
+import rmm
 
 from cudf.core.udf import masked_typing, utils
 from cudf.core.udf._ops import comparison_ops
@@ -20,6 +21,7 @@ size_type = types.int32
 
 strings_ptx_file = utils._get_ptx_file(os.path.dirname(__file__), "shim_")
 utils.ptx_files.append(strings_ptx_file)
+
 
 # String object definitions
 class UDFString(types.Type):
