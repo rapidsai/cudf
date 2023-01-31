@@ -2124,7 +2124,9 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        ans_mask = cudf.core.column.full(
+            size=len(self), fill_value=True, dtype="bool"
+        )
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
