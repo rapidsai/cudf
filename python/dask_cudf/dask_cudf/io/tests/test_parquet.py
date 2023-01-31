@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import glob
 import math
@@ -35,16 +35,6 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-# Helper function to make it easier to handle the
-# upcoming deprecation of `gather_statistics`.
-# See: https://github.com/dask/dask/issues/8937
-# TODO: This function should be used to switch to
-# the "new" `calculate_divisions` kwarg (for newer
-# Dask versions) once it is introduced
-def _divisions(setting):
-    return {"gather_statistics": setting}
-
-
 def test_roundtrip_backend_dispatch(tmpdir):
     # Test ddf.read_parquet cudf-backend dispatch
     tmpdir = str(tmpdir)
@@ -68,31 +58,35 @@ def test_roundtrip_from_dask(tmpdir, divisions, write_metadata_file):
     )
 
     # Read list of parquet files
-    ddf2 = dask_cudf.read_parquet(files, **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(files, calculate_divisions=divisions)
     dd.assert_eq(ddf, ddf2, check_divisions=divisions)
 
     # Specify columns=['x']
     ddf2 = dask_cudf.read_parquet(
-        files, columns=["x"], **_divisions(divisions)
+        files, columns=["x"], calculate_divisions=divisions
     )
     dd.assert_eq(ddf[["x"]], ddf2, check_divisions=divisions)
 
     # Specify columns='y'
-    ddf2 = dask_cudf.read_parquet(files, columns="y", **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(
+        files, columns="y", calculate_divisions=divisions
+    )
     dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
 
     # Now include metadata
-    ddf2 = dask_cudf.read_parquet(tmpdir, **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=divisions)
     dd.assert_eq(ddf, ddf2, check_divisions=divisions)
 
     # Specify columns=['x'] (with metadata)
     ddf2 = dask_cudf.read_parquet(
-        tmpdir, columns=["x"], **_divisions(divisions)
+        tmpdir, columns=["x"], calculate_divisions=divisions
     )
     dd.assert_eq(ddf[["x"]], ddf2, check_divisions=divisions)
 
     # Specify columns='y' (with metadata)
-    ddf2 = dask_cudf.read_parquet(tmpdir, columns="y", **_divisions(divisions))
+    ddf2 = dask_cudf.read_parquet(
+        tmpdir, columns="y", calculate_divisions=divisions
+    )
     dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
 
 
@@ -121,7 +115,7 @@ def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     gddf = dask_cudf.from_dask_dataframe(ddf)
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
-    gddf2 = dask_cudf.read_parquet(tmpdir, **_divisions(True))
+    gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
     dd.assert_eq(gddf, gddf2)
 
 
@@ -189,7 +183,9 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     fn = str(tmpdir)
     ddf2 = dask.datasets.timeseries(freq="D")
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
-    read_df = dask_cudf.read_parquet(fn, index=index, **_divisions(divisions))
+    read_df = dask_cudf.read_parquet(
+        fn, index=index, calculate_divisions=divisions
+    )
     dd.assert_eq(
         ddf2, read_df, check_divisions=(divisions and index), check_index=index
     )
@@ -205,7 +201,9 @@ def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
     )
     ddf2.name = ddf2.name.astype("object")
     ddf2.to_parquet(fn, write_index=index)
-    read_df = dask_cudf.read_parquet(fn, index=index, **_divisions(divisions))
+    read_df = dask_cudf.read_parquet(
+        fn, index=index, calculate_divisions=divisions
+    )
     dd.assert_eq(
         ddf2, read_df, check_divisions=(divisions and index), check_index=index
     )
@@ -407,7 +405,7 @@ def test_create_metadata_file(tmpdir, partition_on):
         tmpdir,
         split_row_groups=False,
         index="myindex",
-        **_divisions(True),
+        calculate_divisions=True,
     )
     if partition_on:
         ddf1 = df1.sort_values("b")
@@ -438,7 +436,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # New pyarrow-dataset base can handle an inconsistent
     # schema (even without a _metadata file), but computing
     # and dtype validation may fail
-    ddf1 = dask_cudf.read_parquet(str(tmpdir), **_divisions(True))
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), calculate_divisions=True)
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
@@ -447,7 +445,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # Check that we can still read the ddf
     # with the _metadata file present
-    ddf2 = dask_cudf.read_parquet(str(tmpdir), **_divisions(True))
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), calculate_divisions=True)
 
     # Check that the result is the same with and
     # without the _metadata file.  Note that we must
