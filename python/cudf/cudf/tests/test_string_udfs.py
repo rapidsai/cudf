@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import numba
 import numpy as np
@@ -8,16 +8,16 @@ from numba import cuda
 from numba.core.typing import signature as nb_signature
 from numba.types import CPointer, void
 
-import cudf
 import rmm
-from cudf.testing._utils import assert_eq
-
 import strings_udf
 from strings_udf._lib.cudf_jit_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
 )
 from strings_udf._typing import str_view_arg_handler, string_view, udf_string
+
+import cudf
+from cudf.testing._utils import assert_eq
 
 
 def get_kernel(func, dtype, size):
