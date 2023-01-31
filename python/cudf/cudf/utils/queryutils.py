@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import ast
 import datetime
@@ -8,6 +8,7 @@ import numpy as np
 from numba import cuda
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
 from cudf.utils.dtypes import (
@@ -191,6 +192,7 @@ def _wrap_query_expr(name, fn, args):
     return kernel
 
 
+@acquire_spill_lock()
 def query_execute(df, expr, callenv):
     """Compile & execute the query expression
 
@@ -220,7 +222,7 @@ def query_execute(df, expr, callenv):
             "or bool dtypes."
         )
 
-    colarrays = [col.data_array_view for col in colarrays]
+    colarrays = [col.data_array_view(mode="read") for col in colarrays]
 
     kernel = compiled["kernel"]
     # process env args

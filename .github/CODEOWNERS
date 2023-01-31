@@ -1,5 +1,6 @@
 #cpp code owners
-cpp/               @rapidsai/cudf-cpp-codeowners
+cpp/                 @rapidsai/cudf-cpp-codeowners
+python/cudf/udf_cpp/ @rapidsai/cudf-cpp-codeowners
 
 #python code owners
 python/            @rapidsai/cudf-python-codeowners
