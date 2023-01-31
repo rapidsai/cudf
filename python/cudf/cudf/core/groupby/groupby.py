@@ -420,8 +420,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         Examples
         --------
         >>> import cudf
-        >>> a = cudf.DataFrame(
-            {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
+        >>> a = cudf.DataFrame({
+        ...     'a': [1, 1, 2],
+        ...     'b': [1, 2, 3],
+        ...     'c': [2, 2, 1]
+        ... })
         >>> a.groupby('a').agg('sum')
            b  c
         a
@@ -430,6 +433,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Specifying a list of aggregations to perform on each column.
 
+        >>> import cudf
+        >>> a = cudf.DataFrame({
+        ...     'a': [1, 1, 2],
+        ...     'b': [1, 2, 3],
+        ...     'c': [2, 2, 1]
+        ... })
         >>> a.groupby('a').agg(['sum', 'min'])
             b       c
           sum min sum min
@@ -439,6 +448,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Using a dict to specify aggregations to perform per column.
 
+        >>> import cudf
+        >>> a = cudf.DataFrame({
+        ...     'a': [1, 1, 2],
+        ...     'b': [1, 2, 3],
+        ...     'c': [2, 2, 1]
+        ... })
         >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
             a   b
           max min mean
@@ -448,6 +463,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Using lambdas/callables to specify aggregations taking parameters.
 
+        >>> import cudf
+        >>> a = cudf.DataFrame({
+        ...     'a': [1, 1, 2],
+        ...     'b': [1, 2, 3],
+        ...     'c': [2, 2, 1]
+        ... })
         >>> f1 = lambda x: x.quantile(0.5); f1.__name__ = "q0.5"
         >>> f2 = lambda x: x.quantile(0.75); f2.__name__ = "q0.75"
         >>> a.groupby('a').agg([f1, f2])
@@ -905,6 +926,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             .. code-block::
 
+                >>> import pandas as pd
                 >>> df = pd.DataFrame({
                 ...     'a': [1, 1, 2, 2],
                 ...     'b': [1, 2, 1, 2],
@@ -1218,8 +1240,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Examples
         --------
         >>> import cudf
-        >>> gdf = cudf.DataFrame({"Speed": [380.0, 370.0, 24.0, 26.0],
-                                  "Score": [50, 30, 90, 80]})
+        >>> gdf = cudf.DataFrame({
+        ...     "Speed": [380.0, 370.0, 24.0, 26.0],
+        ...      "Score": [50, 30, 90, 80],
+        ... })
         >>> gdf
         Speed  Score
         0  380.0     50
@@ -1652,28 +1676,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         Returns
         -------
         DataFrame or Series
-
-        .. pandas-compat::
-            **groupby.fillna**
-
-            This function may return result in different format to the method
-            Pandas supports. For example:
-
-            .. code-block::
-
-                >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
-                >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('k').fillna({'v': 4}) # pandas
-                       v
-                k
-                1 0  2.0
-                  1  4.0
-                2 2  4.0
-                >>> gdf.groupby('k').fillna({'v': 4}) # cudf
-                     v
-                0  2.0
-                1  4.0
-                2  4.0
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
