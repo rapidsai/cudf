@@ -545,6 +545,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = {}
 
         if not isinstance(data, ColumnBase):
+            # Using `getattr_static` to check if
+            # `data` is on device memory and perform
+            # a deep copy later. This is different
+            # from `hasattr` because, it doesn't
+            # invoke the property we are looking
+            # for and the later actually invokes
+            # the property.
             has_cai = (
                 type(
                     inspect.getattr_static(

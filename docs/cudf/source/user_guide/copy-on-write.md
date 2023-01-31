@@ -8,27 +8,31 @@ However, when either the new object is modified, a new copy of the data is made 
 The same behavior also works in the other direction, i.e. modifications of the original object will not propagate to the new object.
 This behavior is best understood by looking at the examples below.
 
-|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
-| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
 
 ## How to enable it
 
-i. Use `cudf.set_option`:
+1. Use `cudf.set_option`:
 
-```python
->>> import cudf
->>> cudf.set_option("copy_on_write", True)
-```
+    ```python
+    >>> import cudf
+    >>> cudf.set_option("copy_on_write", True)
+    ```
 
-ii. Set the environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
+2. Set the environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
 launch of the Python interpreter:
 
-```bash
-export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
-```
+    ```bash
+    export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
+    ```
 
+## How to disable it
+
+
+Copy-on-write can be disable by setting ``copy_on_write`` cudf option to ``False``:
+
+```python
+>>> cudf.set_option("copy_on_write", False)
+```
 
 ## Making copies
 
@@ -80,6 +84,15 @@ dtype: int64
 ## Notes
 
 When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cudf will always trigger a copy and will not modify the original object.
+
+### Explicit deep and shallow copies comparison
+
+
+|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
+| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
+
 
 ## Advantages
 
@@ -158,13 +171,3 @@ dtype: int64
 dtype: int64
 ```
 2. There are numerous other inconsistencies, which are solved by copy-on-write. Read more about them [here](https://phofl.github.io/cow-introduction.html).
-
-
-## How to disable it
-
-
-Copy-on-write can be disable by setting ``copy_on_write`` cudf option to ``False``:
-
-```python
->>> cudf.set_option("copy_on_write", False)
-```

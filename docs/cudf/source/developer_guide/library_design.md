@@ -229,6 +229,7 @@ Additionally, parameters are:
     of `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
     *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
 
+(Buffer-design)=
 #### Design
 
 Spilling consists of two components:
@@ -316,6 +317,8 @@ Internally, these objects typically interact with cuDF objects at the Frame laye
 However, for performance reasons they frequently access internal attributes and methods of `Frame` and its subclasses.
 
 
+(copy-on-write-dev-doc)=
+
 ## Copy-on-write
 
 This section describes the internal implementation details of the copy-on-write feature.
@@ -348,6 +351,20 @@ This function will return a proxy object that has `__cuda_array_interface__`
 implemented and will not trigger a deep copy even if the `CopyOnWriteBuffer`
 has weak references. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
+
+
+### Internal access to raw data pointers
+
+Since it is unsafe to access the raw pointer associated with a buffer when
+copy-on-write is enabled, in addition to the readonly proxy object described above,
+access to the pointer is gated through `Buffer.get_ptr`. This method accepts a mode
+argument through which the caller indicates how they will access the data associated
+with the buffer. If only read-only access is required (`mode="read"`), this indicates
+that the caller has no intention of modifying the buffer through this pointer.
+In this case, any shallow copies are not unlinked. In contrast, if modification is
+required one may pass `mode="write"`, provoking unlinking of any shallow copies.
+The same mechanism is also used for `SpillableBuffer`, though in that case one must
+also consider acquiring a spill lock (see `Buffer` [design](Buffer-design) for more details).
 
 ### Variable width data types
 Weak references are implemented only for fixed-width data types as these are only column

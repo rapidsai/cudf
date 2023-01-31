@@ -32,8 +32,7 @@ class CopyOnWriteBuffer(Buffer):
     This buffer enables making copies of data only when there
     is a write operation being performed.
 
-    See `Copy-on-write` section in `library_design.md` for
-    detailed information on `CopyOnWriteBuffer`.
+    See more here :ref:`copy-on-write-dev-doc`.
 
     Use the factory function `as_buffer` to create a CopyOnWriteBuffer
     instance.

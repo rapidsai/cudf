@@ -252,7 +252,7 @@ _register_option(
         """
         If set to `False`, disables copy-on-write.
         If set to `True`, enables copy-on-write.
-        Read more at: :ref: copy-on-write-user-doc
+        Read more at: :ref:`copy-on-write-user-doc`
         \tValid values are True or False. Default is False.
     """
     ),
