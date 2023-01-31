@@ -450,25 +450,26 @@ def _default_backend(func, *args, **kwargs):
         return func(*args, **kwargs)
 
 
-# TODO: Skip this check when Dask>=2023.1.1 is required
-if hasattr(PandasBackendEntrypoint, "to_backend_dispatch"):
-    to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
-
-    @to_pandas_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-    def to_pandas_dispatch_from_cudf(data, **kwargs):
-        return data.to_pandas(**kwargs)
+# Register cudf->pandas
+to_pandas_dispatch = PandasBackendEntrypoint.to_backend_dispatch()
 
 
+@to_pandas_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def to_pandas_dispatch_from_cudf(data, nullable=False):
+    return data.to_pandas(nullable=nullable)
+
+
+# Register pandas->cudf and cudf->cudf
 to_cudf_dispatch = Dispatch("to_cudf_dispatch")
 
 
 @to_cudf_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def to_cudf_dispatch_from_pandas(data, **kwargs):
-    return cudf.from_pandas(data, **kwargs)
+def to_cudf_dispatch_from_pandas(data, nan_as_null=None):
+    return cudf.from_pandas(data, nan_as_null=nan_as_null)
 
 
 @to_cudf_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def to_cudf_dispatch_from_cudf(data, **kwargs):
+def to_cudf_dispatch_from_cudf(data):
     return data
 
 

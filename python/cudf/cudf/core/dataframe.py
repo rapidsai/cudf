@@ -4983,7 +4983,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, nullable=False, **kwargs):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas DataFrame.
 

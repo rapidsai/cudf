@@ -33,11 +33,6 @@ def test_from_dict_backend_dispatch():
 
 
 def test_to_backend():
-    # Test DataFrame.to_backend
-    # Requires Dask>=2023.1.1
-    if version.parse(dask.__version__) < version.parse("2023.1.1"):
-        pytest.skip("to_backend not supported in this version of Dask.")
-
     np.random.seed(0)
     data = {
         "x": np.random.randint(0, 5, size=10000),
