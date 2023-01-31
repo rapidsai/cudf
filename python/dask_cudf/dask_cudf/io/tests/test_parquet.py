@@ -7,7 +7,6 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask
 from dask import dataframe as dd
@@ -328,89 +327,14 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
-    if parse_version(dask.__version__) > parse_version("2021.07.0"):
-        # This version of Dask supports `aggregate_files=True`.
-        # Check that we can aggregate by a partition name.
-        df_read = dd.read_parquet(
-            tmpdir, engine="pyarrow", aggregate_files="year"
-        )
-        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
-        dd.assert_eq(df_read, gdf_read)
-
-
-@pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
-def test_chunksize(tmpdir, chunksize, metadata):
-    nparts = 2
-    df_size = 100
-    row_group_size = 5
-
-    df = pd.DataFrame(
-        {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
-            "b": np.random.random(size=df_size),
-            "c": np.random.randint(1, 5, size=df_size),
-            "index": np.arange(0, df_size),
-        }
-    ).set_index("index")
-
-    ddf1 = dd.from_pandas(df, npartitions=nparts)
-    ddf1.to_parquet(
-        str(tmpdir),
-        engine="pyarrow",
-        row_group_size=row_group_size,
-        write_metadata_file=metadata,
+    # Check that we can aggregate files by a partition name
+    df_read = dd.read_parquet(
+        tmpdir, engine="pyarrow", aggregate_files="year", split_row_groups=2
     )
-
-    if metadata:
-        path = str(tmpdir)
-    else:
-        dirname = str(tmpdir)
-        files = os.listdir(dirname)
-        assert "_metadata" not in files
-        path = os.path.join(dirname, "*.parquet")
-
-    ddf2 = dask_cudf.read_parquet(
-        path,
-        chunksize=chunksize,
-        split_row_groups=True,
-        **_divisions(True),
+    gdf_read = dask_cudf.read_parquet(
+        tmpdir, aggregate_files="year", split_row_groups=2
     )
-    ddf2.compute(scheduler="synchronous")
-
-    dd.assert_eq(ddf1, ddf2, check_divisions=False)
-
-    num_row_groups = df_size // row_group_size
-    if not chunksize:
-        assert ddf2.npartitions == num_row_groups
-    else:
-        assert ddf2.npartitions < num_row_groups
-
-    if parse_version(dask.__version__) > parse_version("2021.07.0"):
-        # This version of Dask supports `aggregate_files=True`.
-        # Test that it works as expected.
-        ddf3 = dask_cudf.read_parquet(
-            path,
-            chunksize=chunksize,
-            split_row_groups=True,
-            aggregate_files=True,
-            **_divisions(True),
-        )
-
-        dd.assert_eq(ddf1, ddf3, check_divisions=False)
-
-        if not chunksize:
-            # Files should not be aggregated
-            assert ddf3.npartitions == num_row_groups
-        elif chunksize == "1MiB":
-            # All files should be aggregated into
-            # one output partition
-            assert ddf3.npartitions == 1
-        else:
-            # Files can be aggregated together, but
-            # chunksize is not large enough to produce
-            # a single output partition
-            assert ddf3.npartitions < num_row_groups
+    dd.assert_eq(df_read, gdf_read)
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])

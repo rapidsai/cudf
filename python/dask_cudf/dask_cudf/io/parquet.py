@@ -230,7 +230,8 @@ class CudfEngine(ArrowDatasetEngine):
                             **read_kwargs,
                         )
                     )
-                    paths = rgs = []
+                    paths = []
+                    rgs = []
                     last_partition_keys = None
                 paths.append(path)
                 rgs.append(
