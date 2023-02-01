@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -341,14 +341,6 @@ TEST_F(JoinTest, FullJoinOnNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-#if 0
-  std::cout << "Actual Results:\n";
-  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
-#endif
-
   column_wrapper<int32_t> col_gold_0{{   3,   -1,   -1,    -1},
                                      {   1,    0,    0,     0}};
   strcol_wrapper          col_gold_1{{ "s0", "s1",  "",    ""},
@@ -372,14 +364,6 @@ TEST_F(JoinTest, FullJoinOnNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-
-#if 0
-  std::cout << "Expected Results:\n";
-  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
-#endif
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 
@@ -631,14 +615,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-#if 0
-  std::cout << "Actual Results:\n";
-  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
-#endif
-
   column_wrapper<int32_t> col_gold_0{{   3,    -1,    2},
                                      {   1,     0,    1}};
   strcol_wrapper          col_gold_1({ "s0",  "s1", "s2"},
@@ -663,14 +639,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-
-#if 0
-  std::cout << "Expected Results:\n";
-  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
-#endif
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 
