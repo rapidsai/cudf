@@ -1541,17 +1541,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
   }
 
-  // Allocate column chunks and gather fragment statistics
-  rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
-  if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
-    frag_stats.resize(num_fragments * num_columns, stream);
-    if (not frag_stats.is_empty()) {
-      auto frag_stats_2dview =
-        device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
-      gather_fragment_statistics(frag_stats_2dview, fragments, col_desc, num_fragments);
-    }
-  }
-
   std::vector<int> first_rg_in_part;
   std::exclusive_scan(
     num_rg_in_part.begin(), num_rg_in_part.end(), std::back_inserter(first_rg_in_part), 0);
@@ -1573,12 +1562,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       for (int c = 0; c < num_columns; c++) {
         gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
 
-        ck             = {};
-        ck.col_desc    = col_desc.device_ptr() + c;
-        ck.col_desc_id = c;
-        ck.fragments   = &fragments.device_view()[c][f];
-        ck.stats =
-          (not frag_stats.is_empty()) ? frag_stats.data() + c * num_fragments + f : nullptr;
+        ck                   = {};
+        ck.col_desc          = col_desc.device_ptr() + c;
+        ck.col_desc_id       = c;
+        ck.fragments         = &fragments.device_view()[c][f];
+        ck.stats             = nullptr;
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
         ck.first_fragment    = c * num_fragments + f;
@@ -1618,6 +1606,27 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         if (chunks.host_view()[rg][col].use_dictionary) {
           md->file(p).row_groups[global_rg].columns[col].meta_data.encodings.push_back(
             Encoding::PLAIN_DICTIONARY);
+        }
+      }
+    }
+  }
+
+  // Allocate column chunks and gather fragment statistics
+  rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
+  if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
+    frag_stats.resize(num_fragments * num_columns, stream);
+    if (not frag_stats.is_empty()) {
+      auto frag_stats_2dview =
+        device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
+      gather_fragment_statistics(frag_stats_2dview, fragments, col_desc, num_fragments);
+
+      for (size_t p = 0; p < partitions.size(); ++p) {
+        int f               = part_frag_offset[p];
+        size_type start_row = partitions[p].start_row;
+        for (int r = 0; r < num_rg_in_part[p]; r++) {
+          for (int c = 0; c < num_columns; c++) {
+            chunks[r + first_rg_in_part[p]][c].stats = frag_stats.data() + c * num_fragments + f;
+          }
         }
       }
     }
