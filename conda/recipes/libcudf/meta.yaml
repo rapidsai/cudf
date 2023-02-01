@@ -5,7 +5,7 @@
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
 {% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
-{% set date_string = environ.get('DATE_STRING', '000000') %}
+{% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
   name: libcudf-split
