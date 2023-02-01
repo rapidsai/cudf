@@ -1322,16 +1322,18 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
     auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
-                      chunk_bytes,
-                      cudaMemcpyDefault,
-                      stream);
-      cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
-                      merge_bytes,
-                      cudaMemcpyDefault,
-                      stream);
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
+                        chunk_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
+                        merge_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
     }
     num_entries_seen += stripes_per_col;
   }
@@ -1346,11 +1348,11 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  cudaMemcpyAsync(d_file_stats_merge,
-                  file_stats_merge.data(),
-                  num_file_blobs * sizeof(statistics_merge_group),
-                  cudaMemcpyDefault,
-                  stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_file_stats_merge,
+                                file_stats_merge.data(),
+                                num_file_blobs * sizeof(statistics_merge_group),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(

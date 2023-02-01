@@ -64,8 +64,8 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_stat.host_to_device(stream);
 
     static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
-    cudaMemcpyAsync(
-      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value());
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
     inf_stat.device_to_host(stream, true);
     ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }

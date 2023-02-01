@@ -804,8 +804,8 @@ def test_multiindex_copy_deep(data, deep):
         lchildren = reduce(operator.add, lchildren)
         rchildren = reduce(operator.add, rchildren)
 
-        lptrs = [child.base_data.ptr for child in lchildren]
-        rptrs = [child.base_data.ptr for child in rchildren]
+        lptrs = [child.base_data.get_ptr(mode="read") for child in lchildren]
+        rptrs = [child.base_data.get_ptr(mode="read") for child in rchildren]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
@@ -814,20 +814,36 @@ def test_multiindex_copy_deep(data, deep):
         mi2 = mi1.copy(deep=deep)
 
         # Assert ._levels identity
-        lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
-        rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
+        lptrs = [
+            lv._data._data[None].base_data.get_ptr(mode="read")
+            for lv in mi1._levels
+        ]
+        rptrs = [
+            lv._data._data[None].base_data.get_ptr(mode="read")
+            for lv in mi2._levels
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
-        lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
-        rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
+        lptrs = [
+            c.base_data.get_ptr(mode="read")
+            for _, c in mi1._codes._data.items()
+        ]
+        rptrs = [
+            c.base_data.get_ptr(mode="read")
+            for _, c in mi2._codes._data.items()
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
-        lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
-        rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
+        lptrs = [
+            d.base_data.get_ptr(mode="read") for _, d in mi1._data.items()
+        ]
+        rptrs = [
+            d.base_data.get_ptr(mode="read") for _, d in mi2._data.items()
+        ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
