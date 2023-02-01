@@ -26,15 +26,8 @@ _supported_masked_types = (
     | _datetime_cases
     | _timedelta_cases
     | {types.boolean}
+    | {strings_typing.string_view, strings_typing.udf_string}
 )
-
-
-from cudf.core.udf.strings_typing import string_view, udf_string
-
-cuda_lower(api.Masked, string_view, types.boolean)(
-    masked_lowering.masked_constructor
-)
-_supported_masked_types |= {string_view, udf_string}
 
 
 masked_typing._register_masked_constructor_typing(_supported_masked_types)
