@@ -27,7 +27,6 @@ _supported_masked_types = (
     | _timedelta_cases
     | {types.boolean}
 )
-cudf_str_dtype = dtype(str)
 
 
 from cudf.core.udf.strings_typing import string_view, udf_string

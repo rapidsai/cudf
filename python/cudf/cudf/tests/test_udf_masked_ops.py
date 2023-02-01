@@ -756,7 +756,6 @@ def test_masked_udf_casting(operator, data):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
-# only run string udf tests if library exists and is enabled
 class TestStringUDFs:
     def test_string_udf_len(self, str_udf_data):
         def func(row):
