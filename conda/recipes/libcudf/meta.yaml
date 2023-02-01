@@ -52,7 +52,7 @@ outputs:
     script: install_libcudf.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_h{{ PKG_HASH }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
@@ -307,7 +307,7 @@ outputs:
     script: install_libcudf_kafka.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: {{ date_string }}_h{{ PKG_HASH }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
         - {{ compiler('cuda') }}
     requirements:
@@ -330,7 +330,7 @@ outputs:
     script: install_libcudf_example.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: {{ date_string }}_h{{ PKG_HASH }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
         - {{ compiler('cuda') }}
     requirements:
@@ -357,7 +357,7 @@ outputs:
     script: install_libcudf_tests.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_h{{ PKG_HASH }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
         - {{ compiler('cuda') }}
     requirements:
