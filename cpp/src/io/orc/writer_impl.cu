@@ -996,29 +996,63 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         auto col_streams   = chunk_streams[col_idx];
         auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
-          // rowgroup_sizes
-
-          // allocate sum of sizes
-
-          // scan to set offsets
-
+        // Calculate rowgroup sizes and stripe size
+        size_t stripe_size = 0;
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
           auto const& ck    = chunks[col_idx][rg_idx];
           auto& strm        = col_streams[rg_idx];
 
           strm.ids[strm_type] = strm_id;
-          if (strm_id >= 0) {
+          if (strm_id < 0) {
+            strm.lengths[strm_type] = 0;
+            continue;
+          }
+
+          if ((strm_type == gpu::CI_DICTIONARY) ||
+              (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
+            if (rg_idx_it == stripe.cbegin()) {
+              const auto stripe_dict = column.host_stripe_dict(stripe.id);
+              strm.lengths[strm_type] =
+                (strm_type == gpu::CI_DICTIONARY)
+                  ? stripe_dict->dict_char_count
+                  : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+            } else {
+              strm.lengths[strm_type] = 0;
+            }
+          } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
+                     ck.encoding_kind == DIRECT_V2) {
+            strm.lengths[strm_type] = column.host_dict_chunk(rg_idx)->string_char_count;
+          } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                     (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
+            // Pass-through
+            strm.lengths[strm_type] = ck.num_rows * ck.dtype_len;
+          } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
+            strm.lengths[strm_type] = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
+          } else {
+            strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
+          }
+          stripe_size += strm.lengths[strm_type];
+        }
+
+        // TODO: allocate sum of sizes
+        // std::cout << stripe_size << std::endl;
+
+        // scan to set offsets
+        for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+          auto const rg_idx = *rg_idx_it;
+          auto const& ck    = chunks[col_idx][rg_idx];
+          auto& strm        = col_streams[rg_idx];
+
+          if (strm_id < 0 or (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
+                              (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
+            strm.data_ptrs[strm_type] = nullptr;
+          } else {
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
               if (rg_idx_it == stripe.cbegin()) {
-                // allocate strm.lengths[strm_type] (?)
                 const int32_t dict_stride = column.dict_stride();
                 const auto stripe_dict    = column.host_stripe_dict(stripe.id);
-                strm.lengths[strm_type] =
-                  (strm_type == gpu::CI_DICTIONARY)
-                    ? stripe_dict->dict_char_count
-                    : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
                 if (stripe.id == 0) {
                   strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
                   // Dictionary lengths are encoded as RLE, which are all stored after non-RLE data:
@@ -1032,37 +1066,16 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                     strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
                 }
               } else {
-                strm.lengths[strm_type]   = 0;
                 strm.data_ptrs[strm_type] = col_streams[rg_idx - 1].data_ptrs[strm_type];
               }
-            } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
-                       ck.encoding_kind == DIRECT_V2) {
-              // if rg == stripe.cbegin()
-              //   allocate sum(column.host_dict_chunk(rg_idx)->string_char_count)
-              strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
-              strm.data_ptrs[strm_type] = (rg_idx == 0)
-                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
-                                               col_streams[rg_idx - 1].lengths[strm_type]);
-            } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
-                       (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
-              // Pass-through
-              // allocate stripe.num_rows * ck.dtype_len
-              strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
-              strm.data_ptrs[strm_type] = nullptr;
-
-            } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
-              // if rg == stripe.cbegin()
-              //   allocate sum(dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx])
-              strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
+            } else if ((strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
+                        ck.encoding_kind == DIRECT_V2) or
+                       (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA)) {
               strm.data_ptrs[strm_type] = (rg_idx == 0)
                                             ? encoded_data.data() + stream_offsets.offsets[strm_id]
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
             } else {
-              // if rg == stripe.cbegin()
-              //   allocate sum(RLE_stream_size(streams.type(strm_id), ck.num_rows))
-              strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
               // RLE encoded streams are stored after all non-RLE streams
               strm.data_ptrs[strm_type] =
                 (rg_idx == 0) ? (encoded_data.data() + stream_offsets.non_rle_data_size +
@@ -1070,9 +1083,6 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                               : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                  col_streams[rg_idx - 1].lengths[strm_type]);
             }
-          } else {
-            strm.lengths[strm_type]   = 0;
-            strm.data_ptrs[strm_type] = nullptr;
           }
           auto const misalignment =
             reinterpret_cast<intptr_t>(strm.data_ptrs[strm_type]) % uncomp_block_align;
