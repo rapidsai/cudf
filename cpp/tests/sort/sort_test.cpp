@@ -932,12 +932,10 @@ TYPED_TEST(Sort, MoreLists)
   {
     lcw col{lcw{lcw{}, lcw{-729297378, -627961465}},
             lcw{lcw{{0}, null_at(0)}, lcw{881899016, -1415270016}}};
-    cudf::test::print(col);
 
     {
       cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1}};
       auto result = cudf::sorted_order(cudf::table_view({col}));
-      cudf::test::print(cudf::table_view({col}).column(0));
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
     }
   }
