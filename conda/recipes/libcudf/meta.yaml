@@ -38,6 +38,7 @@ requirements:
   host:
     - librmm ={{ minor_version }}
     - cudatoolkit ={{ cuda_version }}
+    - cuda-nvrtc ={{ cuda_version }}
     - cuda-nvrtc-dev ={{ cuda_version }}
     - cuda-nvtx ={{ cuda_version }}
     - libcurand-dev
