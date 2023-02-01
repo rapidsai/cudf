@@ -516,8 +516,7 @@ struct RankListAndStruct : public cudf::test::BaseFixture {
                     std::get<0>(input_arg),
                     std::get<1>(input_arg),
                     std::get<2>(input_arg),
-                    percentage,
-                    true);
+                    percentage);
       }
   }
 };
