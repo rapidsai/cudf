@@ -204,17 +204,17 @@ TEST_F(LogicalStackTest, GroundTruth)
   hostdevice_vector<SymbolT> top_of_stack_gpu{string_size, stream_view};
   cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes};
 
-  cudaMemcpyAsync(d_stack_ops.data(),
-                  stack_symbols.data(),
-                  stack_symbols.size() * sizeof(SymbolT),
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_ops.data(),
+                                stack_symbols.data(),
+                                stack_symbols.size() * sizeof(SymbolT),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
-  cudaMemcpyAsync(d_stack_op_indexes.data(),
-                  stack_op_indexes.data(),
-                  stack_op_indexes.size() * sizeof(SymbolOffsetT),
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_stack_op_indexes.data(),
+                                stack_op_indexes.data(),
+                                stack_op_indexes.size() * sizeof(SymbolOffsetT),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   // Run algorithm
   fst::sparse_stack_op_to_top_of_stack<StackLevelT>(d_stack_ops.data(),

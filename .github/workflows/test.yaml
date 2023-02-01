@@ -67,7 +67,7 @@ jobs:
       run_script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
@@ -78,7 +78,7 @@ jobs:
       test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
   wheel-tests-dask-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@main
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@cuda-118
     with:
       build_type: nightly
       branch: ${{ inputs.branch }}
