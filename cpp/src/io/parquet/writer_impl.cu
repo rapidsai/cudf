@@ -31,6 +31,7 @@
 #include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -38,6 +39,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -83,6 +85,31 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
+}
+
+size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
+{
+  if (column.num_children() == 0) {
+    return is_fixed_width(column.type()) ? size_of(column.type()) * column.size() : 0;
+  }
+
+  if (column.type().id() == type_id::STRING) {
+    auto const scol = strings_column_view(column);
+    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
+           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
+  } else if (column.type().id() == type_id::STRUCT) {
+    auto const scol = structs_column_view(column);
+    size_type ret   = 0;
+    for (int i = 0; i < scol.num_children(); i++) {
+      ret += column_size(scol.get_sliced_child(i), stream);
+    }
+    return ret;
+  } else if (column.type().id() == type_id::LIST) {
+    auto const lcol = lists_column_view(column);
+    return column_size(lcol.get_sliced_child(stream), stream);
+  }
+
+  return 0;
 }
 
 }  // namespace
@@ -1418,6 +1445,30 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                               cudf::io::default_max_page_size_bytes;
   }
 
+  // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
+  // will start producing fragments larger than the desired page size, so calculate fragment sizes
+  // for each column.
+  std::vector<size_type> column_frag_size(single_streams_table.num_columns(),
+                                          max_page_fragment_size_);
+
+  // calculate fragment size for each leaf column (but not if using custom fragment sizes)
+  auto iter = thrust::make_counting_iterator<size_type>(0);
+  if (table.num_rows() > 0 && max_page_fragment_size_ == default_max_page_fragment_size) {
+    std::for_each(iter, iter + single_streams_table.num_columns(), [&](size_type index) {
+      auto const avg_len = std::max<size_type>(
+        column_size(single_streams_table.column(index), stream) / table.num_rows(), 1);
+      auto const frag_size    = max_page_size_bytes / avg_len;
+      column_frag_size[index] = std::min<size_type>(max_page_fragment_size_, frag_size);
+    });
+  }
+
+  bool const non_uniform_fragments =
+    table.num_rows() > 0 &&
+    std::any_of(column_frag_size.begin(), column_frag_size.end(), [this](auto size) {
+      return size != max_page_fragment_size_;
+    });
+
+  // do first pass with max_page_fragment_size_ to calculate row group boundaries
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
