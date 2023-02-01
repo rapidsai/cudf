@@ -1,7 +1,7 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 # Adopted from https://github.com/tmcdonell/travis-scripts/blob/dfaac280ac2082cd6bcaba3217428347899f2975/update-accelerate-buildbot.sh
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 set -e
 
@@ -40,11 +40,6 @@ if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
   test -e ${CUDF_FILE}
   echo "Upload cudf: ${CUDF_FILE}"
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE} --no-progress
-
-  export STRINGS_UDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/strings_udf --python=$PYTHON --output -c "${CONDA_BLD_DIR}")
-  test -e ${STRINGS_UDF_FILE}
-  echo "Upload strings_udf: ${STRINGS_UDF_FILE}"
-  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${STRINGS_UDF_FILE} --no-progress
 
   export DASK_CUDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/dask-cudf --python=$PYTHON --output)
   test -e ${DASK_CUDF_FILE}

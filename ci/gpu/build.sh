@@ -136,11 +136,11 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
     ################################################################################
-    # BUILD - Build libcudf, cuDF, libcudf_kafka, dask_cudf, and strings_udf from source
+    # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka strings_udf benchmarks tests --ptds
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
@@ -286,20 +286,6 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
-
-
-# only install strings_udf after cuDF is finished testing without its presence
-gpuci_logger "Installing strings_udf"
-gpuci_mamba_retry install strings_udf -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
-
-cd "$WORKSPACE/python/strings_udf/strings_udf"
-gpuci_logger "Python py.test for strings_udf"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/strings-udf-cuda-tmp" --junitxml="$WORKSPACE/junit-strings-udf.xml" -v --cov-config=.coveragerc --cov=strings_udf --cov-report=xml:"$WORKSPACE/python/strings_udf/strings-udf-coverage.xml" --cov-report term tests
-
-# retest cuDF UDFs
-cd "$WORKSPACE/python/cudf/cudf"
-gpuci_logger "Python py.test retest cuDF UDFs"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-strings-udf-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf-strings-udf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-strings-udf-coverage.xml" --cov-report term --dist=loadscope tests/test_udf_masked_ops.py
 
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
