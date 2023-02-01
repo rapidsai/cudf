@@ -21,7 +21,7 @@ install_requires = [
     "typing_extensions",
     # Allow floating minor versions for Arrow.
     "pyarrow==10",
-    f"rmm{cuda_suffix}",
+    f"rmm{cuda_suffix}==23.2.*",
     f"ptxcompiler{cuda_suffix}",
     f"cubinlinker{cuda_suffix}",
     "cupy-cuda11x",
