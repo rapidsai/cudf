@@ -104,8 +104,8 @@ struct dispatch_to_cudf_column {
     if (array.null_bitmap_data() == nullptr) {
       return std::make_unique<rmm::device_buffer>(0, stream, mr);
     }
-    auto null_bitmap_size = array.null_bitmap()->size();
-    auto allocation_size =
+    auto const null_bitmap_size = array.null_bitmap()->size();
+    auto const allocation_size =
       bitmask_allocation_size_bytes(static_cast<size_type>(null_bitmap_size * CHAR_BIT));
     auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
@@ -114,10 +114,11 @@ struct dispatch_to_cudf_column {
                                   null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
-    auto num_zeros = allocation_size - null_bitmap_size;
-    if (num_zeros > 0) {
-      auto zero_after = static_cast<char*>(mask->data()) + null_bitmap_size;
-      CUDF_CUDA_TRY(cudaMemsetAsync(zero_after, 0, num_zeros, stream.value()));
+    // Zero-initialize trailing padding bytes
+    auto const num_trailing_bytes = allocation_size - null_bitmap_size;
+    if (num_trailing_bytes > 0) {
+      auto trailing_bytes = static_cast<uint8_t*>(mask->data()) + null_bitmap_size;
+      CUDF_CUDA_TRY(cudaMemsetAsync(trailing_bytes, 0, num_trailing_bytes, stream.value()));
     }
     return mask;
   }
