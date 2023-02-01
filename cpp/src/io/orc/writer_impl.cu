@@ -989,23 +989,30 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
-  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    auto const& column = orc_table.column(col_idx);
-    auto col_streams   = chunk_streams[col_idx];
-    for (auto const& stripe : segmentation.stripes) {
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
-        auto const rg_idx = *rg_idx_it;
-        auto const& ck    = chunks[col_idx][rg_idx];
-        auto& strm        = col_streams[rg_idx];
+  for (auto const& stripe : segmentation.stripes) {
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
+        auto const& column = orc_table.column(col_idx);
+        auto col_streams   = chunk_streams[col_idx];
+        auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
 
-        for (int strm_type = 0; strm_type < gpu::CI_NUM_STREAMS; ++strm_type) {
-          auto const strm_id = streams.id(col_idx * gpu::CI_NUM_STREAMS + strm_type);
+          // rowgroup_sizes
+
+          // allocate sum of sizes
+
+          // scan to set offsets
+
+        for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+          auto const rg_idx = *rg_idx_it;
+          auto const& ck    = chunks[col_idx][rg_idx];
+          auto& strm        = col_streams[rg_idx];
 
           strm.ids[strm_type] = strm_id;
           if (strm_id >= 0) {
             if ((strm_type == gpu::CI_DICTIONARY) ||
                 (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
               if (rg_idx_it == stripe.cbegin()) {
+                // allocate strm.lengths[strm_type] (?)
                 const int32_t dict_stride = column.dict_stride();
                 const auto stripe_dict    = column.host_stripe_dict(stripe.id);
                 strm.lengths[strm_type] =
@@ -1019,6 +1026,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                   if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
                     strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
                 } else {
+                  // don't think this branch makes sense
                   auto const& strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
                   strm.data_ptrs[strm_type] =
                     strm_up.data_ptrs[strm_type] + strm_up.lengths[strm_type];
@@ -1029,6 +1037,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
               }
             } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                        ck.encoding_kind == DIRECT_V2) {
+              // if rg == stripe.cbegin()
+              //   allocate sum(column.host_dict_chunk(rg_idx)->string_char_count)
               strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
               strm.data_ptrs[strm_type] = (rg_idx == 0)
                                             ? encoded_data.data() + stream_offsets.offsets[strm_id]
@@ -1037,16 +1047,21 @@ encoded_data encode_columns(orc_table_view const& orc_table,
             } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                        (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
               // Pass-through
+              // allocate stripe.num_rows * ck.dtype_len
               strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
               strm.data_ptrs[strm_type] = nullptr;
 
             } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
+              // if rg == stripe.cbegin()
+              //   allocate sum(dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx])
               strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
               strm.data_ptrs[strm_type] = (rg_idx == 0)
                                             ? encoded_data.data() + stream_offsets.offsets[strm_id]
                                             : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
                                                col_streams[rg_idx - 1].lengths[strm_type]);
             } else {
+              // if rg == stripe.cbegin()
+              //   allocate sum(RLE_stream_size(streams.type(strm_id), ck.num_rows))
               strm.lengths[strm_type] = RLE_stream_size(streams.type(strm_id), ck.num_rows);
               // RLE encoded streams are stored after all non-RLE streams
               strm.data_ptrs[strm_type] =
