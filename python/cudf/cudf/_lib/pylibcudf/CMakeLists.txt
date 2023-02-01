@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources aggregation.pyx column.pyx column_view.pyx copying.pyx gpumemoryview.pyx
-                   table.pyx table_view.pyx types.pyx utils.pyx
+                   groupby.pyx table.pyx table_view.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
