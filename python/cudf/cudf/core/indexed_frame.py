@@ -2496,7 +2496,11 @@ class IndexedFrame(Frame):
 
         cols = {
             name: col.round(decimals[name], how=how)
-            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
+            if (
+                name in decimals
+                and _is_non_decimal_numeric_dtype(col.dtype)
+                and not is_bool_dtype(col.dtype)
+            )
             else col.copy(deep=True)
             for name, col in self._data.items()
         }
