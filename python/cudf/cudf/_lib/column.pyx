@@ -457,14 +457,7 @@ cdef class Column:
 
         cdef pylibcudf.gpumemoryview data = None
         if col.base_data is not None:
-            if isinstance(col.base_data, SpillableBuffer):
-                data = pylibcudf.gpumemoryview(
-                    col.base_data.get_ptr(
-                        spill_lock=get_spill_lock()
-                    )
-                )
-            else:
-                data = pylibcudf.gpumemoryview(col.base_data.ptr)
+            data = pylibcudf.gpumemoryview(col.base_data.get_ptr(mode="read"))
 
         cdef pylibcudf.gpumemoryview mask = None
         if self.nullable:
