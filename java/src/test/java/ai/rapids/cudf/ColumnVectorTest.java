@@ -4115,36 +4115,54 @@ public class ColumnVectorTest extends CudfTestBase {
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
     String patternString3 = ".*";
     String patternString4 = "";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram(patternString2, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(patternString3, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram(patternString4, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings(null, "abCD", "ovér the",
-        "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
-         ColumnVector res1 = testStrings.containsRe(patternString1);
-         ColumnVector res2 = testStrings.containsRe(patternString2);
-         ColumnVector res3 = testStrings.containsRe(patternString3);
+             "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(null, false, false, false,
              true, true, true, true);
          ColumnVector expected2 = ColumnVector.fromBoxedBooleans(null, false, false, true,
              false, false, false, true);
          ColumnVector expected3 = ColumnVector.fromBoxedBooleans(null, true, true, true,
              true, true, true, true)) {
-      assertColumnsAreEqual(expected1, res1);
-      assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
+      try (ColumnVector res1 = testStrings.containsRe(patternString1);
+           ColumnVector res2 = testStrings.containsRe(patternString2);
+           ColumnVector res3 = testStrings.containsRe(patternString3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      try (ColumnVector res1 = testStrings.containsRe(regexProg1);
+           ColumnVector res2 = testStrings.containsRe(regexProg2);
+           ColumnVector res3 = testStrings.containsRe(regexProg3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
     }
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
-          "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
-           ColumnVector res = testStrings.containsRe(patternString4)) {}
-    });
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+             "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs")) {
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.containsRe(patternString4)) {}
+      });
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.containsRe(regexProg4)) {}
+      });
+    }
   }
 
   @Test
-  @Disabled("Needs fix for https://github.com/rapidsai/cudf/issues/4671")
   void testContainsReEmptyInput() {
     String patternString1 = ".*";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings("");
          ColumnVector res1 = testStrings.containsRe(patternString1);
+         ColumnVector resReProg1 = testStrings.containsRe(regexProg1);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
       assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected1, resReProg1);
     }
   }
 

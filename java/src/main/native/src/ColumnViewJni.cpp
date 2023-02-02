@@ -1306,16 +1306,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv *env, jo
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, jobject j_object,
                                                                   jlong j_view_handle,
-                                                                  jstring patternObj) {
+                                                                  jstring pattern_obj,
+                                                                  jint regex_flags,
+                                                                  jint capture_groups) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
-  JNI_NULL_CHECK(env, patternObj, "pattern is null", false);
+  JNI_NULL_CHECK(env, pattern_obj, "pattern is null", false);
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
-    cudf::strings_column_view strings_column(*column_view);
-    cudf::jni::native_jstring pattern(env, patternObj);
-    return release_as_jlong(cudf::strings::contains_re(strings_column, pattern.get()));
+    auto const column_view = reinterpret_cast<cudf::column_view const *>(j_view_handle);
+    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const pattern = cudf::jni::native_jstring(env, pattern_obj);
+    auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
+    auto const capture = static_cast<cudf::strings::capture_groups>(capture_groups);
+    auto const regex_prog = cudf::strings::regex_program::create(pattern.get(), flags, capture);
+    return release_as_jlong(cudf::strings::contains_re(strings_column, *regex_prog));
   }
   CATCH_STD(env, 0);
 }
