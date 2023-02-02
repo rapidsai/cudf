@@ -5702,13 +5702,22 @@ class StringColumn(column.ColumnBase):
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             if isinstance(other, cudf.Scalar) and other.dtype != "O":
-                if op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                if op in {
+                    "__eq__",
+                    "__lt__",
+                    "__le__",
+                    "__gt__",
+                    "__ge__",
+                    "__ne__",
+                }:
                     val = False
-                elif op == "__ne__":
-                    val = True
-                return column.full(len(self), val, dtype="bool").set_mask(
-                    self.mask
-                )
+                    if op == "__ne__":
+                        val = True
+                    return column.full(len(self), val, dtype="bool").set_mask(
+                        self.mask
+                    )
+                else:
+                    return NotImplemented
 
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
