@@ -126,162 +126,43 @@ constexpr size_t underflow_safe_subtract(size_t a, size_t b)
   return a - b;
 }
 
-}  // anonymous namespace
-
-// blockDim {512,1,1}
-template <int block_size>
-__global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments(device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> part_frag_offset,
-                       uint32_t fragment_size)
+void __device__ init_frag_state(frag_init_state_s* const s,
+                                uint32_t fragment_size,
+                                int part_end_row)
 {
-  __shared__ __align__(16) frag_init_state_s state_g;
+  // frag.num_rows = fragment_size except for the last fragment in partition which can be
+  // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
+  // nested.
+  s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
+  s->frag.num_dict_vals      = 0;
+  s->frag.fragment_data_size = 0;
+  s->frag.dict_data_size     = 0;
 
-  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  __shared__ typename block_reduce::TempStorage reduce_storage;
+  s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
+  size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
+  s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
-  frag_init_state_s* const s              = &state_g;
-  uint32_t const t                        = threadIdx.x;
-  auto const physical_type                = col_desc[blockIdx.x].physical_type;
-  uint32_t const num_fragments_per_column = frag.size().second;
-
-  if (t == 0) { s->col = col_desc[blockIdx.x]; }
-  __syncthreads();
-
-  auto const leaf_type = s->col.leaf_column->type().id();
-  auto const dtype_len = physical_type_len(physical_type, leaf_type);
-
-  for (uint32_t frag_y = blockIdx.y; frag_y < num_fragments_per_column; frag_y += gridDim.y) {
-    if (t == 0) {
-      // Find which partition this fragment came from
-      auto it =
-        thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
-      int p             = it - part_frag_offset.begin() - 1;
-      int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
-      s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
-
-      // frag.num_rows = fragment_size except for the last fragment in partition which can be
-      // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
-      // nested.
-      s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
-      s->frag.num_dict_vals      = 0;
-      s->frag.fragment_data_size = 0;
-      s->frag.dict_data_size     = 0;
-
-      s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
-      size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
-      s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
-
-      if (s->col.level_offsets != nullptr) {
-        // For nested schemas, the number of values in a fragment is not directly related to the
-        // number of encoded data elements or the number of rows.  It is simply the number of
-        // repetition/definition values which together encode validity and nesting information.
-        size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
-        size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
-        s->frag.num_values            = last_level_val_idx - first_level_val_idx;
-      } else {
-        s->frag.num_values = s->frag.num_rows;
-      }
-    }
-    __syncthreads();
-
-    size_type nvals           = s->frag.num_leaf_values;
-    size_type start_value_idx = s->frag.start_value_idx;
-
-    for (uint32_t i = 0; i < nvals; i += block_size) {
-      uint32_t val_idx  = start_value_idx + i + t;
-      uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
-                            ? s->col.leaf_column->is_valid(val_idx)
-                            : 0;
-      uint32_t len;
-      if (is_valid) {
-        len = dtype_len;
-        if (physical_type == BYTE_ARRAY) {
-          switch (leaf_type) {
-            case type_id::STRING: {
-              auto str = s->col.leaf_column->element<string_view>(val_idx);
-              len += str.size_bytes();
-            } break;
-            case type_id::LIST: {
-              auto list_element =
-                get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx);
-              len += list_element.size_bytes();
-            } break;
-            default: CUDF_UNREACHABLE("Unsupported data type for leaf column");
-          }
-        }
-      } else {
-        len = 0;
-      }
-
-      len = block_reduce(reduce_storage).Sum(len);
-      if (t == 0) { s->frag.fragment_data_size += len; }
-      __syncthreads();
-      // page fragment size must fit in a 32-bit signed integer
-      if (s->frag.fragment_data_size > std::numeric_limits<int32_t>::max()) {
-        CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
-      }
-    }
-    __syncthreads();
-    if (t == 0) { frag[blockIdx.x][frag_y] = s->frag; }
+  if (s->col.level_offsets != nullptr) {
+    // For nested schemas, the number of values in a fragment is not directly related to the
+    // number of encoded data elements or the number of rows.  It is simply the number of
+    // repetition/definition values which together encode validity and nesting information.
+    size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
+    size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
+    s->frag.num_values            = last_level_val_idx - first_level_val_idx;
+  } else {
+    s->frag.num_values = s->frag.num_rows;
   }
 }
 
-// blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<size_type const> column_frag_sizes)
+void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 {
-  __shared__ __align__(16) frag_init_state_s state_g;
-
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  EncColumnChunk* ck_g       = frag[blockIdx.x].chunk;
-  frag_init_state_s* const s = &state_g;
-  uint32_t const t           = threadIdx.x;
-  auto const physical_type   = ck_g->col_desc->physical_type;
-  size_type fragment_size    = column_frag_sizes[ck_g->col_desc_id];
-
-  if (t == 0) { s->col = *ck_g->col_desc; }
-  __syncthreads();
-
-  auto const leaf_type = s->col.leaf_column->type().id();
-  auto const dtype_len = physical_type_len(physical_type, leaf_type);
-
-  if (t == 0) {
-    int part_end_row  = ck_g->start_row + ck_g->num_rows;
-    s->frag.start_row = ck_g->start_row + (blockIdx.x - ck_g->first_fragment) * fragment_size;
-
-    // frag.num_rows = fragment_size except for the last fragment in partition which can be
-    // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
-    // nested.
-    s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
-    s->frag.num_dict_vals      = 0;
-    s->frag.fragment_data_size = 0;
-    s->frag.dict_data_size     = 0;
-    s->frag.chunk              = ck_g;
-
-    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, s->col);
-    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, s->col);
-    s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
-
-    if (s->col.level_offsets != nullptr) {
-      // For nested schemas, the number of values in a fragment is not directly related to the
-      // number of encoded data elements or the number of rows.  It is simply the number of
-      // repetition/definition values which together encode validity and nesting information.
-      size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
-      size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
-      s->frag.num_values            = last_level_val_idx - first_level_val_idx;
-    } else {
-      s->frag.num_values = s->frag.num_rows;
-    }
-  }
-  __syncthreads();
-
+  auto const physical_type  = s->col.physical_type;
+  auto const leaf_type      = s->col.leaf_column->type().id();
+  auto const dtype_len      = physical_type_len(physical_type, leaf_type);
   size_type nvals           = s->frag.num_leaf_values;
   size_type start_value_idx = s->frag.start_value_idx;
 
@@ -319,6 +200,71 @@ __global__ void __launch_bounds__(block_size)
       CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
     }
   }
+}
+
+}  // anonymous namespace
+
+// blockDim {512,1,1}
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  gpuInitPageFragments(device_2dspan<PageFragment> frag,
+                       device_span<parquet_column_device_view const> col_desc,
+                       device_span<partition_info const> partitions,
+                       device_span<int const> part_frag_offset,
+                       uint32_t fragment_size)
+{
+  __shared__ __align__(16) frag_init_state_s state_g;
+
+  frag_init_state_s* const s              = &state_g;
+  uint32_t const t                        = threadIdx.x;
+  uint32_t const num_fragments_per_column = frag.size().second;
+
+  if (t == 0) { s->col = col_desc[blockIdx.x]; }
+  __syncthreads();
+
+  for (uint32_t frag_y = blockIdx.y; frag_y < num_fragments_per_column; frag_y += gridDim.y) {
+    if (t == 0) {
+      // Find which partition this fragment came from
+      auto it =
+        thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
+      int p             = it - part_frag_offset.begin() - 1;
+      int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
+      s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
+      init_frag_state(s, fragment_size, part_end_row);
+    }
+    __syncthreads();
+
+    calculate_frag_size<block_size>(s, t);
+    __syncthreads();
+    if (t == 0) { frag[blockIdx.x][frag_y] = s->frag; }
+  }
+}
+
+// blockDim {512,1,1}
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
+  gpuInitPageFragments1D(device_span<PageFragment> frag,
+                         device_span<size_type const> column_frag_sizes)
+{
+  __shared__ __align__(16) frag_init_state_s state_g;
+
+  EncColumnChunk* ck_g       = frag[blockIdx.x].chunk;
+  frag_init_state_s* const s = &state_g;
+  uint32_t const t           = threadIdx.x;
+  size_type fragment_size    = column_frag_sizes[ck_g->col_desc_id];
+
+  if (t == 0) { s->col = *ck_g->col_desc; }
+  __syncthreads();
+
+  if (t == 0) {
+    int part_end_row  = ck_g->start_row + ck_g->num_rows;
+    s->frag.start_row = ck_g->start_row + (blockIdx.x - ck_g->first_fragment) * fragment_size;
+    s->frag.chunk     = ck_g;
+    init_frag_state(s, fragment_size, part_end_row);
+  }
+  __syncthreads();
+
+  calculate_frag_size<block_size>(s, t);
   __syncthreads();
   if (t == 0) { frag[blockIdx.x] = s->frag; }
 }
