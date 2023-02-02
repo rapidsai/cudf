@@ -1663,12 +1663,13 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
       for (size_t p = 0; p < partitions.size(); ++p) {
         for (int r = 0; r < num_rg_in_part[p]; r++) {
-          size_t global_r             = global_rowgroup_base[p] + r;
-          auto& row_group             = md->file(p).row_groups[global_r];
-          uint32_t fragments_in_chunk = util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
-          gpu::EncColumnChunk& ck     = chunks[r + first_rg_in_part[p]][c];
-          ck.fragments                = expanded_fragments.device_ptr(frag_offset);
-          ck.first_fragment           = frag_offset;
+          auto const global_r   = global_rowgroup_base[p] + r;
+          auto const& row_group = md->file(p).row_groups[global_r];
+          uint32_t const fragments_in_chunk =
+            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+          gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
+          ck.fragments            = expanded_fragments.device_ptr(frag_offset);
+          ck.first_fragment       = frag_offset;
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
 
           // In fragment struct, add a pointer to the chunk it belongs to
@@ -1704,8 +1705,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         gather_fragment_statistics(frag_stats_2dview, fragments, col_desc, num_fragments);
 
         for (size_t p = 0; p < partitions.size(); ++p) {
-          int f               = part_frag_offset[p];
-          size_type start_row = partitions[p].start_row;
+          auto const f         = part_frag_offset[p];
+          auto const start_row = partitions[p].start_row;
           for (int r = 0; r < num_rg_in_part[p]; r++) {
             for (int c = 0; c < num_columns; c++) {
               chunks[r + first_rg_in_part[p]][c].stats = frag_stats.data() + c * num_fragments + f;
