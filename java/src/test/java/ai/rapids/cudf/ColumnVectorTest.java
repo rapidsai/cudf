@@ -4087,26 +4087,39 @@ public class ColumnVectorTest extends CudfTestBase {
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
     String patternString3 = ".*";
     String patternString4 = "";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram(patternString2, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(patternString3, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram(patternString4, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
-          "lazy @dog", "1234", "00:0:00");
-         ColumnVector res1 = testStrings.matchesRe(patternString1);
-         ColumnVector res2 = testStrings.matchesRe(patternString2);
-         ColumnVector res3 = testStrings.matchesRe(patternString3);
-         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
-           true, true);
-         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
-           false, false);
-         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
-           true, true)) {
-      assertColumnsAreEqual(expected1, res1);
-      assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
-    }
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
              "lazy @dog", "1234", "00:0:00");
-           ColumnVector res = testStrings.matchesRe(patternString4)) {}
-    });
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+             true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+             false, false);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
+             true, true)) {
+      try (ColumnVector res1 = testStrings.matchesRe(patternString1);
+           ColumnVector res2 = testStrings.matchesRe(patternString2);
+           ColumnVector res3 = testStrings.matchesRe(patternString3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      try (ColumnVector res1 = testStrings.matchesRe(regexProg1);
+           ColumnVector res2 = testStrings.matchesRe(regexProg2);
+           ColumnVector res3 = testStrings.matchesRe(regexProg3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.matchesRe(patternString4)) {}
+      });
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.matchesRe(regexProg4)) {}
+      });
+    }
   }
 
   @Test
