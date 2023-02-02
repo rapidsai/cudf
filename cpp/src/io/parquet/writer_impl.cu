@@ -924,19 +924,27 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
   frag.device_to_host(stream, true);
 }
 
+void writer::impl::init_page_fragments_1d(device_span<gpu::PageFragment> frag,
+                                          host_span<gpu::EncColumnChunk* const> frag_chunks,
+                                          host_span<size_type const> frag_sizes)
+{
+  auto d_chunks  = cudf::detail::make_device_uvector_async(frag_chunks, stream);
+  auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
+
+  InitPageFragments1D(frag, d_chunks, d_frag_sz, stream);
+  stream.synchronize();
+}
+
 // TODO add to impl
-void gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
-                                   device_span<gpu::PageFragment const> frags,
-                                   rmm::cuda_stream_view stream)
+void writer::impl::gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
+                                                 device_span<gpu::PageFragment const> frags)
 {
   rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
 
   gpu::InitFragmentStatistics1D(frag_stats_group, frags, stream);
-
-  // remove when added to impl
-  bool int96_timestamps = false;
   detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
     frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
+  stream.synchronize();
 }
 
 void writer::impl::gather_fragment_statistics(
@@ -1449,28 +1457,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     });
 
   // Init page fragments
-  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing
-  // fragments larger than the desired page size -> TODO: keep track of the max fragment size, and
-  // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
-  // ideally want the page size to be below 1MB so as to have enough pages to get good
-  // compression/decompression performance).
-  // If using the default fragment size, scale it up or down depending on the requested page size.
-  bool using_default_frag_size =
-    max_page_fragment_size_ == cudf::io::default_max_page_fragment_size;
-  if (using_default_frag_size) {
-    max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
-                              cudf::io::default_max_page_size_bytes;
-  }
-
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
   // will start producing fragments larger than the desired page size, so calculate fragment sizes
-  // for each column.
+  // for each leaf column.  Skip if the fragment size is not the default.
   std::vector<size_type> column_frag_size(single_streams_table.num_columns(),
                                           max_page_fragment_size_);
 
-  // calculate fragment size for each leaf column (but not if using custom fragment sizes)
   auto iter = thrust::make_counting_iterator<size_type>(0);
-  if (table.num_rows() > 0 && using_default_frag_size) {
+  if (table.num_rows() > 0 && max_page_fragment_size_ == cudf::io::default_max_page_fragment_size) {
     std::for_each(iter, iter + single_streams_table.num_columns(), [&](size_type index) {
       auto const avg_len = std::max<size_type>(
         column_size(single_streams_table.column(index), stream) / table.num_rows(), 1);
@@ -1701,16 +1695,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         }
       }
     }
-
-    // TODO make this a function?
-    auto d_chunks  = cudf::detail::make_device_uvector_async(chunks_for_fragments, stream);
-    auto d_frag_sz = cudf::detail::make_device_uvector_async(column_frag_size, stream);
     chunks.host_to_device(stream);
-    InitPageFragments1D(expanded_fragments, d_chunks, d_frag_sz, stream);
 
-    // now gather fragment statistics for new fragments
+    // re-initialize page fragments
+    init_page_fragments_1d(expanded_fragments, chunks_for_fragments, column_frag_size);
+
+    // and gather fragment statistics for new fragments
     if (not frag_stats.is_empty()) {
-      gather_fragment_statistics_1d(frag_stats, expanded_fragments, stream);
+      gather_fragment_statistics_1d(frag_stats, expanded_fragments);
     }
 
   } else {
