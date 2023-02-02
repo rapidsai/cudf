@@ -3189,7 +3189,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(),
+                                      regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3233,7 +3234,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(),
+                                       regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3264,11 +3266,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
+  @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
+    if (idx == 0) {
+      return extractAllRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), idx);
+    }
+    return extractAllRecord(new RegexProgram(pattern), idx);
+  }
+
+  /**
+   * Extracts all strings that match the given regex program pattern and corresponds to the
+   * regular expression group index. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg The regex program
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(RegexProgram regexProg, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-
-    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+    assert regexProg != null : "regex program may not be null";
+    return new ColumnVector(
+        extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                         regexProg.capture().nativeId, idx));
   }
 
   /**
@@ -4081,14 +4103,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
-   * Native method for extracting all results corresponding to group idx from a regular expression.
+   * Native method for extracting all results corresponding to group idx from a regex program pattern.
    *
    * @param nativeHandle Native handle of the cudf::column_view being operated on.
    * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param idx Regex group index. A 0 value means matching the entire regex.
    * @return Native handle of a string column of the result.
    */
-  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+  private static native long extractAllRecord(long nativeHandle, String pattern, int flags, int capture, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
