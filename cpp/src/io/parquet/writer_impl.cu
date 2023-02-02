@@ -924,27 +924,13 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
   frag.device_to_host(stream, true);
 }
 
-void writer::impl::init_page_fragments_1d(device_span<gpu::PageFragment> frag,
-                                          host_span<gpu::EncColumnChunk* const> frag_chunks,
+void writer::impl::init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
                                           host_span<size_type const> frag_sizes)
 {
-  auto d_chunks  = cudf::detail::make_device_uvector_async(frag_chunks, stream);
-  auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
+  auto d_frag_sz = cudf::detail::make_device_uvector_sync(frag_sizes, stream);
 
-  InitPageFragments1D(frag, d_chunks, d_frag_sz, stream);
-  stream.synchronize();
-}
-
-// TODO add to impl
-void writer::impl::gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
-                                                 device_span<gpu::PageFragment const> frags)
-{
-  rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
-
-  gpu::InitFragmentStatistics1D(frag_stats_group, frags, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
-  stream.synchronize();
+  InitPageFragments1D(frag, d_frag_sz, stream);
+  frag.device_to_host(stream, true);
 }
 
 void writer::impl::gather_fragment_statistics(
@@ -964,6 +950,17 @@ void writer::impl::gather_fragment_statistics(
                                                                       num_fragments * num_columns,
                                                                       stream,
                                                                       int96_timestamps);
+  stream.synchronize();
+}
+
+void writer::impl::gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
+                                                 device_span<gpu::PageFragment const> frags)
+{
+  rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
+
+  gpu::InitFragmentStatistics1D(frag_stats_group, frags, stream);
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
+    frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
   stream.synchronize();
 }
 
@@ -1636,28 +1633,29 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // until now we've been using a uniform fragment size. if there are any columns with
   // a fragment size != max_page_fragment_size_ then resize the fragments array and
   // update chunks with new fragment info
-  rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
-  rmm::device_uvector<gpu::PageFragment> expanded_fragments(0, stream);
 
-  if (non_uniform_fragments) {
-    // calculate start offset for each column
-    std::vector<size_type> frag_offsets;
+  // first figure out the total number of fragments
+  // calculate start offset for each column
+  std::vector<size_type> frag_offsets;
+  int total_frags = 0;
+
+  if (non_uniform_fragments && frags_per_column.size() > 0) {
     std::exclusive_scan(frags_per_column.data(),
                         frags_per_column.data() + num_columns + 1,
                         std::back_inserter(frag_offsets),
                         0);
 
-    auto const total_frags = frag_offsets[num_columns];
+    total_frags = frag_offsets[num_columns];
+  }
 
+  rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
+  hostdevice_vector<gpu::PageFragment> expanded_fragments(total_frags, stream);
+
+  if (non_uniform_fragments) {
     // gather new fragments
-    expanded_fragments.resize(total_frags, stream);
     if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
       frag_stats.resize(total_frags, stream);
     }
-
-    // if we could resize a hostdevice_vector we could just set the
-    // chunk pointer on the page fragments
-    std::vector<gpu::EncColumnChunk*> chunks_for_fragments(total_frags);
 
     for (int c = 0; c < num_columns; c++) {
       auto frag_offset     = frag_offsets[c];
@@ -1669,24 +1667,27 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           auto& row_group             = md->file(p).row_groups[global_r];
           uint32_t fragments_in_chunk = util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
           gpu::EncColumnChunk& ck     = chunks[r + first_rg_in_part[p]][c];
-          ck.fragments                = expanded_fragments.data() + frag_offset;
+          ck.fragments                = expanded_fragments.device_ptr(frag_offset);
           ck.first_fragment           = frag_offset;
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
 
           // In fragment struct, add a pointer to the chunk it belongs to
           // In each fragment in chunk_fragments, update the chunk pointer here.
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            chunks_for_fragments[frag_offset + i] =
+            expanded_fragments[frag_offset + i].chunk =
               &chunks.device_view()[r + first_rg_in_part[p]][c];
           }
           frag_offset += fragments_in_chunk;
         }
       }
     }
+
+    // synch will be done in init_page_fragments_1d()
+    expanded_fragments.host_to_device(stream);
     chunks.host_to_device(stream);
 
     // re-initialize page fragments
-    init_page_fragments_1d(expanded_fragments, chunks_for_fragments, column_frag_size);
+    init_page_fragments_1d(expanded_fragments, column_frag_size);
 
     // and gather fragment statistics for new fragments
     if (not frag_stats.is_empty()) {

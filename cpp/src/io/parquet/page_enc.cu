@@ -132,7 +132,6 @@ constexpr size_t underflow_safe_subtract(size_t a, size_t b)
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuInitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<EncColumnChunk* const> frag_chunks,
                          device_span<size_type const> column_frag_sizes)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
@@ -140,7 +139,7 @@ __global__ void __launch_bounds__(block_size)
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
-  EncColumnChunk* ck_g       = frag_chunks[blockIdx.x];
+  EncColumnChunk* ck_g       = frag[blockIdx.x].chunk;
   frag_init_state_s* const s = &state_g;
   uint32_t const t           = threadIdx.x;
   auto const physical_type   = ck_g->col_desc->physical_type;
@@ -2187,12 +2186,11 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
 }
 
 void InitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<EncColumnChunk* const> frag_chunks,
                          device_span<size_type const> column_frag_sizes,
                          rmm::cuda_stream_view stream)
 {
   gpuInitPageFragments1D<512>
-    <<<frag.size(), 512, 0, stream>>>(frag, frag_chunks, column_frag_sizes);
+    <<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
 }
 
 void InitFragmentStatistics(device_2dspan<statistics_group> groups,

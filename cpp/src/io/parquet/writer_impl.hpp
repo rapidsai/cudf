@@ -140,11 +140,9 @@ class writer::impl {
    * @brief Gather page fragments for columns with differing fragment sizes
    * 
    * @param frag Destination page fragments
-   * @param frag_chunks Pointers to the column chunk for each fragment
    * @param frag_sizes Array of fragment sizes for each column
   */
-  void init_page_fragments_1d(device_span<gpu::PageFragment> frag,
-                              host_span<gpu::EncColumnChunk* const> frag_chunks,
+  void init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
                               host_span<size_type const> frag_sizes);
 
   /**

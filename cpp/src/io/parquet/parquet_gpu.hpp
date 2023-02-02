@@ -500,7 +500,6 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        rmm::cuda_stream_view stream);
 
 void InitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<EncColumnChunk* const> frag_chunks,
                          device_span<size_type const> column_frag_sizes,
                          rmm::cuda_stream_view stream);
 
