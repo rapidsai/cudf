@@ -2189,8 +2189,7 @@ void InitPageFragments1D(device_span<PageFragment> frag,
                          device_span<size_type const> column_frag_sizes,
                          rmm::cuda_stream_view stream)
 {
-  gpuInitPageFragments1D<512>
-    <<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
+  gpuInitPageFragments1D<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
 }
 
 void InitFragmentStatistics(device_2dspan<statistics_group> groups,
