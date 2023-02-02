@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "update_validity.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/segmented_reduction.cuh>
@@ -92,20 +94,9 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
   }
 
   // Compute the output null mask
-  auto const bitmask                 = col.null_mask();
-  auto const first_bit_indices_begin = offsets.begin();
-  auto const first_bit_indices_end   = offsets.end() - 1;
-  auto const last_bit_indices_begin  = first_bit_indices_begin + 1;
-  auto [output_null_mask, output_null_count] =
-    cudf::detail::segmented_null_mask_reduction(bitmask,
-                                                first_bit_indices_begin,
-                                                first_bit_indices_end,
-                                                last_bit_indices_begin,
-                                                null_handling,
-                                                std::nullopt,
-                                                stream,
-                                                mr);
-  result->set_null_mask(std::move(output_null_mask), output_null_count);
+  cudf::reduction::detail::update_validity(
+    *result, col, offsets, null_handling, std::nullopt, stream, mr);
+
   return result;
 };
 
