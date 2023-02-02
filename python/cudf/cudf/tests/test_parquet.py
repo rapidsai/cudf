@@ -20,6 +20,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
+from cudf.core._compat import PANDAS_LT_153
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -2422,7 +2423,8 @@ def test_parquet_writer_list_statistics(tmpdir):
                 ]
             },
             marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/7562"
+                condition=PANDAS_LT_153,
+                reason="pandas assertion fixed in pandas 1.5.3",
             ),
         ),
     ],

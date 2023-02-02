@@ -153,7 +153,7 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST
+  REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
@@ -190,7 +190,7 @@ ConfigureTest(ROUND_TEST round/round_tests.cpp)
 # ##################################################################################################
 # * binary tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  BINARY_TEST
+  BINARYOP_TEST
   binaryop/binop-verify-input-test.cpp
   binaryop/binop-null-test.cpp
   binaryop/binop-compiled-test.cpp
@@ -225,6 +225,7 @@ ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp io/json_chunked_reader.cpp)
+ConfigureTest(JSON_WRITER_TEST io/json_writer.cpp)
 ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)

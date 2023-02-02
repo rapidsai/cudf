@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -37,16 +37,33 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
-    if engine != "cudf_experimental" and keep_quotes:
+    if engine == "cudf_experimental":
         raise ValueError(
-            "keep_quotes='True' is supported only with"
-            " engine='cudf_experimental'"
+            "engine='cudf_experimental' support has been removed, "
+            "use `engine='cudf'`"
         )
+
+    if engine == "cudf_legacy":
+        # TODO: Deprecated in 23.02, please
+        # give some time until(more than couple of
+        # releases from now) `cudf_legacy`
+        # support can be removed completely.
+        warnings.warn(
+            "engine='cudf_legacy' is a deprecated engine."
+            "This will be removed in a future release."
+            "Please switch to using engine='cudf'.",
+            FutureWarning,
+        )
+    if engine == "cudf_legacy" and not lines:
+        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-    if engine == "cudf" or engine == "cudf_experimental":
+    if engine != "cudf" and keep_quotes:
+        raise ValueError(
+            "keep_quotes='True' is supported only with engine='cudf'"
+        )
+
+    if engine == "cudf_legacy" or engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -97,7 +114,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf_experimental",
+            engine == "cudf_legacy",
             keep_quotes,
         )
     else:
@@ -162,12 +179,65 @@ def read_json(
 
 
 @ioutils.doc_to_json()
-def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
+def to_json(
+    cudf_val,
+    path_or_buf=None,
+    engine="auto",
+    orient=None,
+    storage_options=None,
+    *args,
+    **kwargs,
+):
     """{docstring}"""
 
-    warnings.warn(
-        "Using CPU via Pandas to write JSON dataset, this may "
-        "be GPU accelerated in the future"
-    )
-    pd_value = cudf_val.to_pandas(nullable=True)
-    return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)
+    if engine == "auto":
+        engine = "pandas"
+
+    if engine == "cudf":
+        if orient not in {"records", None}:
+            raise ValueError(
+                f"Only the `orient='records'` is supported for JSON writer"
+                f" with `engine='cudf'`, got {orient}"
+            )
+
+        if path_or_buf is None:
+            path_or_buf = StringIO()
+            return_as_string = True
+        else:
+            path_or_buf = ioutils.get_writer_filepath_or_buffer(
+                path_or_data=path_or_buf,
+                mode="w",
+                storage_options=storage_options,
+            )
+            return_as_string = False
+
+        if ioutils.is_fsspec_open_file(path_or_buf):
+            with path_or_buf as file_obj:
+                file_obj = ioutils.get_IOBase_writer(file_obj)
+                libjson.write_json(
+                    cudf_val, path_or_buf=file_obj, *args, **kwargs
+                )
+        else:
+            libjson.write_json(
+                cudf_val, path_or_buf=path_or_buf, *args, **kwargs
+            )
+
+        if return_as_string:
+            path_or_buf.seek(0)
+            return path_or_buf.read()
+    elif engine == "pandas":
+        warnings.warn("Using CPU via Pandas to write JSON dataset")
+        pd_value = cudf_val.to_pandas(nullable=True)
+        return pd.io.json.to_json(
+            path_or_buf,
+            pd_value,
+            orient=orient,
+            storage_options=storage_options,
+            *args,
+            **kwargs,
+        )
+    else:
+        raise ValueError(
+            f"`engine` only support {{'auto', 'cudf', 'pandas'}}, "
+            f"got: {engine}"
+        )

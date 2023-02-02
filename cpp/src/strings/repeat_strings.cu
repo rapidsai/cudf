@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,6 +235,8 @@ struct compute_size_and_repeat_separately_fn {
  * This function is similar to `strings::detail::make_strings_children`, except that it accepts an
  * optional input `std::optional<column_view>` that can contain the precomputed sizes of the output
  * strings.
+ *
+ * @deprecated This will be removed with issue 12542
  */
 template <typename Func>
 auto make_strings_children(Func fn,
@@ -262,8 +264,10 @@ auto make_strings_children(Func fn,
     for_each_fn(fn);
 
     // Compute the offsets values.
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    auto const bytes =
+      cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+    CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Size of output exceeds column size limit");
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
