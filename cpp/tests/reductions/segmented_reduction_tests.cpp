@@ -24,7 +24,9 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 
-#include <typeinfo>
+#include <limits>
+#include <utility>
+#include <vector>
 
 #define XXX 0  // null placeholder
 

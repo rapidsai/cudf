@@ -14,35 +14,44 @@
  * limitations under the License.
  */
 
-#include "update_validity.hpp"
+#pragma once
 
-#include <cudf/detail/null_mask.cuh>
-#include <cudf/scalar/scalar.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <optional>
 
 namespace cudf {
 namespace reduction {
 namespace detail {
 
+/**
+ * @brief Compute the validity mask and set it on the result column
+ *
+ * If `null_handling == null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid.
+ * If `null_handling == null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
+ *
+ * @param result Result of segmented reduce to update the null mask
+ * @param col Input column before reduce
+ * @param offsets Indices to segment boundaries
+ * @param null_handling How null entries are processed within each segment
+ * @param init Optional initial value
+ * @param stream Used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
 void update_validity(column& result,
                      column_view const& col,
                      device_span<size_type const> offsets,
                      null_policy null_handling,
                      std::optional<std::reference_wrapper<scalar const>> init,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
-{
-  auto [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
-    col.null_mask(),
-    offsets.begin(),
-    offsets.end() - 1,
-    offsets.begin() + 1,
-    null_handling,
-    init.has_value() ? std::optional(init.value().get().is_valid()) : std::nullopt,
-    stream,
-    mr);
-  result.set_null_mask(std::move(output_null_mask), output_null_count);
-}
+                     rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace reduction

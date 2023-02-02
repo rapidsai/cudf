@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "update_validity.hpp"
+
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
@@ -42,30 +44,6 @@ namespace cudf {
 namespace reduction {
 namespace simple {
 namespace detail {
-
-/**
- * @brief Compute the validity mask and set it on the result column
- *
- * If `null_handling == null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid.
- * If `null_handling == null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- *
- * @param result Result of segmented reduce to update the null mask
- * @param col Input column before reduce
- * @param offsets Indices to segment boundaries
- * @param null_handling How null entries are processed within each segment
- * @param init Optional initial value
- * @param stream Used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- */
-void update_validity(column& result,
-                     column_view const& col,
-                     device_span<size_type const> offsets,
-                     null_policy null_handling,
-                     std::optional<std::reference_wrapper<scalar const>> init,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Segment reduction for 'sum', 'product', 'min', 'max', 'sum of squares', etc
@@ -128,7 +106,7 @@ std::unique_ptr<column> simple_segmented_reduction(
   }
 
   // Compute the output null mask
-  update_validity(*result, col, offsets, null_handling, init, stream, mr);
+  cudf::reduction::detail::update_validity(*result, col, offsets, null_handling, init, stream, mr);
 
   return result;
 }
@@ -189,7 +167,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                             ->release()[0]);
 
   // Compute the output null mask
-  update_validity(*result, col, offsets, null_handling, std::nullopt, stream, mr);
+  cudf::reduction::detail::update_validity(
+    *result, col, offsets, null_handling, std::nullopt, stream, mr);
 
   return result;
 }

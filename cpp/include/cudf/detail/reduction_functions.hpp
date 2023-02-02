@@ -216,7 +216,7 @@ std::unique_ptr<scalar> mean(
 std::unique_ptr<scalar> variance(
   column_view const& col,
   data_type const output_dtype,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -239,7 +239,7 @@ std::unique_ptr<scalar> variance(
 std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
   data_type const output_dtype,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

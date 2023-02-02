@@ -252,7 +252,7 @@ std::unique_ptr<column> segmented_mean(
  * in the segment is valid.
  *
  * @throw cudf::logic_error if input column type is not arithmetic type
- * @throw cudf::logic_error if `output_dtype` is not floating point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col Input column data
  * @param offsets Indices to identify segment boundaries within input `col`
@@ -298,7 +298,7 @@ std::unique_ptr<column> segmented_standard_deviation(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -330,7 +330,7 @@ std::unique_ptr<column> segmented_variance(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
