@@ -23,7 +23,7 @@
 #include <iostream>
 #include <string>
 
-namespace cudf {
+namespace {
 
 /**
  * @brief Returns the default log filename for the global logger.
@@ -34,11 +34,15 @@ namespace cudf {
  *
  * @return std::string The default log file name.
  */
-inline std::string default_log_filename()
+std::string default_log_filename()
 {
   auto* filename = std::getenv("LIBCUDF_DEBUG_LOG_FILE");
   return (filename == nullptr) ? std::string{"cudf_log.txt"} : std::string{filename};
 }
+
+}  // namespace
+
+namespace cudf {
 
 /**
  * @brief Simple wrapper around a spdlog::logger that performs cuDF-specific initialization.
