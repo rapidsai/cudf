@@ -4040,14 +4040,14 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
 TEST_F(ParquetWriterTest, LargeColumnIndex)
 {
   // create a file large enough to be written in 2 batches (currently 1GB per batch)
+  // pick fragment size that's a multiple of num_rows so we'll get equal sized row groups
   const std::string s1(1000, 'a');
   const std::string s2(1000, 'b');
   constexpr auto num_rows = 512 * 1024;
+  constexpr auto frag_size = num_rows / 128;
 
-  // TODO(ets) need dictionary_policy set to NEVER from #12211. Then
-  // we don't need to append a number to make the strings unique.
   auto col0_elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return ((i < num_rows) ? s1 : s2) + std::to_string(i); });
+    0, [&](auto i) { return (i < num_rows) ? s1 : s2; });
   auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + 2 * num_rows);
 
   auto const expected = table_view{{col0, col0}};
@@ -4057,6 +4057,8 @@ TEST_F(ParquetWriterTest, LargeColumnIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_fragment_size(frag_size)
       .row_group_size_bytes(1024 * 1024 * 1024)
       .row_group_size_rows(num_rows);
   cudf::io::write_parquet(out_opts);
