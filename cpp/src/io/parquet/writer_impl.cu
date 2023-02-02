@@ -1560,6 +1560,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
 
+  // total fragments per column (in case they are non-uniform)
+  std::vector<size_type> frags_per_column(num_columns, 0);
+
   for (size_t p = 0; p < partitions.size(); ++p) {
     int f               = part_frag_offset[p];
     size_type start_row = partitions[p].start_row;
@@ -1601,6 +1604,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         column_chunk_meta.path_in_schema = parquet_columns[c].get_path_in_schema();
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
+
+        if (column_frag_size[c] < max_page_fragment_size_) {
+          auto const new_frags_in_chunk =
+            util::div_rounding_up_unsafe(row_group.num_rows, column_frag_size[c]);
+          frags_per_column[c] += new_frags_in_chunk;
+        } else {
+          frags_per_column[c] += fragments_in_chunk;
+        }
       }
       f += fragments_in_chunk;
       start_row += (uint32_t)row_group.num_rows;
@@ -1608,7 +1619,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   fragments.host_to_device(stream);
-  // the following sends chunks to device, and then recalls to host
   auto dict_info_owner = build_chunk_dictionaries(
     chunks, col_desc, fragments, compression_, dict_policy_, max_dictionary_size_, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
@@ -1630,29 +1640,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   rmm::device_uvector<gpu::PageFragment> expanded_fragments(0, stream);
 
   if (non_uniform_fragments) {
-    // first get the total fragments per column so we can resize the
-    // fragments and fragment_stats arrays
-    std::vector<size_type> frags_per_column(num_columns, 0);
-
-    for (size_t p = 0; p < partitions.size(); ++p) {
-      for (int r = 0; r < num_rg_in_part[p]; r++) {
-        size_t global_r = global_rowgroup_base[p] + r;
-        auto& row_group = md->file(p).row_groups[global_r];
-        uint32_t fragments_in_chunk =
-          util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size_);
-        for (int c = 0; c < num_columns; c++) {
-          if (column_frag_size[c] < max_page_fragment_size_) {
-            auto const new_frags_in_chunk =
-              util::div_rounding_up_unsafe(row_group.num_rows, column_frag_size[c]);
-            frags_per_column[c] += new_frags_in_chunk;
-          } else {
-            frags_per_column[c] += fragments_in_chunk;
-          }
-        }
-      }
-    }
-
-    // start offset for each column
+    // calculate start offset for each column
     std::vector<size_type> frag_offsets;
     std::exclusive_scan(frags_per_column.data(),
                         frags_per_column.data() + num_columns + 1,
@@ -1661,7 +1649,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
     auto const total_frags = frag_offsets[num_columns];
 
-    // gather new fragments, a partition at a time
+    // gather new fragments
     expanded_fragments.resize(total_frags, stream);
     if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
       frag_stats.resize(total_frags, stream);
