@@ -115,18 +115,32 @@ auto self_equality(cudf::table_view input,
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
 
   auto const table_comparator = cudf::experimental::row::equality::self_comparator{input, stream};
-  auto const equal_comparator =
-    table_comparator.equal_to(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
 
   auto output = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(input.num_rows()),
-                    thrust::make_counting_iterator(0),
-                    output->mutable_view().data<bool>(),
-                    equal_comparator);
+  if (cudf::detail::has_nested_columns(input)) {
+    auto const equal_comparator =
+      table_comparator.equal_to<true>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(input.num_rows()),
+                      thrust::make_counting_iterator(0),
+                      output->mutable_view().data<bool>(),
+                      equal_comparator);
+  } else {
+    auto const equal_comparator =
+      table_comparator.equal_to<false>(cudf::nullate::NO{}, cudf::null_equality::EQUAL, comparator);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(input.num_rows()),
+                      thrust::make_counting_iterator(0),
+                      output->mutable_view().data<bool>(),
+                      equal_comparator);
+  }
+
   return output;
 }
 
