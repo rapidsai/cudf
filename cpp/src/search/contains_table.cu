@@ -272,19 +272,33 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
+    if (cudf::detail::has_nested_columns(haystack) or cudf::detail::has_nested_columns(needles)) {
+      auto const check_contains = [&](auto const value_comp) {
+        auto const d_eqcomp =
+          comparator.equal_to<true>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
+        map.contains(needles_it,
+                     needles_it + needles.num_rows(),
+                     contained.begin(),
+                     d_hasher,
+                     d_eqcomp,
+                     stream.value());
+      };
 
-    auto const check_contains = [&](auto const value_comp) {
-      auto const d_eqcomp =
-        comparator.equal_to(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
-      map.contains(needles_it,
-                   needles_it + needles.num_rows(),
-                   contained.begin(),
-                   d_hasher,
-                   d_eqcomp,
-                   stream.value());
-    };
+      dispatch_nan_comparator(compare_nans, check_contains);
+    } else {
+      auto const check_contains = [&](auto const value_comp) {
+        auto const d_eqcomp =
+          comparator.equal_to<false>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
+        map.contains(needles_it,
+                     needles_it + needles.num_rows(),
+                     contained.begin(),
+                     d_hasher,
+                     d_eqcomp,
+                     stream.value());
+      };
 
-    dispatch_nan_comparator(compare_nans, check_contains);
+      dispatch_nan_comparator(compare_nans, check_contains);
+    }
   }
 
   return contained;

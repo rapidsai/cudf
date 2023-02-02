@@ -39,8 +39,6 @@ struct permuted_row_equality_comparator {
   {
   }
 
-  permuted_row_equality_comparator() = default;
-
   /**
    * @brief Returns true if the two rows at the specified indices in the permuted
    * order are equivalent.

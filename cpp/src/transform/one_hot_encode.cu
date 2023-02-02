@@ -59,19 +59,36 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   auto const t_rhs = table_view{{categories}};
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
-  auto const d_equal =
-    comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
 
-  thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(total_size),
-    all_encodings->mutable_view().begin<bool>(),
-    [input_size = input.size(), d_equal] __device__(size_type i) {
-      auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
-      auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
-      return d_equal(element_index, category_index);
-    });
+  if (cudf::detail::has_nested_columns(t_lhs) or cudf::detail::has_nested_columns(t_rhs)) {
+    auto const d_equal = comparator.equal_to<true>(
+      nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
+
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(total_size),
+      all_encodings->mutable_view().begin<bool>(),
+      [input_size = input.size(), d_equal] __device__(size_type i) {
+        auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
+        auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
+        return d_equal(element_index, category_index);
+      });
+  } else {
+    auto const d_equal = comparator.equal_to<false>(
+      nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
+
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(total_size),
+      all_encodings->mutable_view().begin<bool>(),
+      [input_size = input.size(), d_equal] __device__(size_type i) {
+        auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
+        auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
+        return d_equal(element_index, category_index);
+      });
+  }
 
   auto const split_iter =
     make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });

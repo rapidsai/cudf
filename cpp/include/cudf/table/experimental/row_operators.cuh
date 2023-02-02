@@ -1553,14 +1553,15 @@ class two_table_comparator {
    * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return strong_index_comparator_adapter{
-      device_row_comparator<true, Nullate, PhysicalEqualityComparator>(
+      device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>(
         nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 

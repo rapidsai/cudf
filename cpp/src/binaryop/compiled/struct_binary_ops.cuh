@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,26 +125,49 @@ void apply_struct_equality_op(mutable_column_view& out,
   auto trhs = table_view{{rhs}};
   auto table_comparator =
     cudf::experimental::row::equality::two_table_comparator{tlhs, trhs, stream};
-  auto device_comparator =
-    table_comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
-                              null_equality::EQUAL,
-                              comparator);
 
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out.begin<bool>(),
-                   out.end<bool>(),
-                   [optional_iter,
-                    is_lhs_scalar,
-                    is_rhs_scalar,
-                    preserve_output = (op != binary_operator::NOT_EQUAL),
-                    device_comparator] __device__(size_type i) {
-                     auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-                     auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
-                     return optional_iter[i].has_value() and
-                            (device_comparator(lhs, rhs) == preserve_output);
-                   });
+
+  if (cudf::detail::has_nested_columns(tlhs) or cudf::detail::has_nested_columns(trhs)) {
+    auto device_comparator = table_comparator.equal_to<true>(
+      nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
+      null_equality::EQUAL,
+      comparator);
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<bool>(),
+                     out.end<bool>(),
+                     [optional_iter,
+                      is_lhs_scalar,
+                      is_rhs_scalar,
+                      preserve_output = (op != binary_operator::NOT_EQUAL),
+                      device_comparator] __device__(size_type i) {
+                       auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
+                       auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
+                       return optional_iter[i].has_value() and
+                              (device_comparator(lhs, rhs) == preserve_output);
+                     });
+  } else {
+    auto device_comparator = table_comparator.equal_to<false>(
+      nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
+      null_equality::EQUAL,
+      comparator);
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<bool>(),
+                     out.end<bool>(),
+                     [optional_iter,
+                      is_lhs_scalar,
+                      is_rhs_scalar,
+                      preserve_output = (op != binary_operator::NOT_EQUAL),
+                      device_comparator] __device__(size_type i) {
+                       auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
+                       auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
+                       return optional_iter[i].has_value() and
+                              (device_comparator(lhs, rhs) == preserve_output);
+                     });
+  }
 }
 }  // namespace cudf::binops::compiled::detail

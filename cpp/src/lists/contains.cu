@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -267,24 +267,48 @@ void index_of_nested_types(InputIterator input_it,
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
-  auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
 
-  auto const do_search = [=](auto const key_validity_iter) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      input_it,
-      input_it + num_rows,
-      output_it,
-      search_list_nested_types_fn{find_option, key_validity_iter, d_comp, search_key_is_scalar});
-  };
+  if (cudf::detail::has_nested_columns(child_tview) or
+      cudf::detail::has_nested_columns(keys_tview)) {
+    auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
 
-  if constexpr (search_key_is_scalar) {
-    auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(search_keys);
-    do_search(key_validity_iter);
+    auto const do_search = [=](auto const key_validity_iter) {
+      thrust::transform(
+        rmm::exec_policy(stream),
+        input_it,
+        input_it + num_rows,
+        output_it,
+        search_list_nested_types_fn{find_option, key_validity_iter, d_comp, search_key_is_scalar});
+    };
+
+    if constexpr (search_key_is_scalar) {
+      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(search_keys);
+      do_search(key_validity_iter);
+    } else {
+      auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
+      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
+      do_search(key_validity_iter);
+    }
   } else {
-    auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
-    auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-    do_search(key_validity_iter);
+    auto const d_comp = comparator.equal_to<false>(nullate::DYNAMIC{has_nulls});
+
+    auto const do_search = [=](auto const key_validity_iter) {
+      thrust::transform(
+        rmm::exec_policy(stream),
+        input_it,
+        input_it + num_rows,
+        output_it,
+        search_list_nested_types_fn{find_option, key_validity_iter, d_comp, search_key_is_scalar});
+    };
+
+    if constexpr (search_key_is_scalar) {
+      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(search_keys);
+      do_search(key_validity_iter);
+    } else {
+      auto const keys_dv_ptr       = column_device_view::create(search_keys, stream);
+      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
+      do_search(key_validity_iter);
+    }
   }
 }
 
