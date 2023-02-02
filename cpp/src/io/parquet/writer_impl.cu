@@ -924,6 +924,21 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
   frag.device_to_host(stream, true);
 }
 
+// TODO add to impl
+void gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
+                                   device_span<gpu::PageFragment const> frags,
+                                   rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
+
+  gpu::InitFragmentStatistics1D(frag_stats_group, frags, stream);
+
+  // remove when added to impl
+  bool int96_timestamps = false;
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
+    frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
+}
+
 void writer::impl::gather_fragment_statistics(
   device_2dspan<statistics_chunk> frag_stats_chunk,
   device_2dspan<gpu::PageFragment const> frag,
@@ -1440,10 +1455,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   // If using the default fragment size, scale it up or down depending on the requested page size.
-  bool using_default_frag_size = max_page_fragment_size_ == cudf::io::default_max_page_fragment_size;
+  bool using_default_frag_size =
+    max_page_fragment_size_ == cudf::io::default_max_page_fragment_size;
   if (using_default_frag_size) {
     max_page_fragment_size_ = (cudf::io::default_max_page_fragment_size * max_page_size_bytes) /
-                               cudf::io::default_max_page_size_bytes;
+                              cudf::io::default_max_page_size_bytes;
   }
 
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
@@ -1657,7 +1673,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       frag_stats.resize(total_frags, stream);
     }
 
-    // if we could resize a hostdevice_vector we could just set the 
+    // if we could resize a hostdevice_vector we could just set the
     // chunk pointer on the page fragments
     std::vector<gpu::EncColumnChunk*> chunks_for_fragments(total_frags);
 
@@ -1687,12 +1703,15 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
 
     // TODO make this a function?
-    auto d_chunks = cudf::detail::make_device_uvector_async(chunks_for_fragments, stream);
+    auto d_chunks  = cudf::detail::make_device_uvector_async(chunks_for_fragments, stream);
     auto d_frag_sz = cudf::detail::make_device_uvector_async(column_frag_size, stream);
     chunks.host_to_device(stream);
     InitPageFragments1D(expanded_fragments, d_chunks, d_frag_sz, stream);
 
     // now gather fragment statistics for new fragments
+    if (not frag_stats.is_empty()) {
+      gather_fragment_statistics_1d(frag_stats, expanded_fragments, stream);
+    }
 
   } else {
     // Allocate column chunks and gather fragment statistics

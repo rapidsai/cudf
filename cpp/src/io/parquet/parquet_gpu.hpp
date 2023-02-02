@@ -517,6 +517,10 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
                             device_span<gpu::parquet_column_device_view const> col_desc,
                             rmm::cuda_stream_view stream);
 
+void InitFragmentStatistics1D(device_span<statistics_group> groups,
+                              device_span<PageFragment const> fragments,
+                              rmm::cuda_stream_view stream);
+
 /**
  * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
  *
