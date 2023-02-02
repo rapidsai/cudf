@@ -3815,10 +3815,10 @@ def test_ndim():
         5,
         pd.Series(
             [1, 4, 3, -6],
-            index=["floats", "ints", "floats_will_nan", "floats_same"],
+            index=["floats", "ints", "floats_with_nan", "floats_same"],
         ),
         cudf.Series(
-            [-4, -2, 12], index=["ints", "floats_will_nan", "floats_same"]
+            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
         ),
         {"floats": -1, "ints": 15, "floats_will_nan": 2},
     ],
