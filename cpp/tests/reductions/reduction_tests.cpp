@@ -294,7 +294,6 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-using ReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
