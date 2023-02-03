@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,26 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/reduction_functions.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <reductions/compound.cuh>
+#include "compound.cuh"
+
+#include <cudf/detail/segmented_reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
+std::unique_ptr<cudf::column> segmented_variance(column_view const& col,
+                                                 device_span<size_type const> offsets,
                                                  cudf::data_type const output_dtype,
+                                                 null_policy null_handling,
                                                  size_type ddof,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  // TODO: add cuda version check when the fix is available
-#if !defined(__CUDACC_DEBUG__)
-  using reducer =
-    compound::detail::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
-  auto col_type =
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
-#else
-  // workaround for bug 200529165 which causes compilation error only at device debug build
-  // hopefully the bug will be fixed in future cuda version (still failing in 11.2)
-  CUDF_FAIL("var/std reductions are not supported at debug build.");
-#endif
+  using reducer = compound::detail::compound_segmented_dispatcher<cudf::reduction::op::variance>;
+  return cudf::type_dispatcher(
+    col.type(), reducer(), col, offsets, output_dtype, null_handling, ddof, stream, mr);
 }
 
 }  // namespace reduction
