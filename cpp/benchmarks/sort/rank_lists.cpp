@@ -15,12 +15,16 @@
  */
 
 #include "nested_types_common.hpp"
+#include "rank_types_common.hpp"
 
 #include <cudf/sorting.hpp>
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <nvbench/nvbench.cuh>
 
-void nvbench_rank_lists(nvbench::state& state, cudf::rank_method method)
+template <cudf::rank_method method>
+void nvbench_rank_lists(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
 {
   cudf::rmm_pool_raii pool_raii;
 
@@ -38,46 +42,8 @@ void nvbench_rank_lists(nvbench::state& state, cudf::rank_method method)
   });
 }
 
-void nvbench_rank_lists_first(nvbench::state& state)
-{
-  nvbench_rank_lists(state, cudf::rank_method::FIRST);
-}
-
-void nvbench_rank_lists_dense(nvbench::state& state)
-{
-  nvbench_rank_lists(state, cudf::rank_method::DENSE);
-}
-
-void nvbench_rank_lists_min(nvbench::state& state)
-{
-  nvbench_rank_lists(state, cudf::rank_method::MIN);
-}
-
-void nvbench_rank_lists_average(nvbench::state& state)
-{
-  nvbench_rank_lists(state, cudf::rank_method::AVERAGE);
-}
-
-NVBENCH_BENCH(nvbench_rank_lists_first)
-  .set_name("rank_lists_first")
-  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
-  .add_int64_axis("depth", {1, 4})
-  .add_float64_axis("null_frequency", {0, 0.2});
-
-NVBENCH_BENCH(nvbench_rank_lists_dense)
-  .set_name("rank_lists_dense")
-  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
-  .add_int64_axis("depth", {1, 4})
-  .add_float64_axis("null_frequency", {0, 0.2});
-
-NVBENCH_BENCH(nvbench_rank_lists_min)
-  .set_name("rank_lists_min")
-  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
-  .add_int64_axis("depth", {1, 4})
-  .add_float64_axis("null_frequency", {0, 0.2});
-
-NVBENCH_BENCH(nvbench_rank_lists_average)
-  .set_name("rank_lists_average")
+NVBENCH_BENCH_TYPES(nvbench_rank_lists, NVBENCH_TYPE_AXES(methods))
+  .set_name("rank_lists")
   .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
   .add_int64_axis("depth", {1, 4})
   .add_float64_axis("null_frequency", {0, 0.2});

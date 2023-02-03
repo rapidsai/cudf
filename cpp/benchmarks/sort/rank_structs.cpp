@@ -15,69 +15,33 @@
  */
 
 #include "nested_types_common.hpp"
+#include "rank_types_common.hpp"
 
 #include <cudf/sorting.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-void nvbench_rank_structs(nvbench::state& state, cudf::rank_method method)
+template <cudf::rank_method method>
+void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
 {
   cudf::rmm_pool_raii pool_raii;
 
   auto const table = create_structs_data(state);
 
-  auto const null_frequency{state.get_float64("null_frequency")};
+  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::rank(table->view().column(0),
                method,
                cudf::order::ASCENDING,
-               null_frequency ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+               nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
                cudf::null_order::AFTER,
                rmm::mr::get_current_device_resource());
   });
 }
 
-void nvbench_rank_structs_first(nvbench::state& state)
-{
-  nvbench_rank_structs(state, cudf::rank_method::FIRST);
-}
-
-void nvbench_rank_structs_dense(nvbench::state& state)
-{
-  nvbench_rank_structs(state, cudf::rank_method::DENSE);
-}
-
-void nvbench_rank_structs_min(nvbench::state& state)
-{
-  nvbench_rank_structs(state, cudf::rank_method::MIN);
-}
-
-void nvbench_rank_structs_average(nvbench::state& state)
-{
-  nvbench_rank_structs(state, cudf::rank_method::AVERAGE);
-}
-
-NVBENCH_BENCH(nvbench_rank_structs_first)
-  .set_name("rank_structs_first")
-  .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
-  .add_int64_axis("Depth", {0, 1, 8})
-  .add_int64_axis("Nulls", {0, 1});
-
-NVBENCH_BENCH(nvbench_rank_structs_dense)
-  .set_name("rank_structs_dense")
-  .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
-  .add_int64_axis("Depth", {0, 1, 8})
-  .add_int64_axis("Nulls", {0, 1});
-
-NVBENCH_BENCH(nvbench_rank_structs_min)
-  .set_name("rank_structs_min")
-  .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
-  .add_int64_axis("Depth", {0, 1, 8})
-  .add_int64_axis("Nulls", {0, 1});
-
-NVBENCH_BENCH(nvbench_rank_structs_average)
-  .set_name("rank_structs_average")
+NVBENCH_BENCH_TYPES(nvbench_rank_structs, NVBENCH_TYPE_AXES(methods))
+  .set_name("rank_structs")
   .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
   .add_int64_axis("Depth", {0, 1, 8})
   .add_int64_axis("Nulls", {0, 1});
