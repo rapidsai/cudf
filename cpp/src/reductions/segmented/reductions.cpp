@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/detail/segmented_reduction_functions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -65,7 +65,7 @@ struct segmented_reduce_dispatch_functor {
   }
 
   template <segmented_reduce_aggregation::Kind k>
-  std::unique_ptr<column> operator()()
+  std::unique_ptr<column> operator()(segmented_reduce_aggregation const& agg)
   {
     switch (k) {
       case segmented_reduce_aggregation::SUM:
@@ -86,6 +86,21 @@ struct segmented_reduce_dispatch_functor {
       case segmented_reduce_aggregation::ALL:
         return reduction::segmented_all(
           col, offsets, output_dtype, null_handling, init, stream, mr);
+      case segmented_reduce_aggregation::SUM_OF_SQUARES:
+        return reduction::segmented_sum_of_squares(
+          col, offsets, output_dtype, null_handling, stream, mr);
+      case segmented_reduce_aggregation::MEAN:
+        return reduction::segmented_mean(col, offsets, output_dtype, null_handling, stream, mr);
+      case aggregation::VARIANCE: {
+        auto var_agg = static_cast<var_aggregation const&>(agg);
+        return reduction::segmented_variance(
+          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
+      }
+      case aggregation::STD: {
+        auto var_agg = static_cast<std_aggregation const&>(agg);
+        return reduction::segmented_standard_deviation(
+          col, offsets, output_dtype, null_handling, var_agg._ddof, stream, mr);
+      }
       default:
         CUDF_FAIL("Unsupported aggregation type.");
         // TODO: Add support for compound_ops. GH #10432
@@ -115,7 +130,8 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
   return aggregation_dispatcher(
     agg.kind,
     segmented_reduce_dispatch_functor{
-      segmented_values, offsets, output_dtype, null_handling, init, stream, mr});
+      segmented_values, offsets, output_dtype, null_handling, init, stream, mr},
+    agg);
 }
 }  // namespace detail
 
