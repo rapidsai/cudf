@@ -3154,7 +3154,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * result = cv.matches_re("\\d+")
+   * result = cv.matchesRe("\\d+")
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3175,8 +3175,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * p = regex_program::create("\\d+")
-   * r = cv.matches_re(p)
+   * p = RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.matchesRe(p)
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3200,7 +3200,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * r = cv.contains_re("\\d+")
+   * r = cv.containsRe("\\d+")
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3221,8 +3221,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * p = regex_program::create("\\d+")
-   * r = cv.contains_re(p)
+   * p = RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.containsRe(p)
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
