@@ -24,13 +24,13 @@ namespace cudf {
 namespace reduction {
 namespace detail {
 
-void update_validity(column& result,
-                     column_view const& col,
-                     device_span<size_type const> offsets,
-                     null_policy null_handling,
-                     std::optional<std::reference_wrapper<scalar const>> init,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+void segmented_update_validity(column& result,
+                               column_view const& col,
+                               device_span<size_type const> offsets,
+                               null_policy null_handling,
+                               std::optional<std::reference_wrapper<scalar const>> init,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
     col.null_mask(),

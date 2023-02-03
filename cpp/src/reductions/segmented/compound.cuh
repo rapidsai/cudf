@@ -94,7 +94,7 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
   }
 
   // Compute the output null mask
-  cudf::reduction::detail::update_validity(
+  cudf::reduction::detail::segmented_update_validity(
     *result, col, offsets, null_handling, std::nullopt, stream, mr);
 
   return result;
