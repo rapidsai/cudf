@@ -21,7 +21,8 @@
 
 #include <string>
 
-struct LoggerTest : public cudf::test::BaseFixture {};
+struct LoggerTest : public cudf::test::BaseFixture {
+};
 
 namespace {
 
