@@ -535,10 +535,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Computed {op} of values within each group.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Not supporting: numeric_only, min_count
+        .. pandas-compat::
+            **{cls}.{op}**
+
+            The numeric_only, min_count
         """
         if numeric_only:
             raise NotImplementedError(
@@ -897,7 +897,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            **groupby.apply**
+            **GroupBy.apply**
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -1654,7 +1654,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         DataFrame or Series
 
         .. pandas-compat::
-            **groupby.fillna**
+            **GroupBy.fillna**
 
             This function may return result in different format to the method
             Pandas supports. For example:
@@ -1732,9 +1732,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Object shifted within each group.
 
-        Notes
-        -----
-        Parameter ``freq`` is unsupported.
+        .. pandas-compat::
+            **GroupBy.shift**
+
+            Parameter ``freq`` is unsupported.
         """
 
         if freq is not None:

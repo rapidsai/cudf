@@ -596,11 +596,6 @@ class StringMethods(ColumnMethods):
             for each group. If `expand=False` and `pat` has only one capture
             group, then return a Series/Index.
 
-        Notes
-        -----
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
         Examples
         --------
         >>> import cudf
@@ -627,6 +622,12 @@ class StringMethods(ColumnMethods):
         1       2
         2    <NA>
         dtype: object
+
+        .. pandas-compat::
+            **StringMethods.extract**
+
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """  # noqa W605
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
@@ -673,14 +674,6 @@ class StringMethods(ColumnMethods):
             A Series/Index of boolean dtype indicating whether the given
             pattern is contained within the string of each element of the
             Series/Index.
-
-        Notes
-        -----
-        The parameters `case` and `na` are not yet supported and will
-        raise a NotImplementedError if anything other than the default
-        value is set.
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
 
         Examples
         --------
@@ -755,6 +748,15 @@ class StringMethods(ColumnMethods):
         3     True
         4     <NA>
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.contains**
+
+            The parameters `case` and `na` are not yet supported and will
+            raise a NotImplementedError if anything other than the default
+            value is set.
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -946,12 +948,6 @@ class StringMethods(ColumnMethods):
             A copy of the object with all matching occurrences of pat replaced
             by repl.
 
-        Notes
-        -----
-        The parameters `case` and `flags` are not yet supported and will raise
-        a `NotImplementedError` if anything other than the default value
-        is set.
-
         Examples
         --------
         >>> import cudf
@@ -981,6 +977,13 @@ class StringMethods(ColumnMethods):
         1     fuz
         2    <NA>
         dtype: object
+
+        .. pandas-compat::
+            **StringMethods.replace**
+
+            The parameters `case` and `flags` are not yet supported and will raise
+            a `NotImplementedError` if anything other than the default value
+            is set.
         """
         if case is not None:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -2767,11 +2770,6 @@ class StringMethods(ColumnMethods):
         DataFrame or MultiIndex
             Returns a DataFrame / MultiIndex
 
-        Notes
-        -----
-        The parameter `expand` is not yet supported and will raise a
-        `NotImplementedError` if anything other than the default value is set.
-
         See Also
         --------
         rpartition
@@ -2813,6 +2811,12 @@ class StringMethods(ColumnMethods):
         MultiIndex([('X', ' ', '123'),
                     ('Y', ' ', '999')],
                    )
+
+        .. pandas-compat::
+            **StringMethods.partition**
+
+            The parameter `expand` is not yet supported and will raise a
+            `NotImplementedError` if anything other than the default value is set.
         """
         if expand is not True:
             raise NotImplementedError(
@@ -3500,11 +3504,11 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-            -  `flags` parameter currently only supports re.DOTALL
-               and re.MULTILINE.
-            -  Some characters need to be escaped when passing
-               in pat. e.g. ``'$'`` has a special meaning in regex
-               and must be escaped when finding this literal character.
+        -   `flags` parameter currently only supports re.DOTALL
+            and re.MULTILINE.
+        -   Some characters need to be escaped when passing
+            in pat. e.g. ``'$'`` has a special meaning in regex
+            and must be escaped when finding this literal character.
 
         Examples
         --------
@@ -3568,11 +3572,6 @@ class StringMethods(ColumnMethods):
             All non-overlapping matches of pattern or
             regular expression in each string of this Series/Index.
 
-        Notes
-        -----
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
         Examples
         --------
         >>> import cudf
@@ -3613,6 +3612,12 @@ class StringMethods(ColumnMethods):
         1        []
         2    [b, b]
         dtype: list
+
+        .. pandas-compat::
+            **StringMethods.findall**
+
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3795,11 +3800,6 @@ class StringMethods(ColumnMethods):
             A Series of booleans indicating whether the given
             pattern matches the end of each string element.
 
-        Notes
-        -----
-        `na` parameter is not yet supported, as cudf uses
-        native strings instead of Python objects.
-
         Examples
         --------
         >>> import cudf
@@ -3816,6 +3816,12 @@ class StringMethods(ColumnMethods):
         2    False
         3     <NA>
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.endswith**
+
+            `na` parameter is not yet supported, as cudf uses
+            native strings instead of Python objects.
         """
         if pat is None:
             raise TypeError(
@@ -4241,13 +4247,6 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of boolean values.
 
-        Notes
-        -----
-        Parameters `case` and `na` are currently not supported.
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
-
         Examples
         --------
         >>> import cudf
@@ -4268,6 +4267,13 @@ class StringMethods(ColumnMethods):
         1     True
         2     True
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.match**
+
+            Parameters `case` and `na` are currently not supported.
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")

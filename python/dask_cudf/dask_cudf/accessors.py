@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 
 class StructMethods:
@@ -263,11 +263,6 @@ class ListMethods:
         -------
         ListColumn with each list sorted
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: `inplace`, `kind`
-
         Examples
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
@@ -277,6 +272,11 @@ class ListMethods:
         1         [2.0, 8.0, 8.0]
         2              [1.0, 2.0]
         dtype: list
+
+        .. pandas-compat::
+            **ListMethods.sort_values**
+
+            The `inplace` and `kind` argument is currently unsupported.
         """
         return self.d_series.map_partitions(
             lambda s: s.list.sort_values(

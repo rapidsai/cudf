@@ -3118,10 +3118,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame
             First differences of the DataFrame.
 
-        Notes
-        -----
-        Diff currently only supports numeric dtype columns.
-
         Examples
         --------
         >>> import cudf
@@ -3145,6 +3141,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4     2     3    16
         5     2     5    20
 
+        .. pandas-compat::
+            **DataFrame.diff**
+
+            Diff currently only supports numeric dtype columns.
         """
         if not is_integer(periods):
             if not (is_float(periods) and periods.is_integer()):
@@ -3310,14 +3310,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        Notes
-        -----
-        Difference from pandas:
-            * Not supporting: level
-
-        Rename will not overwrite column names. If a list with duplicates is
-        passed, column names will be postfixed with a number.
-
         Examples
         --------
         >>> import cudf
@@ -3343,6 +3335,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         10  1  4
         20  2  5
         30  3  6
+
+        .. pandas-compat::
+            **DataFrame.rename**
+
+            * Not Supporting: level
+
+            Rename will not overwrite column names. If a list with duplicates is
+            passed, column names will be postfixed with a number.
         """
         if errors != "ignore":
             raise NotImplementedError(
@@ -3442,10 +3442,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             When ``DataFrame.agg`` is called with several aggs,
             ``DataFrame`` is returned.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: ``axis``, ``*args``, ``**kwargs``
+        .. pandas-compat::
+            **DataFrame.agg**
+
+            * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
         # TODO: Remove the typecasting below once issue #6846 is fixed
@@ -3578,11 +3578,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             The first `n` rows ordered by the given columns in descending
             order.
 
-        Notes
-        -----
-        Difference from pandas:
-            - Only a single column is supported in *columns*
-
         Examples
         --------
         >>> import cudf
@@ -3617,6 +3612,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         France    65000000  2583560      FR
         Italy     59000000  1937894      IT
         Brunei      434000    12128      BN
+
+        .. pandas-compat::
+            **DataFrame.nlargest**
+
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest(True, n, columns, keep)
 
@@ -3642,11 +3642,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         DataFrame
-
-        Notes
-        -----
-        Difference from pandas:
-            - Only a single column is supported in *columns*
 
         Examples
         --------
@@ -3689,6 +3684,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Anguilla       11300  311      AI
         Tuvalu         11300   38      TV
         Nauru         337000  182      NR
+
+        .. pandas-compat::
+            **DataFrame.nsmallest**
+
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest(False, n, columns, keep)
 
@@ -3766,10 +3766,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
 
-        Notes
-        -----
-        Difference from pandas:
-        Not supporting *copy* because default and only behavior is copy=True
+        .. pandas-compat::
+            **DataFrame.transpose, DataFrame.T**
+
+            Not supporting *copy* because default and only behavior is copy=True
         """
 
         index = self._data.to_pandas_index()
@@ -3921,10 +3921,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
             merged : DataFrame
 
-        Notes
-        -----
-        **DataFrames merges in cuDF result in non-deterministic row ordering.**
-
         Examples
         --------
         >>> import cudf
@@ -3960,6 +3956,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         right dtype respectively. This extends to semi and anti joins.
         - For outer joins, the result will be the union of categories
         from both sides.
+
+        .. pandas-compat::
+            **DataFrame.merge**
+
+            **DataFrames merges in cuDF result in non-deterministic row ordering.**
         """
         if indicator:
             raise NotImplementedError(
@@ -4030,12 +4031,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         joined : DataFrame
 
-        Notes
-        -----
-        Difference from pandas:
+        .. pandas-compat::
+            **DataFrame.join**
 
-        - *other* must be a single DataFrame for now.
-        - *on* is not supported yet due to lack of multi-index support.
+            - *other* must be a single DataFrame for now.
+            - *on* is not supported yet due to lack of multi-index support.
         """
         if on is not None:
             raise NotImplementedError("The on parameter is not yet supported")
@@ -5147,11 +5147,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         cudf DataFrame
 
-        Notes
-        -----
-        -   Does not support automatically setting index column(s) similar
-            to how ``to_pandas`` works for PyArrow Tables.
-
         Examples
         --------
         >>> import cudf
@@ -5162,6 +5157,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         0  1  4
         1  2  5
         2  3  6
+
+        .. pandas-compat::
+            **DataFrame.from_arrow**
+
+            -   Does not support automatically setting index column(s) similar
+                to how ``to_pandas`` works for PyArrow Tables.
         """
         index_col = None
         if isinstance(table, pa.Table) and isinstance(
@@ -5173,13 +5174,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if index_col:
             if isinstance(index_col[0], dict):
-                out = out.set_index(
-                    cudf.RangeIndex(
-                        index_col[0]["start"],
-                        index_col[0]["stop"],
-                        name=index_col[0]["name"],
-                    )
+                idx = cudf.RangeIndex(
+                    index_col[0]["start"],
+                    index_col[0]["stop"],
+                    name=index_col[0]["name"],
                 )
+                if len(idx) == len(out):
+                    # `idx` is generated from arrow `pandas_metadata`
+                    # which can get out of date with many of the
+                    # arrow operations. Hence verifying if the
+                    # lengths match, or else don't need to set
+                    # an index at all i.e., Default RangeIndex
+                    # will be set.
+                    # See more about the discussion here:
+                    # https://github.com/apache/arrow/issues/15178
+                    out = out.set_index(idx)
             else:
                 out = out.set_index(index_col[0])
 
@@ -5493,14 +5502,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
 
-        .. pandas-compat::
-            **DataFrame.quantile**
-
-            One notable difference from Pandas is when DataFrame is of
-            non-numeric types and result is expected to be a Series in case of
-            Pandas. cuDF will return a DataFrame as it doesn't support mixed
-            types under Series.
-
         Examples
         --------
         >>> import cupy as cp
@@ -5521,6 +5522,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                a     b
         0.1  1.3   3.7
         0.5  2.5  55.0
+
+        .. pandas-compat::
+            **DataFrame.quantile**
+
+            One notable difference from Pandas is when DataFrame is of
+            non-numeric types and result is expected to be a Series in case of
+            Pandas. cuDF will return a DataFrame as it doesn't support mixed
+            types under Series.
         """  # noqa: E501
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
@@ -5786,10 +5795,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Series
             For each column/row the number of non-NA/null entries.
 
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -5803,6 +5808,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Age       4
         Single    5
         dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.count**
+
+            Parameters currently not supported are `axis`, `level`, `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
@@ -5950,10 +5960,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cudf.Series.value_counts : Return the counts of values
             in a Series.
 
-        Notes
-        -----
-        ``axis`` parameter is currently not supported.
-
         Examples
         --------
         >>> import cudf
@@ -5992,6 +5998,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
            legs  wings
         0     2    0.0
         1  <NA>    2.0
+
+        .. pandas-compat::
+            **DataFrame.mode**
+
+            ``axis`` parameter is currently not supported.
         """
         if axis not in (0, "index"):
             raise NotImplementedError("Only axis=0 is currently supported")
@@ -6530,7 +6541,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Note that a copy of the columns is made.
+        Note: that a copy of the columns is made.
         """
         if not all(isinstance(name, str) for name in self._data.names):
             warnings.warn(
@@ -6635,11 +6646,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
-        See Also
-        --------
-        cudf.concat : General function to concatenate DataFrame or
-            objects.
-
         Notes
         -----
         If a list of dict/series is passed and the keys are all contained in
@@ -6649,7 +6655,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         computationally intensive than a single concatenate. A better
         solution is to append those rows to a list and then concatenate
         the list with the original DataFrame all at once.
-        `verify_integrity` parameter is not supported yet.
+        `verify_integrity` parameter is not supported yet
+
+        See Also
+        --------
+        cudf.concat : General function to concatenate DataFrame or
+            objects.
 
         Examples
         --------
@@ -7027,22 +7038,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             DataFrame if any assignment statements are included in
             ``expr``, or None if ``inplace=True``.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Additional kwargs are not supported.
-            * Bitwise and logical operators are not dtype-dependent.
-              Specifically, `&` must be used for bitwise operators on integers,
-              not `and`, which is specifically for the logical and between
-              booleans.
-            * Only numerical types are currently supported.
-            * Operators generally will not cast automatically. Users are
-              responsible for casting columns to suitable types before
-              evaluating a function.
-            * Multiple assignments to the same name (i.e. a sequence of
-              assignment statements where later statements are conditioned upon
-              the output of earlier statements) is not supported.
-
         Examples
         --------
         >>> df = cudf.DataFrame({'A': range(1, 6), 'B': range(10, 0, -2)})
@@ -7104,6 +7099,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3   6   9 -3
         3  4   4   8  0
         4  5   2   7  3
+
+        .. pandas-compat::
+            **DataFrame.eval**
+
+            * Additional kwargs are not supported.
+            * Bitwise and logical operators are not dtype-dependent.
+              Specifically, `&` must be used for bitwise operators on integers,
+              not `and`, which is specifically for the logical and between
+              booleans.
+            * Only numerical types are currently supported.
+            * Operators generally will not cast automatically. Users are
+              responsible for casting columns to suitable types before
+              evaluating a function.
+            * Multiple assignments to the same name (i.e. a sequence of
+              assignment statements where later statements are conditioned upon
+              the output of earlier statements) is not supported.
         """
         if kwargs:
             raise ValueError(
