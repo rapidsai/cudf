@@ -441,13 +441,18 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
-  src/reductions/segmented_all.cu
-  src/reductions/segmented_any.cu
-  src/reductions/segmented_max.cu
-  src/reductions/segmented_min.cu
-  src/reductions/segmented_product.cu
-  src/reductions/segmented_reductions.cpp
-  src/reductions/segmented_sum.cu
+  src/reductions/segmented/all.cu
+  src/reductions/segmented/any.cu
+  src/reductions/segmented/max.cu
+  src/reductions/segmented/mean.cu
+  src/reductions/segmented/min.cu
+  src/reductions/segmented/product.cu
+  src/reductions/segmented/reductions.cpp
+  src/reductions/segmented/std.cu
+  src/reductions/segmented/sum.cu
+  src/reductions/segmented/sum_of_squares.cu
+  src/reductions/segmented/update_validity.cu
+  src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
