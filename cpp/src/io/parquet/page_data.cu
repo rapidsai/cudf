@@ -119,6 +119,16 @@ inline __device__ bool is_bounds_page(page_state_s* const s, size_t min_row, siz
   return ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end));
 }
 
+/**
+ * @brief Returns whether or not a page is completely contained within the specified
+ * row bounds
+ *
+ * @param s The page to be checked
+ * @param min_row The starting row index
+ * @param num_rows The number of rows
+ *
+ * @return True if the page is completely contained within the row bounds
+ */
 inline __device__ bool page_is_contained(page_state_s* const s, size_t min_row, size_t num_rows)
 {
   size_t const page_begin = s->col.start_row + s->page.chunk_row;
@@ -1849,8 +1859,15 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
   // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
-  // starts before this page and ends after this page
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain "0" rows
+  //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
                                                page_is_contained(s, min_row, num_rows)))) {
     return;
