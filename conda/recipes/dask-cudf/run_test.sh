@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 set -e
 
@@ -18,11 +18,11 @@ if [ "${ARCH}" = "aarch64" ]; then
 fi
 
 # Install the latest version of dask and distributed
-logger "pip install git+https://github.com/dask/distributed.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/distributed.git@2023.1.1 --upgrade --no-deps"
+pip install "git+https://github.com/dask/distributed.git@2023.1.1" --upgrade --no-deps
 
-logger "pip install git+https://github.com/dask/dask.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/dask.git@2023.1.1 --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git@2023.1.1" --upgrade --no-deps
 
 logger "python -c 'import dask_cudf'"
 python -c "import dask_cudf"
