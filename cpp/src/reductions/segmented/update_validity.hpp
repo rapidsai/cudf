@@ -45,13 +45,13 @@ namespace detail {
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-void update_validity(column& result,
-                     column_view const& col,
-                     device_span<size_type const> offsets,
-                     null_policy null_handling,
-                     std::optional<std::reference_wrapper<scalar const>> init,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr);
+void segmented_update_validity(column& result,
+                               column_view const& col,
+                               device_span<size_type const> offsets,
+                               null_policy null_handling,
+                               std::optional<std::reference_wrapper<scalar const>> init,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace reduction

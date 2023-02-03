@@ -106,7 +106,8 @@ std::unique_ptr<column> simple_segmented_reduction(
   }
 
   // Compute the output null mask
-  cudf::reduction::detail::update_validity(*result, col, offsets, null_handling, init, stream, mr);
+  cudf::reduction::detail::segmented_update_validity(
+    *result, col, offsets, null_handling, init, stream, mr);
 
   return result;
 }
@@ -167,7 +168,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                             ->release()[0]);
 
   // Compute the output null mask
-  cudf::reduction::detail::update_validity(
+  cudf::reduction::detail::segmented_update_validity(
     *result, col, offsets, null_handling, std::nullopt, stream, mr);
 
   return result;
