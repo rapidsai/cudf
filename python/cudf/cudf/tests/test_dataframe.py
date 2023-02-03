@@ -10011,3 +10011,17 @@ def test_dataframe_transpose_complex_types(data):
     actual = gdf.T
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
+
+    assert_eq(expected, actual)

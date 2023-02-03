@@ -110,6 +110,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/scan.hpp
         - test -f $PREFIX/include/cudf/detail/scatter.hpp
         - test -f $PREFIX/include/cudf/detail/search.hpp
+        - test -f $PREFIX/include/cudf/detail/segmented_reduction_functions.hpp
         - test -f $PREFIX/include/cudf/detail/sequence.hpp
         - test -f $PREFIX/include/cudf/detail/sorting.hpp
         - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
