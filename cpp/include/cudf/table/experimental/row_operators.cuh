@@ -1131,10 +1131,19 @@ struct nan_equal_physical_equality_comparator {
  * returns false, representing unequal rows. If the rows are compared without mismatched elements,
  * the rows are equal.
  *
- * @tparam has_nested_columns compile-time optimization for primitive types
+ * @tparam has_nested_columns compile-time optimization for primitive types.
+ *         This template parameter is to be used by the developer by querying
+ *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *          overloads for nested types, while `false` only compiles operator
+ *          overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual values
  * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+ *
+ * NOTE: The operator overloads in sub-class `element_comparator` are templated via the
+ *       `type_dispatcher` to help select an overload instance for each column in a table.
+ *       So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+ *       but it will be a runtime error if template parameter `has_nested_columns != true`.
  */
 template <bool has_nested_columns,
           typename Nullate,

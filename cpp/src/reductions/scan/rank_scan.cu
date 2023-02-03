@@ -32,6 +32,22 @@ namespace cudf {
 namespace detail {
 namespace {
 
+template <typename device_comparator_type, typename value_resolver>
+struct rank_equality_functor {
+  rank_equality_functor(device_comparator_type comparator_, value_resolver resolver_)
+    : comparator(comparator_), resolver(resolver_)
+  {
+  }
+
+  auto __device__ operator()(size_type row_index)
+  {
+    return resolver(row_index == 0 || !comparator(row_index, row_index - 1), row_index);
+  }
+
+  device_comparator_type comparator;
+  value_resolver resolver;
+};
+
 /**
  * @brief generate row ranks or dense ranks using a row comparison then scan the results
  *
@@ -58,26 +74,25 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
+  auto const comparator_helper = [&](auto const device_comparator) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<size_type>(),
+                     mutable_ranks.end<size_type>(),
+                     rank_equality_functor<decltype(device_comparator), value_resolver>(
+                       device_comparator, resolver));
+  };
+
   if (cudf::detail::has_nested_columns(order_by_view)) {
     auto const device_comparator =
       comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator = device_comparator, resolver] __device__(size_type row_index) {
-                       return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
-                                       row_index);
-                     });
+
+    comparator_helper(device_comparator);
+
   } else {
     auto const device_comparator =
       comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<size_type>(),
-                     mutable_ranks.end<size_type>(),
-                     [comparator = device_comparator, resolver] __device__(size_type row_index) {
-                       return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
-                                       row_index);
-                     });
+
+    comparator_helper(device_comparator);
   }
 
   thrust::inclusive_scan(rmm::exec_policy(stream),

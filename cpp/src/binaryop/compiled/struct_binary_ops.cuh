@@ -106,6 +106,35 @@ void apply_struct_binary_op(mutable_column_view& out,
   }
 }
 
+template <typename OptionalIteratorType, typename DeviceComparatorType>
+struct struct_equality_functor {
+  struct_equality_functor(OptionalIteratorType optional_iter_,
+                          bool is_lhs_scalar_,
+                          bool is_rhs_scalar_,
+                          bool preserve_output_,
+                          DeviceComparatorType device_comparator_)
+    : optional_iter(optional_iter_),
+      is_lhs_scalar(is_lhs_scalar_),
+      is_rhs_scalar(is_rhs_scalar_),
+      preserve_output(preserve_output_),
+      device_comparator(device_comparator_)
+  {
+  }
+
+  auto __device__ operator()(size_type i)
+  {
+    auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
+    auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
+    return optional_iter[i].has_value() and (device_comparator(lhs, rhs) == preserve_output);
+  }
+
+  OptionalIteratorType optional_iter;
+  bool is_lhs_scalar;
+  bool is_rhs_scalar;
+  bool preserve_output;
+  DeviceComparatorType device_comparator;
+};
+
 template <typename PhysicalEqualityComparator =
             cudf::experimental::row::equality::physical_equality_comparator>
 void apply_struct_equality_op(mutable_column_view& out,
@@ -130,44 +159,32 @@ void apply_struct_equality_op(mutable_column_view& out,
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
+  auto const comparator_helper = [&](auto const device_comparator) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<bool>(),
+                     out.end<bool>(),
+                     struct_equality_functor<decltype(optional_iter), decltype(device_comparator)>(
+                       optional_iter,
+                       is_lhs_scalar,
+                       is_rhs_scalar,
+                       op != binary_operator::NOT_EQUAL,
+                       device_comparator));
+  };
+
   if (cudf::detail::has_nested_columns(tlhs) or cudf::detail::has_nested_columns(trhs)) {
     auto device_comparator = table_comparator.equal_to<true>(
       nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
       null_equality::EQUAL,
       comparator);
 
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out.begin<bool>(),
-                     out.end<bool>(),
-                     [optional_iter,
-                      is_lhs_scalar,
-                      is_rhs_scalar,
-                      preserve_output = (op != binary_operator::NOT_EQUAL),
-                      device_comparator] __device__(size_type i) {
-                       auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-                       auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
-                       return optional_iter[i].has_value() and
-                              (device_comparator(lhs, rhs) == preserve_output);
-                     });
+    comparator_helper(device_comparator);
   } else {
     auto device_comparator = table_comparator.equal_to<false>(
       nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
       null_equality::EQUAL,
       comparator);
 
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out.begin<bool>(),
-                     out.end<bool>(),
-                     [optional_iter,
-                      is_lhs_scalar,
-                      is_rhs_scalar,
-                      preserve_output = (op != binary_operator::NOT_EQUAL),
-                      device_comparator] __device__(size_type i) {
-                       auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-                       auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
-                       return optional_iter[i].has_value() and
-                              (device_comparator(lhs, rhs) == preserve_output);
-                     });
+    comparator_helper(device_comparator);
   }
 }
 }  // namespace cudf::binops::compiled::detail
