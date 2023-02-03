@@ -658,10 +658,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Computed {op} of values within each group.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Not supporting: numeric_only, min_count
+        .. pandas-compat::
+            **{cls}.{op}**
+
+            The numeric_only, min_count
         """
         if numeric_only:
             raise NotImplementedError(
@@ -1359,7 +1359,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            **groupby.apply**
+            **GroupBy.apply**
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -2199,6 +2199,28 @@ class GroupBy(Serializable, Reducible, Scannable):
         Returns
         -------
         DataFrame or Series
+
+        .. pandas-compat::
+            **GroupBy.fillna**
+
+            This function may return result in different format to the method
+            Pandas supports. For example:
+
+            .. code-block::
+
+                >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
+                >>> gdf = cudf.from_pandas(df)
+                >>> df.groupby('k').fillna({'v': 4}) # pandas
+                       v
+                k
+                1 0  2.0
+                  1  4.0
+                2 2  4.0
+                >>> gdf.groupby('k').fillna({'v': 4}) # cudf
+                     v
+                0  2.0
+                1  4.0
+                2  4.0
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
@@ -2258,9 +2280,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Object shifted within each group.
 
-        Notes
-        -----
-        Parameter ``freq`` is unsupported.
+        .. pandas-compat::
+            **GroupBy.shift**
+
+            Parameter ``freq`` is unsupported.
         """
 
         if freq is not None:
