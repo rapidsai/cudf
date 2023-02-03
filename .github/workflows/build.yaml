@@ -28,7 +28,7 @@ concurrency:
 jobs:
   cpp-build:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -37,7 +37,7 @@ jobs:
   python-build:
     needs: [cpp-build]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -46,7 +46,7 @@ jobs:
   upload-conda:
     needs: [cpp-build, python-build]
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-upload-packages.yaml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -55,7 +55,7 @@ jobs:
       skip_upload_pkgs: libcudf-example
   wheel-build-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -67,7 +67,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-publish.yml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -77,7 +77,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-publish-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -88,7 +88,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-publish.yml@branch-23.02
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
