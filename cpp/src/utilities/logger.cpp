@@ -20,7 +20,6 @@
 
 #include <spdlog/sinks/basic_file_sink.h>
 
-#include <iostream>
 #include <string>
 
 namespace {
@@ -39,10 +38,6 @@ std::string default_log_filename()
   auto* filename = std::getenv("LIBCUDF_DEBUG_LOG_FILE");
   return (filename == nullptr) ? std::string{"cudf_log.txt"} : std::string{filename};
 }
-
-}  // namespace
-
-namespace cudf {
 
 /**
  * @brief Simple wrapper around a spdlog::logger that performs cuDF-specific initialization.
@@ -80,10 +75,10 @@ struct logger_wrapper {
   }
 };
 
-spdlog::logger& logger()
+}  // namespace
+
+spdlog::logger& cudf::logger()
 {
   static logger_wrapper wrapped{};
   return wrapped.logger_;
 }
-
-}  // namespace cudf
