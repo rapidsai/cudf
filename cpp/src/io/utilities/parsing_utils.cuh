@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,6 +166,19 @@ constexpr bool is_infinity(char const* begin, char const* end)
   return ((index == begin + 3 || index == begin + 8) && index >= end);
 }
 
+constexpr bool is_nan(char const* begin, char const* end)
+{
+  if (*begin == '-' || *begin == '+') begin++;
+  char const* cinf = "nan";
+  auto index       = begin;
+  while (index < end) {
+    if (*cinf != to_lower(*index)) break;
+    index++;
+    cinf++;
+  }
+  return ((index == begin + 3) && index >= end);
+}
+
 /**
  * @brief Parses a character string and returns its numeric value.
  *
@@ -192,6 +205,9 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
   // Handle infinity
   if (std::is_floating_point_v<T> && is_infinity(begin, end)) {
     return sign * std::numeric_limits<T>::infinity();
+  }
+  if (std::is_floating_point_v<T> && is_nan(begin, end)) {
+    return sign * std::numeric_limits<T>::quiet_NaN();
   }
   if (*begin == '-' || *begin == '+') begin++;
 
@@ -661,7 +677,7 @@ struct ConvertFunctor {
     }();
     if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return value.has_value() and !std::isnan(*value);
+    return value.has_value();  // and !std::isnan(*value);
   }
 
   /**
