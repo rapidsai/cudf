@@ -52,6 +52,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+      skip_upload_pkgs: libcudf-example
   wheel-build-cudf:
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@cuda-118
