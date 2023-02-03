@@ -3153,7 +3153,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
+   * cv = ["abc", "123", "def456"]
    * result = cv.matches_re("\\d+")
    * r is now [false, true, false]
    * ```
@@ -3174,8 +3174,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex program pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * p = regex_program::create("\\d+")
+   * r = cv.matches_re(p)
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3198,8 +3199,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.contains_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * r = cv.contains_re("\\d+")
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3219,8 +3220,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given RegexProgram pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.contains_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * p = regex_program::create("\\d+")
+   * r = cv.contains_re(p)
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
