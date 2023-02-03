@@ -1749,10 +1749,11 @@ __global__ void __launch_bounds__(block_size)
       auto const thread_depth = depth + t;
       if (thread_depth < s->page.num_output_nesting_levels) {
         // if we are not a bounding page (as checked above) then we are either
-        // returning 0 rows from the page (completely outside the bounds) or all
-        // rows in the page (completely within the bounds)
+        // returning all rows/values from this page, or 0 of them
         pp->nesting[thread_depth].batch_size =
-          s->num_rows == 0 ? 0 : pp->nesting[thread_depth].size;
+          (s->num_rows == 0 && !page_is_contained(s, min_row, num_rows))
+            ? 0
+            : pp->nesting[thread_depth].size;
       }
       depth += blockDim.x;
     }
