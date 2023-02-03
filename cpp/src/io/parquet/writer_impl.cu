@@ -927,8 +927,7 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
 void writer::impl::init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
                                           host_span<size_type const> frag_sizes)
 {
-  auto d_frag_sz = cudf::detail::make_device_uvector_sync(frag_sizes, stream);
-
+  auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
   InitPageFragments1D(frag, d_frag_sz, stream);
   frag.device_to_host(stream, true);
 }
@@ -1693,7 +1692,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       }
     }
 
-    // synch will be done in init_page_fragments_1d()
     expanded_fragments.host_to_device(stream);
     chunks.host_to_device(stream);
 

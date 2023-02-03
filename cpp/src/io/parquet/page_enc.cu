@@ -265,7 +265,6 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
 
   calculate_frag_size<block_size>(s, t);
-  __syncthreads();
   if (t == 0) { frag[blockIdx.x] = s->frag; }
 }
 
