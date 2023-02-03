@@ -1463,10 +1463,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   auto iter = thrust::make_counting_iterator<size_type>(0);
   if (table.num_rows() > 0 && max_page_fragment_size_ == cudf::io::default_max_page_fragment_size) {
     std::for_each(iter, iter + single_streams_table.num_columns(), [&](size_type index) {
-      auto const avg_len = std::max<size_type>(
-        column_size(single_streams_table.column(index), stream) / table.num_rows(), 1);
-      auto const frag_size    = max_page_size_bytes / avg_len;
-      column_frag_size[index] = std::min<size_type>(max_page_fragment_size_, frag_size);
+      auto const avg_len = util::div_rounding_up_safe(
+        column_size(single_streams_table.column(index), stream), table.num_rows());
+      if (avg_len > 0) {
+        auto const frag_size    = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
+        column_frag_size[index] = std::min<size_type>(max_page_fragment_size_, frag_size);
+      }
     });
   }
 
