@@ -66,7 +66,8 @@ inline std::unique_ptr<cudf::table> create_structs_data(nvbench::state& state,
   });
 
   std::vector<std::unique_ptr<cudf::column>> child_cols = std::move(cols);
-  // Lets add some layers
+  // Nest the child columns in a struct, then nest that struct column inside another
+  // struct column up to the desired depth
   for (int i = 0; i < depth; i++) {
     std::vector<bool> struct_validity;
     std::uniform_int_distribution<int> bool_distribution(0, 100 * (i + 1));

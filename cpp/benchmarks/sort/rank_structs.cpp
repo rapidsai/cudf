@@ -26,12 +26,14 @@ void nvbench_rank_structs(nvbench::state& state, cudf::rank_method method)
 
   auto const table = create_structs_data(state);
 
+  auto const null_frequency{state.get_float64("null_frequency")};
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::rank(table->view().column(0),
                method,
                cudf::order::ASCENDING,
-               cudf::null_policy::INCLUDE,
-               cudf::null_order::BEFORE,
+               null_frequency ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+               cudf::null_order::AFTER,
                rmm::mr::get_current_device_resource());
   });
 }
