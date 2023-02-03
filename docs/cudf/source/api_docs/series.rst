@@ -102,7 +102,6 @@ Function application, GroupBy & window
    :toctree: api/
 
    Series.apply
-   Series.applymap
    Series.map
    Series.groupby
    Series.rolling
@@ -359,7 +358,6 @@ the ``Series.cat`` accessor.
        Series.str
        Series.cat
        Series.dt
-       Index.str
 
 
 Serialization / IO / conversion

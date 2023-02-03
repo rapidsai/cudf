@@ -21,19 +21,14 @@ Properties
 .. autosummary::
    :toctree: api/
 
-   Index.empty
    Index.has_duplicates
    Index.duplicated
    Index.hasnans
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
-   Index.is_unique
-   Index.name
    Index.names
-   Index.ndim
    Index.nlevels
-   Index.shape
    Index.size
    Index.values
 
@@ -45,21 +40,15 @@ Modifying and computations
    Index.any
    Index.copy
    Index.drop_duplicates
-   Index.equals
-   Index.factorize
    Index.is_boolean
    Index.is_categorical
    Index.is_floating
    Index.is_integer
    Index.is_interval
-   Index.is_mixed
    Index.is_numeric
    Index.is_object
-   Index.min
-   Index.max
    Index.rename
    Index.repeat
-   Index.where
    Index.take
    Index.unique
 
@@ -80,23 +69,11 @@ Missing values
    Index.isna
    Index.notna
 
-Memory usage
-~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   Index.memory_usage
-
 Conversion
 ~~~~~~~~~~
 .. autosummary::
    :toctree: api/
 
-   Index.astype
-   Index.to_arrow
-   Index.to_cupy
-   Index.to_list
-   Index.to_numpy
    Index.to_series
    Index.to_frame
    Index.to_pandas
@@ -109,16 +86,7 @@ Sorting
 .. autosummary::
    :toctree: api/
 
-   Index.argsort
-   Index.searchsorted
    Index.sort_values
-
-Time-specific operations
-~~~~~~~~~~~~~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   Index.shift
 
 Combining / joining / set operations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
