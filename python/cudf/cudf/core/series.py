@@ -1258,10 +1258,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4     <NA>
         dtype: int64
 
-        Notes
-        -----
-        Please note map currently only supports fixed-width numeric
-        type functions.
+        .. pandas-compat::
+            **Series.map**
+
+            Please note map currently only supports fixed-width numeric
+            type functions.
         """
         if isinstance(arg, dict):
             if hasattr(arg, "__missing__"):
@@ -2026,12 +2027,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         Series : Series with sorted values.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
         Examples
         --------
         >>> import cudf
@@ -2043,6 +2038,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         1    5
         dtype: int64
+
+        .. pandas-compat::
+            **Series.sort_values**
+
+            * Support axis='index' only.
+            * The inplace and kind argument is currently unsupported
         """
         return super().sort_values(
             by=self.name,
@@ -2487,16 +2488,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         int
             Number of non-null values in the Series.
 
-        Notes
-        -----
-        Parameters currently not supported is `level`.
-
         Examples
         --------
         >>> import cudf
         >>> ser = cudf.Series([1, 5, 2, 4, 3])
         >>> ser.count()
         5
+
+        .. pandas-compat::
+            **Series.count**
+
+            Parameters currently not supported is `level`.
         """
 
         if level is not None:
@@ -2598,10 +2600,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Covariance between Series and other normalized by N-1
             (unbiased estimator).
 
-        Notes
-        -----
-        `min_periods` parameter is not yet supported.
-
         Examples
         --------
         >>> import cudf
@@ -2609,6 +2607,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.cov(ser2)
         -0.015750000000000004
+
+        .. pandas-compat::
+            **Series.cov**
+
+            `min_periods` parameter is not yet supported.
         """
 
         if min_periods is not None:
@@ -3336,12 +3339,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         Series
 
-        Notes
-        -----
-        Difference from pandas:
-          - Supports scalar values only for changing name attribute
-          - Not supporting : inplace, level
-
         Examples
         --------
         >>> import cudf
@@ -3360,6 +3357,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: numeric_series, dtype: int64
         >>> renamed_series.name
         'numeric_series'
+
+        .. pandas-compat::
+            **Series.rename**
+
+            - Supports scalar values only for changing name attribute
+            - The ``inplace`` and ``level`` is not supported
         """
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
@@ -4539,11 +4542,6 @@ class DatetimeProperties:
         Series
             Series of formatted strings.
 
-        Notes
-        -----
-        The following date format identifiers are not yet
-        supported: ``%c``, ``%x``,``%X``
-
         Examples
         --------
         >>> import cudf
@@ -4570,6 +4568,12 @@ class DatetimeProperties:
         1    2000 / 30 / 06
         2    2000 / 30 / 09
         dtype: object
+
+        .. pandas-compat::
+            **series.DatetimeProperties.strftime**
+
+            The following date format identifiers are not yet
+            supported: ``%c``, ``%x``,``%X``
         """
 
         if not isinstance(date_format, str):

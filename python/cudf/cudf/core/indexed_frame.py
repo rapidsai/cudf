@@ -595,11 +595,6 @@ class IndexedFrame(Frame):
         result : Series
             Series after replacement. The mask and index are preserved.
 
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
-
         Examples
         --------
         **Series**
@@ -742,6 +737,12 @@ class IndexedFrame(Frame):
         2    2    7  c
         3    3    8  d
         4    4    9  e
+
+        .. pandas-compat::
+            **DataFrame.replace, Series.replace, IndexedFrame.replace**
+
+            Parameters that are currently not supported are: `limit`, `regex`,
+            `method`
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -1073,13 +1074,6 @@ class IndexedFrame(Frame):
         `before` and `after` may be specified as strings instead of
         Timestamps.
 
-        .. pandas-compat::
-            **DataFrame.truncate, Series.truncate**
-
-            The ``copy`` parameter is only present for API compatibility, but
-            ``copy=False`` is not supported. This method always generates a
-            copy.
-
         Examples
         --------
         **Series**
@@ -1221,6 +1215,13 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:25  1  2
         2021-01-01 23:45:26  1  2
         2021-01-01 23:45:27  1  2
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate, IndexedFrame.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
         """
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
@@ -1473,11 +1474,6 @@ class IndexedFrame(Frame):
         -------
         Frame or None
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: kind, sort_remaining=False
-
         Examples
         --------
         **Series**
@@ -1518,6 +1514,11 @@ class IndexedFrame(Frame):
         1  2  3
         3  1  2
         2  3  1
+
+        .. pandas-compat::
+            **DataFrame.sort_index, Series.sort_index, IndexedFrame.sort_index**
+
+            * Not supporting: kind, sort_remaining=False
         """
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
@@ -2235,12 +2236,6 @@ class IndexedFrame(Frame):
         -------
         Frame : Frame with sorted values.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
         Examples
         --------
         >>> import cudf
@@ -2252,6 +2247,12 @@ class IndexedFrame(Frame):
         0  0 -3
         2  2  0
         1  1  2
+
+        .. pandas-compat::
+            **DataFrame.sort_values, Series.sort_values, IndexedFrame.sort_values**
+
+            * Support axis='index' only.
+            * Not supporting: inplace, kind
         """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -2713,13 +2714,14 @@ class IndexedFrame(Frame):
         2018-02-28      18.0  63.333333
 
 
-        Notes
-        -----
-        Note that the dtype of the index (or the 'on' column if using
-        'on=') in the result will be of a frequency closest to the
-        resampled frequency.  For example, if resampling from
-        nanoseconds to milliseconds, the index will be of dtype
-        'datetime64[ms]'.
+        .. pandas-compat::
+            **DataFrame.resample, Series.resample, IndexedFrame.resample**
+
+            Note that the dtype of the index (or the 'on' column if using
+            'on=') in the result will be of a frequency closest to the
+            resampled frequency.  For example, if resampling from
+            nanoseconds to milliseconds, the index will be of dtype
+            'datetime64[ms]'.
         """
         import cudf.core.resample
 
@@ -3153,18 +3155,6 @@ class IndexedFrame(Frame):
         provided via the `random_state` parameter. This function will always
         produce the same sample given an identical `random_state`.
 
-        Notes
-        -----
-        When sampling from ``axis=0/'index'``, ``random_state`` can be either
-        a numpy random state (``numpy.random.RandomState``) or a cupy random
-        state (``cupy.random.RandomState``). When a numpy random state is
-        used, the output is guaranteed to match the output of the corresponding
-        pandas method call, but generating the sample may be slow. If exact
-        pandas equivalence is not required, using a cupy random state will
-        achieve better performance, especially when sampling large number of
-        items. It's advised to use the matching `ndarray` type to the random
-        state for the `weights` array.
-
         Parameters
         ----------
         n : int, optional
@@ -3232,6 +3222,19 @@ class IndexedFrame(Frame):
            a  c
         0  1  3
         1  2  4
+
+        .. pandas-compat::
+            **DataFrame.sample, Series.sample, IndexedFrame.sample**
+
+            When sampling from ``axis=0/'index'``, ``random_state`` can be either
+            a numpy random state (``numpy.random.RandomState``) or a cupy random
+            state (``cupy.random.RandomState``). When a numpy random state is
+            used, the output is guaranteed to match the output of the corresponding
+            pandas method call, but generating the sample may be slow. If exact
+            pandas equivalence is not required, using a cupy random state will
+            achieve better performance, especially when sampling large number of
+            items. It's advised to use the matching `ndarray` type to the random
+            state for the `weights` array.
         """
         axis = self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]

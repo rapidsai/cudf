@@ -256,11 +256,6 @@ class Frame(BinaryOperand, Scannable):
         out : bool
             If DataFrame/Series is empty, return True, if not return False.
 
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
         Examples
         --------
         >>> import cudf
@@ -301,6 +296,12 @@ class Frame(BinaryOperand, Scannable):
         Series([], dtype: float64)
         >>> s.empty
         True
+
+        .. pandas-compat::
+            **DataFrame.empty, Series.empty, Frame.empty**
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
         """
         return self.size == 0
 
@@ -642,6 +643,8 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
 
         .. pandas-compat::
+            **DataFrame.where, Series.where, Frame.where**
+
             Note that ``where`` treats missing values as falsy,
             in parallel with pandas treatment of nullable data:
 
@@ -1933,10 +1936,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -1945,6 +1944,11 @@ class Frame(BinaryOperand, Scannable):
         a    1
         b    7
         dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.min, Series.min, Frame.min**
+
+            Parameters currently not supported are `level`, `numeric_only`.
         """
         return self._reduce(
             "min",
@@ -1984,10 +1988,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -1996,6 +1996,11 @@ class Frame(BinaryOperand, Scannable):
         a     4
         b    10
         dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.max, Series.max, Frame.max**
+
+            Parameters currently not supported are `level`, `numeric_only`.
         """
         return self._reduce(
             "max",
@@ -2040,10 +2045,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -2052,6 +2053,11 @@ class Frame(BinaryOperand, Scannable):
         a    10
         b    34
         dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.sum, Series.sum, Frame.sum**
+
+            Parameters currently not supported are `level`, `numeric_only`.
         """
         return self._reduce(
             "sum",
@@ -2098,10 +2104,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are level`, `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -2110,6 +2112,11 @@ class Frame(BinaryOperand, Scannable):
         a      24
         b    5040
         dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.product, Series.product, Frame.product**
+
+            Parameters currently not supported are level`, `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
         return self._reduce(
@@ -2204,11 +2211,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `level` and
-        `numeric_only`
-
         Examples
         --------
         >>> import cudf
@@ -2217,6 +2219,12 @@ class Frame(BinaryOperand, Scannable):
         a    1.290994
         b    1.290994
         dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.std, Series.std, Frame.std**
+
+            Parameters currently not supported are `level` and
+            `numeric_only`
         """
 
         return self._reduce(
@@ -2260,11 +2268,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         scalar
 
-        Notes
-        -----
-        Parameters currently not supported are `level` and
-        `numeric_only`
-
         Examples
         --------
         >>> import cudf
@@ -2273,6 +2276,12 @@ class Frame(BinaryOperand, Scannable):
         a    1.666667
         b    1.666667
         dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.var, Series.var, Frame.var**
+
+            Parameters currently not supported are `level` and
+            `numeric_only`
         """
         return self._reduce(
             "var",
@@ -2305,10 +2314,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series or scalar
 
-        Notes
-        -----
-        Parameters currently not supported are `level` and `numeric_only`
-
         Examples
         --------
         **Series**
@@ -2326,6 +2331,11 @@ class Frame(BinaryOperand, Scannable):
         a   -1.2
         b   -1.2
         dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.kurtosis, Frame.kurtosis**
+
+            Parameters currently not supported are `level` and `numeric_only`
         """
         if axis not in (0, "index", None):
             raise NotImplementedError("Only axis=0 is currently supported.")
@@ -2358,11 +2368,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
         Examples
         --------
         **Series**
@@ -2387,6 +2392,12 @@ class Frame(BinaryOperand, Scannable):
         a    0.00000
         b   -0.37037
         dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.skew, Series.skew, Frame.skew**
+
+            Parameters currently not supported are `axis`, `level` and
+            `numeric_only`
         """
         if axis not in (0, "index", None):
             raise NotImplementedError("Only axis=0 is currently supported.")
@@ -2418,10 +2429,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
         Examples
         --------
         >>> import cudf
@@ -2430,6 +2437,11 @@ class Frame(BinaryOperand, Scannable):
         a     True
         b    False
         dtype: bool
+
+        .. pandas-compat::
+            **DataFrame.all, Series.all, Frame.all**
+
+            Parameters currently not supported are `axis`, `bool_only`, `level`.
         """
         return self._reduce(
             "all",
@@ -2457,10 +2469,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         Series
 
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `bool_only`, `level`.
-
         Examples
         --------
         >>> import cudf
@@ -2469,6 +2477,11 @@ class Frame(BinaryOperand, Scannable):
         a    True
         b    True
         dtype: bool
+
+        .. pandas-compat::
+            **DataFrame.any, Series.any, Frame.any**
+
+            Parameters currently not supported are `axis`, `bool_only`, `level`.
         """
         return self._reduce(
             "any",
@@ -2523,10 +2536,6 @@ class Frame(BinaryOperand, Scannable):
         -------
         scalar
 
-        Notes
-        -----
-        Parameters currently not supported are `level` and `numeric_only`.
-
         Examples
         --------
         >>> import cudf
@@ -2541,6 +2550,11 @@ class Frame(BinaryOperand, Scannable):
         dtype: int64
         >>> ser.median()
         17.0
+
+        .. pandas-compat::
+            **DataFrame.median, Series.median, Frame.median**
+
+            Parameters currently not supported are `level` and `numeric_only`.
         """
         return self._reduce(
             "median",
