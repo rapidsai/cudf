@@ -3175,7 +3175,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * p = RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
    * r = cv.matchesRe(p)
    * r is now [false, true, false]
    * ```
@@ -3221,7 +3221,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * ```
    * cv = ["abc", "123", "def456"]
-   * p = RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
    * r = cv.containsRe(p)
    * r is now [false, true, true]
    * ```
