@@ -209,20 +209,30 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // CUDF_FAIL("Segmented reduction on fixed point column only supports min and max reduction.");
   using RepType = device_storage_type_t<InputType>;
   auto result =
     simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
   auto const scale = [&] {
-    // if (std::is_same_v<Op, cudf::reduction::op::product>) {
-    //  auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
-    //  return numeric::scale_type{col.type().scale() * (valid_count + (init.has_value() ? 1 : 0))};
-    //}
+    if (std::is_same_v<Op, cudf::reduction::op::product>) {
+      CUDF_FAIL("Segmented reduction for fixed point does not support product aggregation yet.");
+      return numeric::scale_type{col.type().scale()};
+    }
     if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
     return numeric::scale_type{col.type().scale()};
   }();
+
+  auto size       = result->size();        // get these before
+  auto null_count = result->null_count();  // release() is called
+  auto contents   = result->release();
+
+  result = std::make_unique<column>(data_type{type_to_id<InputType>(), scale},
+                                    size,
+                                    std::move(*(contents.data.release())),
+                                    std::move(*(contents.null_mask.release())),
+                                    null_count);
+
   return result;
 }
 
