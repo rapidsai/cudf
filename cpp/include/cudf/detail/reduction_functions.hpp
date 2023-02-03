@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ std::unique_ptr<scalar> mean(
 std::unique_ptr<scalar> variance(
   column_view const& col,
   data_type const output_dtype,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -239,7 +239,7 @@ std::unique_ptr<scalar> variance(
 std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
   data_type const output_dtype,
-  cudf::size_type ddof,
+  size_type ddof,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -335,172 +335,6 @@ std::unique_ptr<scalar> merge_sets(
   lists_column_view const& col,
   null_equality nulls_equal,
   nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Compute sum of each segment in input column.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
- * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
- *
- * @param col Input column to compute sum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each sum
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sums of segments in type `output_dtype`
- */
-std::unique_ptr<column> segmented_sum(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Computes product of each segment in input column.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
- * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
- *
- * @param col Input column to compute product
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each product
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Product as scalar of type `output_dtype`
- */
-std::unique_ptr<column> segmented_product(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Compute minimum of each segment in input column.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
- *
- * @param col Input column to compute minimum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each minimum
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Minimums of segments in type `output_dtype`
- */
-std::unique_ptr<column> segmented_min(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Compute maximum of each segment in input column.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
- *
- * @param col Input column to compute maximum
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each maximum
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Maximums of segments in type `output_dtype`
- */
-std::unique_ptr<column> segmented_max(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Compute if any of the values in the segment are true when typecasted to bool.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is not convertible to bool.
- * @throw cudf::logic_error if `output_dtype` is not bool8.
- *
- * @param col Input column to compute any
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each any
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Column of bool8 for the results of the segments
- */
-std::unique_ptr<column> segmented_any(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Compute if all of the values in the segment are true when typecasted to bool.
- *
- * If an input segment is empty, the segment result is null.
- *
- * @throw cudf::logic_error if input column type is not convertible to bool.
- * @throw cudf::logic_error if `output_dtype` is not bool8.
- *
- * @param col Input column to compute all
- * @param offsets Indices to identify segment boundaries
- * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
- * in the segment is valid.
- * @param init Initial value of each all
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Column of bool8 for the results of the segments
- */
-std::unique_ptr<column> segmented_all(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  data_type const output_dtype,
-  null_policy null_handling,
-  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
