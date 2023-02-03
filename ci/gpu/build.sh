@@ -45,7 +45,7 @@ export INSTALL_DASK_MAIN=1
 export DASK_STABLE_VERSION="2022.12.0"
 
 # ucx-py version
-export UCX_PY_VERSION='0.30.*'
+export UCX_PY_VERSION='0.31.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
