@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
@@ -9,6 +9,7 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.exception_handler cimport cudf_exception_handler
 from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
@@ -32,7 +33,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         const table_view& source_table,
         const column_view& gather_map,
         out_of_bounds_policy policy
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] shift(
         const column_view& input,
