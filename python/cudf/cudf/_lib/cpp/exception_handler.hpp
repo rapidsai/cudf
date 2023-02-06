@@ -50,6 +50,9 @@ void cudf_exception_handler()
     PyErr_SetString(PyExc_TypeError, exn.what());
   } catch (const std::domain_error& exn) {
     PyErr_SetString(PyExc_ValueError, exn.what());
+  } catch (const cudf::dtype_error& exn) {
+    // Have to catch dtype_error before invalid_argument because it is a subclass
+    PyErr_SetString(PyExc_TypeError, exn.what());
   } catch (const std::invalid_argument& exn) {
     PyErr_SetString(PyExc_ValueError, exn.what());
   } catch (const std::ios_base::failure& exn) {
@@ -65,9 +68,6 @@ void cudf_exception_handler()
     PyErr_SetString(PyExc_ArithmeticError, exn.what());
   } catch (const std::underflow_error& exn) {
     PyErr_SetString(PyExc_ArithmeticError, exn.what());
-    // The are all libcudf exceptions that cudf knows how to handle
-  } catch (const cudf::dtype_error& exn) {
-    PyErr_SetString(PyExc_TypeError, exn.what());
     // The below is the default catch-all case.
   } catch (const std::exception& exn) {
     PyErr_SetString(PyExc_RuntimeError, exn.what());

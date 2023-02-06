@@ -93,20 +93,20 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported dtype. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct dtype_error : public std::logic_error {
+struct dtype_error : public std::invalid_argument {
   /**
    * @brief Constructs a dtype_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  dtype_error(char const* const message) : std::logic_error(message) {}
+  dtype_error(char const* const message) : std::invalid_argument(message) {}
 
   /**
    * @brief Construct a new logic error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  dtype_error(std::string const& message) : std::logic_error(message) {}
+  dtype_error(std::string const& message) : std::invalid_argument(message) {}
 };
 
 }  // namespace cudf
