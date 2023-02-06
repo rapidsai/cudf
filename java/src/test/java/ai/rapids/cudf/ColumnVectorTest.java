@@ -4040,14 +4040,18 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testExtractRe() {
-      try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
-            Table expected = new Table.TestBuilder()
-                    .column("a", "b", null, null)
-                    .column("1", "2", null, null)
-                    .build();
-            Table found = input.extractRe("([ab])(\\d)")) {
-          assertTablesAreEqual(expected, found);
+    try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
+         Table expected = new Table.TestBuilder()
+             .column("a", "b", null, null)
+             .column("1", "2", null, null)
+             .build()) {
+      try (Table found = input.extractRe("([ab])(\\d)")) {
+        assertTablesAreEqual(expected, found);
       }
+      try (Table found = input.extractRe(new RegexProgram("([ab])(\\d)"))) {
+        assertTablesAreEqual(expected, found);
+      }
+    }
   }
 
   @Test
