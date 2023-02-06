@@ -1473,23 +1473,23 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     // for multiple fragments per page to smooth things out. using 2 was too
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
-    std::transform(column_sizes.begin(),
-                   column_sizes.end(),
-                   std::back_inserter(column_frag_size),
-                   [&table, this](auto col_size) {
-                     constexpr int target_frags_per_page = 4;
+    auto frag_size_fn = [&](auto const& col, size_type col_size) {
+      const int target_frags_per_page = is_fixed_width(col.type()) ? 1 : 4;
+      auto const avg_len =
+        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
+      if (avg_len > 0) {
+        auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
+        return std::min<size_type>(max_page_fragment_size_, frag_size);
+      } else {
+        return max_page_fragment_size_;
+      }
+    };
 
-                     auto const avg_len =
-                       target_frags_per_page *
-                       util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
-                     if (avg_len > 0) {
-                       auto const frag_size =
-                         util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
-                       return std::min<size_type>(max_page_fragment_size_, frag_size);
-                     } else {
-                       return max_page_fragment_size_;
-                     }
-                   });
+    std::transform(single_streams_table.begin(),
+                   single_streams_table.end(),
+                   column_sizes.begin(),
+                   std::back_inserter(column_frag_size),
+                   frag_size_fn);
 
     // also adjust fragment size if a single fragment will overrun a rowgroup
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
