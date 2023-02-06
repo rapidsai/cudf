@@ -15,7 +15,6 @@
  */
 
 #include "binary_ops.cuh"
-#include "cudf/utilities/error.hpp"
 
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_view& out,
@@ -27,7 +26,8 @@ void dispatch_equality_op(mutable_column_view& out,
                           rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
-               "Unsupported operator for these types", cudf::dtype_error);
+               "Unsupported operator for these types",
+               cudf::dtype_error);
   auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
   auto outd         = mutable_column_device_view::create(out, stream);
   auto lhsd         = column_device_view::create(lhs, stream);

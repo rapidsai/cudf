@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/utilities/error.hpp"
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
