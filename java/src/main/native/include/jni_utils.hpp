@@ -863,7 +863,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
   }                                                                                                \
   catch (const cudf::dtype_error &e) {                                                             \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e, ret_val);                      \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), ret_val);                \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
