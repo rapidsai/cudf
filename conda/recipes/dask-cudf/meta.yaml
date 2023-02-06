@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -34,14 +34,14 @@ requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask >=2022.12.0
-    - distributed >=2022.12.0
+    - dask ==2023.1.1
+    - distributed ==2023.1.1
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask >=2022.12.0
-    - distributed >=2022.12.0
+    - dask ==2023.1.1
+    - distributed ==2023.1.1
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:
