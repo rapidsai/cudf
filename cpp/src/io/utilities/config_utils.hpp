@@ -31,9 +31,9 @@ T getenv_or(std::string_view env_var_name, T default_val)
 {
   auto const env_val = std::getenv(env_var_name.data());
   if (env_val != nullptr) {
-    logger().debug("Environment variable {} read as {}", env_var_name, env_val);
+    CUDF_LOG_INFO("Environment variable {} read as {}", env_var_name, env_val);
   } else {
-    logger().debug(
+    CUDF_LOG_INFO(
       "Environment variable {} is not set, using default value {}", env_var_name, default_val);
   }
 
