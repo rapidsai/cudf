@@ -36,7 +36,7 @@ namespace detail {
  * @brief Creates child offsets and chars columns by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
- * @throws cudf::logic_error if the output strings column exceeds the column size limit
+ * @throws std::overflow_error if the output strings column exceeds the column size limit
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must also have members d_offsets and d_chars which are set to

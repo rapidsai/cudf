@@ -283,8 +283,8 @@ auto sizes_to_offsets(SizesIterator begin,
  * The return also includes the total number of elements -- the last element value from the
  * scan.
  *
- * @throw cudf::logic_error if the total size of the scan (last element) greater than maximum value
- * of `size_type`
+ * @throw std::overflow_error if the total size of the scan (last element) greater than maximum
+ * value of `size_type`
  *
  * @tparam InputIterator Used as input to scan to set the offset values
  * @param begin The beginning of the input sequence
