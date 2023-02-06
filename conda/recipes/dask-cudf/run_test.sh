@@ -17,12 +17,22 @@ if [ "${ARCH}" = "aarch64" ]; then
   exit 0
 fi
 
-# Install the latest version of dask and distributed
-logger "pip install git+https://github.com/dask/distributed.git@2023.1.1 --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@2023.1.1" --upgrade --no-deps
+# Dask & Distributed option to install main or `DASK_STABLE_VERSION` packages.
+export INSTALL_DASK_MAIN=0
 
-logger "pip install git+https://github.com/dask/dask.git@2023.1.1 --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@2023.1.1" --upgrade --no-deps
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2023.1.1"
+
+# Install the latest(main branch) version of dask and distributed
+if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+    export DASK_STABLE_VERSION="main"
+fi
+
+logger "pip install git+https://github.com/dask/distributed.git@{$DASK_STABLE_VERSION} --upgrade --no-deps"
+pip install "git+https://github.com/dask/distributed.git@{$DASK_STABLE_VERSION}" --upgrade --no-deps
+
+logger "pip install git+https://github.com/dask/dask.git@{$DASK_STABLE_VERSION} --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git@{$DASK_STABLE_VERSION}" --upgrade --no-deps
 
 logger "python -c 'import dask_cudf'"
 python -c "import dask_cudf"
