@@ -5173,13 +5173,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if index_col:
             if isinstance(index_col[0], dict):
-                out = out.set_index(
-                    cudf.RangeIndex(
-                        index_col[0]["start"],
-                        index_col[0]["stop"],
-                        name=index_col[0]["name"],
-                    )
+                idx = cudf.RangeIndex(
+                    index_col[0]["start"],
+                    index_col[0]["stop"],
+                    name=index_col[0]["name"],
                 )
+                if len(idx) == len(out):
+                    # `idx` is generated from arrow `pandas_metadata`
+                    # which can get out of date with many of the
+                    # arrow operations. Hence verifying if the
+                    # lengths match, or else don't need to set
+                    # an index at all i.e., Default RangeIndex
+                    # will be set.
+                    # See more about the discussion here:
+                    # https://github.com/apache/arrow/issues/15178
+                    out = out.set_index(idx)
             else:
                 out = out.set_index(index_col[0])
 
