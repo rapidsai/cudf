@@ -1468,6 +1468,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    std::back_inserter(column_sizes),
                    [this](auto const& column) { return column_size(column, stream); });
 
+    // adjust global fragment size if a single fragment will overrun a rowgroup
+    auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
+    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, table.num_rows());
+    if (avg_row_len > 0) {
+      auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
+      max_page_fragment_size_ = std::min<size_type>(rg_frag_size, max_page_fragment_size_);
+    }
+
     // dividing page size by average row length will tend to overshoot the desired
     // page size when there's high variability in the row lengths. instead, shoot
     // for multiple fragments per page to smooth things out. using 2 was too
@@ -1490,14 +1498,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    column_sizes.begin(),
                    std::back_inserter(column_frag_size),
                    frag_size_fn);
-
-    // also adjust fragment size if a single fragment will overrun a rowgroup
-    auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
-    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, table.num_rows());
-    if (avg_row_len > 0) {
-      auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
-      max_page_fragment_size_ = std::min<size_type>(rg_frag_size, max_page_fragment_size_);
-    }
   }
 
   bool const has_non_uniform_fragments =
@@ -1702,11 +1702,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           ck.first_fragment       = frag_offset;
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
 
-          // In fragment struct, add a pointer to the chunk it belongs to
-          // In each fragment in chunk_fragments, update the chunk pointer here.
+          // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            expanded_fragments[frag_offset + i].chunk =
-              &chunks.device_view()[r + first_rg_in_part[p]][c];
+            expanded_fragments[frag_offset + i].chunk = &ck;
           }
           frag_offset += fragments_in_chunk;
         }
