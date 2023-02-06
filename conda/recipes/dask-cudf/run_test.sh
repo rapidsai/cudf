@@ -17,22 +17,20 @@ if [ "${ARCH}" = "aarch64" ]; then
   exit 0
 fi
 
-# Dask & Distributed option to install main or `DASK_STABLE_VERSION` packages.
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
 export DASK_STABLE_VERSION="2023.1.1"
 
-# Install the latest(main branch) version of dask and distributed
+# Install the conda-forge or nightly version of dask and distributed
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
-    export DASK_STABLE_VERSION="main"
+    gpuci_logger "gpuci_mamba_retry install -c dask/label/dev 'dask/label/dev::dask' 'dask/label/dev::distributed'"
+    gpuci_mamba_retry install -c dask/label/dev "dask/label/dev::dask" "dask/label/dev::distributed"
+else
+    gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
 fi
-
-logger "pip install git+https://github.com/dask/distributed.git@{$DASK_STABLE_VERSION} --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@{$DASK_STABLE_VERSION}" --upgrade --no-deps
-
-logger "pip install git+https://github.com/dask/dask.git@{$DASK_STABLE_VERSION} --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@{$DASK_STABLE_VERSION}" --upgrade --no-deps
 
 logger "python -c 'import dask_cudf'"
 python -c "import dask_cudf"
