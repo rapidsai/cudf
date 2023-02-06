@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <stdexcept>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -267,7 +268,8 @@ auto make_strings_children(Func fn,
     auto const bytes =
       cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
     CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-                 "Size of output exceeds column size limit");
+                 "Size of output exceeds column size limit",
+                 std::overflow_error);
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
