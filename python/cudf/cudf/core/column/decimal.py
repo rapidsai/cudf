@@ -96,8 +96,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
             result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
         else:
             raise TypeError(
-            f"{op} not supported for the following dtypes: "
-            f"{self.dtype}, {other.dtype}"
+                f"{op} not supported for the following dtypes: "
+                f"{self.dtype}, {other.dtype}"
             )
 
         return result
