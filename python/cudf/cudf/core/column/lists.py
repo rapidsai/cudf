@@ -401,19 +401,9 @@ class ListMethods(ColumnMethods):
         Series([False, True, True])
         dtype: bool
         """
-        search_key = cudf.Scalar(search_key)
-        try:
-            res = self._return_or_inplace(
-                contains_scalar(self._column, search_key)
-            )
-        except RuntimeError as e:
-            if (
-                "Type/Scale of search key does not "
-                "match list column element type." in str(e)
-            ):
-                raise TypeError(str(e)) from e
-            raise
-        return res
+        return self._return_or_inplace(
+            contains_scalar(self._column, cudf.Scalar(search_key))
+        )
 
     def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
         """
@@ -460,23 +450,14 @@ class ListMethods(ColumnMethods):
         dtype: int32
         """
 
-        try:
-            if is_scalar(search_key):
-                return self._return_or_inplace(
-                    index_of_scalar(self._column, cudf.Scalar(search_key))
-                )
-            else:
-                return self._return_or_inplace(
-                    index_of_column(self._column, as_column(search_key))
-                )
-
-        except RuntimeError as e:
-            if (
-                "Type/Scale of search key does not "
-                "match list column element type." in str(e)
-            ):
-                raise TypeError(str(e)) from e
-            raise
+        if is_scalar(search_key):
+            return self._return_or_inplace(
+                index_of_scalar(self._column, cudf.Scalar(search_key))
+            )
+        else:
+            return self._return_or_inplace(
+                index_of_column(self._column, as_column(search_key))
+            )
 
     @property
     def leaves(self) -> ParentType:
