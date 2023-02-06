@@ -111,7 +111,7 @@ Name: Max Speed, dtype: float64
 ...     'Max Speed': [380., 370., 24., 26.],
 ... }})
 >>> df
-    Animal  Max Speed
+   Animal  Max Speed
 0  Falcon      380.0
 1  Falcon      370.0
 2  Parrot       24.0
@@ -1245,7 +1245,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...      "Score": [50, 30, 90, 80],
         ... })
         >>> gdf
-        Speed  Score
+           Speed  Score
         0  380.0     50
         1  370.0     30
         2   24.0     90
@@ -1314,7 +1314,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
         ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
         >>> gdf
-        id  val1  val2  val3
+           id  val1  val2  val3
         0  a     5     4     4
         1  a     4     5     5
         2  a     6     6     6
