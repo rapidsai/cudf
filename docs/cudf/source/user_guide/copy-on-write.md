@@ -2,14 +2,13 @@
 
 # Copy-on-write
 
-Copy-on-write is a memory management strategy that allows multiple cudf objects containing the same data to refer to the same memory address as long as neither of them modify the underlying data.
+Copy-on-write is a memory management strategy that allows multiple cuDF objects containing the same data to refer to the same memory address as long as neither of them modify the underlying data.
 With this approach, any operation that generates an unmodified view of an object (such as copies, slices, or methods like `DataFrame.head`) returns a new object that points to the same memory as the original.
-However, when either the new object is modified, a new copy of the data is made prior to the modification, ensuring that the changes do not propagate back to the original object.
-The same behavior also works in the other direction, i.e. modifications of the original object will not propagate to the new object.
+However, when either the existing or new object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.
 This behavior is best understood by looking at the examples below.
 
 
-## How to enable it
+## Enabling copy-on-write
 
 1. Use `cudf.set_option`:
 
@@ -25,10 +24,10 @@ launch of the Python interpreter:
     export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
     ```
 
-## How to disable it
+## Disabling copy-on-write
 
 
-Copy-on-write can be disable by setting ``copy_on_write`` cudf option to ``False``:
+Copy-on-write can be disabled by setting the ``copy_on_write`` option to ``False``:
 
 ```python
 >>> cudf.set_option("copy_on_write", False)
@@ -83,7 +82,7 @@ dtype: int64
 
 ## Notes
 
-When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cudf will always trigger a copy and will not modify the original object.
+When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cuDF will always trigger a copy and will not modify the original object.
 
 ### Explicit deep and shallow copies comparison
 
