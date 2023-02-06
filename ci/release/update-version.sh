@@ -94,3 +94,7 @@ NEXT_SHORT_TAG_PEP440=$(python -c "from setuptools.extern import packaging; prin
 # Wheel builds install intra-RAPIDS dependencies from same release
 sed_runner "s/rmm{cuda_suffix}.*\",/rmm{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/cudf/setup.py
 sed_runner "s/cudf{cuda_suffix}==.*\",/cudf{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/dask_cudf/setup.py
+
+for FILE in .github/workflows/*.yaml; do
+  sed_runner "/shared-action-workflows/ s/@.*/@branch-${NEXT_SHORT_TAG}/g" "${FILE}"
+done
