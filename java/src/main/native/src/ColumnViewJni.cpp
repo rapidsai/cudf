@@ -742,14 +742,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(
       auto result = cudf::strings::split_record_re(strings_column, *regex_prog, max_split);
       return release_as_jlong(result);
     } else {
-      auto result = cudf::strings::split_record(strings_column, cudf::string_scalar{pattern}, max_split);
+      auto result =
+          cudf::strings::split_record(strings_column, cudf::string_scalar{pattern}, max_split);
       return release_as_jlong(result);
     }
-    // auto result =
-    //     split_by_regex ?
-    //         cudf::strings::split_record_re(strs_input, pattern, max_split) :
-    //         cudf::strings::split_record(strs_input, cudf::string_scalar{pattern}, max_split);
-    // return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }
