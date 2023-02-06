@@ -285,6 +285,7 @@ extern "C" {
   {                                                                                              \
     return_type const res = name<type>(data, size);                                              \
     *numba_return_value   = res;                                                                 \
+    __syncthreads();                                                                             \
     return 0;                                                                                    \
   }
 
@@ -310,6 +311,7 @@ extern "C" {
   {                                                                              \
     auto const res      = name<type>(data, index, size);                         \
     *numba_return_value = res;                                                   \
+    __syncthreads();                                                             \
     return 0;                                                                    \
   }
 
