@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include "binary_ops.hpp"
+#include "cudf/utilities/error.hpp"
 #include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
@@ -119,7 +120,7 @@ void apply_struct_equality_op(mutable_column_view& out,
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
                  op == binary_operator::NULL_EQUALS,
-               "Unsupported operator for these types");
+               "Unsupported operator for these types", cudf::dtype_error);
 
   auto tlhs = table_view{{lhs}};
   auto trhs = table_view{{rhs}};
