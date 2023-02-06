@@ -3252,10 +3252,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
+  @Deprecated
   public final Table extractRe(String pattern) throws CudfException {
+    return extractRe(new RegexProgram(pattern));
+  }
+
+  /**
+   * For each captured group specified in the given regex program
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg the regex program to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the regex
+   * program does not contain any capture groups.
+   */
+  public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    return new Table(extractRe(this.getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),
+                               regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -4100,9 +4118,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
-   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   * Native method for extracting results from a regex program pattern. Returns a table handle.
+   *
+   * @param cudfViewHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    */
-  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long[] extractRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
    * Native method for extracting all results corresponding to group idx from a regex program pattern.
