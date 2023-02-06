@@ -62,9 +62,8 @@ using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
                 bool nullable,
-                std::size_t max_page_size_bytes        = cudf::io::default_max_page_size_bytes,
-                std::size_t max_page_size_rows         = cudf::io::default_max_page_size_rows,
-                cudf::size_type max_page_fragment_size = cudf::io::default_max_page_fragment_size)
+                std::size_t max_page_size_bytes = cudf::io::default_max_page_size_bytes,
+                std::size_t max_page_size_rows  = cudf::io::default_max_page_size_rows)
 {
   // Just shift nulls of the next column by one position to avoid having all nulls in the same
   // table rows.
@@ -94,7 +93,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *input_table)
       .max_page_size_bytes(max_page_size_bytes)
       .max_page_size_rows(max_page_size_rows)
-      .max_page_fragment_size(max_page_fragment_size)
+      .max_page_fragment_size(cudf::io::default_max_page_fragment_size)
       .build();
   cudf::io::write_parquet(write_opts);
 
@@ -639,8 +638,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
                       "chunked_read_with_structs_of_lists",
                       nullable,
                       512 * 1024,  // 512KB per page
-                      20000,       // 20k rows per page
-                      5001         // non-default value to prevent variable fragments
+                      20000        // 20k rows per page
     );
   };
 

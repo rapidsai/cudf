@@ -1456,31 +1456,52 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
   // will start producing fragments larger than the desired page size, so calculate fragment sizes
   // for each leaf column.  Skip if the fragment size is not the default.
-  std::vector<size_type> column_frag_size(single_streams_table.num_columns(),
-                                          max_page_fragment_size_);
+  bool is_default_fragment_size = max_page_fragment_size_ == -1;
+  if (is_default_fragment_size) { max_page_fragment_size_ = default_max_page_fragment_size; }
 
-  auto iter = thrust::make_counting_iterator<size_type>(0);
-  if (table.num_rows() > 0 && max_page_fragment_size_ == cudf::io::default_max_page_fragment_size) {
-    std::for_each(iter, iter + single_streams_table.num_columns(), [&](size_type index) {
-      // dividing page size by average row length will tend to overshoot the desired page
-      // size when there's high variability in the row lengths. instead, shoot for multiple
-      // fragments per page to smooth things out. using 2 was too unbalanced in final page
-      // sizes, so using 4 which seems to be a good compromise at smoothing things out without
-      // getting fragment sizes too small.
-      constexpr int target_frags_per_page = 4;
-      auto const avg_len =
-        target_frags_per_page *
-        util::div_rounding_up_safe(column_size(single_streams_table.column(index), stream),
-                                   table.num_rows());
-      if (avg_len > 0) {
-        auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
-        column_frag_size[index] = std::min<size_type>(max_page_fragment_size_, frag_size);
-      }
-    });
+  std::vector<size_type> column_frag_size;
+
+  if (table.num_rows() > 0 && is_default_fragment_size) {
+    std::vector<size_t> column_sizes;
+    std::transform(single_streams_table.begin(),
+                   single_streams_table.end(),
+                   std::back_inserter(column_sizes),
+                   [this](auto const& column) { return column_size(column, stream); });
+
+    // dividing page size by average row length will tend to overshoot the desired
+    // page size when there's high variability in the row lengths. instead, shoot
+    // for multiple fragments per page to smooth things out. using 2 was too
+    // unbalanced in final page sizes, so using 4 which seems to be a good
+    // compromise at smoothing things out without getting fragment sizes too small.
+    std::transform(column_sizes.begin(),
+                   column_sizes.end(),
+                   std::back_inserter(column_frag_size),
+                   [&table, this](auto col_size) {
+                     constexpr int target_frags_per_page = 4;
+
+                     auto const avg_len =
+                       target_frags_per_page *
+                       util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
+                     if (avg_len > 0) {
+                       auto const frag_size =
+                         util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
+                       return std::min<size_type>(max_page_fragment_size_, frag_size);
+                     } else {
+                       return max_page_fragment_size_;
+                     }
+                   });
+
+    // also adjust fragment size if a single fragment will overrun a rowgroup
+    auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
+    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, table.num_rows());
+    if (avg_row_len > 0) {
+      auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
+      max_page_fragment_size_ = std::min<size_type>(rg_frag_size, max_page_fragment_size_);
+    }
   }
 
-  bool const non_uniform_fragments =
-    table.num_rows() > 0 &&
+  bool const has_non_uniform_fragments =
+    table.num_rows() > 0 and not column_frag_size.empty() and
     std::any_of(column_frag_size.begin(), column_frag_size.end(), [this](auto size) {
       return size != max_page_fragment_size_;
     });
@@ -1611,7 +1632,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        if (column_frag_size[c] < max_page_fragment_size_) {
+        if (not column_frag_size.empty() && column_frag_size[c] < max_page_fragment_size_) {
           auto const new_frags_in_chunk =
             util::div_rounding_up_unsafe(row_group.num_rows, column_frag_size[c]);
           frags_per_column[c] += new_frags_in_chunk;
@@ -1648,7 +1669,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   std::vector<size_type> frag_offsets;
   int total_frags = 0;
 
-  if (non_uniform_fragments && frags_per_column.size() > 0) {
+  if (has_non_uniform_fragments && frags_per_column.size() > 0) {
     std::exclusive_scan(frags_per_column.data(),
                         frags_per_column.data() + num_columns + 1,
                         std::back_inserter(frag_offsets),
@@ -1660,7 +1681,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   hostdevice_vector<gpu::PageFragment> expanded_fragments(total_frags, stream);
 
-  if (non_uniform_fragments) {
+  if (has_non_uniform_fragments) {
     // gather new fragments
     if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
       frag_stats.resize(total_frags, stream);
