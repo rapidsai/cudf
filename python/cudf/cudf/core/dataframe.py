@@ -4614,10 +4614,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self._column_names,
             self._index_names if keep_index else None,
         )
-        # Slice into partition
-        ret = [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
-        if not keep_index:
-            ret = [df.reset_index(drop=True) for df in ret]
+        # Slice into partitions. Notice, `hash_partition` returns the start
+        # offset of each partition thus we skip the first offset
+        ret = outdf._split(offsets[1:], keep_index=keep_index)
+
+        # `_split()`` ignores empty intervals so we add empty partitions here
+        ret += [self._empty_like(keep_index) for _ in range(nparts - len(ret))]
         return ret
 
     def info(
