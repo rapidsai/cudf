@@ -112,15 +112,15 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
   return 0;
 }
 
-
 // checks to see if the given column has a fixed size.  This doesn't
 // check every row, so assumes string and list columns are not fixed, even
 // if each row is the same width.
 // TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
 bool is_col_fixed_width(column_view const& column)
 {
-  if (is_fixed_width(column.type())) { return true; }
-  else if (column.type().id() == type_id::STRUCT) {
+  if (is_fixed_width(column.type())) {
+    return true;
+  } else if (column.type().id() == type_id::STRUCT) {
     for (int i = 0; i < column.num_children(); i++) {
       if (not is_fixed_width(column.child(i).type())) { return false; }
     }
@@ -1477,7 +1477,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   bool is_default_fragment_size = max_page_fragment_size_ == -1;
   if (is_default_fragment_size) { max_page_fragment_size_ = default_max_page_fragment_size; }
 
-  std::vector<size_type> column_frag_size;
+  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size_);
 
   if (table.num_rows() > 0 && is_default_fragment_size) {
     std::vector<size_t> column_sizes;
@@ -1514,15 +1514,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     std::transform(single_streams_table.begin(),
                    single_streams_table.end(),
                    column_sizes.begin(),
-                   std::back_inserter(column_frag_size),
+                   column_frag_size.begin(),
                    frag_size_fn);
   }
-
-  bool const has_non_uniform_fragments =
-    table.num_rows() > 0 and not column_frag_size.empty() and
-    std::any_of(column_frag_size.begin(), column_frag_size.end(), [this](auto size) {
-      return size != max_page_fragment_size_;
-    });
 
   // do first pass with max_page_fragment_size_ to calculate row group boundaries
   std::vector<int> num_frag_in_part;
@@ -1685,82 +1679,68 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // first figure out the total number of fragments
   // calculate start offset for each column
   std::vector<size_type> frag_offsets;
-  int total_frags = 0;
+  size_type total_frags = 0;
 
-  if (has_non_uniform_fragments && frags_per_column.size() > 0) {
+  if (frags_per_column.size() > 0) {
     std::exclusive_scan(frags_per_column.data(),
                         frags_per_column.data() + num_columns + 1,
                         std::back_inserter(frag_offsets),
                         0);
-
     total_frags = frag_offsets[num_columns];
   }
 
+  bool const is_resize_fragments = total_frags != num_columns * num_fragments;
+
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
-  hostdevice_vector<gpu::PageFragment> expanded_fragments(total_frags, stream);
+  hostdevice_vector<gpu::PageFragment> expanded_fragments(is_resize_fragments ? total_frags : 0,
+                                                          stream);
+  if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
+    frag_stats.resize(total_frags, stream);
+  }
 
-  if (has_non_uniform_fragments) {
-    // gather new fragments
-    if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
-      frag_stats.resize(total_frags, stream);
-    }
+  // update fragments (if necessary) and prepare for fragment statistics calculation
+  for (int c = 0; c < num_columns; c++) {
+    auto frag_offset     = frag_offsets[c];
+    auto const frag_size = column_frag_size[c];
 
-    for (int c = 0; c < num_columns; c++) {
-      auto frag_offset     = frag_offsets[c];
-      auto const frag_size = column_frag_size[c];
-
-      for (size_t p = 0; p < partitions.size(); ++p) {
-        for (int r = 0; r < num_rg_in_part[p]; r++) {
-          auto const global_r   = global_rowgroup_base[p] + r;
-          auto const& row_group = md->file(p).row_groups[global_r];
-          uint32_t const fragments_in_chunk =
-            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
-          gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
-          ck.fragments            = expanded_fragments.device_ptr(frag_offset);
-          ck.first_fragment       = frag_offset;
-          if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
+    for (size_t p = 0; p < partitions.size(); ++p) {
+      for (int r = 0; r < num_rg_in_part[p]; r++) {
+        auto const global_r   = global_rowgroup_base[p] + r;
+        auto const& row_group = md->file(p).row_groups[global_r];
+        uint32_t const fragments_in_chunk =
+          util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+        gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
+        if (is_resize_fragments) {
+          ck.fragments      = expanded_fragments.device_ptr(frag_offset);
+          ck.first_fragment = frag_offset;
 
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
             expanded_fragments[frag_offset + i].chunk =
               &chunks.device_view()[r + first_rg_in_part[p]][c];
           }
-          frag_offset += fragments_in_chunk;
         }
+        if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
+
+        frag_offset += fragments_in_chunk;
       }
     }
+  }
 
+  chunks.host_to_device(stream);
+
+  // re-initialize page fragments
+  if (is_resize_fragments) {
     expanded_fragments.host_to_device(stream);
-    chunks.host_to_device(stream);
-
-    // re-initialize page fragments
     init_page_fragments_1d(expanded_fragments, column_frag_size);
+  }
 
-    // and gather fragment statistics for new fragments
-    if (not frag_stats.is_empty()) {
-      gather_fragment_statistics_1d(frag_stats, expanded_fragments);
-    }
-
-  } else {
-    // Allocate column chunks and gather fragment statistics
-    if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
-      frag_stats.resize(num_fragments * num_columns, stream);
-      if (not frag_stats.is_empty()) {
-        auto frag_stats_2dview =
-          device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
-        gather_fragment_statistics(frag_stats_2dview, fragments, col_desc, num_fragments);
-
-        for (size_t p = 0; p < partitions.size(); ++p) {
-          auto const f         = part_frag_offset[p];
-          auto const start_row = partitions[p].start_row;
-          for (int r = 0; r < num_rg_in_part[p]; r++) {
-            for (int c = 0; c < num_columns; c++) {
-              chunks[r + first_rg_in_part[p]][c].stats = frag_stats.data() + c * num_fragments + f;
-            }
-          }
-        }
-      }
-    }
+  // and gather fragment statistics
+  if (not frag_stats.is_empty()) {
+    gather_fragment_statistics_1d(
+      frag_stats,
+      {is_resize_fragments ? expanded_fragments.device_ptr() : fragments.base_device_ptr(),
+       static_cast<size_t>(total_frags)});
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
