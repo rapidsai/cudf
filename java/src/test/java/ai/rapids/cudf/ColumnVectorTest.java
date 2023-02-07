@@ -5000,8 +5000,8 @@ public class ColumnVectorTest extends CudfTestBase {
              .column("there", null, null, null, "some", "strings")
              .column("all", null, null, null, "things", "here")
              .build();
-          Table resultSplitLimit2 = v.stringSplit(pattern, 2);
-          Table resultSplitAll = v.stringSplit(pattern)) {
+         Table resultSplitLimit2 = v.stringSplit(pattern, 2);
+         Table resultSplitAll = v.stringSplit(pattern)) {
       assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
       assertTablesAreEqual(expectedSplitAll, resultSplitAll);
     }
