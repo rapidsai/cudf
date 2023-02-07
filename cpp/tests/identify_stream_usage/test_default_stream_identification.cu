@@ -30,7 +30,7 @@ void test_cudaLaunchKernel()
 
   try {
     kernel<<<1, 1>>>();
-  } catch (std::runtime_error) {
+  } catch (std::runtime_error&) {
     return;
   }
   throw std::runtime_error("No exception raised for kernel on default stream!");

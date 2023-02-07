@@ -509,6 +509,15 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
+# * stream identification tests -------------------------------------------------------------------
+ConfigureTest(
+  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+)
+set_tests_properties(
+  STREAM_IDENTIFICATION_TEST PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_stream_usage>
+)
+
+# ##################################################################################################
 # enable testing ################################################################################
 # ##################################################################################################
 
