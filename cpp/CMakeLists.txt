@@ -860,6 +860,10 @@ if(CUDF_BUILD_TESTUTIL)
   )
 endif()
 
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
+endif()
+
 set(doc_string
     [=[
 Provide targets for the cudf library.
