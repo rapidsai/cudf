@@ -23,12 +23,10 @@ language = "en"
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx_copybutton",
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
-    "PandasCompat",
     "myst_nb",
 ]
 
@@ -46,7 +44,6 @@ html_theme = "pydata_sphinx_theme"
 html_logo = "_static/RAPIDS-logo-purple.png"
 htmlhelp_basename = "dask-cudfdoc"
 
-html_theme = "alabaster"
 html_static_path = ["_static"]
 
 pygments_style = "sphinx"
@@ -66,6 +63,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
+    "dask": ("https://docs.dask.org/en/stable/", None),
 }
 
 numpydoc_show_inherited_class_members = True
