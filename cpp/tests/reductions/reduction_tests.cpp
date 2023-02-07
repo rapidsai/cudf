@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,7 +294,6 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-using ReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
