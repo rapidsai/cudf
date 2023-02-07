@@ -230,6 +230,7 @@ __global__ void __launch_bounds__(block_size)
       int const p            = it - part_frag_offset.begin() - 1;
       int const part_end_row = partitions[p].start_row + partitions[p].num_rows;
       s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
+      s->frag.chunk     = frag[blockIdx.x][frag_y].chunk;
       init_frag_state(s, fragment_size, part_end_row);
     }
     __syncthreads();
