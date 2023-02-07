@@ -108,31 +108,31 @@ void apply_struct_binary_op(mutable_column_view& out,
 
 template <typename OptionalIteratorType, typename DeviceComparatorType>
 struct struct_equality_functor {
-  struct_equality_functor(OptionalIteratorType optional_iter_,
-                          bool is_lhs_scalar_,
-                          bool is_rhs_scalar_,
-                          bool preserve_output_,
-                          DeviceComparatorType device_comparator_)
-    : optional_iter(optional_iter_),
-      is_lhs_scalar(is_lhs_scalar_),
-      is_rhs_scalar(is_rhs_scalar_),
-      preserve_output(preserve_output_),
-      device_comparator(device_comparator_)
+  struct_equality_functor(OptionalIteratorType optional_iter,
+                          bool is_lhs_scalar,
+                          bool is_rhs_scalar,
+                          bool preserve_output,
+                          DeviceComparatorType device_comparator)
+    : _optional_iter(optional_iter),
+      _is_lhs_scalar(is_lhs_scalar),
+      _is_rhs_scalar(is_rhs_scalar),
+      _preserve_output(preserve_output),
+      _device_comparator(device_comparator)
   {
   }
 
   auto __device__ operator()(size_type i)
   {
-    auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-    auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
-    return optional_iter[i].has_value() and (device_comparator(lhs, rhs) == preserve_output);
+    auto lhs = cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
+    auto rhs = cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
+    return _optional_iter[i].has_value() and (_device_comparator(lhs, rhs) == _preserve_output);
   }
 
-  OptionalIteratorType optional_iter;
-  bool is_lhs_scalar;
-  bool is_rhs_scalar;
-  bool preserve_output;
-  DeviceComparatorType device_comparator;
+  OptionalIteratorType _optional_iter;
+  bool _is_lhs_scalar;
+  bool _is_rhs_scalar;
+  bool _preserve_output;
+  DeviceComparatorType _device_comparator;
 };
 
 template <typename PhysicalEqualityComparator =

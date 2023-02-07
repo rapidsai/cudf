@@ -34,18 +34,18 @@ namespace {
 
 template <typename device_comparator_type, typename value_resolver>
 struct rank_equality_functor {
-  rank_equality_functor(device_comparator_type comparator_, value_resolver resolver_)
-    : comparator(comparator_), resolver(resolver_)
+  rank_equality_functor(device_comparator_type comparator, value_resolver resolver)
+    : _comparator(comparator), _resolver(resolver)
   {
   }
 
   auto __device__ operator()(size_type row_index)
   {
-    return resolver(row_index == 0 || !comparator(row_index, row_index - 1), row_index);
+    return _resolver(row_index == 0 || !_comparator(row_index, row_index - 1), row_index);
   }
 
-  device_comparator_type comparator;
-  value_resolver resolver;
+  device_comparator_type _comparator;
+  value_resolver _resolver;
 };
 
 /**

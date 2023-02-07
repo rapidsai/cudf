@@ -43,33 +43,33 @@ namespace {
 
 template <bool forward, typename permuted_equal_t, typename value_resolver>
 struct unique_identifier {
-  unique_identifier(size_type const* labels_,
-                    size_type const* offsets_,
-                    permuted_equal_t permuted_equal_,
-                    value_resolver resolver_)
-    : labels(labels_), offsets(offsets_), permuted_equal(permuted_equal_), resolver(resolver_)
+  unique_identifier(size_type const* labels,
+                    size_type const* offsets,
+                    permuted_equal_t permuted_equal,
+                    value_resolver resolver)
+    : _labels(labels), _offsets(offsets), _permuted_equal(permuted_equal), _resolver(resolver)
   {
   }
 
   auto __device__ operator()(size_type row_index)
   {
-    auto const group_start = offsets[labels[row_index]];
+    auto const group_start = _offsets[_labels[row_index]];
     if constexpr (forward) {
       // First value of equal values is 1.
-      return resolver(row_index == group_start || !permuted_equal(row_index, row_index - 1),
-                      row_index - group_start);
+      return _resolver(row_index == group_start || !_permuted_equal(row_index, row_index - 1),
+                       row_index - group_start);
     } else {
-      auto const group_end = offsets[labels[row_index] + 1];
+      auto const group_end = _offsets[_labels[row_index] + 1];
       // Last value of equal values is 1.
-      return resolver(row_index + 1 == group_end || !permuted_equal(row_index, row_index + 1),
-                      row_index - group_start);
+      return _resolver(row_index + 1 == group_end || !_permuted_equal(row_index, row_index + 1),
+                       row_index - group_start);
     }
   }
 
-  size_type const* labels;
-  size_type const* offsets;
-  permuted_equal_t permuted_equal;
-  value_resolver resolver;
+  size_type const* _labels;
+  size_type const* _offsets;
+  permuted_equal_t _permuted_equal;
+  value_resolver _resolver;
 };
 
 /**

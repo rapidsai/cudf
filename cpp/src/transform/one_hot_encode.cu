@@ -38,20 +38,20 @@ namespace detail {
 
 template <typename DeviceComparatorType>
 struct ohe_equality_functor {
-  ohe_equality_functor(size_type input_size_, DeviceComparatorType d_equal_)
-    : input_size(input_size_), d_equal(d_equal_)
+  ohe_equality_functor(size_type input_size, DeviceComparatorType d_equal)
+    : _input_size(input_size), _d_equal(d_equal)
   {
   }
 
   auto __device__ operator()(size_type i)
   {
-    auto const element_index  = cudf::experimental::row::lhs_index_type{i % input_size};
-    auto const category_index = cudf::experimental::row::rhs_index_type{i / input_size};
-    return d_equal(element_index, category_index);
+    auto const element_index  = cudf::experimental::row::lhs_index_type{i % _input_size};
+    auto const category_index = cudf::experimental::row::rhs_index_type{i / _input_size};
+    return _d_equal(element_index, category_index);
   }
 
-  size_type input_size;
-  DeviceComparatorType d_equal;
+  size_type _input_size;
+  DeviceComparatorType _d_equal;
 };
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
