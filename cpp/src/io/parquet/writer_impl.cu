@@ -1624,7 +1624,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        if (not column_frag_size.empty() && column_frag_size[c] < max_page_fragment_size_) {
+        if (column_frag_size[c] < max_page_fragment_size_) {
           auto const new_frags_in_chunk =
             util::div_rounding_up_unsafe(row_group.num_rows, column_frag_size[c]);
           frags_per_column[c] += new_frags_in_chunk;
