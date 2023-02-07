@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,7 +163,7 @@ std::unique_ptr<column> index_of(
  * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
  *
  * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
- * @throw cudf::logic_error If `search_keys` type does not match the element type in `lists`
+ * @throw cudf::dtype_error If `search_keys` type does not match the element type in `lists`
  * @throw cudf::logic_error If `lists` or `search_keys` contains nested elements (LIST, STRUCT)
  */
 std::unique_ptr<column> index_of(

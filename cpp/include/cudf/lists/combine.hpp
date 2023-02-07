@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,8 +80,8 @@ std::unique_ptr<column> concatenate_rows(
  * r is [ {1, 2, 3, 4, 5}, {6, 7, 8, 9} ]
  * @endcode
  *
- * @throws cudf::logic_error if the input column is not at least two-level depth lists column (i.e.,
- *         each row must be a list of list).
+ * @throws std::invalid_argument if the input column is not at least two-level depth lists column
+ * (i.e., each row must be a list of list).
  * @throws cudf::logic_error if the input lists column contains nested typed entries that are not
  *         lists.
  *
