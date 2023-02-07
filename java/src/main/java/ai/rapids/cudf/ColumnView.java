@@ -4046,7 +4046,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
    */
   private static native long[] stringSplit(long nativeHandle, String delimiter, int limit);
-  
+
   /**
    * Returns a list of columns by splitting each string using the specified regular expression
    * pattern. The number of rows in the output columns will be the same as the input column.
@@ -4076,7 +4076,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
    */
   private static native long stringSplitRecord(long nativeHandle, String delimiter, int limit);
-  
+
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified regular expression pattern.

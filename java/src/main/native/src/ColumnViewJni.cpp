@@ -679,8 +679,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNI
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(
-    JNIEnv *env, jclass, jlong input_handle, jstring delimiter_obj, jint limit) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
+                                                                        jlong input_handle,
+                                                                        jstring delimiter_obj,
+                                                                        jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -735,8 +737,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRe(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(
-    JNIEnv *env, jclass, jlong input_handle, jstring delimiter_obj, jint limit) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
+                                                                         jlong input_handle,
+                                                                         jstring delimiter_obj,
+                                                                         jint limit) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
@@ -755,7 +759,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(
     auto const delimiter_jstr = cudf::jni::native_jstring(env, delimiter_obj);
     auto const delimiter = std::string(delimiter_jstr.get(), delimiter_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
-    auto result = cudf::strings::split_record(strings_column, cudf::string_scalar{delimiter}, max_split);
+    auto result =
+        cudf::strings::split_record(strings_column, cudf::string_scalar{delimiter}, max_split);
     return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
