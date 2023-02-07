@@ -1575,8 +1575,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceRegex(
   JNI_NULL_CHECK(env, j_repl, "replace scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const *>(j_column_view);
-    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const cv = reinterpret_cast<cudf::column_view const *>(j_column_view);
+    auto const strings_column = cudf::strings_column_view{*cv};
     auto const pattern = cudf::jni::native_jstring(env, j_pattern);
     auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups = static_cast<cudf::strings::capture_groups>(capture_groups);
@@ -1609,15 +1609,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceMultiRegex(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(
-    JNIEnv *env, jclass, jlong column_view, jstring pattern_obj, jint regex_flags,
+    JNIEnv *env, jclass, jlong j_column_view, jstring pattern_obj, jint regex_flags,
     jint capture_groups, jstring replace_obj) {
 
-  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, j_column_view, "column is null", 0);
   JNI_NULL_CHECK(env, pattern_obj, "pattern string is null", 0);
   JNI_NULL_CHECK(env, replace_obj, "replace string is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(j_column_view);
     auto const strings_column = cudf::strings_column_view{*cv};
     auto const pattern = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags = static_cast<cudf::strings::regex_flags>(regex_flags);
