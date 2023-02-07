@@ -477,7 +477,8 @@ class device_row_comparator {
           // element_index because either both rows have a deeply nested NULL at the
           // same position, and we'll "continue" in our iteration, or we will early
           // exit if only one of the rows has a deeply nested NULL
-          if (lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) {
+          if ((lcol.nullable() and l_def_levels[l_dremel_index] == l_max_def_level - 1) or
+              (rcol.nullable() and r_def_levels[r_dremel_index] == r_max_def_level - 1)) {
             ++element_index;
           }
           if (l_def_level == r_def_level) { continue; }
@@ -665,7 +666,7 @@ struct preprocessed_table {
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
   /**
-   * @brief Preprocess table for use with lexicographical comparison
+   * @brief Preprocess table for use with self lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
    * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
@@ -684,6 +685,30 @@ struct preprocessed_table {
                                                     host_span<order const> column_order,
                                                     host_span<null_order const> null_precedence,
                                                     rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Preprocess tables for use with two table lexicographical comparison
+   *
+   * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
+   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
+   *
+   * @param left The left table to preprocess
+   * @param right The right table to preprocess
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If it is nullptr, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   * @return A shared pointer to a preprocessed table
+   */
+  static std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>> create(
+    table_view const& left,
+    table_view const& right,
+    host_span<order const> column_order,
+    host_span<null_order const> null_precedence,
+    rmm::cuda_stream_view stream);
 
  private:
   friend class self_comparator;       ///< Allow self_comparator to access private members

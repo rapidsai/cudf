@@ -256,7 +256,7 @@ auto decompose_structs(table_view table,
 
 /*
  * This helper function generates dremel data for any list-type columns in a
- * table. This data is necessary for lexicographic comparisons.
+ * table. This data is necessary for self lexicographic comparisons.
  */
 auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 {
@@ -270,6 +270,48 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   }
   auto d_dremel_device_views = detail::make_device_uvector_sync(dremel_device_views, stream);
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
+}
+
+/*
+ * This helper function generates dremel data for any list-type columns in a
+ * table. This data is necessary for two table lexicographic comparisons.
+ */
+auto list_lex_preprocess(table_view left, table_view right, rmm::cuda_stream_view stream)
+{
+  std::vector<detail::dremel_data> dremel_data_left;
+  std::vector<detail::dremel_device_view> dremel_device_views_left;
+  std::vector<detail::dremel_data> dremel_data_right;
+  std::vector<detail::dremel_device_view> dremel_device_views_right;
+  for (auto i = 0; i < left.num_columns(); i++) {
+    auto left_col  = left.column(i);
+    auto right_col = right.column(i);
+    if (left_col.type().id() == type_id::LIST && right_col.type().id() == type_id::LIST) {
+      auto left_nullability  = detail::get_nested_nullability(left_col);
+      auto right_nullability = detail::get_nested_nullability(right_col);
+
+      std::transform(left_nullability.begin(),
+                     left_nullability.end(),
+                     right_nullability.begin(),
+                     left_nullability.begin(),
+                     [](auto const l_null, auto const r_null) { return l_null || r_null; });
+
+      dremel_data_left.push_back(
+        detail::get_dremel_data(left_col, left_nullability, false, stream));
+      dremel_device_views_left.push_back(dremel_data_left.back());
+
+      dremel_data_right.push_back(
+        detail::get_dremel_data(right_col, left_nullability, false, stream));
+      dremel_device_views_right.push_back(dremel_data_right.back());
+    }
+  }
+  auto d_dremel_device_views_left =
+    detail::make_device_uvector_sync(dremel_device_views_left, stream);
+  auto d_dremel_device_views_right =
+    detail::make_device_uvector_sync(dremel_device_views_right, stream);
+  return std::make_tuple(std::move(dremel_data_left),
+                         std::move(d_dremel_device_views_left),
+                         std::move(dremel_data_right),
+                         std::move(d_dremel_device_views_right));
 }
 
 using column_checker_fn_t = std::function<void(column_view const&)>;
@@ -377,15 +419,82 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   }
 }
 
+std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>>
+preprocessed_table::create(table_view const& left,
+                           table_view const& right,
+                           host_span<order const> column_order,
+                           host_span<null_order const> null_precedence,
+                           rmm::cuda_stream_view stream)
+{
+  check_lex_compatibility(left);
+  check_lex_compatibility(right);
+
+  auto [verticalized_lhs_left,
+        new_column_order_left,
+        new_null_precedence_left,
+        verticalized_col_depths_left]  = decompose_structs(left, column_order, null_precedence);
+  auto [verticalized_lhs_right,
+        new_column_order_right,
+        new_null_precedence_right,
+        verticalized_col_depths_right] = decompose_structs(right, column_order, null_precedence);
+
+  auto d_t_left            = table_device_view::create(verticalized_lhs_right, stream);
+  auto d_column_order_left = detail::make_device_uvector_async(new_column_order_right, stream);
+  auto d_null_precedence_left =
+    detail::make_device_uvector_async(new_null_precedence_right, stream);
+  auto d_depths_left = detail::make_device_uvector_async(verticalized_col_depths_right, stream);
+
+  auto d_t_right            = table_device_view::create(verticalized_lhs_right, stream);
+  auto d_column_order_right = detail::make_device_uvector_async(new_column_order_right, stream);
+  auto d_null_precedence_right =
+    detail::make_device_uvector_async(new_null_precedence_right, stream);
+  auto d_depths_right = detail::make_device_uvector_async(verticalized_col_depths_right, stream);
+
+  // check_shape_compatibility(left, right) below ensures both tables are of comparable shapes and
+  // types
+  if (detail::has_nested_columns(left) && detail::has_nested_columns(right)) {
+    auto [dremel_data_left,
+          d_dremel_device_view_left,
+          dremel_data_right,
+          d_dremel_device_view_right] =
+      list_lex_preprocess(verticalized_lhs_left, verticalized_lhs_right, stream);
+
+    return std::make_pair(std::shared_ptr<preprocessed_table>(
+                            new preprocessed_table(std::move(d_t_left),
+                                                   std::move(d_column_order_left),
+                                                   std::move(d_null_precedence_left),
+                                                   std::move(d_depths_left),
+                                                   std::move(dremel_data_left),
+                                                   std::move(d_dremel_device_view_left))),
+                          std::shared_ptr<preprocessed_table>(
+                            new preprocessed_table(std::move(d_t_right),
+                                                   std::move(d_column_order_right),
+                                                   std::move(d_null_precedence_right),
+                                                   std::move(d_depths_right),
+                                                   std::move(dremel_data_right),
+                                                   std::move(d_dremel_device_view_right))));
+  } else {
+    return std::make_pair(
+      std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t_left),
+                                                                 std::move(d_column_order_left),
+                                                                 std::move(d_null_precedence_left),
+                                                                 std::move(d_depths_left))),
+      std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t_right),
+                                                                 std::move(d_column_order_right),
+                                                                 std::move(d_null_precedence_right),
+                                                                 std::move(d_depths_right))));
+  }
+}
+
 two_table_comparator::two_table_comparator(table_view const& left,
                                            table_view const& right,
                                            host_span<order const> column_order,
                                            host_span<null_order const> null_precedence,
                                            rmm::cuda_stream_view stream)
-  : d_left_table{preprocessed_table::create(left, column_order, null_precedence, stream)},
-    d_right_table{preprocessed_table::create(right, column_order, null_precedence, stream)}
 {
   check_shape_compatibility(left, right);
+  std::tie(d_left_table, d_right_table) =
+    preprocessed_table::create(left, right, column_order, null_precedence, stream);
 }
 
 }  // namespace lexicographic

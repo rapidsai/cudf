@@ -36,6 +36,19 @@
 
 namespace cudf::detail {
 
+std::vector<std::uint8_t> get_nested_nullability(column_view h_col)
+{
+  std::vector<std::uint8_t> nullability;
+  auto curr_col = h_col;
+
+  while (is_nested(curr_col.type())) {
+    nullability.push_back(curr_col.nullable());
+    curr_col = curr_col.type().id() == type_id::LIST ? curr_col.child(1) : curr_col.child(0);
+  }
+  nullability.push_back(curr_col.nullable());
+  return nullability;
+}
+
 /**
  * @brief Functor to get definition level value for a nested struct column until the leaf level or
  * the first list level.
@@ -159,13 +172,14 @@ dremel_data get_dremel_data(column_view h_col,
   uint8_t curr_nesting_level_idx = 0;
 
   if (nullability.empty()) {
-    while (is_nested(curr_col.type())) {
-      nullability.push_back(curr_col.nullable());
-      curr_col = curr_col.type().id() == type_id::LIST ? curr_col.child(1) : curr_col.child(0);
-    }
-    nullability.push_back(curr_col.nullable());
+    nullability = get_nested_nullability(h_col);
+    // while (is_nested(curr_col.type())) {
+    //   nullability.push_back(curr_col.nullable());
+    //   curr_col = curr_col.type().id() == type_id::LIST ? curr_col.child(1) : curr_col.child(0);
+    // }
+    // nullability.push_back(curr_col.nullable());
   }
-  curr_col = h_col;
+  // curr_col = h_col;
 
   auto add_def_at_level = [&](column_view col) {
     // Add up all def level contributions in this column all the way till the first list column

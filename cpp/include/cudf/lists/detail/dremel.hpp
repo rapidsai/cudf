@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,15 @@
 #include <rmm/device_uvector.hpp>
 
 namespace cudf::detail {
+
+/**
+ * @brief Get a flattened representation of the nullability of a nested column
+ *        and its children
+ *
+ * @param h_col column_view
+ * @return nullability
+ */
+std::vector<std::uint8_t> get_nested_nullability(column_view h_col);
 
 /**
  * @brief Device view for `dremel_data`.
