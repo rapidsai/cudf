@@ -21,61 +21,56 @@
 
 #include <string>
 
-struct LoggerTest : public cudf::test::BaseFixture {
-};
-
-namespace {
-
-std::ostringstream sink_ss()
-{
+class LoggerTest : public cudf::test::BaseFixture {
   std::ostringstream oss;
-  cudf::logger().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
-  cudf::logger().set_formatter(
-    std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter("%v")));
-  return oss;
-}
+  spdlog::level::level_enum prev_level;
+  std::vector<spdlog::sink_ptr> prev_sinks;
 
-}  // namespace
+ public:
+  LoggerTest() : prev_level{cudf::logger().level()}, prev_sinks{cudf::logger().sinks()}
+  {
+    cudf::logger().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
+    cudf::logger().set_formatter(
+      std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter("%v")));
+  }
+  ~LoggerTest()
+  {
+    cudf::logger().set_level(prev_level);
+    cudf::logger().sinks() = prev_sinks;
+  }
+
+  void clear_sink() { oss.str(""); }
+  std::string sink_content() { return oss.str(); }
+};
 
 TEST_F(LoggerTest, Basic)
 {
-  auto ss = sink_ss();
   cudf::logger().critical("crit msg");
-  ASSERT_EQ(ss.str(), "crit msg\n");
+  ASSERT_EQ(this->sink_content(), "crit msg\n");
 }
 
 TEST_F(LoggerTest, DefaultLevel)
 {
-  auto ss = sink_ss();
-
   cudf::logger().trace("trace");
   cudf::logger().debug("debug");
   cudf::logger().info("info");
   cudf::logger().warn("warn");
   cudf::logger().error("error");
   cudf::logger().critical("critical");
-  ASSERT_EQ(ss.str(), "info\nwarn\nerror\ncritical\n");
+  ASSERT_EQ(this->sink_content(), "info\nwarn\nerror\ncritical\n");
 }
 
 TEST_F(LoggerTest, CustomLevel)
 {
-  auto ss = sink_ss();
-
-  auto lvl = cudf::logger().level();
-
   cudf::logger().set_level(spdlog::level::warn);
   cudf::logger().info("info");
   cudf::logger().warn("warn");
-  ASSERT_EQ(ss.str(), "warn\n");
+  ASSERT_EQ(this->sink_content(), "warn\n");
 
-  // clear sink
-  ss.str(std::string());
+  this->clear_sink();
 
   cudf::logger().set_level(spdlog::level::debug);
   cudf::logger().trace("trace");
   cudf::logger().debug("debug");
-  ASSERT_EQ(ss.str(), "debug\n");
-
-  // revert to default level
-  cudf::logger().set_level(lvl);
+  ASSERT_EQ(this->sink_content(), "debug\n");
 }
