@@ -20,6 +20,10 @@ minutes to Dask
 by `10 minutes to cuDF and Dask-cuDF
 <https://docs.rapids.ai/api/cudf/stable/user_guide/10min.html>`__.
 
+When running on multi-GPU systems, `Dask-CUDA
+<https://docs.rapids.ai/api/dask-cuda/stable/>`__ is recommended to
+simplify the setup of the cluster, taking advantage of all features of
+the GPU and networking hardware.
 
 .. toctree::
    :maxdepth: 2
