@@ -768,7 +768,7 @@ endif()
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   if(CUDA_STATIC_RUNTIME)
     # TODO: Should this be a hard error, or just a skip? Depends on what the default is IMO.
-    message(FATAL_ERROR "Stream identification cannot be build with a static CUDA runtime.")
+    message(FATAL_ERROR "Stream identification cannot be built with a static CUDA runtime.")
   endif()
 
   # Libraries for stream-related testing.
