@@ -1678,49 +1678,51 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     frag_stats.resize(total_frags, stream);
   }
 
-  // update fragments (if necessary) and prepare for fragment statistics calculation
-  for (int c = 0; c < num_columns; c++) {
-    auto frag_offset     = frag_offsets[c];
-    auto const frag_size = column_frag_size[c];
+  // update fragments and/or prepare for fragment statistics calculation if necessary
+  if (is_resize_fragments || not frag_stats.is_empty()) {
+    for (int c = 0; c < num_columns; c++) {
+      auto frag_offset     = frag_offsets[c];
+      auto const frag_size = column_frag_size[c];
 
-    for (size_t p = 0; p < partitions.size(); ++p) {
-      for (int r = 0; r < num_rg_in_part[p]; r++) {
-        auto const global_r   = global_rowgroup_base[p] + r;
-        auto const& row_group = md->file(p).row_groups[global_r];
-        uint32_t const fragments_in_chunk =
-          util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
-        gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
-        if (is_resize_fragments) {
-          ck.fragments      = expanded_fragments.device_ptr(frag_offset);
-          ck.first_fragment = frag_offset;
+      for (size_t p = 0; p < partitions.size(); ++p) {
+        for (int r = 0; r < num_rg_in_part[p]; r++) {
+          auto const global_r   = global_rowgroup_base[p] + r;
+          auto const& row_group = md->file(p).row_groups[global_r];
+          uint32_t const fragments_in_chunk =
+            util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
+          gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
+          if (is_resize_fragments) {
+            ck.fragments      = expanded_fragments.device_ptr(frag_offset);
+            ck.first_fragment = frag_offset;
 
-          // update the chunk pointer here for each fragment in chunk.fragments
-          for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            expanded_fragments[frag_offset + i].chunk =
-              &chunks.device_view()[r + first_rg_in_part[p]][c];
+            // update the chunk pointer here for each fragment in chunk.fragments
+            for (uint32_t i = 0; i < fragments_in_chunk; i++) {
+              expanded_fragments[frag_offset + i].chunk =
+                &chunks.device_view()[r + first_rg_in_part[p]][c];
+            }
           }
-        }
-        if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
+          if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }
 
-        frag_offset += fragments_in_chunk;
+          frag_offset += fragments_in_chunk;
+        }
       }
     }
-  }
 
-  chunks.host_to_device(stream);
+    chunks.host_to_device(stream);
 
-  // re-initialize page fragments
-  if (is_resize_fragments) {
-    expanded_fragments.host_to_device(stream);
-    init_page_fragments_1d(expanded_fragments, column_frag_size);
-  }
+    // re-initialize page fragments
+    if (is_resize_fragments) {
+      expanded_fragments.host_to_device(stream);
+      init_page_fragments_1d(expanded_fragments, column_frag_size);
+    }
 
-  // and gather fragment statistics
-  if (not frag_stats.is_empty()) {
-    gather_fragment_statistics(
-      frag_stats,
-      {is_resize_fragments ? expanded_fragments.device_ptr() : fragments.base_device_ptr(),
-       static_cast<size_t>(total_frags)});
+    // and gather fragment statistics
+    if (not frag_stats.is_empty()) {
+      gather_fragment_statistics(
+        frag_stats,
+        {is_resize_fragments ? expanded_fragments.device_ptr() : fragments.base_device_ptr(),
+        static_cast<size_t>(total_frags)});
+    }
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
