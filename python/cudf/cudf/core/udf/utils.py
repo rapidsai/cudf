@@ -444,6 +444,7 @@ def maybe_patch_numba_linker(
             logger.debug("Cannot patch Numba Linker - unsupported version")
 
 
+@lru_cache(maxsize=None)
 def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
@@ -461,14 +462,8 @@ def set_malloc_heap_size(size=None):
         _heap_size = size
 
 
-@lru_cache(maxsize=None)
-def set_initial_malloc_heap_size():
-    set_malloc_heap_size()
-
-
 def column_to_string_view_array_init_heap(col):
     # lazily allocate heap only when a string needs to be returned
-    set_initial_malloc_heap_size()
     return column_to_string_view_array(col)
 
 
