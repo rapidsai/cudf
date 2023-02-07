@@ -31,6 +31,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <stdexcept>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -369,7 +370,7 @@ TEST_F(OverflowTest, OverflowTest)
 
     cudf::table_view tbl({*many_chars});
     EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
-                 cudf::logic_error);
+                 std::out_of_range);
   }
 
   // string column, overflow on chars
