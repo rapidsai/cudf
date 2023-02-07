@@ -271,31 +271,8 @@ __global__ void __launch_bounds__(block_size)
 
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-  gpuInitFragmentStats(device_2dspan<statistics_group> groups,
-                       device_2dspan<PageFragment const> fragments,
-                       device_span<parquet_column_device_view const> col_desc)
-{
-  uint32_t const lane_id                  = threadIdx.x & WARP_MASK;
-  uint32_t const column_id                = blockIdx.x;
-  uint32_t const num_fragments_per_column = fragments.size().second;
-
-  uint32_t frag_id = blockIdx.y * 4 + (threadIdx.x / cudf::detail::warp_size);
-  while (frag_id < num_fragments_per_column) {
-    if (lane_id == 0) {
-      statistics_group g;
-      g.col                      = &col_desc[column_id];
-      g.start_row                = fragments[column_id][frag_id].start_value_idx;
-      g.num_rows                 = fragments[column_id][frag_id].num_leaf_values;
-      groups[column_id][frag_id] = g;
-    }
-    frag_id += gridDim.y * 4;
-  }
-}
-
-// blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
-  gpuInitFragmentStats1D(device_span<statistics_group> groups,
-                         device_span<PageFragment const> fragments)
+  gpuInitFragmentStats(device_span<statistics_group> groups,
+                       device_span<PageFragment const> fragments)
 {
   uint32_t const lane_id = threadIdx.x & WARP_MASK;
   uint32_t const frag_id = blockIdx.x * 4 + (threadIdx.x / cudf::detail::warp_size);
@@ -2138,27 +2115,13 @@ void InitPageFragments1D(device_span<PageFragment> frag,
   gpuInitPageFragments1D<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
 }
 
-void InitFragmentStatistics(device_2dspan<statistics_group> groups,
-                            device_2dspan<PageFragment const> fragments,
-                            device_span<parquet_column_device_view const> col_desc,
+void InitFragmentStatistics(device_span<statistics_group> groups,
+                            device_span<PageFragment const> fragments,
                             rmm::cuda_stream_view stream)
-{
-  int const num_columns              = col_desc.size();
-  int const num_fragments_per_column = fragments.size().second;
-  auto const y_dim =
-    util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
-  auto const grid_y = std::min(static_cast<uint32_t>(y_dim), MAX_GRID_Y_SIZE);
-  dim3 const dim_grid(num_columns, grid_y);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
-}
-
-void InitFragmentStatistics1D(device_span<statistics_group> groups,
-                              device_span<PageFragment const> fragments,
-                              rmm::cuda_stream_view stream)
 {
   int const num_fragments = fragments.size();
   int const dim = util::div_rounding_up_safe(num_fragments, 128 / cudf::detail::warp_size);
-  gpuInitFragmentStats1D<<<dim, 128, 0, stream.value()>>>(groups, fragments);
+  gpuInitFragmentStats<<<dim, 128, 0, stream.value()>>>(groups, fragments);
 }
 
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,

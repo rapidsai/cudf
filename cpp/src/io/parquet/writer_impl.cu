@@ -950,32 +950,12 @@ void writer::impl::init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& 
   frag.device_to_host(stream, true);
 }
 
-void writer::impl::gather_fragment_statistics(
-  device_2dspan<statistics_chunk> frag_stats_chunk,
-  device_2dspan<gpu::PageFragment const> frag,
-  device_span<gpu::parquet_column_device_view const> col_desc,
-  uint32_t num_fragments)
-{
-  auto num_columns = col_desc.size();
-  rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
-  auto frag_stats_group_2dview =
-    device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
-
-  gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(frag_stats_chunk.data(),
-                                                                      frag_stats_group.data(),
-                                                                      num_fragments * num_columns,
-                                                                      stream,
-                                                                      int96_timestamps);
-  stream.synchronize();
-}
-
-void writer::impl::gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
-                                                 device_span<gpu::PageFragment const> frags)
+void writer::impl::gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
+                                              device_span<gpu::PageFragment const> frags)
 {
   rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
 
-  gpu::InitFragmentStatistics1D(frag_stats_group, frags, stream);
+  gpu::InitFragmentStatistics(frag_stats_group, frags, stream);
   detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
     frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
   stream.synchronize();
@@ -1737,7 +1717,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   // and gather fragment statistics
   if (not frag_stats.is_empty()) {
-    gather_fragment_statistics_1d(
+    gather_fragment_statistics(
       frag_stats,
       {is_resize_fragments ? expanded_fragments.device_ptr() : fragments.base_device_ptr(),
        static_cast<size_t>(total_frags)});

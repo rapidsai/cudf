@@ -145,27 +145,15 @@ class writer::impl {
   void init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
                               host_span<size_type const> frag_sizes);
 
-  /**
-   * @brief Gather per-fragment statistics
-   *
-   * @param dst_stats output statistics
-   * @param frag Input page fragments
-   * @param col_desc column description array
-   * @param num_fragments Total number of fragments per column
-   */
-  void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
-                                  device_2dspan<gpu::PageFragment const> frag,
-                                  device_span<gpu::parquet_column_device_view const> col_desc,
-                                  uint32_t num_fragments);
 
   /**
-   * @brief Gather per-fragment statistics for columns with differeng numbers of fragments
+   * @brief Gather per-fragment statistics
    *
    * @param frag_stats output statistics
    * @param frags Input page fragments
    */
-  void gather_fragment_statistics_1d(device_span<statistics_chunk> frag_stats,
-                                     device_span<gpu::PageFragment const> frags);
+  void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
+                                  device_span<gpu::PageFragment const> frags);
 
   /**
    * @brief Initialize encoder pages
