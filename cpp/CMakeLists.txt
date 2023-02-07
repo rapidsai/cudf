@@ -763,7 +763,7 @@ if(CUDF_BUILD_TESTUTIL)
 
 endif()
 
-# * build cudf_stream_usage -----------------------------------------------------------------------
+# * build cudf_identify_stream_usage --------------------------------------------------------------
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   if(CUDA_STATIC_RUNTIME)
@@ -772,17 +772,17 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   endif()
 
   # Libraries for stream-related testing.
-  add_library(cudf_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
 
   set_target_properties(
-    cudf_stream_usage
+    cudf_identify_stream_usage
     PROPERTIES # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
   )
-  target_link_libraries(cudf_stream_usage PUBLIC CUDA::cudart rmm::rmm)
-  add_library(cudf::cudf_stream_usage ALIAS cudf_stream_usage)
+  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
+  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
 endif()
 
 # ##################################################################################################
