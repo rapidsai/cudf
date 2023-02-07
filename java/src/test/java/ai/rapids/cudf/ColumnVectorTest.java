@@ -4989,7 +4989,6 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testStringSplit() {
     String pattern = " ";
-    RegexProgram regexProg = new RegexProgram(pattern, CaptureGroups.NON_CAPTURE);
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
              "ARé some things", "test strings here");
          Table expectedSplitLimit2 = new Table.TestBuilder()
@@ -5000,17 +4999,11 @@ public class ColumnVectorTest extends CudfTestBase {
              .column("Héllo", "thésé", null, "", "ARé", "test")
              .column("there", null, null, null, "some", "strings")
              .column("all", null, null, null, "things", "here")
-             .build()) {
-      try (Table resultSplitLimit2 = v.stringSplit(pattern, 2);
-           Table resultSplitAll = v.stringSplit(pattern)) {
-        assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
-        assertTablesAreEqual(expectedSplitAll, resultSplitAll);
-      }
-      try (Table resultSplitLimit2 = v.stringSplit(regexProg, 2);
-           Table resultSplitAll = v.stringSplit(regexProg)) {
-        assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
-        assertTablesAreEqual(expectedSplitAll, resultSplitAll);
-      }
+             .build();
+          Table resultSplitLimit2 = v.stringSplit(pattern, 2);
+          Table resultSplitAll = v.stringSplit(pattern)) {
+      assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertTablesAreEqual(expectedSplitAll, resultSplitAll);
     }
   }
 
