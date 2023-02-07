@@ -35,8 +35,6 @@ constexpr int64_t data_size = 512 << 20;
 
 void nvbench_orc_write(nvbench::state& state)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   cudf::size_type num_cols = state.get_int64("num_columns");
 
   auto tbl = create_random_table(
@@ -79,8 +77,6 @@ void nvbench_orc_write(nvbench::state& state)
 
 void nvbench_orc_chunked_write(nvbench::state& state)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   cudf::size_type num_cols   = state.get_int64("num_columns");
   cudf::size_type num_tables = state.get_int64("num_chunks");
 

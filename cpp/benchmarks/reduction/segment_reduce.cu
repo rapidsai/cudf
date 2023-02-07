@@ -86,9 +86,6 @@ template <typename DataType, cudf::aggregation::Kind kind>
 void BM_Simple_Segmented_Reduction(nvbench::state& state,
                                    nvbench::type_list<DataType, nvbench::enum_type<kind>>)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const column_size{cudf::size_type(state.get_int64("column_size"))};
   auto const num_segments{cudf::size_type(state.get_int64("num_segments"))};
 

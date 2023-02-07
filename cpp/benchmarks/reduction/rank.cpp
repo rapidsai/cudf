@@ -26,8 +26,6 @@
 template <typename type>
 static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const dtype = cudf::type_to_id<type>();
 
   double const null_probability = state.get_float64("null_probability");

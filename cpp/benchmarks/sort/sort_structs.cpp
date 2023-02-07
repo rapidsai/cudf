@@ -26,8 +26,6 @@
 
 void nvbench_sort_struct(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;

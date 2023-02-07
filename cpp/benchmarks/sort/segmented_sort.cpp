@@ -26,8 +26,6 @@
 
 void nvbench_segmented_sort(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const stable     = static_cast<bool>(state.get_int64("stable"));
   auto const dtype      = cudf::type_to_id<int32_t>();
   auto const size_bytes = static_cast<size_t>(state.get_int64("size_bytes"));

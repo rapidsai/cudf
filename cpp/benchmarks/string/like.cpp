@@ -71,7 +71,6 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
 
 static void bench_like(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
   auto const n_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const hit_rate = static_cast<int32_t>(state.get_int64("hit_rate"));
 

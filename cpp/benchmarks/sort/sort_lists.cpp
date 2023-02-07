@@ -23,8 +23,6 @@
 
 void nvbench_sort_lists(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   const size_t size_bytes(state.get_int64("size_bytes"));
   const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
   auto const null_frequency{state.get_float64("null_frequency")};

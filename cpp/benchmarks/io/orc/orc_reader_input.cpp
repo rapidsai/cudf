@@ -60,8 +60,6 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
 template <data_type DataType>
 void BM_orc_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
@@ -84,8 +82,6 @@ void BM_orc_read_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),

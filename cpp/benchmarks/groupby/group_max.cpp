@@ -24,7 +24,6 @@
 template <typename Type>
 void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
   const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   auto const keys = [&] {

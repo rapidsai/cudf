@@ -69,4 +69,15 @@ class rmm_pool_raii {
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
 };
 
+/**
+ * Base fixture for cudf benchmarks using nvbench.
+ *
+ * Initializes the default memory resource to use the RMM pool device resource.
+ */
+struct nvbench_base_fixture {
+  rmm_pool_raii _mr;
+};
+
 }  // namespace cudf
+
+#define NVBENCH_ENVIRONMENT cudf::nvbench_base_fixture

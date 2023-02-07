@@ -67,8 +67,6 @@ void csv_read_common(DataType const& data_types,
 template <data_type DataType>
 void BM_csv_read_input(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = io_type::FILEPATH;
 
@@ -78,8 +76,6 @@ void BM_csv_read_input(nvbench::state& state, nvbench::type_list<nvbench::enum_t
 template <cudf::io::io_type IO>
 void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type      = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),

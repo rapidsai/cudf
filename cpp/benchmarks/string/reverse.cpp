@@ -25,7 +25,6 @@
 
 static void bench_reverse(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
 

@@ -40,7 +40,6 @@ auto make_aggregation_request_vector(cudf::column_view const& values, Args&&... 
 template <typename Type>
 void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
   const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   auto const keys = [&] {
