@@ -171,9 +171,7 @@ dremel_data get_dremel_data(column_view h_col,
   std::vector<uint8_t> start_at_sub_level;
   uint8_t curr_nesting_level_idx = 0;
 
-  if (nullability.empty()) {
-    nullability = get_nested_nullability(h_col);
-  }
+  if (nullability.empty()) { nullability = get_nested_nullability(h_col); }
 
   auto add_def_at_level = [&](column_view col) {
     // Add up all def level contributions in this column all the way till the first list column
