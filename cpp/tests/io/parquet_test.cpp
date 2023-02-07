@@ -4040,7 +4040,7 @@ int32_t compare_binary(const std::vector<uint8_t>& v1,
 TEST_F(ParquetWriterTest, LargeColumnIndex)
 {
   // create a file large enough to be written in 2 batches (currently 1GB per batch)
-  // pick fragment size that's a multiple of num_rows so we'll get equal sized row groups
+  // pick fragment size that num_rows is divisible by, so we'll get equal sized row groups
   const std::string s1(1000, 'a');
   const std::string s2(1000, 'b');
   constexpr auto num_rows = 512 * 1024;
