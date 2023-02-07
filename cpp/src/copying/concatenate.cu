@@ -229,7 +229,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
 
   CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range",
-               std::out_of_range);
+               std::overflow_error);
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
@@ -471,7 +471,8 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
     });
   // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
-               "Total number of concatenated rows exceeds size_type range");
+               "Total number of concatenated rows exceeds size_type range",
+               std::overflow_error);
 
   // traverse children
   cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);

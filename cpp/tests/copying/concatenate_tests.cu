@@ -370,7 +370,7 @@ TEST_F(OverflowTest, OverflowTest)
 
     cudf::table_view tbl({*many_chars});
     EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
-                 std::out_of_range);
+                 std::overflow_error);
   }
 
   // string column, overflow on chars
@@ -385,7 +385,7 @@ TEST_F(OverflowTest, OverflowTest)
 
     cudf::table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
-                 cudf::logic_error);
+                 std::overflow_error);
   }
 
   // string column, overflow on offsets (rows)
@@ -401,7 +401,7 @@ TEST_F(OverflowTest, OverflowTest)
 
     cudf::table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
-                 cudf::logic_error);
+                 std::overflow_error);
   }
 
   // list<struct>, structs too long
@@ -426,7 +426,7 @@ TEST_F(OverflowTest, OverflowTest)
     cudf::table_view tbl({*col});
     auto tables =
       std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
-    EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(tables), std::overflow_error);
   }
 
   // struct<int, list>, list child too long
@@ -451,7 +451,7 @@ TEST_F(OverflowTest, OverflowTest)
     cudf::table_view tbl({*col});
     auto tables =
       std::vector<cudf::table_view>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
-    EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(tables), std::overflow_error);
   }
 }
 
@@ -471,7 +471,8 @@ TEST_F(OverflowTest, Presliced)
 
     // 513 * 1024 * 1024, should fail
     cudf::table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})),
+                 std::overflow_error);
   }
 
   // struct<int8> column
@@ -491,7 +492,8 @@ TEST_F(OverflowTest, Presliced)
 
     // 513 * 1024 * 1024, should fail
     cudf::table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})),
+                 std::overflow_error);
   }
 
   // strings, overflow on chars
@@ -517,7 +519,8 @@ TEST_F(OverflowTest, Presliced)
 
     // (num_rows / 2) + 1 should fail
     cudf::table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})),
+                 std::overflow_error);
   }
 
   // strings, overflow on offsets
@@ -590,7 +593,7 @@ TEST_F(OverflowTest, Presliced)
     auto sliced = cudf::split(*col, {2});
     cudf::table_view tbl({sliced[1]});
     auto tables = std::vector<cudf::table_view>({tbl, tbl, tbl, tbl});
-    EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(tables), std::overflow_error);
   }
 
   // list<struct>, overflow on offsets
@@ -675,7 +678,8 @@ TEST_F(OverflowTest, Presliced)
     cudf::concatenate(std::vector<cudf::table_view>({a, a, a, a}));
 
     cudf::table_view b({sliced[1]});
-    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<cudf::table_view>({b, b, b, b})),
+                 std::overflow_error);
   }
 }
 

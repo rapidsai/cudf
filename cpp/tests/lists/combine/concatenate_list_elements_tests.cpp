@@ -54,7 +54,7 @@ TEST_F(ConcatenateListElementsTest, InvalidInput)
   // Input lists is not at least 2-level depth lists column.
   {
     auto const col = IntListsCol{1, 2, 3};
-    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), std::invalid_argument);
   }
 }
 
