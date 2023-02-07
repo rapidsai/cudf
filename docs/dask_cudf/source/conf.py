@@ -64,6 +64,7 @@ intersphinx_mapping = {
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
 }
 
 numpydoc_show_inherited_class_members = True
