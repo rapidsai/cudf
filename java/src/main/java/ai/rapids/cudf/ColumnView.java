@@ -2848,7 +2848,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl) {
-    return replaceRegex(pattern, repl, -1);
+    return replaceRegex(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), repl);
   }
 
   /**
