@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -12,6 +12,8 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee env.yaml
 
 rapids-mamba-retry env create --force -f env.yaml -n test
+
+export CMAKE_GENERATOR=Ninja
 
 # Temporarily allow unbound variables for conda activation.
 set +u
