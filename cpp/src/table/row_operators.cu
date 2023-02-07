@@ -289,6 +289,7 @@ auto list_lex_preprocess(table_view left, table_view right, rmm::cuda_stream_vie
       auto left_nullability  = detail::get_nested_nullability(left_col);
       auto right_nullability = detail::get_nested_nullability(right_col);
 
+      // ensure that either nested column's nullability is captured for both columns
       std::transform(left_nullability.begin(),
                      left_nullability.end(),
                      right_nullability.begin(),

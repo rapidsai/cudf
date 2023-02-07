@@ -173,13 +173,7 @@ dremel_data get_dremel_data(column_view h_col,
 
   if (nullability.empty()) {
     nullability = get_nested_nullability(h_col);
-    // while (is_nested(curr_col.type())) {
-    //   nullability.push_back(curr_col.nullable());
-    //   curr_col = curr_col.type().id() == type_id::LIST ? curr_col.child(1) : curr_col.child(0);
-    // }
-    // nullability.push_back(curr_col.nullable());
   }
-  // curr_col = h_col;
 
   auto add_def_at_level = [&](column_view col) {
     // Add up all def level contributions in this column all the way till the first list column
