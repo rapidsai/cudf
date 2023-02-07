@@ -46,6 +46,7 @@ struct def_level_fn {
   uint8_t const* d_nullability;
   uint8_t sub_level_start;
   uint8_t curr_def_level;
+  bool always_nullable;
 
   __device__ uint32_t operator()(size_type i)
   {
@@ -55,7 +56,7 @@ struct def_level_fn {
     auto col           = *parent_col;
     do {
       // If col not nullable then it does not contribute to def levels
-      if (d_nullability[l]) {
+      if (always_nullable or d_nullability[l]) {
         if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
           ++def;
         } else {  // We have found the shallowest level at which this row is null
@@ -75,6 +76,7 @@ struct def_level_fn {
 dremel_data get_dremel_data(column_view h_col,
                             std::vector<uint8_t> nullability,
                             bool output_as_byte_array,
+                            bool always_nullable,
                             rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
@@ -173,14 +175,14 @@ dremel_data get_dremel_data(column_view h_col,
     uint32_t def = 0;
     start_at_sub_level.push_back(curr_nesting_level_idx);
     while (col.type().id() == type_id::STRUCT) {
-      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
+      def += (always_nullable or nullability[curr_nesting_level_idx]) ? 1 : 0;
       col = col.child(0);
       ++curr_nesting_level_idx;
     }
     // At the end of all those structs is either a list column or the leaf. List column contributes
     // at least one def level. Leaf contributes 1 level only if it is nullable.
-    def +=
-      (col.type().id() == type_id::LIST ? 1 : 0) + (nullability[curr_nesting_level_idx] ? 1 : 0);
+    def += (col.type().id() == type_id::LIST ? 1 : 0) +
+           (always_nullable or nullability[curr_nesting_level_idx] ? 1 : 0);
     def_at_level.push_back(def);
     ++curr_nesting_level_idx;
   };
@@ -297,7 +299,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
-                                                   def_at_level[level]});
+                                                   def_at_level[level],
+                                                   always_nullable});
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
@@ -306,7 +309,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level + 1,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level + 1],
-                                                   def_at_level[level + 1]});
+                                                   def_at_level[level + 1],
+                                                   always_nullable});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -389,7 +393,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
-                                                   def_at_level[level]});
+                                                   def_at_level[level],
+                                                   always_nullable});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
