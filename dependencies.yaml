@@ -28,7 +28,6 @@ files:
   test_java:
     output: none
     includes:
-      - build
       - cudatoolkit
       - test_java
   test_notebooks:
@@ -272,6 +271,7 @@ dependencies:
         packages:
           - *cmake_ver
           - maven
+          - ninja
           - openjdk=8.*
     specific:
       - output_types: conda
