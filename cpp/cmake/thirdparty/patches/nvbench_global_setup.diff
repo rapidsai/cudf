@@ -5,7 +5,7 @@ index 4c1588c..3ba2b99 100644
 @@ -54,6 +54,14 @@
  // clang-format on
  #endif
- 
+
 +#ifndef NVBENCH_ENVIRONMENT
 +namespace nvbench {
 +struct no_environment
