@@ -112,6 +112,24 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
   return 0;
 }
 
+
+// checks to see if the given column has a fixed size.  This doesn't
+// check every row, so assumes string and list columns are not fixed, even
+// if each row is the same width.
+// TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
+bool is_col_fixed_width(column_view const& column)
+{
+  if (is_fixed_width(column.type())) { return true; }
+  else if (column.type().id() == type_id::STRUCT) {
+    for (int i = 0; i < column.num_children(); i++) {
+      if (not is_fixed_width(column.child(i).type())) { return false; }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1482,7 +1500,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
     auto frag_size_fn = [&](auto const& col, size_type col_size) {
-      const int target_frags_per_page = is_fixed_width(col.type()) ? 1 : 4;
+      const int target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
       auto const avg_len =
         target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
       if (avg_len > 0) {
