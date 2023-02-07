@@ -104,17 +104,17 @@ struct page_state_s {
  * specified row bounds
  *
  * @param s The page to be checked
- * @param min_row The starting row index
+ * @param start_row The starting row index
  * @param num_rows The number of rows
  *
  * @return True if the page spans the beginning or the end of the row bounds
  */
-inline __device__ bool is_bounds_page(page_state_s* const s, size_t min_row, size_t num_rows)
+inline __device__ bool is_bounds_page(page_state_s* const s, size_t start_row, size_t num_rows)
 {
   size_t const page_begin = s->col.start_row + s->page.chunk_row;
   size_t const page_end   = page_begin + s->page.num_rows;
-  size_t const begin      = min_row;
-  size_t const end        = min_row + num_rows;
+  size_t const begin      = start_row;
+  size_t const end        = start_row + num_rows;
 
   return ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end));
 }
@@ -124,17 +124,17 @@ inline __device__ bool is_bounds_page(page_state_s* const s, size_t min_row, siz
  * row bounds
  *
  * @param s The page to be checked
- * @param min_row The starting row index
+ * @param start_row The starting row index
  * @param num_rows The number of rows
  *
  * @return True if the page is completely contained within the row bounds
  */
-inline __device__ bool page_is_contained(page_state_s* const s, size_t min_row, size_t num_rows)
+inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row, size_t num_rows)
 {
   size_t const page_begin = s->col.start_row + s->page.chunk_row;
   size_t const page_end   = page_begin + s->page.num_rows;
-  size_t const begin      = min_row;
-  size_t const end        = min_row + num_rows;
+  size_t const begin      = start_row;
+  size_t const end        = start_row + num_rows;
 
   return page_begin >= begin && page_end <= end;
 }
@@ -1751,7 +1751,7 @@ __global__ void __launch_bounds__(block_size)
         // if we are not a bounding page (as checked above) then we are either
         // returning all rows/values from this page, or 0 of them
         pp->nesting[thread_depth].batch_size =
-          (s->num_rows == 0 && !page_is_contained(s, min_row, num_rows))
+          (s->num_rows == 0 && !is_page_contained(s, min_row, num_rows))
             ? 0
             : pp->nesting[thread_depth].size;
       }
@@ -1867,10 +1867,10 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
   //  |---------|---------|----------|
   //        ^------------------^
   //      row start           row end
-  // P1 will contain "0" rows
+  // P1 will contain 0 rows
   //
   if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
-                                               page_is_contained(s, min_row, num_rows)))) {
+                                               is_page_contained(s, min_row, num_rows)))) {
     return;
   }
 
