@@ -16,9 +16,10 @@ import cudf
 
 def read_csv(path, blocksize="default", **kwargs):
     """
-    Read CSV files into a dask_cudf.DataFrame
+    Read CSV files into a :class:`.DataFrame`.
 
-    This API parallelizes the ``cudf.read_csv`` function in the following ways:
+    This API parallelizes the :func:`cudf:cudf.read_csv` function in
+    the following ways:
 
     It supports loading many files at once using globstrings:
 
@@ -34,23 +35,26 @@ def read_csv(path, blocksize="default", **kwargs):
     >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
     >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
 
-    Internally ``dask_cudf.read_csv`` uses ``cudf.read_csv`` and supports
-    many of the same keyword arguments with the same performance guarantees.
-    See the docstring for ``cudf.read_csv()`` for more information on available
+    Internally ``read_csv`` uses :func:`cudf:cudf.read_csv` and
+    supports many of the same keyword arguments with the same
+    performance guarantees. See the docstring for
+    :func:`cudf:cudf.read_csv` for more information on available
     keyword arguments.
 
     Parameters
     ----------
     path : str, path object, or file-like object
-        Either a path to a file (a str, pathlib.Path, or
-        py._path.local.LocalPath), URL (including http, ftp, and S3 locations),
-        or any object with a read() method (such as builtin open() file
-        handler function or StringIO).
+        Either a path to a file (a str, :py:class:`pathlib.Path`, or
+        py._path.local.LocalPath), URL (including http, ftp, and S3
+        locations), or any object with a read() method (such as
+        builtin :py:func:`open` file handler function or
+        :py:class:`~io.StringIO`).
     blocksize : int or str, default "256 MiB"
-        The target task partition size. If `None`, a single block
+        The target task partition size. If ``None``, a single block
         is used for each file.
     **kwargs : dict
-        Passthrough key-word arguments that are sent to ``cudf.read_csv``.
+        Passthrough key-word arguments that are sent to
+        :func:`cudf:cudf.read_csv`.
 
     Examples
     --------
@@ -61,6 +65,7 @@ def read_csv(path, blocksize="default", **kwargs):
     0  1     hi
     1  2  hello
     2  3     ai
+
     """
 
     # Handle `chunksize` deprecation
