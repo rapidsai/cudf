@@ -30,7 +30,7 @@ files:
   test_java:
     output: none
     includes:
-      - build
+      - build_all
       - cudatoolkit
       - test_java
   test_notebooks:
