@@ -1704,7 +1704,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            expanded_fragments[frag_offset + i].chunk = &ck;
+            expanded_fragments[frag_offset + i].chunk =
+              &chunks.device_view()[r + first_rg_in_part[p]][c];
           }
           frag_offset += fragments_in_chunk;
         }
