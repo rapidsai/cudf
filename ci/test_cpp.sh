@@ -35,7 +35,8 @@ nvidia-smi
 set +e
 
 # Get library for finding incorrect default stream usage.
-STREAM_IDENTIFY_LIB=$(conda info | grep "active env location" | cut -d ":" -f 2)/lib/libcudf_identify_stream_usage.so
+STREAM_IDENTIFY_LIB=$(conda info | grep "active env location" | awk 'BEGIN { FS = " : " } ; {print $2}')/lib/libcudf_identify_stream_usage.so
+
 echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB}"
 
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
