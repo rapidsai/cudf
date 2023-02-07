@@ -696,8 +696,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
-    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    auto const strings_column = cudf::strings_column_view{*input};
     auto const delimiter_jstr = cudf::jni::native_jstring(env, delimiter_obj);
     auto const delimiter = std::string(delimiter_jstr.get(), delimiter_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
@@ -723,8 +723,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRe(
 
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
-    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    auto const strings_column = cudf::strings_column_view{*input};
     auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
@@ -754,8 +754,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
 
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
-    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    auto const strings_column = cudf::strings_column_view{*input};
     auto const delimiter_jstr = cudf::jni::native_jstring(env, delimiter_obj);
     auto const delimiter = std::string(delimiter_jstr.get(), delimiter_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
@@ -782,8 +782,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRe(
 
   try {
     cudf::jni::auto_set_device(env);
-    auto const column_view = reinterpret_cast<cudf::column_view const *>(input_handle);
-    auto const strings_column = cudf::strings_column_view{*column_view};
+    auto const input = reinterpret_cast<cudf::column_view const *>(input_handle);
+    auto const strings_column = cudf::strings_column_view{*input};
     auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
     auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;

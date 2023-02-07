@@ -2543,7 +2543,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a list of columns by splitting each string using the specified regex program pattern.
    * The number of rows in the output columns will be the same as the input column. Null entries
-   * are added for a row where split results have been exhausted. Null input entries result in
+   * are added for the rows where split results have been exhausted. Null input entries result in
    * all nulls in the corresponding rows of the output columns.
    *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
@@ -2612,7 +2612,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a list of columns by splitting each string using the specified regex program pattern.
    * The number of rows in the output columns will be the same as the input column. Null entries
-   * are added for a row where split results have been exhausted. Null input entries result in
+   * are added for the rows where split results have been exhausted. Null input entries result in
    * all nulls in the corresponding rows of the output columns.
    *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
@@ -4036,7 +4036,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a list of columns by splitting each string using the specified string literal
    * delimiter. The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
    * result in all nulls in the corresponding rows of the output columns.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
@@ -4050,7 +4050,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a list of columns by splitting each string using the specified regular expression
    * pattern. The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
    * result in all nulls in the corresponding rows of the output columns.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
