@@ -781,6 +781,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                CXX_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
   )
+  target_link_libraries(cudf_stream_usage PUBLIC CUDA::cudart rmm::rmm)
+  add_library(cudf::cudf_stream_usage ALIAS cudf_stream_usage)
 endif()
 
 # ##################################################################################################
