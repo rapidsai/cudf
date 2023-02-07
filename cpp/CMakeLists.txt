@@ -772,9 +772,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   endif()
 
   # Libraries for stream-related testing.
-  add_library(
-    cudf_stream_usage SHARED tests/utilities/identify_stream_usage/identify_stream_usage.cpp
-  )
+  add_library(cudf_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
 
   set_target_properties(
     cudf_stream_usage
