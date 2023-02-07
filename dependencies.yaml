@@ -272,6 +272,7 @@ dependencies:
           - *cmake_ver
           - maven
           - openjdk=8.*
+          - make
     specific:
       - output_types: conda
         matrices:
