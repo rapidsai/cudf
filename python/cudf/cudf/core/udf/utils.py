@@ -47,8 +47,8 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
     "STRINGS_UDF_HEAP_SIZE", 2**31
 )
-heap_size = 0
-cudf_str_dtype = dtype(str)
+_heap_size = 0
+_cudf_str_dtype = dtype(str)
 
 
 logger = get_logger()
@@ -151,7 +151,7 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    if col.dtype == cudf_str_dtype:
+    if col.dtype == _cudf_str_dtype:
         col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
@@ -271,7 +271,7 @@ def _get_input_args_from_frame(fr):
     args = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        if col.dtype == cudf_str_dtype:
+        if col.dtype == _cudf_str_dtype:
             data = column_to_string_view_array_init_heap(col)
         else:
             data = col.data
@@ -287,13 +287,13 @@ def _get_input_args_from_frame(fr):
 
 
 def _return_arr_from_dtype(dtype, size):
-    if dtype == cudf_str_dtype:
+    if dtype == _cudf_str_dtype:
         return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
     return cp.empty(size, dtype=dtype)
 
 
 def _post_process_output_col(col, retty):
-    if retty == cudf_str_dtype:
+    if retty == _cudf_str_dtype:
         return column_from_udf_string_array(col)
     return as_column(col, retty)
 
@@ -448,17 +448,17 @@ def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
     """
-    global heap_size
+    global _heap_size
     if size is None:
         size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
-    if size != heap_size:
+    if size != _heap_size:
         (ret,) = cudart.cudaDeviceSetLimit(
             cudart.cudaLimit.cudaLimitMallocHeapSize, size
         )
         if ret.value != 0:
             raise RuntimeError("Unable to set cudaMalloc heap size")
 
-        heap_size = size
+        _heap_size = size
 
 
 @lru_cache(maxsize=None)
