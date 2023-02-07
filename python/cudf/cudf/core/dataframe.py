@@ -4618,7 +4618,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # offset of each partition thus we skip the first offset
         ret = outdf._split(offsets[1:], keep_index=keep_index)
 
-        # `_split()`` ignores empty intervals so we add empty partitions here
+        # Calling `_split()` on an empty dataframe returns an empty list
+        # so we add empty partitions here
         ret += [self._empty_like(keep_index) for _ in range(nparts - len(ret))]
         return ret
 
