@@ -3153,8 +3153,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * result = cv.matchesRe("\\d+")
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3164,11 +3164,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector matchesRe(String pattern) {
+    return matchesRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given regex program pattern but only at the beginning of the string.
+   *
+   * ```
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.matchesRe(p)
+   * r is now [false, true, false]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
+   * @param regexProg Regex program to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector matchesRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(),
+                                      regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3176,8 +3199,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * r = cv.containsRe("\\d+")
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3187,11 +3210,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
+  @Deprecated
   public final ColumnVector containsRe(String pattern) {
+    return containsRe(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE));
+  }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given RegexProgram pattern starting at any location.
+   *
+   * ```
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.containsRe(p)
+   * r is now [false, true, true]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
+   * @param regexProg Regex program to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public final ColumnVector containsRe(RegexProgram regexProg) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    assert !pattern.isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(),
+                                       regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3206,10 +3252,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
+  @Deprecated
   public final Table extractRe(String pattern) throws CudfException {
+    return extractRe(new RegexProgram(pattern));
+  }
+
+  /**
+   * For each captured group specified in the given regex program
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg the regex program to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the regex
+   * program does not contain any capture groups.
+   */
+  public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern may not be null";
-    return new Table(extractRe(this.getNativeView(), pattern));
+    assert regexProg != null : "regex program may not be null";
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),
+                               regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3222,11 +3286,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
+  @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
+    if (idx == 0) {
+      return extractAllRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), idx);
+    }
+    return extractAllRecord(new RegexProgram(pattern), idx);
+  }
+
+  /**
+   * Extracts all strings that match the given regex program pattern and corresponds to the
+   * regular expression group index. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   * @param regexProg The regex program
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(RegexProgram regexProg, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-
-    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+    assert regexProg != null : "regex program may not be null";
+    return new ColumnVector(
+        extractAllRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                         regexProg.capture().nativeId, idx));
   }
 
   /**
@@ -3995,21 +4079,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern from the
+   * Native method for checking if strings match the passed in regex program pattern from the
    * beginning of the string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long matchesRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern starting at any location.
+   * Native method for checking if strings match the passed in regex program pattern starting at any location.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long containsRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in like pattern
@@ -4030,19 +4118,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
-   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   * Native method for extracting results from a regex program pattern. Returns a table handle.
+   *
+   * @param cudfViewHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    */
-  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long[] extractRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for extracting all results corresponding to group idx from a regular expression.
+   * Native method for extracting all results corresponding to group idx from a regex program pattern.
    *
    * @param nativeHandle Native handle of the cudf::column_view being operated on.
    * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param idx Regex group index. A 0 value means matching the entire regex.
    * @return Native handle of a string column of the result.
    */
-  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+  private static native long extractAllRecord(long nativeHandle, String pattern, int flags, int capture, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
