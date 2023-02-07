@@ -536,7 +536,7 @@ def write_csv(
     try:
         with nogil:
             cpp_write_csv(options)
-    except OverflowError as e:
+    except OverflowError:
         raise OverflowError(
             f"Writing CSV file with chunksize={rows_per_chunk} failed. "
             "Consider providing a smaller chunksize argument."
