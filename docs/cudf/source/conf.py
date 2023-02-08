@@ -52,6 +52,8 @@ extensions = [
 ]
 
 jupyter_execute_notebooks = "force"
+execution_excludepatterns = ['performance-comparisons.ipynb']
+
 execution_timeout = 300
 
 copybutton_prompt_text = ">>> "

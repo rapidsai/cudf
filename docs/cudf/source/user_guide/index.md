@@ -12,5 +12,6 @@ groupby
 guide-to-udfs
 cupy-interop
 options
+performance-comparisons
 PandasCompat
 ```
