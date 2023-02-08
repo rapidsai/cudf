@@ -179,12 +179,65 @@ def read_json(
 
 
 @ioutils.doc_to_json()
-def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
+def to_json(
+    cudf_val,
+    path_or_buf=None,
+    engine="auto",
+    orient=None,
+    storage_options=None,
+    *args,
+    **kwargs,
+):
     """{docstring}"""
 
-    warnings.warn(
-        "Using CPU via Pandas to write JSON dataset, this may "
-        "be GPU accelerated in the future"
-    )
-    pd_value = cudf_val.to_pandas(nullable=True)
-    return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)
+    if engine == "auto":
+        engine = "pandas"
+
+    if engine == "cudf":
+        if orient not in {"records", None}:
+            raise ValueError(
+                f"Only the `orient='records'` is supported for JSON writer"
+                f" with `engine='cudf'`, got {orient}"
+            )
+
+        if path_or_buf is None:
+            path_or_buf = StringIO()
+            return_as_string = True
+        else:
+            path_or_buf = ioutils.get_writer_filepath_or_buffer(
+                path_or_data=path_or_buf,
+                mode="w",
+                storage_options=storage_options,
+            )
+            return_as_string = False
+
+        if ioutils.is_fsspec_open_file(path_or_buf):
+            with path_or_buf as file_obj:
+                file_obj = ioutils.get_IOBase_writer(file_obj)
+                libjson.write_json(
+                    cudf_val, path_or_buf=file_obj, *args, **kwargs
+                )
+        else:
+            libjson.write_json(
+                cudf_val, path_or_buf=path_or_buf, *args, **kwargs
+            )
+
+        if return_as_string:
+            path_or_buf.seek(0)
+            return path_or_buf.read()
+    elif engine == "pandas":
+        warnings.warn("Using CPU via Pandas to write JSON dataset")
+        pd_value = cudf_val.to_pandas(nullable=True)
+        return pd.io.json.to_json(
+            path_or_buf,
+            pd_value,
+            orient=orient,
+            storage_options=storage_options,
+            *args,
+            **kwargs,
+        )
+    else:
+        raise ValueError(
+            f"`engine` only support {{'auto', 'cudf', 'pandas'}}, "
+            f"got: {engine}"
+        )
