@@ -17,6 +17,7 @@
 #pragma once
 
 #include "update_validity.hpp"
+#include "valid_counts.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.cuh>
@@ -64,21 +65,13 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
   auto out_itr = result->mutable_view().template begin<ResultType>();
 
   // Compute valid counts
-  rmm::device_uvector<size_type> valid_counts(num_segments, stream);
-  if (col.has_nulls() && (null_handling == null_policy::EXCLUDE)) {
-    auto valid_fn = [] __device__(auto p) -> size_type { return static_cast<size_type>(p.second); };
-    auto itr      = thrust::make_transform_iterator(d_col->pair_begin<InputType, true>(), valid_fn);
-    cudf::reduction::detail::segmented_reduce(itr,
-                                              offsets.begin(),
-                                              offsets.end(),
-                                              valid_counts.data(),
-                                              thrust::plus<size_type>{},
-                                              0,
-                                              stream);
-  } else {
-    thrust::adjacent_difference(
-      rmm::exec_policy(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
-  }
+  rmm::device_uvector<size_type> valid_counts =
+    cudf::reduction::detail::segmented_valid_counts(*d_col,
+                                                    col.has_nulls(),
+                                                    offsets,
+                                                    null_handling,
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   // Run segmented reduction
   if (col.has_nulls()) {

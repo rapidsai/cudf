@@ -17,6 +17,7 @@
 #pragma once
 
 #include "update_validity.hpp"
+#include "valid_counts.hpp"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
@@ -36,6 +37,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/reduce.h>
 
 #include <optional>
 #include <type_traits>
@@ -214,8 +216,23 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
     simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
   auto const scale = [&] {
     if (std::is_same_v<Op, cudf::reduction::op::product>) {
-      CUDF_FAIL("Segmented reduction for fixed point does not support product aggregation yet.");
-      return numeric::scale_type{col.type().scale()};
+      // CUDF_FAIL("Segmented reduction for fixed point does not support product aggregation yet.");
+      auto d_col = column_device_view::create(col, stream);
+      rmm::device_uvector<size_type> valid_counts =
+        cudf::reduction::detail::segmented_valid_counts(*d_col,
+                                                        col.has_nulls(),
+                                                        offsets,
+                                                        null_handling,
+                                                        stream,
+                                                        rmm::mr::get_current_device_resource());
+      auto max_valid_count = thrust::reduce(rmm::exec_policy(stream),
+                                            valid_counts.begin(),
+                                            valid_counts.end(),
+                                            size_type{0},
+                                            thrust::maximum<size_type>{});
+      auto new_scale       = numeric::scale_type{col.type().scale() * max_valid_count};
+      // TODO: adjust values in each segment to match the new scale
+      return new_scale;
     }
     if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
