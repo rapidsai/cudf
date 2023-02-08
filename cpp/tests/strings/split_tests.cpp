@@ -327,7 +327,6 @@ TEST_F(StringsSplitTest, SplitRecordLong)
 
   auto result =
     cudf::strings::split_record(cudf::strings_column_view(strings), cudf::string_scalar(" "));
-
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   // clang-format off
    LCW expected(
