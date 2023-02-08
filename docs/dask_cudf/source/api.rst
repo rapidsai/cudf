@@ -26,6 +26,14 @@ data reading facilities, followed by calling
       read_text,
       read_parquet
 
+.. warning::
+
+   FIXME: where should the following live?
+
+   .. autofunction:: dask_cudf.concat
+
+   .. autofunction:: dask_cudf.from_delayed
+
 Grouping
 ========
 
@@ -51,8 +59,8 @@ if possible.
 .. autofunction:: dask_cudf.groupby_agg
 
 
-Dask Collections
-================
+DataFrames and Series
+=====================
 
 The core distributed objects provided by Dask-cuDF are the
 :class:`.DataFrame` and :class:`.Series`. These inherit respectively
