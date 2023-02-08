@@ -320,51 +320,68 @@ def test_series_compare_nulls(cmpop, dtypes):
     utils.assert_eq(expect, got)
 
 
-def string_series_compare_test_cases():
-    cases = []
-    pd_sr = pd.Series(["a", "b", None, "d", "e", None], dtype="string")
-    all_cmpop_cases = [
-        (pd_sr, pd_sr),
-        (pd_sr, "a"),
-        ("a", pd_sr),
-    ]
+@pytest.fixture
+def str_series_cmp_data():
+    return pd.Series(["a", "b", None, "d", "e", None], dtype="string")
 
-    for op in _cmpops:
-        for case in all_cmpop_cases:
-            cases.append((*case, op))
 
-    eq_neq_cases = (
-        (pd_sr, 1),
-        (1, pd_sr),
-        (pd_sr, 1.5),
-        (1.5, pd_sr),
-        (pd_sr, True),
-        (True, pd_sr),
+@pytest.fixture(ids=[op.__name__ for op in _cmpops], params=_cmpops)
+def str_series_compare_str_cmpop(request):
+    return request.param
+
+
+@pytest.fixture(ids=["eq", "ne"], params=[operator.eq, operator.ne])
+def str_series_compare_num_cmpop(request):
+    return request.param
+
+
+@pytest.fixture(ids=["int", "float", "bool"], params=[1, 1.5, True])
+def cmp_scalar(request):
+    return request.param
+
+
+def test_str_series_compare_str(
+    str_series_cmp_data, str_series_compare_str_cmpop
+):
+    expect = str_series_compare_str_cmpop(str_series_cmp_data, "a")
+    got = str_series_compare_str_cmpop(
+        Series.from_pandas(str_series_cmp_data), "a"
     )
-    for case in eq_neq_cases:
-        cases += [(*case, operator.eq), (*case, operator.ne)]
 
-    return cases
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
 
-@pytest.mark.parametrize(
-    "obj, cmp_obj, cmpop", string_series_compare_test_cases()
-)
-def test_string_series_compare(obj, cmpop, cmp_obj):
+def test_str_series_compare_str_reflected(
+    str_series_cmp_data, str_series_compare_str_cmpop
+):
+    expect = str_series_compare_str_cmpop("a", str_series_cmp_data)
+    got = str_series_compare_str_cmpop(
+        "a", Series.from_pandas(str_series_cmp_data)
+    )
 
-    g_obj = obj
-    if isinstance(g_obj, pd.Series):
-        g_obj = Series.from_pandas(g_obj)
-    g_cmp_obj = cmp_obj
-    if isinstance(g_cmp_obj, pd.Series):
-        g_cmp_obj = Series.from_pandas(g_cmp_obj)
-    got = cmpop(g_obj, g_cmp_obj)
-    expected = cmpop(obj, cmp_obj)
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
-    if isinstance(expected, pd.Series):
-        expected = cudf.from_pandas(expected)
 
-    utils.assert_eq(expected, got)
+def test_str_series_compare_num(
+    str_series_cmp_data, str_series_compare_num_cmpop, cmp_scalar
+):
+    expect = str_series_compare_num_cmpop(str_series_cmp_data, cmp_scalar)
+    got = str_series_compare_num_cmpop(
+        Series.from_pandas(str_series_cmp_data), cmp_scalar
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
+
+
+def test_str_series_compare_num_reflected(
+    str_series_cmp_data, str_series_compare_num_cmpop, cmp_scalar
+):
+    expect = str_series_compare_num_cmpop(cmp_scalar, str_series_cmp_data)
+    got = str_series_compare_num_cmpop(
+        cmp_scalar, Series.from_pandas(str_series_cmp_data)
+    )
+
+    utils.assert_eq(expect, got.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
