@@ -2531,12 +2531,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return list of strings columns as a table.
    */
+  @Deprecated
   public final Table stringSplit(String pattern, int limit, boolean splitByRegex) {
+    if (splitByRegex) {
+      return stringSplit(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
+    } else {
+      return stringSplit(pattern, limit);
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
+   * all nulls in the corresponding rows of the output columns.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return list of strings columns as a table.
+   */
+  public final Table stringSplit(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert pattern != null : "pattern is null";
-    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), pattern, limit, splitByRegex));
+    return new Table(stringSplitRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                   regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2550,6 +2572,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return list of strings columns as a table.
    */
+  @Deprecated
   public final Table stringSplit(String pattern, boolean splitByRegex) {
     return stringSplit(pattern, -1, splitByRegex);
   }
@@ -2567,7 +2590,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter, int limit) {
-    return stringSplit(delimiter, limit, false);
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert delimiter != null : "delimiter is null";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
+    return new Table(stringSplit(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2580,7 +2606,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter) {
-    return stringSplit(delimiter, -1, false);
+    return stringSplit(delimiter, -1);
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
+   * all nulls in the corresponding rows of the output columns.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @return list of strings columns as a table.
+   */
+  public final Table stringSplit(RegexProgram regexProg) {
+    return stringSplit(regexProg, -1);
   }
 
   /**
@@ -2595,13 +2635,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return a LIST column of string elements.
    */
+  @Deprecated
   public final ColumnVector stringSplitRecord(String pattern, int limit, boolean splitByRegex) {
+    if (splitByRegex) {
+      return stringSplitRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
+    } else {
+      return stringSplitRecord(pattern, limit);
+    }
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regex program pattern.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(RegexProgram regexProg, int limit) {
     assert type.equals(DType.STRING) : "column type must be String";
-    assert pattern != null : "pattern is null";
-    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), pattern, limit, splitByRegex));
+        stringSplitRecordRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                            regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2613,6 +2673,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                     regular expression pattern or just by a string literal delimiter.
    * @return a LIST column of string elements.
    */
+  @Deprecated
   public final ColumnVector stringSplitRecord(String pattern, boolean splitByRegex) {
     return stringSplitRecord(pattern, -1, splitByRegex);
   }
@@ -2628,7 +2689,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter, int limit) {
-    return stringSplitRecord(delimiter, limit, false);
+    assert type.equals(DType.STRING) : "column type must be String";
+    assert delimiter != null : "delimiter is null";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
+    return new ColumnVector(stringSplitRecord(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2639,7 +2703,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter) {
-    return stringSplitRecord(delimiter, -1, false);
+    return stringSplitRecord(delimiter, -1);
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regex program pattern.
+   *
+   * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
+   *                  for each input string.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(RegexProgram regexProg) {
+    return stringSplitRecord(regexProg, -1);
   }
 
   /**
@@ -3958,36 +4034,64 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Returns a list of columns by splitting each string using the specified pattern. The number of
-   * rows in the output columns will be the same as the input column. Null entries are added for a
-   * row where split results have been exhausted. Null input entries result in all nulls in the
-   * corresponding rows of the output columns.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long nativeHandle, String pattern, int limit,
-                                           boolean splitByRegex);
+  private static native long[] stringSplit(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regular expression
+   * pattern. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long[] stringSplitRe(long nativeHandle, String pattern, int flags,
+                                             int capture, int limit);
 
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long stringSplitRecord(long nativeHandle, String pattern, int limit,
-                                               boolean splitByRegex);
+  private static native long stringSplitRecord(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regular expression pattern.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
+   * @param flags regex flags setting.
+   * @param capture capture groups setting.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long stringSplitRecordRe(long nativeHandle, String pattern, int flags,
+                                                 int capture, int limit);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
