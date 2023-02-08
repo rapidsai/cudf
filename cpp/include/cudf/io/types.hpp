@@ -248,7 +248,7 @@ struct source_info {
   explicit source_info(std::vector<cudf::host_span<T const>> const& host_buffers)
     : _type(io_type::HOST_BUFFER)
   {
-    if constexpr (not std::is_same_v<T, std::byte>) {
+    if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
       _host_buffers.resize(host_buffers.size());
       std::transform(host_buffers.begin(),
                      host_buffers.end(),
