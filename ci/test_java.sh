@@ -29,22 +29,17 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   libcudf
 
-SUITEERROR=0
-
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "Run Java tests"
 pushd java
 mvn test -B -DCUDF_JNI_ARROW_STATIC=OFF -DCUDF_JNI_ENABLE_PROFILING=OFF
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf Java"
-fi
 popd
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

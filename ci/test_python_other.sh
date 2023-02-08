@@ -12,6 +12,8 @@ rapids-mamba-retry install \
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest dask_cudf"
@@ -26,12 +28,6 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term \
   dask_cudf
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in dask-cudf"
-fi
 popd
 
 rapids-logger "pytest custreamz"
@@ -46,12 +42,6 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term \
   custreamz
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in custreamz"
-fi
 popd
 
 set -e
@@ -73,12 +63,6 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/strings-udf-coverage.xml" \
   --cov-report=term \
   tests
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in strings_udf"
-fi
 popd
 
 rapids-logger "pytest cudf with strings_udf"
@@ -94,12 +78,7 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-strings-udf-coverage.xml" \
   --cov-report=term \
   tests/test_udf_masked_ops.py
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf with strings_udf"
-fi
 popd
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

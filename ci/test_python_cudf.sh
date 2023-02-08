@@ -7,6 +7,8 @@ source "$(dirname "$0")/test_python_common.sh"
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest cudf"
@@ -24,12 +26,6 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
   --cov-report=term \
   tests
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf"
-fi
 popd
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
@@ -48,12 +44,6 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
   --cov-report=term \
   benchmarks
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf"
-fi
 
 rapids-logger "pytest for cudf benchmarks using pandas"
 CUDF_BENCHMARKS_USE_PANDAS=ON \
@@ -67,12 +57,7 @@ pytest \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
   --cov-report=term \
   benchmarks
-exitcode=$?
-
-if (( ${exitcode} != 0 )); then
-    SUITEERROR=${exitcode}
-    echo "FAILED: 1 or more tests in cudf"
-fi
 popd
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}
