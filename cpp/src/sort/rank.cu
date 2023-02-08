@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -47,37 +47,26 @@
 namespace cudf {
 namespace detail {
 namespace {
-// Functor to identify unique elements in a sorted order table/column
-template <typename ReturnType, typename Iterator>
-struct unique_comparator {
-  unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
-    : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
-      permute(sorted_order)
-  {
-  }
-  __device__ ReturnType operator()(size_type index) const noexcept
-  {
-    return index == 0 || not comparator(permute[index], permute[index - 1]);
-  };
-
- private:
-  row_equality_comparator<nullate::DYNAMIC> comparator;
-  Iterator const permute;
-};
 
 // Assign rank from 1 to n unique values. Equal values get same rank value.
 rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
                                                  column_view sorted_order_view,
                                                  rmm::cuda_stream_view stream)
 {
-  auto device_table     = table_device_view::create(table_view{{input_col}}, stream);
+  auto const t_input    = table_view{{input_col}};
+  auto const comparator = cudf::experimental::row::equality::self_comparator{t_input, stream};
+  auto const device_comparator = comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_input)});
+
+  auto const sorted_index_order = thrust::make_permutation_iterator(
+    sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
+  auto conv = [permute = sorted_index_order, device_comparator] __device__(size_type index) {
+    return static_cast<size_type>(index == 0 ||
+                                  not device_comparator(permute[index], permute[index - 1]));
+  };
+  auto const unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
+
   auto const input_size = input_col.size();
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
-  auto sorted_index_order = thrust::make_permutation_iterator(
-    sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
-  auto conv = unique_comparator<size_type, decltype(sorted_index_order)>(
-    *device_table, sorted_index_order, input_col.has_nulls());
-  auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
   thrust::inclusive_scan(
     rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
