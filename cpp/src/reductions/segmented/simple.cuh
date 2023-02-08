@@ -231,7 +231,12 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                             size_type{0},
                                             thrust::maximum<size_type>{});
       auto new_scale       = numeric::scale_type{col.type().scale() * max_valid_count};
-      // TODO: adjust values in each segment to match the new scale
+      // adjust values in each segment to match the new scale
+      thrust::transform(rmm::exec_policy(stream),
+                        d_col->begin<InputType>(),
+                        d_col->end<InputType>(),
+                        d_col->begin<InputType>(),
+                        [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); });
       return new_scale;
     }
     if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
