@@ -72,7 +72,7 @@ void BM_orc_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
+  cuio_source_sink_pair source_sink(io_type::FILEPATH);
   cudf::io::orc_writer_options opts =
     cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
 
