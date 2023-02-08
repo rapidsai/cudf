@@ -4265,8 +4265,7 @@ public final class Table implements AutoCloseable {
      *             besides IDENTITY and MURMUR3.
      * @param numberOfPartitions number of partitions to use
      * @param seed the seed value for hashing
-     * @return Table that exposes a limited functionality of the
-     * {@link Table} class
+     * @return Table that exposes a limited functionality of the {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
       int[] partitionOffsets = new int[numberOfPartitions];
