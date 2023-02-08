@@ -50,11 +50,6 @@ option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
-# TODO: Should this be on or off by default? Is it an advanced option?)
-option(CUDF_BUILD_STREAMS_TEST_UTIL
-       "Whether to build the utilities for stream testing contained in libcudf" ON
-)
-mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
@@ -76,6 +71,18 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+if(${CUDA_STATIC_RUNTIME})
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+)
+mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
@@ -767,8 +774,10 @@ endif()
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   if(CUDA_STATIC_RUNTIME)
-    # TODO: Should this be a hard error, or just a skip? Depends on what the default is IMO.
-    message(FATAL_ERROR "Stream identification cannot be built with a static CUDA runtime.")
+    message(
+      FATAL_ERROR
+        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+    )
   endif()
 
   # Libraries for stream-related testing.
