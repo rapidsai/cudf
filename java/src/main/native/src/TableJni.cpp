@@ -2661,8 +2661,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
   JNI_NULL_CHECK(env, columns_to_hash, "columns_to_hash is null", NULL);
   JNI_NULL_CHECK(env, output_offsets, "output_offsets is null", NULL);
   JNI_ARG_CHECK(env, number_of_partitions > 0, "number_of_partitions is zero", NULL);
-  // For simplicity of converting a signed int to a unsigned int
-  JNI_ARG_CHECK(env, seed >= 0, "seed is negative", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
