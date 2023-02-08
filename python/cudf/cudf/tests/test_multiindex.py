@@ -788,6 +788,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
     Case1: Constructed from GroupBy, StringColumns
     Case2: Constructed from MultiIndex, NumericColumns
     """
+    original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", copy_on_write)
     same_ref = (not deep) or (cudf.get_option("copy_on_write") and not deep)
 
@@ -848,7 +849,7 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         ]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
-    cudf.set_option("copy_on_write", False)
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize(

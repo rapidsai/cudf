@@ -522,6 +522,7 @@ cdef class Column:
                 # CopyOnWriteBuffer reference to another column
                 # and still create a weak reference.
                 # With the current design that's not possible.
+                # https://github.com/rapidsai/cudf/issues/12734
                 data = data_owner.copy(deep=False)
             elif (
                 # This is an optimization of the most common case where
