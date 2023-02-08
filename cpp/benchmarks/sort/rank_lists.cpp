@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,25 +15,35 @@
  */
 
 #include "nested_types_common.hpp"
+#include "rank_types_common.hpp"
 
-#include <cudf/detail/sorting.hpp>
+#include <cudf/sorting.hpp>
+
+#include <cudf_test/column_utilities.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-void nvbench_sort_lists(nvbench::state& state)
+template <cudf::rank_method method>
+void nvbench_rank_lists(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
 {
   cudf::rmm_pool_raii pool_raii;
 
   auto const table = create_lists_data(state);
 
+  auto const null_frequency{state.get_float64("null_frequency")};
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(*table, {}, {}, stream_view, rmm::mr::get_current_device_resource());
+    cudf::rank(table->view().column(0),
+               method,
+               cudf::order::ASCENDING,
+               null_frequency ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE,
+               cudf::null_order::AFTER,
+               rmm::mr::get_current_device_resource());
   });
 }
 
-NVBENCH_BENCH(nvbench_sort_lists)
-  .set_name("sort_list")
+NVBENCH_BENCH_TYPES(nvbench_rank_lists, NVBENCH_TYPE_AXES(methods))
+  .set_name("rank_lists")
   .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
   .add_int64_axis("depth", {1, 4})
   .add_float64_axis("null_frequency", {0, 0.2});
