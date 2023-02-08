@@ -7,7 +7,7 @@ With this approach, any operation that generates an unmodified view of an object
 However, when either the existing or new object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.
 This behavior is best understood by looking at the examples below.
 
-
+The default behaviour in cuDF is for copy-on-write to be disabled, so to use it, one must explicitly opt in by setting a cuDF option. This can be done operation by operation if this is required, but the most common use case is to enable copy-on-write for the duration of a script.
 ## Enabling copy-on-write
 
 1. Use `cudf.set_option`:
