@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-#include "simple_segmented.cuh"
+#include "simple.cuh"
 
 #include <cudf/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_max(
+std::unique_ptr<cudf::column> segmented_min(
   column_view const& col,
   device_span<size_type const> offsets,
-  cudf::data_type const output_dtype,
+  data_type const output_dtype,
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(col.type() == output_dtype,
-               "segmented_max() operation requires matching output type");
+               "segmented_min() operation requires matching output type");
   return cudf::type_dispatcher(
     col.type(),
-    simple::detail::same_column_type_dispatcher<cudf::reduction::op::max>{},
+    simple::detail::same_column_type_dispatcher<cudf::reduction::op::min>{},
     col,
     offsets,
     null_handling,

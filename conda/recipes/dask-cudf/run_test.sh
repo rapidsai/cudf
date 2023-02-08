@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 set -e
 
@@ -17,12 +17,20 @@ if [ "${ARCH}" = "aarch64" ]; then
   exit 0
 fi
 
-# Install the latest version of dask and distributed
-logger "pip install git+https://github.com/dask/distributed.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
+export INSTALL_DASK_MAIN=0
 
-logger "pip install git+https://github.com/dask/dask.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
+# Dask version to install when `INSTALL_DASK_MAIN=0`
+export DASK_STABLE_VERSION="2023.1.1"
+
+# Install the conda-forge or nightly version of dask and distributed
+if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+    gpuci_logger "gpuci_mamba_retry install -c dask/label/dev 'dask/label/dev::dask' 'dask/label/dev::distributed'"
+    gpuci_mamba_retry install -c dask/label/dev "dask/label/dev::dask" "dask/label/dev::distributed"
+else
+    gpuci_logger "gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask=={$DASK_STABLE_VERSION} conda-forge::distributed=={$DASK_STABLE_VERSION} conda-forge::dask-core=={$DASK_STABLE_VERSION} --force-reinstall
+fi
 
 logger "python -c 'import dask_cudf'"
 python -c "import dask_cudf"
