@@ -6,6 +6,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+from packaging import version
 
 import dask
 from dask import dataframe as dd
@@ -29,6 +30,58 @@ def test_from_dict_backend_dispatch():
         ddf = dd.from_dict(data, npartitions=2)
     assert isinstance(ddf, dgd.DataFrame)
     dd.assert_eq(expect, ddf)
+
+
+def test_to_backend():
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        ddf = dd.from_dict(data, npartitions=2)
+        assert isinstance(ddf._meta, pd.DataFrame)
+
+        gdf = ddf.to_backend("cudf")
+        assert isinstance(gdf, dgd.DataFrame)
+        dd.assert_eq(cudf.DataFrame(data), ddf)
+
+        assert isinstance(gdf.to_backend()._meta, pd.DataFrame)
+
+
+def test_to_backend_kwargs():
+    data = {"x": [0, 2, np.nan, 3, 4, 5]}
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        dser = dd.from_dict(data, npartitions=2)["x"]
+        assert isinstance(dser._meta, pd.Series)
+
+        # Using `nan_as_null=False` will result in a cudf-backed
+        # Series with a NaN element (ranther than <NA>)
+        gser_nan = dser.to_backend("cudf", nan_as_null=False)
+        assert isinstance(gser_nan, dgd.Series)
+        assert np.isnan(gser_nan.compute()).sum() == 1
+
+        # Using `nan_as_null=True` will result in a cudf-backed
+        # Series with a <NA> element (ranther than NaN)
+        gser_null = dser.to_backend("cudf", nan_as_null=True)
+        assert isinstance(gser_null, dgd.Series)
+        assert np.isnan(gser_null.compute()).sum() == 0
+
+        # Check `nullable` argument for `cudf.Series.to_pandas`
+        dser_null = gser_null.to_backend("pandas", nullable=False)
+        assert dser_null.compute().dtype == "float"
+        dser_null = gser_null.to_backend("pandas", nullable=True)
+        assert isinstance(dser_null.compute().dtype, pd.Float64Dtype)
+
+        # Check unsupported arguments
+        with pytest.raises(ValueError, match="pandas-to-cudf"):
+            dser.to_backend("cudf", bad_arg=True)
+
+        with pytest.raises(ValueError, match="cudf-to-cudf"):
+            gser_null.to_backend("cudf", bad_arg=True)
+
+        with pytest.raises(ValueError, match="cudf-to-pandas"):
+            gser_null.to_backend("pandas", bad_arg=True)
 
 
 def test_from_cudf():
@@ -547,8 +600,6 @@ def test_unary_ops(func, gdf, gddf):
 
     # Fixed in https://github.com/dask/dask/pull/4657
     if isinstance(p, cudf.Index):
-        from packaging import version
-
         if version.parse(dask.__version__) < version.parse("1.1.6"):
             pytest.skip(
                 "dask.dataframe assert_eq index check hardcoded to "
