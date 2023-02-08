@@ -24,9 +24,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <stdexcept>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {

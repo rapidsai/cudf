@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <stdexcept>
 #include <strings/regex/regex.cuh>
 
 #include <cudf/column/column_factories.hpp>
@@ -28,6 +27,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {

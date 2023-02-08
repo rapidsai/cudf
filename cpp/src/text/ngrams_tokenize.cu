@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <stdexcept>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <nvtext/detail/tokenize.hpp>
@@ -39,6 +38,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
+
+#include <stdexcept>
 
 namespace nvtext {
 namespace detail {

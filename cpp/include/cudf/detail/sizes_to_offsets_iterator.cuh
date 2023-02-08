@@ -24,9 +24,10 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <stdexcept>
 #include <thrust/distance.h>
 #include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {

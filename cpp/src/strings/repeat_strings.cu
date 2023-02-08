@@ -29,13 +29,14 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <stdexcept>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {
