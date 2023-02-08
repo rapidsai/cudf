@@ -20,6 +20,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/strings/detail/split_utils.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
@@ -31,7 +32,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -44,7 +44,7 @@ namespace {
 enum class Dir { FORWARD, BACKWARD };
 
 /**
- * @brief Base class for delimiter-based tokenizers.
+ * @brief Base class for delimiter-based tokenizers
  *
  * These are common methods used by both split and rsplit tokenizer functors.
  */
@@ -62,75 +62,49 @@ struct base_split_tokenizer {
   __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
 
   /**
-   * @brief Initialize token elements for all strings.
-   *
-   * The process_tokens() only handles creating tokens for strings that contain
-   * delimiters. This function will initialize the output tokens for all
-   * strings by assigning null entries for null and empty strings and the
-   * string itself for strings with no delimiters.
-   *
-   * The tokens are placed in output order so that all tokens for each output
-   * column are stored consecutively in `d_all_tokens`.
-   *
-   * @param idx Index of string in column
-   * @param d_tokens_offsets Offsets to each string's tokens output
-   * @param d_all_tokens Tokens vector for all strings
-   */
-  __device__ void init_tokens(size_type idx,
-                              size_type const* d_tokens_offsets,
-                              string_index_pair* d_all_tokens) const
-  {
-    auto const d_tokens = d_all_tokens + d_tokens_offsets[idx];
-    if (is_valid(idx)) {
-      auto const d_str = get_string(idx);
-      // initialize pair to current string
-      *d_tokens = string_index_pair{d_str.data(), d_str.size_bytes()};
-    } else {
-      *d_tokens = string_index_pair{nullptr, 0};
-    }
-  }
-
-  /**
    * @brief This counts the tokens for strings that contain delimiters
    *
    * Counting tokens is the same regardless if counting from the left
    * or from the right. This logic counts from the left which is simpler
-   * logic.
+   * logic. The count will be truncated appropriately to the max_tokens value.
    *
-   * @param idx Index of a delimiter position
+   * @param idx Index of input string
    * @param d_positions Start positions of all the delimiters
-   * @param positions_count The number of delimiters
-   * @param d_indexes Indices of the strings for each delimiter
-   * @param d_counts The token counts for all the strings
+   * @param d_delimiter_offsets Offsets per string to delimiters in d_positions
+   * @param d_counts The token counts for each string
    */
-
   __device__ void count_tokens(size_type idx,
                                size_type const* d_positions,
-                               size_type positions_count,
-                               size_type const* d_indexes,
+                               size_type const* d_delimiter_offsets,
                                size_type* d_counts) const
   {
-    auto const str_idx = d_indexes[idx] - 1;  // adjust for upper_bound
-    if ((idx > 0) && (d_indexes[idx - 1] == (str_idx + 1))) return;
+    if (!is_valid(idx)) {
+      d_counts[idx] = 0;
+      return;
+    }
 
     auto const delim_length = d_delimiter.size_bytes();
-    auto const d_str        = get_string(str_idx);
-    auto const base_ptr     = get_base_ptr();
-    size_type delim_count   = 0;  // re-count delimiters to compute the token-count
-    size_type last_pos      = d_positions[idx] - delim_length;
-    while ((idx < positions_count) && (d_indexes[idx] == (str_idx + 1))) {
+    auto const d_str        = get_string(idx);
+    auto const d_str_end    = d_str.data() + d_str.size_bytes();
+    auto const base_ptr     = get_base_ptr() + delim_length - 1;
+    auto const delimiters   = d_positions + d_delimiter_offsets[idx];
+    auto const delim_count  = d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx];
+
+    // device_span<size_type>(delimiters, delim_count);
+
+    size_type token_count = 1;  // all strings will have at least one token
+    size_type last_pos    = delimiters[0] - delim_length;
+    for (size_type j = 0; j < delim_count; ++j) {
       // make sure the whole delimiter is inside the string before counting it
-      auto d_pos = d_positions[idx];
-      if (((base_ptr + d_pos + delim_length - 1) < (d_str.data() + d_str.size_bytes())) &&
-          ((d_pos - last_pos) >= delim_length)) {
-        ++delim_count;     // only count if the delimiter fits
-        last_pos = d_pos;  // overlapping delimiters are ignored too
+      auto const d_pos = delimiters[j];
+      // delimiter must fit in string && overlapping delimiters are ignored
+      if (((base_ptr + d_pos) < d_str_end) && ((d_pos - last_pos) >= delim_length)) {
+        ++token_count;
+        last_pos = d_pos;
       }
-      ++idx;
     }
-    // the number of tokens is delim_count+1 but capped to max_tokens
-    d_counts[str_idx] =
-      ((max_tokens > 0) && (delim_count + 1 > max_tokens)) ? max_tokens : delim_count + 1;
+    // number of tokens is capped to max_tokens
+    d_counts[idx] = ((max_tokens > 0) && (token_count > max_tokens)) ? max_tokens : token_count;
   }
 
   base_split_tokenizer(column_device_view const& d_strings,
@@ -189,34 +163,45 @@ struct split_tokenizer_fn : base_split_tokenizer {
   __device__ void process_tokens(size_type idx,
                                  size_type const* d_tokens_offsets,
                                  size_type const* d_positions,
-                                 size_type positions_count,
-                                 size_type const* d_indexes,
+                                 size_type const* d_delimiter_offsets,
                                  string_index_pair* d_all_tokens) const
   {
-    auto const str_idx = d_indexes[idx] - 1;  // adjust for upper_bound
-    if ((idx > 0) && d_indexes[idx - 1] == (str_idx + 1)) return;
+    auto const d_tokens = d_all_tokens + d_tokens_offsets[idx];  // this string's tokens output
+    if (!is_valid(idx)) {
+      *d_tokens = string_index_pair{nullptr, 0};
+      return;
+    }
 
-    // max_tokens already included in token-count
-    auto const token_count = d_tokens_offsets[str_idx + 1] - d_tokens_offsets[str_idx];
-    auto const base_ptr    = get_base_ptr();  // d_positions values are based on this ptr
-    auto const d_tokens = d_all_tokens + d_tokens_offsets[str_idx];  // this string's tokens output
-    // this string
-    auto const d_str   = get_string(str_idx);
-    auto str_ptr       = d_str.data();                  // beginning of the string
-    auto const str_end = str_ptr + d_str.size_bytes();  // end of the string
+    auto const d_str = get_string(idx);
+
+    // max_tokens already included in token counts
+    auto const token_count = d_tokens_offsets[idx + 1] - d_tokens_offsets[idx];
+    if (token_count == 1) {
+      *d_tokens = string_index_pair{d_str.data(), d_str.size_bytes()};
+      return;
+    }
+
+    auto const base_ptr    = get_base_ptr();                // d_positions values based on this
+    auto str_ptr           = d_str.data();                  // beginning of the string
+    auto const str_end     = str_ptr + d_str.size_bytes();  // end of the string
+    auto const delimiters  = d_positions + d_delimiter_offsets[idx];
+    auto const delim_count = d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx];
+
     // build the index-pair of each token for this string
     for (size_type col = 0; col < token_count; ++col) {
-      auto next_delim = ((idx + col) < positions_count)  // boundary check for delims in last string
-                          ? (base_ptr + d_positions[idx + col])  // start of next delimiter
-                          : str_end;                             // or end of this string
+      auto next_delim = (col < delim_count)  // boundary check for delims in last string
+                          ? (base_ptr + delimiters[col])  // start of next delimiter
+                          : str_end;                      // or end of this string
 
       auto eptr = (next_delim < str_end)          // make sure delimiter is inside this string
                       && (col + 1 < token_count)  // and this is not the last token
                     ? next_delim
                     : str_end;
+
       // store the token into the output vector
       d_tokens[col] =
         string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, eptr))};
+
       // setup for next token
       str_ptr = eptr + d_delimiter.size_bytes();
     }
@@ -231,12 +216,12 @@ struct split_tokenizer_fn : base_split_tokenizer {
 };
 
 /**
- * @brief The tokenizer functions for split().
+ * @brief The tokenizer functions for split_record
  *
- * The methods here count delimiters, tokens, and output token elements
+ * The methods here identify delimiters and output token elements
  * for each string in a strings column.
  *
- * Same as split_tokenizer_fn except tokens are counted from the end of each string.
+ * Same as split_tokenizer_fn except tokens are processed from the end of each string.
  */
 struct rsplit_tokenizer_fn : base_split_tokenizer {
   /**
@@ -259,52 +244,60 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * in which the delimiter resides.
    *
    * The tokens are processed from the end of each string so the `max_tokens`
-   * is honored correctly.
+   * and any overlapping delimiters are honored correctly.
    *
    * Each token is placed in `d_all_tokens` so they align consecutively
    * with other tokens for the same output column.
-   * That is, `d_tokens[col * strings_count + string_index]` is the token at column `col`
-   * for string at `string_index`.
    *
    * @param idx Index of the delimiter in the chars column
    * @param d_tokens_offsets Tokens offsets for each string
    * @param d_positions The ending byte position of each delimiter
-   * @param positions_count Number of delimiters
-   * @param d_indexes Indices of the strings for each delimiter
+   * @param d_delimiter_offsets Offsets to delimiters for each string within d_positions
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,
                                  size_type const* d_tokens_offsets,
                                  size_type const* d_positions,
-                                 size_type positions_count,
-                                 size_type const* d_indexes,
+                                 size_type const* d_delimiter_offsets,
                                  string_index_pair* d_all_tokens) const
   {
-    auto const str_idx = d_indexes[idx] - 1;  // adjust for upper_bound
-    if ((idx + 1 < positions_count) && d_indexes[idx + 1] == (str_idx + 1)) return;
+    auto const d_tokens = d_all_tokens + d_tokens_offsets[idx];  // this string's tokens output
+    if (!is_valid(idx)) {
+      *d_tokens = string_index_pair{nullptr, 0};
+      return;
+    }
 
-    // max_tokens already included in token-counts
-    auto const token_count = d_tokens_offsets[str_idx + 1] - d_tokens_offsets[str_idx];
+    auto const d_str = get_string(idx);
+
+    // max_tokens already included in token-count
+    auto const token_count = d_tokens_offsets[idx + 1] - d_tokens_offsets[idx];
+    if (token_count == 1) {
+      *d_tokens = string_index_pair{d_str.data(), d_str.size_bytes()};
+      return;
+    }
+
     auto const base_ptr    = get_base_ptr();  // d_positions values are based on this ptr
-    // this string's tokens output
-    auto const d_tokens = d_all_tokens + d_tokens_offsets[str_idx];
-    // this string
-    auto const d_str     = get_string(str_idx);
-    auto const str_begin = d_str.data();                    // beginning of the string
-    auto str_ptr         = str_begin + d_str.size_bytes();  // end of the string
+    auto const str_begin   = d_str.data();    // beginning of the string
+    auto const delimiters  = d_positions + d_delimiter_offsets[idx];
+    auto const delim_count = d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx];
+
     // build the index-pair of each token for this string
+    auto str_ptr = str_begin + d_str.size_bytes();  // end of the string
     for (size_type col = 0; col < token_count; ++col) {
-      auto prev_delim = (idx >= col)  // boundary check for delims in first string
-                          ? (base_ptr + d_positions[idx - col] + 1)  // end of prev delimiter
-                          : str_begin;                               // or the start of this string
+      auto prev_delim =
+        (col < delim_count)                                     // boundary check;
+          ? (base_ptr + delimiters[delim_count - 1 - col] + 1)  // end of prev delimiter
+          : str_begin;                                          // or the start of this string
 
       auto sptr = (prev_delim > str_begin)        // make sure delimiter is inside the string
                       && (col + 1 < token_count)  // and this is not the last token
                     ? prev_delim
                     : str_begin;
+
       // store the token into the output -- building the array backwards
       d_tokens[(token_count - 1 - col)] =
         string_index_pair{sptr, static_cast<size_type>(str_ptr - sptr)};
+
       // setup for next/prev token
       str_ptr = sptr - d_delimiter.size_bytes();
     }
@@ -356,86 +349,90 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                      });
 
   // create vector of every delimiter position in the chars column
-  rmm::device_uvector<size_type> delimiter_positions(delimiter_count, stream);
-  auto d_positions = delimiter_positions.data();
-  auto copy_end    = thrust::copy_if(rmm::exec_policy(stream),
-                                  thrust::make_counting_iterator<size_type>(0),
-                                  thrust::make_counting_iterator<size_type>(chars_bytes),
-                                  delimiter_positions.begin(),
-                                  [tokenizer, d_offsets, chars_bytes] __device__(size_type idx) {
-                                    return tokenizer.is_delimiter(idx, d_offsets, chars_bytes);
-                                  });
-
-  // create vector of string indices for each delimiter
-  rmm::device_uvector<size_type> string_indices(delimiter_count, stream);  // these will
-  auto d_string_indices = string_indices.data();  // be strings that only contain delimiters
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      d_offsets,
-                      d_offsets + strings_count,
-                      delimiter_positions.begin(),
-                      copy_end,
-                      string_indices.begin());
-
-  // compute the number of tokens per string
-  rmm::device_uvector<size_type> token_counts(strings_count, stream);
-  auto d_token_counts = token_counts.data();
-  // first, initialize token counts for strings without delimiters in them
-  thrust::transform(rmm::exec_policy(stream),
+  auto delimiter_positions = rmm::device_uvector<size_type>(delimiter_count, stream);
+  auto d_positions         = delimiter_positions.data();
+  auto const copy_end =
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_token_counts,
-                    [tokenizer] __device__(size_type idx) {
-                      // null are 0, all others 1
-                      return static_cast<size_type>(tokenizer.is_valid(idx));
+                    thrust::make_counting_iterator<size_type>(chars_bytes),
+                    delimiter_positions.begin(),
+                    [tokenizer, d_offsets, chars_bytes] __device__(size_type idx) {
+                      return tokenizer.is_delimiter(idx, d_offsets, chars_bytes);
                     });
 
-  // now compute the number of tokens in each string
+  // create a vector of offsets to each string's delimiter set within delimiter_positions
+  auto const delimiter_offsets = [&] {
+    // first, create a vector of string indices for each delimiter
+    auto string_indices   = rmm::device_uvector<size_type>(delimiter_count, stream);
+    auto d_string_indices = string_indices.data();  // strings that only contain delimiters
+    thrust::upper_bound(rmm::exec_policy(stream),
+                        d_offsets,
+                        d_offsets + strings_count,
+                        delimiter_positions.begin(),
+                        copy_end,
+                        string_indices.begin());
+
+    // compute delimiter offsets per string
+    auto delimiter_offsets   = rmm::device_uvector<size_type>(strings_count + 1, stream);
+    auto d_delimiter_offsets = delimiter_offsets.data();
+
+    // memset required to zero-out any null-entries or strings with no delimiters
+    cudaMemsetAsync(d_delimiter_offsets, 0, delimiter_offsets.size() * sizeof(size_type), stream);
+
+    // next, count the number of delimiters per string
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       delimiter_count,
+                       [d_string_indices, d_delimiter_offsets] __device__(size_type idx) {
+                         auto const str_idx = d_string_indices[idx] - 1;
+                         atomicAdd(d_delimiter_offsets + str_idx, 1);
+                       });
+    // finally, convert the counts into offsets
+    thrust::exclusive_scan(rmm::exec_policy(stream),
+                           delimiter_offsets.begin(),
+                           delimiter_offsets.end(),
+                           delimiter_offsets.begin());
+    return delimiter_offsets;
+  }();
+  auto const d_delimiter_offsets = delimiter_offsets.data();
+
+  auto token_counts   = rmm::device_uvector<size_type>(strings_count, stream);
+  auto d_token_counts = token_counts.data();
+
+  // compute the number of tokens per string
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
-    delimiter_count,
-    [tokenizer, d_positions, delimiter_count, d_string_indices, d_token_counts] __device__(
-      size_type idx) {
-      tokenizer.count_tokens(idx, d_positions, delimiter_count, d_string_indices, d_token_counts);
+    strings_count,
+    [tokenizer, d_positions, d_delimiter_offsets, d_token_counts] __device__(size_type idx) {
+      tokenizer.count_tokens(idx, d_positions, d_delimiter_offsets, d_token_counts);
     });
 
-  auto offsets      = std::get<0>(cudf::detail::make_offsets_child_column(
+  auto offsets = std::get<0>(cudf::detail::make_offsets_child_column(
     d_token_counts, d_token_counts + strings_count, stream, mr));
-  auto total_tokens = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
-
-  auto d_tokens_offsets = offsets->view().data<size_type>();
+  auto const total_tokens =
+    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
+  auto const d_tokens_offsets = offsets->view().data<size_type>();
 
   // create working area to hold all token positions
-  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
-  string_index_pair* d_tokens = tokens.data();
-  // initialize the token positions
-  // -- accounts for nulls, empty, and strings with no delimiter in them
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     [tokenizer, d_tokens_offsets, d_tokens] __device__(size_type idx) {
-                       tokenizer.init_tokens(idx, d_tokens_offsets, d_tokens);
-                     });
-
-  // get the positions for every token using the delimiter positions
+  auto tokens   = rmm::device_uvector<string_index_pair>(total_tokens, stream);
+  auto d_tokens = tokens.data();
+  // fill in the token objects
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
-    delimiter_count,
-    [tokenizer,
-     d_tokens_offsets,
-     d_positions,
-     delimiter_count,
-     d_string_indices,
-     d_tokens] __device__(size_type idx) {
-      tokenizer.process_tokens(
-        idx, d_tokens_offsets, d_positions, delimiter_count, d_string_indices, d_tokens);
+    strings_count,
+    [tokenizer, d_tokens_offsets, d_positions, d_delimiter_offsets, d_tokens] __device__(
+      size_type idx) {
+      tokenizer.process_tokens(idx, d_tokens_offsets, d_positions, d_delimiter_offsets, d_tokens);
     });
 
-  auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
+  // build strings column from tokens
+  auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
+
   return make_lists_column(strings_count,
                            std::move(offsets),
-                           std::move(strings_output),
+                           std::move(strings_child),
                            input.null_count(),
                            copy_bitmask(input.parent(), stream, mr),
                            stream,
