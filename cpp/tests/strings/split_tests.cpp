@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -305,6 +305,49 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"Héllo", "thesé  "}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{}},
                validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, SplitRecordLong)
+{
+  // TODO: create some more test-cases with larger delimiters which span string rows
+  std::vector<const char*> h_strings{
+    " Héllo, this is a réally long string to test the long-strings path in the split-record code "
+    "logic.",
+    nullptr,
+    "The long strings need to be extra long to average out above 64 bytes per string overall for "
+    "the entire column.  ",
+    "Thé éxtra challenge here is due to the empty or smaller strings which bring the average down.",
+    "Thisstringhasnodelimiterssoitcanbetestedtoreturnthissinglestringwhensplit-recordiscalled.",
+    "",
+    " "};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
+
+  auto result =
+    cudf::strings::split_record(cudf::strings_column_view(strings), cudf::string_scalar(" "));
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  // clang-format off
+   LCW expected(
+    {LCW{
+      "","Héllo,","this","is","a","réally","long","string","to","test","the",
+         "long-strings","path","in","the","split-record","code","logic."},
+     LCW{},
+     LCW{"The","long","strings","need","to","be","extra","long","to","average","out","above",
+         "64","bytes","per","string","overall","for","the","entire","column.","",""},
+     LCW{
+      "Thé","éxtra","challenge","here","is","due","to","the","empty","or","smaller","strings",
+      "which","bring","the","average","down."},
+     LCW{"Thisstringhasnodelimiterssoitcanbetestedtoreturnthissinglestringwhensplit-recordiscalled."},
+     LCW{""},
+     LCW{"", ""}},
+    validity);
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  result =
+    cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar(" "));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
