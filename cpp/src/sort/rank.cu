@@ -55,21 +55,40 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
 {
   auto const t_input    = table_view{{input_col}};
   auto const comparator = cudf::experimental::row::equality::self_comparator{t_input, stream};
-  auto const device_comparator = comparator.equal_to(nullate::DYNAMIC{has_nested_nulls(t_input)});
 
   auto const sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
-  auto conv = [permute = sorted_index_order, device_comparator] __device__(size_type index) {
-    return static_cast<size_type>(index == 0 ||
-                                  not device_comparator(permute[index], permute[index - 1]));
-  };
-  auto const unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
   auto const input_size = input_col.size();
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
 
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
+  if (cudf::detail::has_nested_columns(t_input)) {
+    auto const device_comparator =
+      comparator.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(t_input)});
+
+    auto conv = [permute = sorted_index_order, device_comparator] __device__(size_type index) {
+      return static_cast<size_type>(index == 0 ||
+                                    not device_comparator(permute[index], permute[index - 1]));
+    };
+    auto const unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
+
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
+
+  } else {
+    auto const device_comparator =
+      comparator.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(t_input)});
+
+    auto conv = [permute = sorted_index_order, device_comparator] __device__(size_type index) {
+      return static_cast<size_type>(index == 0 ||
+                                    not device_comparator(permute[index], permute[index - 1]));
+    };
+    auto const unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
+
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
+  }
+
   return dense_rank_sorted;
 }
 
