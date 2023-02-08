@@ -33,6 +33,8 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns = []
 
+copybutton_prompt_text = ">>> "
+
 # Enable automatic generation of systematic, namespaced labels for sections
 myst_heading_anchors = 2
 
@@ -43,6 +45,7 @@ myst_heading_anchors = 2
 html_theme = "pydata_sphinx_theme"
 html_logo = "_static/RAPIDS-logo-purple.png"
 htmlhelp_basename = "dask-cudfdoc"
+html_use_modindex = True
 
 html_static_path = ["_static"]
 
