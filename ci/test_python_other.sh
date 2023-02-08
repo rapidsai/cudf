@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 source "$(dirname "$0")/test_python_common.sh"
