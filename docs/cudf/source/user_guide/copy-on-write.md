@@ -8,6 +8,7 @@ However, when either the existing or new object is _modified_, a copy of the dat
 This behavior is best understood by looking at the examples below.
 
 The default behaviour in cuDF is for copy-on-write to be disabled, so to use it, one must explicitly opt in by setting a cuDF option. This can be done operation by operation if this is required, but the most common use case is to enable copy-on-write for the duration of a script.
+
 ## Enabling copy-on-write
 
 1. Use `cudf.set_option`:
@@ -84,17 +85,6 @@ dtype: int64
 
 When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cuDF will always trigger a copy and will not modify the original object.
 
-### Explicit deep and shallow copies comparison
-
-
-|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
-| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
-
-
-## Advantages
-
 1. Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
 
 ```python
@@ -170,3 +160,12 @@ dtype: int64
 dtype: int64
 ```
 2. There are numerous other inconsistencies, which are solved by copy-on-write. Read more about them [here](https://phofl.github.io/cow-introduction.html).
+
+
+### Explicit deep and shallow copies comparison
+
+
+|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
+| `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |
