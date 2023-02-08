@@ -4263,8 +4263,8 @@ public final class Table implements AutoCloseable {
      * @param type the type of hash to use. Depending on the type of hash different restrictions
      *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
      *             besides IDENTITY and MURMUR3.
-     * @param numberOfPartitions - number of partitions to use
-     * @param seed - the seed of hash algorithm
+     * @param numberOfPartitions number of partitions to use
+     * @param seed the seed value for hashing
      * @return Table that exposes a limited functionality of the
      * {@link Table} class
      */
