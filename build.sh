@@ -315,8 +315,8 @@ if buildAll || hasArg libcudf; then
            LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
            MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
         fi
-        BMR_DIR=${GITHUB_WORKSPACE:-"${LIB_BUILD_DIR}"}
-        echo "$BMR_DIR"
+        BMR_DIR=${RAPIDS_BMR_DIR:-"${LIB_BUILD_DIR}"}
+        echo "Metrics build dir: [$BMR_DIR]"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${BMR_DIR}/ninja_log.html
         cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
     fi
