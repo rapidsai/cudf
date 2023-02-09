@@ -6732,17 +6732,6 @@ public class ColumnVectorTest extends CudfTestBase {
     assertFalse(colWithEmptyNulls.hasNonEmptyNulls());
   }
 
-  /**
-   * Since ColumnView#mayHaveNonEmptyNulls is a non-deterministic method, this test is only here to
-   * make sure we have piped everything correctly. Cudf already should have tests for this
-   */
-  @Test
-  void testMayHaveNonEmptyNulls() {
-    ColumnView colWithNonEmptyNulls = getColumnViewWithNonEmptyNulls();
-    assertTrue(colWithNonEmptyNulls.mayHaveNonEmptyNulls() ||
-        colWithNonEmptyNulls.hasNonEmptyNulls());
-  }
-
   @Test
   void testPurgeNonEmptyNullsStruct() {
     ColumnView listCol = getColumnViewWithNonEmptyNulls();

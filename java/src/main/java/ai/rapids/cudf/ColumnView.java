@@ -5010,26 +5010,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Whether the column or its descendants have non-empty null rows
    */
   public boolean hasNonEmptyNulls() {
-    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
     return hasNonEmptyNulls(viewHandle);
-  }
-
-  /**
-   * Approximates if a column or its descendants *may* have non-empty null elements
-   * Compared to the exact `has_nonempty_nulls()` function, this function is typically
-   * more efficient.
-   *
-   * Complexity:
-   * - Best case: `O(count_descendants(input))`
-   * - Worst case: `O(count_descendants(input)) * m`, where `m` is the number of rows in the largest
-   * descendant
-   *
-   * @return true, if either the column or its descendants MIGHT have null rows
-   *         false, if neither the column nor its descendants have null rows
-   */
-  public boolean mayHaveNonEmptyNulls() {
-    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
-    return mayHaveNonEmptyNulls(viewHandle);
   }
 
   /**
@@ -5053,7 +5034,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new column with equivalent contents to `input`, but with null rows purged
    */
   public ColumnVector purgeNonEmptyNulls() {
-    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
     return new ColumnVector(purgeNonEmptyNulls(viewHandle));
   }
 }
