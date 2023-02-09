@@ -355,32 +355,25 @@ TEST_F(ListLowerBound, ListWithNulls)
 {
   {
     using lcw = cudf::test::lists_column_wrapper<double>;
-    using cudf::test::iterators::nulls_at;
-    lcw col1{
+    auto const haystack = lcw{
       lcw{-3.45967821e+12},  // 0
       lcw{-3.6912186e-32},   // 1
       lcw{9.721175},         // 2
     };
 
-    lcw val1{
-      lcw{{0, 4.22671e+32}, nulls_at({0})},
+    auto const needles = lcw{
+      lcw{{0, 4.22671e+32}, null_at(0)},
     };
 
-    cudf::table_view input{{col1}};
-    cudf::table_view values{{val1}};
-    std::vector<cudf::order> column_order{cudf::order::ASCENDING};
-    std::vector<cudf::null_order> null_order_flags{cudf::null_order::BEFORE};
-
-    auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0};
-    auto result = cudf::lower_bound(input, values, column_order, null_order_flags);
+    auto const expect = int32s_col{0};
+    auto const result = cudf::lower_bound(cudf::table_view{{haystack}}, cudf::table_view{{needles}}, {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
   }
 
   {
     using lcw = cudf::test::lists_column_wrapper<int32_t, int32_t>;
-    using cudf::test::iterators::nulls_at;
-    lcw col1{
-      lcw{{0}, nulls_at({0})},  // 0
+    auto const col1 = lcw{
+      lcw{{0}, null_at(0)},  // 0
       lcw{-80},                 // 1
       lcw{-17},                 // 2
     };
@@ -405,8 +398,8 @@ TEST_F(ListLowerBound, ListWithNulls)
     std::vector<cudf::null_order> null_order_flags{cudf::null_order::BEFORE,
                                                    cudf::null_order::BEFORE};
 
-    auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{3};
-    auto result = cudf::lower_bound(input, values, column_order, null_order_flags);
+    auto const expect = int32s_col{3};
+    auto const result = cudf::lower_bound(input, values, column_order, null_order_flags);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
   }
 }
