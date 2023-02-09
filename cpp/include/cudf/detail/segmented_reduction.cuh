@@ -145,10 +145,10 @@ void segmented_reduce(InputIterator d_in,
                       size_type* d_valid_counts,
                       rmm::cuda_stream_view stream)
 {
-  using OutputType         = typename thrust::iterator_value<OutputIterator>::type;
-  using IntermediateType   = typename thrust::iterator_value<InputIterator>::type;
-  auto num_segments        = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end));
-  auto const binary_op     = op.get_binary_op();
+  using OutputType       = typename thrust::iterator_value<OutputIterator>::type;
+  using IntermediateType = typename thrust::iterator_value<InputIterator>::type;
+  auto num_segments      = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
+  auto const binary_op   = op.get_binary_op();
   auto const initial_value = op.template get_identity<IntermediateType>();
 
   rmm::device_uvector<IntermediateType> intermediate_result{static_cast<std::size_t>(num_segments),
