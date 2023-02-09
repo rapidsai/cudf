@@ -1237,6 +1237,43 @@ TYPED_TEST(SegmentedReductionFixedPointTest, Sum)
   }
 }
 
+TYPED_TEST(SegmentedReductionFixedPointTest, Product)
+{
+  using RepType = cudf::device_storage_type_t<TypeParam>;
+
+  auto const offsets = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto const d_offsets =
+    cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
+  auto const agg = cudf::make_product_aggregation<cudf::segmented_reduce_aggregation>();
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input =
+      cudf::test::fixed_point_column_wrapper<RepType>({-10, 1, 33, 12, XXX, 53, 11, XXX, XXX, XXX},
+                                                      {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+                                                      numeric::scale_type{scale});
+    auto out_type = cudf::column_view(input).type();
+    auto result =
+      cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);
+    auto expect = cudf::test::fixed_point_column_wrapper<RepType>(
+      {-330, XXX, 11, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale * 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+
+    result = cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::EXCLUDE);
+    expect = cudf::test::fixed_point_column_wrapper<RepType>(
+      {-330, 636, 11, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}, numeric::scale_type{scale * 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+
+    input = cudf::test::fixed_point_column_wrapper<RepType>(
+      {-10, 1, 33, 12, 123, 53, 11, 0, -120, 88}, numeric::scale_type{scale});
+    expect = cudf::test::fixed_point_column_wrapper<RepType>(
+      {-330, 78228, 11, 0, -10560, XXX}, {1, 1, 1, 1, 1, 0}, numeric::scale_type{scale * 3});
+    result = cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+    result = cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::EXCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+}
+
 TYPED_TEST(SegmentedReductionFixedPointTest, SumOfSquares)
 {
   using RepType = cudf::device_storage_type_t<TypeParam>;
