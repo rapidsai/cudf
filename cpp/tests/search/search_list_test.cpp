@@ -382,17 +382,17 @@ TEST_F(ListLowerBound, ListWithNulls)
       lcw{-17},              // 2
     };
 
-    lcw col2{
+    auto const col2 = lcw{
       lcw{27},               // 0
       lcw{{0}, null_at(0)},  // 1
       lcw{},                 // 2
     };
 
-    lcw val1{
+    auto const val1 = lcw{
       lcw{87},
     };
 
-    lcw val2{
+    auto const val2 = lcw{
       lcw{},
     };
 
