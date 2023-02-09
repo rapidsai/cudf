@@ -86,11 +86,12 @@ enum class Encoding : uint8_t {
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
   RLE                     = 3,
-  BIT_PACKED              = 4,
+  BIT_PACKED              = 4,  // Deprecated
   DELTA_BINARY_PACKED     = 5,
   DELTA_LENGTH_BYTE_ARRAY = 6,
   DELTA_BYTE_ARRAY        = 7,
   RLE_DICTIONARY          = 8,
+  BYTE_STREAM_SPLIT       = 9,
 };
 
 /**
