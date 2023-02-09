@@ -6,7 +6,6 @@ import pickle
 import warnings
 from functools import cached_property
 from itertools import chain
-from math import ceil
 from types import SimpleNamespace
 from typing import (
     Any,
