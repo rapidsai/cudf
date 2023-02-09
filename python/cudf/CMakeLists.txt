@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -14,9 +14,11 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(cudf_version 22.12.01)
+set(cudf_version 23.02.00)
 
 include(../../fetch_rapids.cmake)
+include(rapids-cuda)
+rapids_cuda_init_architectures(cudf-python)
 
 project(
   cudf-python
@@ -25,7 +27,7 @@ project(
             # language to be enabled here. The test project that is built in scikit-build to verify
             # various linking options for the python library is hardcoded to build with C, so until
             # that is fixed we need to keep C.
-            C CXX
+            C CXX CUDA
 )
 
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
@@ -71,7 +73,7 @@ include(rapids-cython)
 
 if(NOT cudf_FOUND)
   # TODO: This will not be necessary once we upgrade to CMake 3.22, which will pull in the required
-  # languages for the C++ project even if this project does not require those languges.
+  # languages for the C++ project even if this project does not require those languages.
   include(rapids-cuda)
   rapids_cuda_init_architectures(cudf-python)
   enable_language(CUDA)
@@ -117,6 +119,7 @@ endif()
 rapids_cython_init()
 
 add_subdirectory(cudf/_lib)
+add_subdirectory(udf_cpp/groupby)
 
 include(cmake/Modules/ProtobufHelpers.cmake)
 codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)

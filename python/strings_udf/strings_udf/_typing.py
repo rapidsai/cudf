@@ -1,26 +1,19 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import operator
 
-import llvmlite.binding as ll
 import numpy as np
 from numba import types
-from numba.core.datamodel import default_manager
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.cuda.cudadrv import nvvm
 
-data_layout = nvvm.data_layout
+import rmm
+from cudf.core.udf.utils import _get_extensionty_size
 
 # libcudf size_type
 size_type = types.int32
-
-# workaround for numba < 0.56
-if isinstance(data_layout, dict):
-    data_layout = data_layout[64]
-target_data = ll.create_target_data(data_layout)
 
 
 # String object definitions
@@ -30,8 +23,7 @@ class UDFString(types.Type):
 
     def __init__(self):
         super().__init__(name="udf_string")
-        llty = default_manager[self].get_value_type()
-        self.size_bytes = llty.get_abi_size(target_data)
+        self.size_bytes = _get_extensionty_size(self)
 
     @property
     def return_type(self):
@@ -44,8 +36,7 @@ class StringView(types.Type):
 
     def __init__(self):
         super().__init__(name="string_view")
-        llty = default_manager[self].get_value_type()
-        self.size_bytes = llty.get_abi_size(target_data)
+        self.size_bytes = _get_extensionty_size(self)
 
     @property
     def return_type(self):
@@ -112,7 +103,9 @@ class StrViewArgHandler:
         if isinstance(ty, types.CPointer) and isinstance(
             ty.dtype, (StringView, UDFString)
         ):
-            return types.uint64, val.ptr
+            return types.uint64, val.ptr if isinstance(
+                val, rmm._lib.device_buffer.DeviceBuffer
+            ) else val.get_ptr(mode="read")
         else:
             return ty, val
 
@@ -151,20 +144,6 @@ def register_stringview_binaryop(op, retty):
                 return nb_signature(retty, string_view, string_view)
 
     cuda_decl_registry.register_global(op)(StringViewBinaryOp)
-
-
-register_stringview_binaryop(operator.eq, types.boolean)
-register_stringview_binaryop(operator.ne, types.boolean)
-register_stringview_binaryop(operator.lt, types.boolean)
-register_stringview_binaryop(operator.gt, types.boolean)
-register_stringview_binaryop(operator.le, types.boolean)
-register_stringview_binaryop(operator.ge, types.boolean)
-
-# st in other
-register_stringview_binaryop(operator.contains, types.boolean)
-
-# st + other
-register_stringview_binaryop(operator.add, udf_string)
 
 
 def create_binary_attr(attrname, retty):
@@ -212,12 +191,24 @@ class StringViewCount(AbstractTemplate):
         return nb_signature(size_type, string_view, recvr=self.this)
 
 
+class StringViewReplace(AbstractTemplate):
+    key = "StringView.replace"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            udf_string, string_view, string_view, recvr=self.this
+        )
+
+
 @cuda_decl_registry.register_attr
 class StringViewAttrs(AttributeTemplate):
     key = string_view
 
     def resolve_count(self, mod):
         return types.BoundFunction(StringViewCount, string_view)
+
+    def resolve_replace(self, mod):
+        return types.BoundFunction(StringViewReplace, string_view)
 
 
 # Build attributes for `MaskedType(string_view)`
@@ -272,3 +263,16 @@ for func in string_unary_funcs:
     )
 
 cuda_decl_registry.register_attr(StringViewAttrs)
+
+register_stringview_binaryop(operator.eq, types.boolean)
+register_stringview_binaryop(operator.ne, types.boolean)
+register_stringview_binaryop(operator.lt, types.boolean)
+register_stringview_binaryop(operator.gt, types.boolean)
+register_stringview_binaryop(operator.le, types.boolean)
+register_stringview_binaryop(operator.ge, types.boolean)
+
+# st in other
+register_stringview_binaryop(operator.contains, types.boolean)
+
+# st + other
+register_stringview_binaryop(operator.add, udf_string)

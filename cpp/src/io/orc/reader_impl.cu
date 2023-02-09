@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <rmm/device_scalar.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -309,15 +310,10 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   }
   compinfo.host_to_device(stream);
 
-  // Workaround for ZSTD. It is possible to have compression ratios > 2048:1,
-  // so the heuristic in gpuParseCompressedStripeData() to estimate the size for
-  // small blocks can be too low. Disable the estimation for ZSTD.
-  auto allow_block_size_estimate = (decompressor.compression() != compression_type::ZSTD);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor.GetBlockSize(),
                                  decompressor.GetLog2MaxCompressionRatio(),
-                                 allow_block_size_estimate,
                                  stream);
   compinfo.device_to_host(stream, true);
 
@@ -369,7 +365,6 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                  compinfo.size(),
                                  decompressor.GetBlockSize(),
                                  decompressor.GetLog2MaxCompressionRatio(),
-                                 allow_block_size_estimate,
                                  stream);
 
   // Dispatch batches of blocks to decompress
@@ -641,6 +636,7 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
     update_null_mask(chunks, out_buffers, stream, _mr);
   }
 
+  rmm::device_scalar<size_type> error_count(0, stream);
   // Update the null map for child columns
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
@@ -652,8 +648,12 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                            row_groups.size().first,
                            row_index_stride,
                            level,
+                           error_count.data(),
                            stream);
-  chunks.device_to_host(stream, true);
+  chunks.device_to_host(stream);
+  // `value` synchronizes
+  auto const num_errors = error_count.value(stream);
+  CUDF_EXPECTS(num_errors == 0, "ORC data decode failed");
 
   std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
     out_buffers[col_idx].null_count() =
@@ -887,7 +887,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
                    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
-                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream, _mr);
+                   return make_column(col_buffer, &schema_info.back(), std::nullopt, stream);
                  });
 }
 
@@ -1018,7 +1018,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       memset(chunks.base_host_ptr(), 0, chunks.memory_size());
 
       const bool use_index =
-        (_use_index == true) &&
+        _use_index &&
         // Do stripes have row group index
         _metadata.is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
@@ -1101,8 +1101,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
                   offset, len);
               CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-              CUDF_CUDA_TRY(cudaMemcpyAsync(
-                d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+              CUDF_CUDA_TRY(
+                cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, stream.value()));
               stream.synchronize();
             }
           }
@@ -1282,13 +1282,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   if (out_columns.empty()) {
     create_columns(std::move(out_buffers), out_columns, schema_info, stream);
   }
-
-  // Return column names (must match order of returned columns)
-  out_metadata.column_names.reserve(schema_info.size());
-  std::transform(schema_info.cbegin(),
-                 schema_info.cend(),
-                 std::back_inserter(out_metadata.column_names),
-                 [](auto info) { return info.name; });
 
   out_metadata.schema_info = std::move(schema_info);
 

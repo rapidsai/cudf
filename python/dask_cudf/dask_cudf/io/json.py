@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -27,7 +27,7 @@ def read_json(url_path, engine="auto", **kwargs):
         this value will be used as the underlying function used to create
         each partition from JSON data. The default value is "auto", so
         that ``engine=partial(cudf.read_json, engine="auto")`` will be
-        pased to ``dask.dataframe.read_json`` by default.
+        passed to ``dask.dataframe.read_json`` by default.
     **kwargs :
         Key-word arguments to pass through to ``dask.dataframe.read_json``.
 
@@ -49,7 +49,7 @@ def read_json(url_path, engine="auto", **kwargs):
 
     Load nested JSON data
 
-    >>> read_json('myfile.json', engine='cudf_experimental')  # doctest: +SKIP
+    >>> read_json('myfile.json')  # doctest: +SKIP
 
     See Also
     --------

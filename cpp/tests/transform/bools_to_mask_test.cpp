@@ -31,14 +31,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
   {
     cudf::test::fixed_width_column_wrapper<bool> input_column(
       input.begin(), input.end(), val.begin());
-    std::transform(
-      val.begin(), val.end(), input.begin(), input.begin(), [](bool val, bool element) {
-        if (val == false) {
-          return false;
-        } else {
-          return element;
-        }
-      });
+    std::transform(val.begin(), val.end(), input.begin(), input.begin(), std::logical_and<bool>());
 
     auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 

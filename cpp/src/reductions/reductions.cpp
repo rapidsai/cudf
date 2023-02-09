@@ -70,18 +70,22 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg._ddof, stream, mr);
       }
       case aggregation::MEDIAN: {
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
-        auto col_ptr =
-          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream);
+        auto col_ptr = quantile(
+          col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const&>(agg);
         CUDF_EXPECTS(quantile_agg._quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto current_mr = rmm::mr::get_current_device_resource();
+        auto sorted_indices =
+          sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
         auto valid_sorted_indices =
           split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
@@ -90,7 +94,8 @@ struct reduce_dispatch_functor {
                                 quantile_agg._interpolation,
                                 valid_sorted_indices,
                                 true,
-                                stream);
+                                stream,
+                                current_mr);
         return get_element(*col_ptr, 0, stream, mr);
       }
       case aggregation::NUNIQUE: {
@@ -153,25 +158,30 @@ std::unique_ptr<scalar> reduce(
     CUDF_FAIL(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
   }
-  // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
-  // handcraft the default scalar with input column.
+
+  // Returns default scalar if input column is empty or all null
   if (col.size() <= col.null_count()) {
     if (agg.kind == aggregation::TDIGEST || agg.kind == aggregation::MERGE_TDIGEST) {
       return tdigest::detail::make_empty_tdigest_scalar(stream);
     }
-    if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+
+    if (output_dtype.id() == type_id::LIST) {
+      if (col.type() == output_dtype) { return make_empty_scalar_like(col, stream, mr); }
       // Under some circumstance, the output type will become the List of input type,
       // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
-      if (output_dtype.id() == type_id::LIST) {
-        auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
-        scalar->set_valid_async(false, stream);
-        return scalar;
-      }
-
-      return make_default_constructed_scalar(output_dtype, stream, mr);
+      auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
+      scalar->set_valid_async(false, stream);
+      return scalar;
     }
+    if (output_dtype.id() == type_id::STRUCT) { return make_empty_scalar_like(col, stream, mr); }
 
-    return make_empty_scalar_like(col, stream, mr);
+    auto result = make_default_constructed_scalar(output_dtype, stream, mr);
+    if (agg.kind == aggregation::ANY || agg.kind == aggregation::ALL) {
+      // empty input should return false for ANY and return true for ALL
+      dynamic_cast<numeric_scalar<bool>*>(result.get())
+        ->set_value(agg.kind == aggregation::ALL, stream);
+    }
+    return result;
   }
 
   return aggregation_dispatcher(

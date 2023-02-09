@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 import os
 import re
@@ -17,7 +17,7 @@ extras_require = {
 }
 
 
-def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
+def get_cuda_version_from_header(cuda_include_dir, delimiter=""):
 
     cuda_version = None
 
@@ -32,7 +32,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
     cuda_version = int(cuda_version.split()[2])
     return "%d%s%d" % (
         cuda_version // 1000,
-        delimeter,
+        delimiter,
         (cuda_version % 1000) // 10,
     )
 
@@ -69,6 +69,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     packages=find_packages(include=["strings_udf", "strings_udf.*"]),
     package_data={

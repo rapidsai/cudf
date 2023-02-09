@@ -615,7 +615,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   CUDF_EXPECTS(
     values.num_children() == 2,
     "Input to `groupby correlation` must be a structs column having 2 children columns.");
-  CUDF_EXPECTS(values.nullable() == false,
+  CUDF_EXPECTS(not values.nullable(),
                "Input to `groupby correlation` must be a non-nullable structs column.");
 
   auto const& corr_agg = dynamic_cast<cudf::detail::correlation_aggregation const&>(agg);

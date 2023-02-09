@@ -339,15 +339,15 @@ def test_series_different_type_cases(dtype, check_exact, check_dtype):
 
 
 @pytest.mark.parametrize(
-    "index",
-    [cudf.Int8Index, cudf.Int16Index, cudf.Int32Index, cudf.Int64Index],
+    "dtype",
+    ["int8", "int16", "int32", "int64"],
 )
 @pytest.mark.parametrize("exact", ["equiv", True, False])
-def test_range_index_and_int_index_eqaulity(index, exact):
+def test_range_index_and_int_index_eqaulity(dtype, exact):
     pidx1 = pd.RangeIndex(0, stop=5, step=1)
     pidx2 = pd.Index([0, 1, 2, 3, 4])
     idx1 = cudf.from_pandas(pidx1)
-    idx2 = index([0, 1, 2, 3, 4])
+    idx2 = cudf.Index([0, 1, 2, 3, 4], dtype=dtype)
 
     kind = None
     try:

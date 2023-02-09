@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 #########################################
 # cuDF GPU build and test script for CI #
 #########################################
@@ -40,7 +40,7 @@ export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2022.11.1"
+export DASK_STABLE_VERSION="2023.1.1"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?

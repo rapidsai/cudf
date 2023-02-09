@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -16,6 +16,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
+from cudf.core._compat import PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -74,8 +75,7 @@ def make_numpy_mixed_dataframe():
     )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    # Category is not yet supported from libcudf
-    # df["Category"] = np.array(["M", "F", "F", "F"])
+    df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df
@@ -269,34 +269,22 @@ def test_csv_reader_mixed_data_delimiter_sep(
 
     gdf1 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        # dtype=[
-        #    "int64", "date", "float64", "int64", "category", "str", "bool"
-        # ],
-        names=["1", "2", "3", "4", "5", "6"],
-        dtype=["int64", "date", "float64", "uint64", "str", "bool"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
+        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
 
     pdf = pd.read_csv(
         fname,
-        # Category is not yet supported from libcudf
-        # names=["1", "2", "3", "4", "5", "6", "7"],
-        names=["1", "2", "3", "4", "5", "6"],
+        names=["1", "2", "3", "4", "5", "6", "7"],
         parse_dates=[1],
         dayfirst=True,
         **pandas_arg,
@@ -834,10 +822,9 @@ def test_csv_reader_bools_NA():
     expected = pd.DataFrame(
         {
             "text": ["true", "false", "foo", "bar", "qux"],
-            "int": [1, 0, 1, 0, 0],
+            "int": [1.0, 0.0, 1.0, 0.0, np.nan],
         }
     )
-    # breaking behaviour is np.nan for qux
     assert_eq(df, expected)
 
 
@@ -1076,7 +1063,7 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
 
 def test_csv_reader_arrow_nativefile(path_or_buf):
     # Check that we can read a file opened with the
-    # Arrow FileSystem inferface
+    # Arrow FileSystem interface
     expect = cudf.read_csv(path_or_buf("filepath"))
     fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
     with fs.open_input_file(path) as fil:
@@ -1367,7 +1354,10 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/rapidsai/cudf/issues/10618",
+)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1647,7 +1637,7 @@ def test_csv_writer_numeric_data(dtype, nelem, tmpdir):
 
     df = make_numeric_dataframe(nelem, dtype)
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -1664,7 +1654,7 @@ def test_csv_writer_datetime_data(tmpdir):
 
     df = make_datetime_dataframe()
     gdf = cudf.from_pandas(df)
-    df.to_csv(path_or_buf=pdf_df_fname, index=False, line_terminator="\n")
+    df.to_csv(path_or_buf=pdf_df_fname, index=False, lineterminator="\n")
     gdf.to_csv(path_or_buf=gdf_df_fname, index=False)
 
     assert os.path.exists(pdf_df_fname)
@@ -2043,19 +2033,27 @@ def test_csv_writer_category(df):
     assert expected == actual
 
 
-def test_csv_reader_category_error():
-    # TODO: Remove this test once following
-    # issue is fixed: https://github.com/rapidsai/cudf/issues/3960
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "category",
+        {"a": "category", "b": "str"},
+        {"b": "category"},
+        {"a": "category"},
+        {"a": pd.CategoricalDtype([1, 2])},
+        {"b": pd.CategoricalDtype([1, 2, 3])},
+        {"b": pd.CategoricalDtype(["b", "a"]), "a": "str"},
+        pd.CategoricalDtype(["a", "b"]),
+    ],
+)
+def test_csv_reader_category(dtype):
+    df = cudf.DataFrame({"a": [1, 2, 3, None], "b": ["a", "b", None, "c"]})
     csv_buf = df.to_csv()
 
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape(
-            "CategoricalDtype as dtype is not yet " "supported in CSV reader"
-        ),
-    ):
-        cudf.read_csv(StringIO(csv_buf), dtype="category")
+    actual = cudf.read_csv(StringIO(csv_buf), dtype=dtype)
+    expected = pd.read_csv(StringIO(csv_buf), dtype=dtype)
+
+    assert_eq(expected, actual, check_dtype=True)
 
 
 def test_csv_writer_datetime_sep():
@@ -2098,7 +2096,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": "abc"}),
         rfunc_args_and_kwargs=([], {"sep": "abc"}),
-        expected_error_message='"sep" must be a 1-character string',
     )
 
     assert_exceptions_equal(
@@ -2106,7 +2103,6 @@ def test_csv_sep_error():
         rfunc=gdf.to_csv,
         lfunc_args_and_kwargs=([], {"sep": 1}),
         rfunc_args_and_kwargs=([], {"sep": 1}),
-        expected_error_message='"sep" must be string, not int',
     )
 
 

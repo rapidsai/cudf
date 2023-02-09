@@ -5,11 +5,8 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
 from tlz import partition_all
 
-import dask
-import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
@@ -29,12 +26,6 @@ from cudf.utils.utils import _dask_cudf_nvtx_annotate
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
 from dask_cudf.sorting import _get_shuffle_type
-
-DASK_BACKEND_SUPPORT = parse_version(dask.__version__) >= parse_version(
-    "2022.10.0"
-)
-# TODO: Remove DASK_BACKEND_SUPPORT throughout codebase
-# when dask_cudf is pinned to dask>=2022.10.0
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -283,29 +274,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _naive_var(self, meta, skipna, ddof, split_every, out)
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
-
-    @_dask_cudf_nvtx_annotate
-    def repartition(self, *args, **kwargs):
-        """Wraps dask.dataframe DataFrame.repartition method.
-        Uses DataFrame.shuffle if `columns=` is specified.
-        """
-        # TODO: Remove this function in future(0.17 release)
-        columns = kwargs.pop("columns", None)
-        if columns:
-            warnings.warn(
-                "The columns argument will be removed from repartition in "
-                "future versions of dask_cudf. Use DataFrame.shuffle().",
-                FutureWarning,
-            )
-            warnings.warn(
-                "Rearranging data by column hash. Divisions will lost. "
-                "Set ignore_index=False to preserve Index values."
-            )
-            ignore_index = kwargs.pop("ignore_index", True)
-            return self.shuffle(
-                on=columns, ignore_index=ignore_index, **kwargs
-            )
-        return super().repartition(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, shuffle=None, **kwargs):

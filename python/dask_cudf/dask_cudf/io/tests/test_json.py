@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import os
 
@@ -12,10 +12,6 @@ from dask.utils import tmpfile
 import dask_cudf
 
 
-@pytest.mark.skipif(
-    not dask_cudf.core.DASK_BACKEND_SUPPORT,
-    reason="No backend-dispatch support",
-)
 def test_read_json_backend_dispatch(tmp_path):
     # Test ddf.read_json cudf-backend dispatch
     df1 = dask.datasets.timeseries(
@@ -73,8 +69,8 @@ def test_read_json_lines(lines):
         dd.assert_eq(actual, actual_pd)
 
 
-def test_read_json_nested_experimental(tmp_path):
-    # Check that `engine="cudf_experimental"` can
+def test_read_json_nested(tmp_path):
+    # Check that `engine="cudf"` can
     # be used to support nested data
     df = pd.DataFrame(
         {
@@ -86,6 +82,13 @@ def test_read_json_nested_experimental(tmp_path):
     kwargs = dict(orient="records", lines=True)
     with tmp_path / "data.json" as f:
         df.to_json(f, **kwargs)
-        actual = dask_cudf.read_json(f, engine="cudf_experimental", **kwargs)
+        # Ensure engine='cudf' is tested.
+        actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
         actual_pd = pd.read_json(f, **kwargs)
+        dd.assert_eq(actual, actual_pd)
+        # Ensure not passing engine='cudf'(default i.e., auto) is tested.
+        actual = dask_cudf.read_json(f, **kwargs)
+        dd.assert_eq(actual, actual_pd)
+        # Ensure not passing kwargs also reads the file.
+        actual = dask_cudf.read_json(f)
         dd.assert_eq(actual, actual_pd)

@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
 
-set(strings_udf_version 22.12.01)
+set(strings_udf_version 23.02.00)
 
 include(../../fetch_rapids.cmake)
 
@@ -32,7 +32,7 @@ project(
             C
             # TODO: Enabling CUDA will not be necessary once we upgrade to CMake 3.22, which will
             # pull in the required languages for the C++ project even if this project does not
-            # require those languges.
+            # require those languages.
             CUDA
 )
 

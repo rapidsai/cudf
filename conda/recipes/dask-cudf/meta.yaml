@@ -1,10 +1,10 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
-{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
-{% set cuda_major=cuda_version.split('.')[0] %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version = environ['CONDA_PY'] %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
 
 package:
   name: dask-cudf
@@ -17,28 +17,38 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - VERSION_SUFFIX
     - PARALLEL_LEVEL
+    - CMAKE_GENERATOR
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - SCCACHE_S3_KEY_PREFIX=dask-cudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=dask-cudf-linux64 # [linux64]
+    - SCCACHE_BUCKET
+    - SCCACHE_REGION
+    - SCCACHE_IDLE_TIMEOUT
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
 
 requirements:
   host:
     - python
     - cudf ={{ version }}
-    - dask==2022.11.1
-    - distributed==2022.11.1
+    - dask ==2023.1.1
+    - distributed ==2023.1.1
     - cudatoolkit ={{ cuda_version }}
   run:
     - python
     - cudf ={{ version }}
-    - dask==2022.11.1
-    - distributed==2022.11.1
+    - dask ==2023.1.1
+    - distributed ==2023.1.1
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - dask_cudf                         # [linux64]
+test:
+  requires:
+    - cudatoolkit ={{ cuda_version }}
+  imports:
+    - dask_cudf
 
 
 about:

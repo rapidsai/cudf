@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import itertools
-import re
+import string
 import warnings
 from collections import abc
 from contextlib import contextmanager
@@ -161,8 +161,6 @@ def assert_exceptions_equal(
     lfunc_args_and_kwargs=None,
     rfunc_args_and_kwargs=None,
     check_exception_type=True,
-    compare_error_message=True,
-    expected_error_message=None,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
     same exception or not.
@@ -190,14 +188,6 @@ def assert_exceptions_equal(
         Whether to compare the exception types raised by ``lfunc``
         with ``rfunc`` exception type or not. If False, ``rfunc``
         is simply evaluated against `Exception` type.
-    compare_error_message : boolean, default True
-        Whether to compare the error messages raised
-        when calling both ``lfunc`` and
-        ``rfunc`` or not.
-    expected_error_message : str, default None
-        Expected error message to be raised by calling ``rfunc``.
-        Note that ``lfunc`` error message will not be compared to
-        this value.
 
     Returns
     -------
@@ -223,15 +213,7 @@ def assert_exceptions_equal(
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        if not compare_error_message:
-            expected_error_message = None
-        elif expected_error_message is None:
-            expected_error_message = re.escape(str(e))
-
-        with pytest.raises(
-            type(e) if check_exception_type else Exception,
-            match=expected_error_message,
-        ):
+        with pytest.raises(type(e) if check_exception_type else Exception):
             rfunc(*rfunc_args, **rfunc_kwargs)
     else:
         raise AssertionError("Expected to fail with an Exception.")
@@ -313,9 +295,13 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind in ("O", "U"):
         low = kwargs.get("low", 10)
         high = kwargs.get("high", 11)
-        return pd._testing.rands_array(
-            np.random.randint(low=low, high=high, size=1)[0], size
+        nchars = np.random.randint(low=low, high=high, size=1)[0]
+        char_options = np.array(list(string.ascii_letters + string.digits))
+        all_chars = "".join(np.random.choice(char_options, nchars * size))
+        return np.array(
+            [all_chars[nchars * i : nchars * (i + 1)] for i in range(size)]
         )
+
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -339,10 +325,6 @@ def does_not_raise():
     yield
 
 
-def xfail_param(param, **kwargs):
-    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
-
-
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
@@ -354,7 +336,7 @@ def assert_column_memory_eq(
     """
 
     def get_ptr(x) -> int:
-        return x.ptr if x else 0
+        return x.get_ptr(mode="read") if x else 0
 
     assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
     assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
@@ -387,3 +369,16 @@ parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
 )
+
+
+@contextmanager
+def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
+    """Catch a warning using pytest.warns if the expect_warning is True.
+
+    All arguments are forwarded to pytest.warns if expect_warning is True.
+    """
+    if condition:
+        with pytest.warns(warning, *args, **kwargs):
+            yield
+    else:
+        yield
