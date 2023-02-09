@@ -193,7 +193,22 @@ struct dremel_data {
 dremel_data get_dremel_data(column_view h_col,
                             std::vector<uint8_t> nullability,
                             bool output_as_byte_array,
-                            bool always_nullable,
                             rmm::cuda_stream_view stream);
 
+/**
+ * @brief Get Dremel offsets, repetition levels, and modified definition levels to be used for
+ *        lexicographical comparators. The modified definition levels are produced by treating
+ *        each nested column in the input as nullable
+ *
+ * @param h_col Column of LIST type
+ * @param nullability Pre-determined nullability at each list level. Empty means infer from
+ * `col`
+ * @param output_as_byte_array flag to indicate if output should be a byte array
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return A struct containing dremel data
+ */
+dremel_data get_comparator_data(column_view h_col,
+                                std::vector<uint8_t> nullability,
+                                bool output_as_byte_array,
+                                rmm::cuda_stream_view stream);
 }  // namespace cudf::detail

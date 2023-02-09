@@ -35,7 +35,7 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
-
+namespace {
 /**
  * @brief Functor to get definition level value for a nested struct column until the leaf level or
  * the first list level.
@@ -73,11 +73,11 @@ struct def_level_fn {
   }
 };
 
-dremel_data get_dremel_data(column_view h_col,
-                            std::vector<uint8_t> nullability,
-                            bool output_as_byte_array,
-                            bool always_nullable,
-                            rmm::cuda_stream_view stream)
+dremel_data get_encoding(column_view h_col,
+                         std::vector<uint8_t> nullability,
+                         bool output_as_byte_array,
+                         bool always_nullable,
+                         rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
     while (col.type().id() == type_id::STRUCT) {
@@ -211,7 +211,7 @@ dremel_data get_dremel_data(column_view h_col,
     }
   }
 
-  auto [device_view_owners, d_nesting_levels] =
+  [[maybe_unused]] auto [device_view_owners, d_nesting_levels] =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
   auto max_def_level = def_at_level.back();
@@ -463,6 +463,23 @@ dremel_data get_dremel_data(column_view h_col,
                      std::move(def_level),
                      leaf_data_size,
                      max_def_level};
+}
+}  // namespace
+
+dremel_data get_dremel_data(column_view h_col,
+                            std::vector<uint8_t> nullability,
+                            bool output_as_byte_array,
+                            rmm::cuda_stream_view stream)
+{
+  return get_encoding(h_col, nullability, output_as_byte_array, false, stream);
+}
+
+dremel_data get_comparator_data(column_view h_col,
+                                std::vector<uint8_t> nullability,
+                                bool output_as_byte_array,
+                                rmm::cuda_stream_view stream)
+{
+  return get_encoding(h_col, nullability, output_as_byte_array, true, stream);
 }
 
 }  // namespace cudf::detail
