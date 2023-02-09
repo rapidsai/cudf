@@ -13,7 +13,6 @@ requires = [
     # Hard pin the patch version used during the build.
     "pyarrow==10.0.1",
     "protoc-wheel",
-    "versioneer",
 ]
 build-backend = "backend"
 backend-path = ["_custom_build"]
