@@ -1,0 +1,64 @@
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        required: true
+        type: string
+      branch:
+        type: string
+      date:
+        type: string
+      sha:
+        type: string
+      repo:
+        type: string
+      node_type:
+        type: string
+        default: "cpu8"
+      build_script:
+        type: string
+        default: "ci/build_cpp.sh"
+
+jobs:
+  build:
+    timeout-minutes: 480
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { CUDA_VER: "11.8.0", LINUX_VER: "ubuntu22.04", ARCH: "amd64", PY_VER: "3.10" }
+          - { CUDA_VER: "11.8.0", LINUX_VER: "ubuntu22.04", ARCH: "arm64", PY_VER: "3.10" }
+    runs-on:
+      - self-hosted
+      - linux
+      - ${{ inputs.node_type }}
+      - ${{ matrix.ARCH }}
+    container:
+      image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
+      env:
+        RAPIDS_BUILD_TYPE: ${{ inputs.build_type }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
+        PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+      - name: Standardize repository information
+        run: |
+          echo "RAPIDS_REPOSITORY=${{ inputs.repo || github.repository }}" >> "${GITHUB_ENV}"
+          echo "RAPIDS_SHA=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          echo "RAPIDS_REF_NAME=${{ inputs.branch || github.ref_name }}" >> "${GITHUB_ENV}"
+          echo "RAPIDS_NIGHTLY_DATE=${{ inputs.date }}" >> "${GITHUB_ENV}"
+      - name: C++ build
+        run: ${{ inputs.build_script }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-metrics-report
+          path: "${{ github.workspace }}/ninja_log.html"
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ninja-log
+          path: "${{ github.workspace }}/ninja.log"

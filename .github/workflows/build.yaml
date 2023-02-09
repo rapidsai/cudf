@@ -28,21 +28,13 @@ concurrency:
 jobs:
   cpp-build:
     secrets: inherit
-    steps:
-    - uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
-      with:
-        build_type: ${{ inputs.build_type || 'branch' }}
-        branch: ${{ inputs.branch }}
-        date: ${{ inputs.date }}
-        sha: ${{ inputs.sha }}
-    - uses: actions/upload-artifact@v3
-      with:
-        name: build-metrics-report
-        path: "${{ github.workspace }}/ninja_log.html"
-    - uses: actions/upload-artifact@v3
-      with:
-        name: ninja-log
-        path: "${{ github.workspace }}/ninja.log"
+    # uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
+    uses: conda-cpp-build.yaml
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
   python-build:
     needs: [cpp-build]
     secrets: inherit
