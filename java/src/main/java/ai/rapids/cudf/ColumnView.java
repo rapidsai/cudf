@@ -2534,17 +2534,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   @Deprecated
   public final Table stringSplit(String pattern, int limit, boolean splitByRegex) {
     if (splitByRegex) {
-      RegexProgram regexProg = new RegexProgram(pattern, CaptureGroups.NON_CAPTURE);
-      return stringSplit(regexProg, limit);
+      return stringSplit(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
     } else {
       return stringSplit(pattern, limit);
     }
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified regex program. The
-   * number of rows in the output columns will be the same as the input column. Null entries
-   * are added for a row where split results have been exhausted. Null input entries result in
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
    * all nulls in the corresponding rows of the output columns.
    *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
@@ -2558,8 +2557,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
-                                 regexProg.capture().nativeId, limit, true));
+    return new Table(stringSplitRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                   regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2594,8 +2593,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
-                                 CaptureGroups.NON_CAPTURE.nativeId, limit, false));
+    return new Table(stringSplit(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2612,10 +2610,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified regex program with
-   * string literal delimiter. The number of rows in the output columns will be the same as the
-   * input column. Null entries are added for a row where split results have been exhausted.
-   * Null input entries result in all nulls in the corresponding rows of the output columns.
+   * Returns a list of columns by splitting each string using the specified regex program pattern.
+   * The number of rows in the output columns will be the same as the input column. Null entries
+   * are added for the rows where split results have been exhausted. Null input entries result in
+   * all nulls in the corresponding rows of the output columns.
    *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
@@ -2640,8 +2638,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   @Deprecated
   public final ColumnVector stringSplitRecord(String pattern, int limit, boolean splitByRegex) {
     if (splitByRegex) {
-      RegexProgram regexProg = new RegexProgram(pattern, CaptureGroups.NON_CAPTURE);
-      return stringSplitRecord(regexProg, limit);
+      return stringSplitRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), limit);
     } else {
       return stringSplitRecord(pattern, limit);
     }
@@ -2663,8 +2660,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
-                          regexProg.capture().nativeId, limit, true));
+        stringSplitRecordRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                            regexProg.capture().nativeId, limit));
   }
 
   /**
@@ -2695,9 +2692,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be String";
     assert delimiter != null : "delimiter is null";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter, RegexFlag.DEFAULT.nativeId,
-                          CaptureGroups.NON_CAPTURE.nativeId, limit, false));
+    return new ColumnVector(stringSplitRecord(this.getNativeView(), delimiter, limit));
   }
 
   /**
@@ -2713,7 +2708,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
-   * corresponding input string using the specified regex program with string literal delimiter.
+   * corresponding input string using the specified regex program pattern.
    *
    * @param regexProg the regex program with UTF-8 encoded string identifying the split pattern
    *                  for each input string.
@@ -2929,7 +2924,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public final ColumnVector replaceRegex(String pattern, Scalar repl) {
-    return replaceRegex(pattern, repl, -1);
+    return replaceRegex(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), repl);
   }
 
   /**
@@ -3016,8 +3011,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringReplaceWithBackrefs(RegexProgram regexProg, String replace) {
     assert regexProg != null : "regex program may not be null";
-    return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(),
-        regexProg.combinedFlags(), regexProg.capture().nativeId, replace));
+    return new ColumnVector(
+        stringReplaceWithBackrefs(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
+                                  regexProg.capture().nativeId, replace));
   }
 
   /**
@@ -3278,8 +3274,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * result = cv.matchesRe("\\d+")
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3296,11 +3292,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a boolean ColumnVector identifying rows which
-   * match the given regex program but only at the beginning of the string.
+   * match the given regex program pattern but only at the beginning of the string.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.matches_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.matchesRe(p)
    * r is now [false, true, false]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3314,7 +3311,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
+    return new ColumnVector(matchesRe(getNativeView(), regexProg.pattern(),
+                                      regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3322,8 +3320,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * match the given regex pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.contains_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * r = cv.containsRe("\\d+")
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3340,11 +3338,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a boolean ColumnVector identifying rows which
-   * match the given RegexProgram object starting at any location.
+   * match the given RegexProgram pattern starting at any location.
    *
    * ```
-   * cv = ["abc","123","def456"]
-   * result = cv.contains_re("\\d+")
+   * cv = ["abc", "123", "def456"]
+   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * r = cv.containsRe(p)
    * r is now [false, true, true]
    * ```
    * Any null string entries return corresponding null output column entries.
@@ -3358,7 +3357,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
     assert !regexProg.pattern().isEmpty() : "pattern string may not be empty";
-    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
+    return new ColumnVector(containsRe(getNativeView(), regexProg.pattern(),
+                                       regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3387,13 +3387,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    * @param regexProg the regex program to use
    * @return the table of extracted matches
-   * @throws CudfException if any error happens including if the RE does
-   * not contain any capture groups.
+   * @throws CudfException if any error happens including if the regex
+   * program does not contain any capture groups.
    */
   public final Table extractRe(RegexProgram regexProg) throws CudfException {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert regexProg != null : "regex program may not be null";
-    return new Table(extractRe(this.getNativeView(), regexProg.pattern(), regexProg.combinedFlags(), regexProg.capture().nativeId));
+    return new Table(extractRe(this.getNativeView(), regexProg.pattern(),
+                               regexProg.combinedFlags(), regexProg.capture().nativeId));
   }
 
   /**
@@ -3408,11 +3409,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public final ColumnVector extractAllRecord(String pattern, int idx) {
+    if (idx == 0) {
+      return extractAllRecord(new RegexProgram(pattern, CaptureGroups.NON_CAPTURE), idx);
+    }
     return extractAllRecord(new RegexProgram(pattern), idx);
   }
 
   /**
-   * Extracts all strings that match the given regex program and corresponds to the
+   * Extracts all strings that match the given regex program pattern and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
    *
    * For supported regex patterns refer to:
@@ -4075,40 +4079,64 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Returns a list of columns by splitting each string using the specified pattern. The number of
-   * rows in the output columns will be the same as the input column. Null entries are added for a
-   * row where split results have been exhausted. Null input entries result in all nulls in the
-   * corresponding rows of the output columns.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long[] stringSplit(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a list of columns by splitting each string using the specified regular expression
+   * pattern. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for the rows where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
    * @param flags regex flags setting.
    * @param capture capture groups setting.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long nativeHandle, String pattern, int flags,
-                                           int capture, int limit, boolean splitByRegex);
+  private static native long[] stringSplitRe(long nativeHandle, String pattern, int flags,
+                                             int capture, int limit);
 
   /**
    * Returns a column that are lists of strings in which each list is made by splitting the
    * corresponding input string using the specified string literal delimiter.
    *
    * @param nativeHandle native handle of the input strings column that being operated on.
-   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   */
+  private static native long stringSplitRecord(long nativeHandle, String delimiter, int limit);
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified regular expression pattern.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split regular expression pattern for
+   *                each input string.
    * @param flags regex flags setting.
    * @param capture capture groups setting.
    * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long stringSplitRecord(long nativeHandle, String pattern, int flags,
-                                               int capture, int limit, boolean splitByRegex);
+  private static native long stringSplitRecordRe(long nativeHandle, String pattern, int flags,
+                                                 int capture, int limit);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -4170,9 +4198,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for replacing any character sequence matching the given regex program
    * pattern using the replace template for back-references.
    * @param columnView native handle of the cudf::column_view being operated on.
-   * @param pattern regular expression pattern to search within each string.
-   * @param flags regex flags setting.
-   * @param capture capture groups setting.
+   * @param pattern The regular expression patterns to search within each string.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
@@ -4204,7 +4232,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex program from the
+   * Native method for checking if strings match the passed in regex program pattern from the
    * beginning of the string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
@@ -4215,7 +4243,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long matchesRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex program starting at any location.
+   * Native method for checking if strings match the passed in regex program pattern starting at any location.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
    * @param flags regex flags setting.
@@ -4243,17 +4271,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
-   * Native method for extracting results from a regex program. Returns a table handle.
+   * Native method for extracting results from a regex program pattern. Returns a table handle.
+   *
+   * @param cudfViewHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern, int flags, int capture) throws CudfException;
 
   /**
-   * Native method for extracting all results corresponding to group idx from a regex program.
+   * Native method for extracting all results corresponding to group idx from a regex program pattern.
    *
    * @param nativeHandle Native handle of the cudf::column_view being operated on.
-   * @param pattern string regex pattern.
-   * @param flags regex flags setting.
-   * @param capture capture groups setting.
+   * @param pattern String regex pattern.
+   * @param flags Regex flags setting.
+   * @param capture Capture groups setting.
    * @param idx Regex group index. A 0 value means matching the entire regex.
    * @return Native handle of a string column of the result.
    */

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 unmasked_input_initializer_template = """\
         d_{idx} = input_col_{idx}
@@ -12,6 +12,11 @@ masked_input_initializer_template = """\
 
 row_initializer_template = """\
         row["{name}"] = masked_{idx}
+"""
+
+group_initializer_template = """\
+        arr_{idx} = input_col_{idx}[offset[block_id]:offset[block_id+1]]
+        dataframe_group["{name}"] = Group(arr_{idx}, size, arr_index)
 """
 
 row_kernel_template = """\
@@ -51,4 +56,25 @@ def _kernel(retval, size, input_col_0, offset_0, {extra_args}):
         ret_masked = pack_return(ret)
         ret_data_arr[i] = ret_masked.value
         ret_mask_arr[i] = ret_masked.valid
+"""
+
+groupby_apply_kernel_template = """
+def _kernel(offset, out, index, {input_columns}, {extra_args}):
+    tid = cuda.threadIdx.x
+    block_id = cuda.blockIdx.x
+    tb_size = cuda.blockDim.x
+
+    recarray = cuda.local.array(1, dtype=dataframe_group_type)
+    dataframe_group = recarray[0]
+
+    if block_id < (len(offset) - 1):
+
+        size = offset[block_id+1] - offset[block_id]
+        arr_index = index[offset[block_id]:offset[block_id+1]]
+
+{group_initializers}
+
+        result = f_(dataframe_group, {extra_args})
+        if cuda.threadIdx.x == 0:
+                out[block_id] = result
 """

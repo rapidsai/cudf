@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#include "nested_types_common.hpp"
 
 #include <cudf/detail/sorting.hpp>
 
@@ -25,16 +24,7 @@ void nvbench_sort_lists(nvbench::state& state)
 {
   cudf::rmm_pool_raii pool_raii;
 
-  const size_t size_bytes(state.get_int64("size_bytes"));
-  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
-  auto const null_frequency{state.get_float64("null_frequency")};
-
-  data_profile table_profile;
-  table_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
-  table_profile.set_list_depth(depth);
-  table_profile.set_null_probability(null_frequency);
-  auto const table =
-    create_random_table({cudf::type_id::LIST}, table_size_bytes{size_bytes}, table_profile);
+  auto const table = create_lists_data(state);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
