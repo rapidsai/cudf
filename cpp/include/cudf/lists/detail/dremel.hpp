@@ -183,14 +183,15 @@ struct dremel_data {
  *              - | - | -- | ---
  * ```
  *
- * @param col Column of LIST type
- * @param level_nullability Pre-determined nullability at each list level. Empty means infer from
- * `col`
+ * @param input Column of LIST type
+ * @param nullability Pre-determined nullability at each list level. Empty means infer from
+ * `input`
+ * @param output_as_byte_array if `true`, then any nested list level that has a child of type
+ * `uint8_t` will be considered as the last level
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
  * @return A struct containing dremel data
  */
-dremel_data get_dremel_data(column_view h_col,
+dremel_data get_dremel_data(column_view input,
                             std::vector<uint8_t> nullability,
                             bool output_as_byte_array,
                             rmm::cuda_stream_view stream);
@@ -200,14 +201,15 @@ dremel_data get_dremel_data(column_view h_col,
  *        lexicographical comparators. The modified definition levels are produced by treating
  *        each nested column in the input as nullable
  *
- * @param h_col Column of LIST type
+ * @param input Column of LIST type
  * @param nullability Pre-determined nullability at each list level. Empty means infer from
- * `col`
- * @param output_as_byte_array flag to indicate if output should be a byte array
+ * `input`
+ * @param output_as_byte_array if `true`, then any nested list level that has a child of type
+ * `uint8_t` will be considered as the last level
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return A struct containing dremel data
  */
-dremel_data get_comparator_data(column_view h_col,
+dremel_data get_comparator_data(column_view input,
                                 std::vector<uint8_t> nullability,
                                 bool output_as_byte_array,
                                 rmm::cuda_stream_view stream);

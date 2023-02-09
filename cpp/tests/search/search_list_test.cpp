@@ -25,7 +25,8 @@
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
 
-using namespace cudf::test::iterators;
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
 
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -354,7 +355,7 @@ struct ListLowerBound : public cudf::test::BaseFixture {
 TEST_F(ListLowerBound, ListWithNulls)
 {
   {
-    using lcw = cudf::test::lists_column_wrapper<double>;
+    using lcw           = cudf::test::lists_column_wrapper<double>;
     auto const haystack = lcw{
       lcw{-3.45967821e+12},  // 0
       lcw{-3.6912186e-32},   // 1
@@ -366,22 +367,25 @@ TEST_F(ListLowerBound, ListWithNulls)
     };
 
     auto const expect = int32s_col{0};
-    auto const result = cudf::lower_bound(cudf::table_view{{haystack}}, cudf::table_view{{needles}}, {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
+    auto const result = cudf::lower_bound(cudf::table_view{{haystack}},
+                                          cudf::table_view{{needles}},
+                                          {cudf::order::ASCENDING},
+                                          {cudf::null_order::BEFORE});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
   }
 
   {
-    using lcw = cudf::test::lists_column_wrapper<int32_t, int32_t>;
+    using lcw       = cudf::test::lists_column_wrapper<int32_t, int32_t>;
     auto const col1 = lcw{
       lcw{{0}, null_at(0)},  // 0
-      lcw{-80},                 // 1
-      lcw{-17},                 // 2
+      lcw{-80},              // 1
+      lcw{-17},              // 2
     };
 
     lcw col2{
-      lcw{27},                  // 0
-      lcw{{0}, nulls_at({0})},  // 1
-      lcw{},                    // 2
+      lcw{27},               // 0
+      lcw{{0}, null_at(0)},  // 1
+      lcw{},                 // 2
     };
 
     lcw val1{
