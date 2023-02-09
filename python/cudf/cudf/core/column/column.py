@@ -6,6 +6,7 @@ import pickle
 import warnings
 from functools import cached_property
 from itertools import chain
+from math import ceil
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -570,7 +571,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
-        num_keys = (stop - start) // step
+        num_keys = ceil((stop - start) / step)
 
         self._check_scatter_key_length(num_keys, value)
 
