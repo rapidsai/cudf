@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/logger.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf_test/base_fixture.hpp>
 
 #include <spdlog/sinks/ostream_sink.h>

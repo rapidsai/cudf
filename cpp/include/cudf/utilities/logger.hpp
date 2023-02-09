@@ -27,22 +27,17 @@
 namespace cudf {
 
 /**
- * @brief Returns the global logger
+ * @brief Returns the global logger.
  *
- * This is a spdlog logger. The easiest way to log messages is to use the `CUDF_LOG_*` macros.
+ * This is a global instance of a spdlog logger. It can be used to configure logging behavior in
+ * libcudf.
+ *
+ * Example: TODO
+ *
+ * Note: TODO
  *
  * @return spdlog::logger& The logger.
  */
 spdlog::logger& logger();
-
-// The default is INFO, but it should be used sparingly, so that by default a log file is only
-// output if there is important information, warnings, errors, and critical failures
-// Log messages that require computation should only be used at level TRACE and DEBUG
-#define CUDF_LOG_TRACE(...)    SPDLOG_LOGGER_TRACE(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_DEBUG(...)    SPDLOG_LOGGER_DEBUG(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_INFO(...)     SPDLOG_LOGGER_INFO(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_WARN(...)     SPDLOG_LOGGER_WARN(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_ERROR(...)    SPDLOG_LOGGER_ERROR(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_CRITICAL(...) SPDLOG_LOGGER_CRITICAL(&cudf::logger(), __VA_ARGS__)
 
 }  // namespace cudf

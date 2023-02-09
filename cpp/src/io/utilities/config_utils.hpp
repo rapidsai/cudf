@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/utilities/logger.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 
 #include <sstream>
 #include <string>
