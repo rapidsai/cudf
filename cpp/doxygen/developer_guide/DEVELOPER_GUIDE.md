@@ -901,6 +901,11 @@ void trivial_types_only(T t){
 }
 ```
 
+# Logging
+
+By default, libcudf logs important information into file named `cudf_log.txt` in the current directory.
+TBC...
+
 # Data Types
 
 Columns may contain data of a number of types (see `enum class type_id` in `include/cudf/types.hpp`)
