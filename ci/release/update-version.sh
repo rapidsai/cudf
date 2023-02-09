@@ -37,20 +37,26 @@ sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g'
 # cpp stream testing update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/tests/utilities/identify_stream_usage/CMakeLists.txt
 
-# Python update
+# Python CMakeLists updates
 sed_runner 's/'"cudf_version .*)"'/'"cudf_version ${NEXT_FULL_TAG})"'/g' python/cudf/CMakeLists.txt
-
-# Strings UDF update
 sed_runner 's/'"strings_udf_version .*)"'/'"strings_udf_version ${NEXT_FULL_TAG})"'/g' python/strings_udf/CMakeLists.txt
-
-# Groupby UDF update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' python/cudf/udf_cpp/CMakeLists.txt
-
-# cpp libcudf_kafka update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt
-
-# cpp cudf_jni update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
+
+# Python __init__.py updates
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf/cudf/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/custreamz/custreamz/__init__.py
+sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/strings_udf/strings_udf/__init__.py
+
+# Python setup.py updates
+sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/cudf/setup.py
+sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/dask_cudf/setup.py
+sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/cudf_kafka/setup.py
+sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/custreamz/setup.py
+sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/strings_udf/setup.py
 
 # rapids-cmake version
 sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
