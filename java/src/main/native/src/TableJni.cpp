@@ -2655,7 +2655,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
     JNIEnv *env, jclass, jlong input_table, jintArray columns_to_hash, jint hash_function,
-    jint number_of_partitions, jintArray output_offsets) {
+    jint number_of_partitions, jint seed, jintArray output_offsets) {
 
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, columns_to_hash, "columns_to_hash is null", NULL);
@@ -2665,6 +2665,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
   try {
     cudf::jni::auto_set_device(env);
     auto const hash_func = static_cast<cudf::hash_id>(hash_function);
+    auto const hash_seed = static_cast<uint32_t>(seed);
     auto const n_input_table = reinterpret_cast<cudf::table_view const *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
@@ -2672,8 +2673,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
     std::vector<cudf::size_type> columns_to_hash_vec(n_columns_to_hash.begin(),
                                                      n_columns_to_hash.end());
 
-    auto [partitioned_table, partition_offsets] =
-        cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions, hash_func);
+    auto [partitioned_table, partition_offsets] = cudf::hash_partition(
+        *n_input_table, columns_to_hash_vec, number_of_partitions, hash_func, hash_seed);
 
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
     std::copy(partition_offsets.begin(), partition_offsets.end(), n_output_offsets.begin());
