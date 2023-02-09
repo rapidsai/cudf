@@ -13,7 +13,7 @@ install_requires = [
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
-    f"cudf{cuda_suffix}==23.2.*",
+    f"cudf{cuda_suffix}==23.4.*",
     "cupy-cuda11x",
 ]
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,20 +207,6 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesInvalidInput)
     EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times), cudf::logic_error);
   }
 
-  // Sizes mismatched between strings column and output_strings_sizes column.
-  {
-    auto const repeat_times = int32s_col{1, 2};
-    auto const sizes        = int32s_col{1, 2, 3, 4, 5};
-    EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times, sizes), cudf::logic_error);
-  }
-
-  // output_strings_sizes column has nulls.
-  {
-    auto const repeat_times = int32s_col{1, 2};
-    auto const sizes        = int32s_col{{null, 2}, null_at(0)};
-    EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times, sizes), cudf::logic_error);
-  }
-
   // Invalid data type for repeat_times column.
   {
     auto const repeat_times = cudf::test::fixed_width_column_wrapper<float>{1, 2, 3, 4, 5, 6};
@@ -243,11 +229,7 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
   auto const repeat_times =
     int32s_col{half_max, half_max, half_max, half_max, half_max, half_max, half_max};
 
-  auto const [sizes, total_bytes] =
-    cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
-  (void)sizes;
-  auto const expected_bytes = static_cast<int64_t>(half_max) * int64_t{1 + 2 + 3 + 4 + 5 + 6 + 7};
-  EXPECT_EQ(expected_bytes, total_bytes);
+  EXPECT_THROW(cudf::strings::repeat_strings(strs_cv, repeat_times), cudf::logic_error);
 }
 
 TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithScalarRepeatTimes)
@@ -301,15 +283,6 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithColumnRepeatTimes)
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 12, 27, 0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(45, total_bytes);
-
-    results = cudf::strings::repeat_strings(strs_cv, repeat_times, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // repeat_times column has nulls.
@@ -319,15 +292,6 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithColumnRepeatTimes)
       {"0a0b0c", "" /*NULL*/, "xyzéééxyzéééxyzééé", "áááááá", "" /*NULL*/}, nulls_at({1, 4})};
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 0, 27, 12, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(45, total_bytes);
-
-    results = cudf::strings::repeat_strings(strs_cv, repeat_times, *sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 }
@@ -377,15 +341,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 12, 27};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(45, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // Sliced the middle of the column.
@@ -397,15 +352,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{12, 27};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(39, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // Sliced the second half of the column.
@@ -416,15 +362,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
     auto const expected_strs = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{27, 12, 12};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(51, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 }
@@ -520,15 +457,6 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnWithNullsWithColumnRepeatTimes)
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 0, 18, 0, 0, 0, 12, 12, 0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(48, total_bytes);
-
-    results = cudf::strings::repeat_strings(strs_cv, repeat_times, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // repeat_times column has nulls.
@@ -548,15 +476,6 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnWithNullsWithColumnRepeatTimes)
                                         nulls_at({1, 2, 3, 4, 5, 7})};
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 0, 0, 0, 0, 0, 12, 0, 0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(strs_cv, repeat_times);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(18, total_bytes);
-
-    results = cudf::strings::repeat_strings(strs_cv, repeat_times, *sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 }
@@ -631,15 +550,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{6, 0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(6, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // Sliced the middle of the column.
@@ -652,15 +562,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{0, 0, 0, 0, 12};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(12, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
   // Sliced the second half of the column, output has nulls.
@@ -671,15 +572,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
     auto const expected_strs  = strs_col{{"áááááá", "" /*NULL*/, "", ""}, null_at(1)};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{12, 0, 0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(12, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
   }
 
@@ -692,15 +584,6 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
     auto const expected_strs  = strs_col{"", ""};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_strs, *results, verbosity);
-
-    auto const expected_sizes = int32s_col{0, 0};
-    auto const [sizes, total_bytes] =
-      cudf::strings::repeat_strings_output_sizes(sliced_strs_cv, sliced_rtimes);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *sizes, verbosity);
-    EXPECT_EQ(0, total_bytes);
-
-    results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes, *sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_strs, *results, verbosity);
   }
 }

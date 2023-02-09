@@ -28,6 +28,7 @@ files:
   test_java:
     output: none
     includes:
+      - build
       - cudatoolkit
       - test_java
   test_notebooks:
