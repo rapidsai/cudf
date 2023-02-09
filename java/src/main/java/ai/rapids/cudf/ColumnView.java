@@ -4474,6 +4474,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
 
+  static native boolean hasNonEmptyNulls(long handle) throws CudfException;
+
+  static native boolean mayHaveNonEmptyNulls(long handle) throws CudfException;
+
+  static native long purgeNonEmptyNulls(long handle) throws CudfException;
+
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
    * creating the device side vector from host side nested vectors. Eventually this can go away or
@@ -4831,5 +4837,58 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
       }
     }
+  }
+
+  /**
+   * Exact check if a column or its descendants have non-empty null rows
+   *
+   * @return Whether the column or its descendants have non-empty null rows
+   */
+  public boolean hasNonEmptyNulls() {
+    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
+    return hasNonEmptyNulls(viewHandle);
+  }
+
+  /**
+   * Approximates if a column or its descendants *may* have non-empty null elements
+   * Compared to the exact `has_nonempty_nulls()` function, this function is typically
+   * more efficient.
+   *
+   * Complexity:
+   * - Best case: `O(count_descendants(input))`
+   * - Worst case: `O(count_descendants(input)) * m`, where `m` is the number of rows in the largest
+   * descendant
+   *
+   * @return true, if either the column or its descendants MIGHT have null rows
+   *         false, if neither the column nor its descendants have null rows
+   */
+  public boolean mayHaveNonEmptyNulls() {
+    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
+    return mayHaveNonEmptyNulls(viewHandle);
+  }
+
+  /**
+   * Copies this column into output while purging any non-empty null rows in the column or its
+   * descendants.
+   *
+   * If this column is not of compound type (LIST/STRING/STRUCT/DICTIONARY), the output will be
+   * the same as input.
+   *
+   * The purge operation only applies directly to LIST and STRING columns, but it applies indirectly
+   * to STRUCT/DICTIONARY columns as well, since these columns may have child columns that
+   * are LIST or STRING.
+   *
+   * Examples:
+   * lists = data: [{{0,1}, {2,3}, {4,5}} validity: {true, false, true}]
+   * lists[1] is null, but the list's child column still stores `{2,3}`.
+   *
+   * After purging the contents of the list's null rows, the column's contents will be:
+   * lists = [data: {{0,1}, {4,5}} validity: {true, false, true}]
+   *
+   * @return A new column with equivalent contents to `input`, but with null rows purged
+   */
+  public ColumnVector purgeNonEmptyNulls() {
+    assert type.isNestedType() || type.hasOffsets() : "Columns should be a LIST, STRING or STRUCT";
+    return new ColumnVector(purgeNonEmptyNulls(viewHandle));
   }
 }

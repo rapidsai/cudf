@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -6649,5 +6650,68 @@ public class ColumnVectorTest extends CudfTestBase {
     ) {
       assertColumnsAreEqual(expectedCv, actualCv);
     }
+  }
+
+  private ColumnView getColumnViewWithNonEmptyNulls() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> list2 = Arrays.asList(7, 8, 9);
+    List<Integer> list3 = null;
+    ColumnVector input =  makeListsColumn(DType.INT32, list0, list1, list2, list3);
+
+    // Modify the validity buffer
+    BaseDeviceMemoryBuffer dmb = input.getDeviceBufferFor(BufferType.VALIDITY);
+    HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(64);
+    newValidity.copyFromDeviceBuffer(dmb);
+    BitVectorHelper.setNullAt(newValidity, 1);
+    dmb.copyFromHostBuffer(newValidity);
+
+    HostColumnVector hostColumnVector = input.copyToHost();
+    assert(hostColumnVector.isNull(1));
+    assert(hostColumnVector.isNull(3));
+
+    ColumnVector expectedOffsetsBeforePurge = ColumnVector.fromInts(0, 3, 6, 9, 9);
+    ColumnView offsetsCvBeforePurge = input.getListOffsetsView();
+    assertColumnsAreEqual(expectedOffsetsBeforePurge, offsetsCvBeforePurge);
+    ColumnView colWithNonEmptyNulls = new ColumnView(input.type, input.rows, Optional.of(2L), dmb,
+        input.getDeviceBufferFor(BufferType.OFFSET), input.getChildColumnViews());
+    assertEquals(2, colWithNonEmptyNulls.nullCount);
+    return colWithNonEmptyNulls;
+  }
+
+  @Test
+  void testPurgeNonEmptyNullsList() {
+    ColumnView colWithNonEmptyNulls = getColumnViewWithNonEmptyNulls();
+    // purge non-empty nulls
+    assertTrue(colWithNonEmptyNulls.hasNonEmptyNulls());
+    ColumnView colWithEmptyNulls = colWithNonEmptyNulls.purgeNonEmptyNulls();
+    ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+    ColumnView offsetsCvAfterPurge = colWithEmptyNulls.getListOffsetsView();
+    assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+    assertFalse(colWithEmptyNulls.hasNonEmptyNulls());
+  }
+
+  /**
+   * Since ColumnView#mayHaveNonEmptyNulls is a non-deterministic method, this test is only here to
+   * make sure we have piped everything correctly. Cudf already should have tests for this
+   */
+  @Test
+  void testMayHaveNonEmptyNulls() {
+    ColumnView colWithNonEmptyNulls = getColumnViewWithNonEmptyNulls();
+    assertTrue(colWithNonEmptyNulls.mayHaveNonEmptyNulls() ||
+        colWithNonEmptyNulls.hasNonEmptyNulls());
+  }
+
+  @Test
+  void testPurgeNonEmptyNullsStruct() {
+    ColumnView listCol = getColumnViewWithNonEmptyNulls();
+    ColumnView stringsCol = ColumnVector.fromStrings("A", "col", "of", "Strings");
+    ColumnView structView = ColumnView.makeStructView(stringsCol, listCol);
+    ColumnView structWithEmptyNulls = structView.purgeNonEmptyNulls();
+    ColumnView newListChild = structWithEmptyNulls.getChildColumnView(1);
+    ColumnVector expectedOffsetsAfterPurge = ColumnVector.fromInts(0, 3, 3, 6, 6);
+    ColumnView offsetsCvAfterPurge = newListChild.getListOffsetsView();
+    assertColumnsAreEqual(expectedOffsetsAfterPurge, offsetsCvAfterPurge);
+    assertFalse(newListChild.hasNonEmptyNulls());
   }
 }
