@@ -2,7 +2,6 @@
 
 import os
 
-import versioneer
 from setuptools import find_packages
 from skbuild import setup
 
@@ -43,21 +42,9 @@ extras_require = {
     ]
 }
 
-if "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE" in os.environ:
-    orig_get_versions = versioneer.get_versions
-
-    version_override = os.environ["RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE"]
-
-    def get_versions():
-        data = orig_get_versions()
-        data["version"] = version_override
-        return data
-
-    versioneer.get_versions = get_versions
-
 setup(
     name=f"cudf{cuda_suffix}",
-    version=versioneer.get_version(),
+    version="23.04.00",
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -72,7 +59,6 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
     ],
-    cmdclass=versioneer.get_cmdclass(),
     include_package_data=True,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={

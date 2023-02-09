@@ -4,7 +4,6 @@ import os
 import re
 import shutil
 
-import versioneer
 from setuptools import find_packages
 from skbuild import setup
 
@@ -56,7 +55,7 @@ cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 setup(
     name="strings_udf",
-    version=versioneer.get_version(),
+    version="23.04.00",
     description="Strings UDF Library",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -75,7 +74,6 @@ setup(
     package_data={
         key: ["*.pxd"] for key in find_packages(include=["strings_udf._lib*"])
     },
-    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
     zip_safe=False,

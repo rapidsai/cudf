@@ -6,9 +6,7 @@ from ptxcompiler.patch import NO_DRIVER, safe_get_versions
 
 from cudf.core.udf.utils import _get_cuda_version_from_ptx_file, _get_ptx_file
 
-from . import _version
-
-__version__ = _version.get_versions()["version"]
+__version__ = "23.04.00"
 
 
 path = os.path.dirname(__file__)

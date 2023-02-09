@@ -2,7 +2,6 @@
 
 import os
 
-import versioneer
 from setuptools import find_packages, setup
 
 cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
@@ -27,21 +26,9 @@ extras_require = {
     ]
 }
 
-if "RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE" in os.environ:
-    orig_get_versions = versioneer.get_versions
-
-    version_override = os.environ["RAPIDS_PY_WHEEL_VERSIONEER_OVERRIDE"]
-
-    def get_versions():
-        data = orig_get_versions()
-        data["version"] = version_override
-        return data
-
-    versioneer.get_versions = get_versions
-
 setup(
     name=f"dask-cudf{cuda_suffix}",
-    version=versioneer.get_version(),
+    version="23.04.00",
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",
     author="NVIDIA Corporation",
@@ -57,7 +44,6 @@ setup(
         "Programming Language :: Python :: 3.10",
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
-    cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     extras_require=extras_require,
 )
