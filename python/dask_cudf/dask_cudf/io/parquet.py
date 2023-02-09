@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 import warnings
 from contextlib import ExitStack
 from functools import partial
@@ -230,7 +230,8 @@ class CudfEngine(ArrowDatasetEngine):
                             **read_kwargs,
                         )
                     )
-                    paths = rgs = []
+                    paths = []
+                    rgs = []
                     last_partition_keys = None
                 paths.append(path)
                 rgs.append(
