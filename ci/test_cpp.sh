@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -21,7 +21,6 @@ set -u
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
-SUITEERROR=0
 
 rapids-print-env
 
@@ -32,6 +31,8 @@ rapids-mamba-retry install \
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 # TODO: Disabling stream identification for now.
@@ -61,25 +62,6 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     #else
     #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     #fi
-
-    exitcode=$?
-    if (( ${exitcode} != 0 )); then
-        SUITEERROR=${exitcode}
-        echo "FAILED: GTest ${gt}"
-    fi
-done
-
-rapids-logger "Run gtests with kvikio"
-# Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
-    gt="$CONDA_PREFIX/bin/gtests/libcudf/${test_name}"
-    echo "Running gtest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-    LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
-    exitcode=$?
-    if (( ${exitcode} != 0 )); then
-        SUITEERROR=${exitcode}
-        echo "FAILED: GTest ${gt}"
-    fi
 done
 
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
@@ -98,4 +80,5 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     # TODO: test-results/*.cs.log are processed in gpuci
 fi
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

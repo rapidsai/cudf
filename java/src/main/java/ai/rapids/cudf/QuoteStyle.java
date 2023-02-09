@@ -20,7 +20,7 @@ package ai.rapids.cudf;
 /**
  * Quote style for CSV records, closely following cudf::io::quote_style.
  */
-enum QuoteStyle {
+public enum QuoteStyle {
     MINIMAL(0),    // Quote only fields which contain special characters
     ALL(1),        // Quote all fields
     NONNUMERIC(2), // Quote all non-numeric fields

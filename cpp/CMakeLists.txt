@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.02.00
+  VERSION 23.04.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -343,6 +343,7 @@ add_library(
   src/io/json/reader_impl.cu
   src/io/json/experimental/byte_range_info.cu
   src/io/json/experimental/read_json.cpp
+  src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -440,13 +441,18 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
-  src/reductions/segmented_all.cu
-  src/reductions/segmented_any.cu
-  src/reductions/segmented_max.cu
-  src/reductions/segmented_min.cu
-  src/reductions/segmented_product.cu
-  src/reductions/segmented_reductions.cpp
-  src/reductions/segmented_sum.cu
+  src/reductions/segmented/all.cu
+  src/reductions/segmented/any.cu
+  src/reductions/segmented/max.cu
+  src/reductions/segmented/mean.cu
+  src/reductions/segmented/min.cu
+  src/reductions/segmented/product.cu
+  src/reductions/segmented/reductions.cpp
+  src/reductions/segmented/std.cu
+  src/reductions/segmented/sum.cu
+  src/reductions/segmented/sum_of_squares.cu
+  src/reductions/segmented/update_validity.cu
+  src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
@@ -530,6 +536,7 @@ add_library(
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
+  src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_re.cu
@@ -538,7 +545,6 @@ add_library(
   src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
-  src/strings/substring.cu
   src/strings/translate.cu
   src/strings/utilities.cu
   src/strings/wrap.cu

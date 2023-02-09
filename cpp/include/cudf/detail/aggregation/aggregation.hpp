@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -292,7 +292,9 @@ class all_aggregation final : public reduce_aggregation, public segmented_reduce
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation,
+                                         public reduce_aggregation,
+                                         public segmented_reduce_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -313,7 +315,8 @@ class sum_of_squares_aggregation final : public groupby_aggregation, public redu
  */
 class mean_aggregation final : public rolling_aggregation,
                                public groupby_aggregation,
-                               public reduce_aggregation {
+                               public reduce_aggregation,
+                               public segmented_reduce_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -353,7 +356,8 @@ class m2_aggregation : public groupby_aggregation {
  */
 class std_var_aggregation : public rolling_aggregation,
                             public groupby_aggregation,
-                            public reduce_aggregation {
+                            public reduce_aggregation,
+                            public segmented_reduce_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -1154,9 +1158,7 @@ struct target_type_impl<Source, aggregation::ALL> {
   using type = bool;
 };
 
-// Always use `double` for MEAN
-// Except for chrono types where result is chrono. (Use FloorDiv)
-// TODO: MEAN should be only be enabled for duration types - not for timestamps
+// Always use `double` for MEAN except for durations and fixed point types.
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
@@ -1167,10 +1169,10 @@ struct target_type_impl<
 };
 
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<(is_chrono<Source>() or is_fixed_point<Source>()) && (k == aggregation::MEAN)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<(is_duration<Source>() or is_fixed_point<Source>()) &&
+                                         (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
@@ -1206,10 +1208,11 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying chrono types, use same type accumulator
-// TODO: Sum/Product should only be enabled for duration types - not for timestamps
+// Summing duration types, use same type accumulator
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source, k, std::enable_if_t<is_chrono<Source>() && is_sum_product_agg(k)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<is_duration<Source>() && (k == aggregation::SUM)>> {
   using type = Source;
 };
 

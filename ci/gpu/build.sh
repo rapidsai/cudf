@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -39,13 +39,13 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 # Dask version to install when `INSTALL_DASK_MAIN=0`
-export DASK_STABLE_VERSION="2022.12.0"
+export DASK_STABLE_VERSION="2023.1.1"
 
 # ucx-py version
-export UCX_PY_VERSION='0.30.*'
+export UCX_PY_VERSION='0.31.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -167,13 +167,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
             echo "Running GoogleTest $test_name"
             ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         done
-
-        # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-        for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
-            gt="$WORKSPACE/cpp/build/gtests/$test_name"
-            echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-            LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
-        done
     fi
 else
     #Project Flash
@@ -229,13 +222,6 @@ else
         else
             GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
         fi
-    done
-
-    # Test libcudf (csv, orc, and parquet) with `LIBCUDF_CUFILE_POLICY=KVIKIO`
-    for test_name in "CSV_TEST" "ORC_TEST" "PARQUET_TEST"; do
-        gt="$CONDA_PREFIX/bin/gtests/libcudf/$test_name"
-        echo "Running GoogleTest $test_name (LIBCUDF_CUFILE_POLICY=KVIKIO)"
-        LIBCUDF_CUFILE_POLICY=KVIKIO ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"

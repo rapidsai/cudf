@@ -1419,17 +1419,16 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 
 @pytest.mark.parametrize("keep_index", [True, False])
 def test_dataframe_hash_partition_keep_index(keep_index):
-
     gdf = cudf.DataFrame(
-        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+        {"val": [1, 2, 3, 4, 5], "key": [3, 2, 1, 4, 5]}, index=[5, 4, 3, 2, 1]
     )
 
     expected_df1 = cudf.DataFrame(
-        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+        {"val": [1, 5], "key": [3, 5]}, index=[5, 1] if keep_index else None
     )
     expected_df2 = cudf.DataFrame(
         {"val": [2, 3, 4], "key": [2, 1, 4]},
-        index=[3, 2, 1] if keep_index else range(1, 4),
+        index=[4, 3, 2] if keep_index else None,
     )
     expected = [expected_df1, expected_df2]
 
@@ -1869,7 +1868,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s1.buffers()[0]).view("u1")[0],
-        gs1._column.mask_array_view.copy_to_host().view("u1")[0],
+        gs1._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1880,7 +1879,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.asarray(s2.buffers()[0]).view("u1")[0],
-        gs2._column.mask_array_view.copy_to_host().view("u1")[0],
+        gs2._column.mask_array_view(mode="read").copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -2660,11 +2659,11 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
         == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
     )
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
         == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
     )
 
@@ -3814,17 +3813,22 @@ def test_ndim():
         -3,
         0,
         5,
-        pd.Series([1, 4, 3, -6], index=["w", "x", "y", "z"]),
-        cudf.Series([-4, -2, 12], index=["x", "y", "z"]),
-        {"w": -1, "x": 15, "y": 2},
+        pd.Series(
+            [1, 4, 3, -6],
+            index=["floats", "ints", "floats_with_nan", "floats_same"],
+        ),
+        cudf.Series(
+            [-4, -2, 12], index=["ints", "floats_with_nan", "floats_same"]
+        ),
+        {"floats": -1, "ints": 15, "floats_will_nan": 2},
     ],
 )
 def test_dataframe_round(decimals):
-    pdf = pd.DataFrame(
+    gdf = cudf.DataFrame(
         {
-            "w": np.arange(0.5, 10.5, 1),
-            "x": np.random.normal(-100, 100, 10),
-            "y": np.array(
+            "floats": np.arange(0.5, 10.5, 1),
+            "ints": np.random.normal(-100, 100, 10),
+            "floats_with_na": np.array(
                 [
                     14.123,
                     2.343,
@@ -3833,30 +3837,24 @@ def test_dataframe_round(decimals):
                     -8.302,
                     np.nan,
                     94.313,
-                    -112.236,
+                    None,
                     -8.029,
                     np.nan,
                 ]
             ),
-            "z": np.repeat([-0.6459412758761901], 10),
+            "floats_same": np.repeat([-0.6459412758761901], 10),
+            "bools": np.random.choice([True, None, False], 10),
+            "strings": np.random.choice(["abc", "xyz", None], 10),
+            "struct": np.random.choice([{"abc": 1}, {"xyz": 2}, None], 10),
+            "list": [[1], [2], None, [4], [3]] * 2,
         }
     )
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    pdf = gdf.to_pandas()
 
     if isinstance(decimals, cudf.Series):
         pdecimals = decimals.to_pandas()
     else:
         pdecimals = decimals
-
-    result = gdf.round(decimals)
-    expected = pdf.round(pdecimals)
-    assert_eq(result, expected)
-
-    # with nulls, maintaining existing null mask
-    for c in pdf.columns:
-        arr = pdf[c].to_numpy().astype("float64")  # for pandas nulls
-        arr.ravel()[np.random.choice(10, 5, replace=False)] = np.nan
-        pdf[c] = gdf[c] = arr
 
     result = gdf.round(decimals)
     expected = pdf.round(pdecimals)
@@ -10011,5 +10009,19 @@ def test_dataframe_transpose_complex_types(data):
 
     expected = pdf.T
     actual = gdf.T
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_from_arrow_slice():
+    table = pa.Table.from_pandas(
+        pd.DataFrame.from_dict(
+            {"a": ["aa", "bb", "cc"] * 3, "b": [1, 2, 3] * 3}
+        )
+    )
+    table_slice = table.slice(3, 7)
+
+    expected = table_slice.to_pandas()
+    actual = cudf.DataFrame.from_arrow(table_slice)
 
     assert_eq(expected, actual)

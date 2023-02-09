@@ -38,6 +38,7 @@
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
 #include <src/io/parquet/parquet.hpp>
+#include <src/io/parquet/parquet_gpu.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -1087,7 +1088,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ParquetWriterTest, HostBuffer)
+TEST_F(ParquetWriterTest, BufferSource)
 {
   constexpr auto num_rows = 100 << 10;
   const auto seq_col      = random_values<int>(num_rows);
@@ -1105,12 +1106,32 @@ TEST_F(ParquetWriterTest, HostBuffer)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer), expected)
       .metadata(&expected_metadata);
   cudf::io::write_parquet(out_opts);
-  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info(out_buffer.data(), out_buffer.size()));
-  const auto result = cudf::io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+  // host buffer
+  {
+    cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info(out_buffer.data(), out_buffer.size()));
+    const auto result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+  }
+
+  // device buffer
+  {
+    auto const d_input = cudf::detail::make_device_uvector_sync(
+      cudf::host_span<uint8_t const>{reinterpret_cast<uint8_t const*>(out_buffer.data()),
+                                     out_buffer.size()},
+      cudf::get_default_stream());
+    auto const d_buffer = cudf::device_span<std::byte const>(
+      reinterpret_cast<std::byte const*>(d_input.data()), d_input.size());
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(d_buffer));
+    const auto result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+  }
 }
 
 TEST_F(ParquetWriterTest, ManyFragments)
@@ -4804,6 +4825,49 @@ TEST_F(ParquetReaderTest, StructByteArray)
   auto result = cudf::io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, NestingOptimizationTest)
+{
+  // test nesting levels > cudf::io::parquet::gpu::max_cacheable_nesting_decode_info deep.
+  constexpr cudf::size_type num_nesting_levels = 16;
+  static_assert(num_nesting_levels > cudf::io::parquet::gpu::max_cacheable_nesting_decode_info);
+  constexpr cudf::size_type rows_per_level = 2;
+
+  constexpr cudf::size_type num_values = (1 << num_nesting_levels) * rows_per_level;
+  auto value_iter                      = thrust::make_counting_iterator(0);
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
+  cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
+
+  // ~256k values with num_nesting_levels = 16
+  int total_values_produced = num_values;
+  auto prev_col             = values.release();
+  for (int idx = 0; idx < num_nesting_levels; idx++) {
+    auto const depth    = num_nesting_levels - idx;
+    auto const num_rows = (1 << (num_nesting_levels - idx));
+
+    auto offsets_iter = cudf::detail::make_counting_transform_iterator(
+      0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
+    total_values_produced += (num_rows + 1);
+
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets(offsets_iter,
+                                                                      offsets_iter + num_rows + 1);
+    auto c   = cudf::make_lists_column(num_rows, offsets.release(), std::move(prev_col), 0, {});
+    prev_col = std::move(c);
+  }
+  auto const& expect = prev_col;
+
+  auto filepath = temp_env->get_temp_filepath("NestingDecodeCache.parquet");
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table_view{{*expect}});
+  cudf::io::write_parquet(opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expect, result.tbl->get_column(0));
 }
 
 TEST_F(ParquetWriterTest, SingleValueDictionaryTest)

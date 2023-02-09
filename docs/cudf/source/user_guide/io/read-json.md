@@ -19,14 +19,14 @@ each object corresponds to a row.
     {"a": "v2", "b": 7},
     {"a": "v3", "b": 5}
 ]'''
->>> df_records = cudf.read_json(j, engine='cudf_experimental')
+>>> df_records = cudf.read_json(j, engine='cudf')
 
 >>> j = '\n'.join([
 ...     '{"a": "v1", "b": 12}',
 ...     '{"a": "v2", "b": 7}',
 ...     '{"a": "v3", "b": 5}'
 ... ])
->>> df_lines = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df_lines = cudf.read_json(j, lines=True)
 
 >>> df_lines
     a   b
@@ -49,7 +49,7 @@ reading nested JSON data.
     {"list": [0,1,2], "struct": {"k":"v1"}},
     {"list": [3,4,5], "struct": {"k":"v2"}}
 ]'''
->>> df = cudf.read_json(j, engine='cudf_experimental')
+>>> df = cudf.read_json(j, engine='cudf')
 >>> df
         list       struct
 0  [0, 1, 2]  {'k': 'v1'}
@@ -61,7 +61,7 @@ reading nested JSON data.
 ...     '{"a": [{"k": 0}], "b": {"k": [0, 1], "m": 5}}',
 ...     '{"a": [{"k": 1}, {"k": 2}], "b": {"k": [2, 3], "m": 6}}',
 ... ])
->>> df = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json(j, lines=True)
 >>> df
                       a                      b
 0            [{'k': 0}]  {'k': [0, 1], 'm': 5}
@@ -97,7 +97,6 @@ should be adjacent, as shown in the following example.
 ...         j,
 ...         lines=True,
 ...         byte_range=(chunk_size * x, chunk_size),
-...         engine='cudf_experimental'
 ...     )
 ...     data.append(d)
 >>> df = cudf.concat(data)
@@ -115,7 +114,7 @@ raw strings, or file-like objects, as well as iterables of these sources.
 >>> j1 = '{"id":0}\n{"id":1}\n'
 >>> j2 = '{"id":2}\n{"id":3}\n'
 
->>> df = cudf.read_json([j1, j2], lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json([j1, j2], lines=True)
 ```
 
 ## Unpacking list and struct data
@@ -133,7 +132,7 @@ following example demonstrates how to extract data from a struct column.
 ...    '{"x": "Jakarta", "y": {"country": "Indonesia", "iso2": "ID"}}',
 ...    '{"x": "Shanghai", "y": {"country": "China", "iso2": "CN"}}'
 ... ])
->>> df = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json(j, lines=True)
 >>> df = df.drop(columns='y').join(df['y'].struct.explode())
 >>> df
           x    country iso2
@@ -156,7 +155,7 @@ list column.
 ...    '{"name": "New Bedford, MA", "coord": [41.63, -70.93]}'
 ... ])
 
->>> df = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json(j, lines=True)
 >>> df['latitude'] = df['coord'].list.get(0)
 >>> df['longitude'] = df['coord'].list.get(1)
 >>> df = df.drop(columns='coord')
@@ -181,7 +180,7 @@ the parent dataframe.
 ...    '{"product": "shirts", "ratings": [3, 4]}'
 ... ])
 
->>> df = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json(j, lines=True)
 >>> df = df.drop(columns='ratings').join(df['ratings'].explode())
 >>> df
   product  ratings
@@ -217,7 +216,7 @@ reads a JSON object as a single line and then extracts the
 }'''
 
 # first read the JSON object with line=True
->>> df = cudf.read_json(j, lines=True, engine='cudf_experimental')
+>>> df = cudf.read_json(j, lines=True)
 >>> df
              metadata                                            records
 0  {'vehicle': 'car'}  [{'id': 0, 'distance': 1.2}, {'id': 1, 'distan...

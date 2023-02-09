@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "simple_segmented.cuh"
+#include "simple.cuh"
 
 #include <cudf/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_product(
+std::unique_ptr<cudf::column> segmented_sum(
   column_view const& col,
   device_span<size_type const> offsets,
   cudf::data_type const output_dtype,
@@ -30,16 +30,15 @@ std::unique_ptr<cudf::column> segmented_product(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(
-    col.type(),
-    simple::detail::column_type_dispatcher<cudf::reduction::op::product>{},
-    col,
-    offsets,
-    output_dtype,
-    null_handling,
-    init,
-    stream,
-    mr);
+  return cudf::type_dispatcher(col.type(),
+                               simple::detail::column_type_dispatcher<cudf::reduction::op::sum>{},
+                               col,
+                               offsets,
+                               output_dtype,
+                               null_handling,
+                               init,
+                               stream,
+                               mr);
 }
 
 }  // namespace reduction

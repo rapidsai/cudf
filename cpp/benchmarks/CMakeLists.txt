@@ -169,7 +169,10 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/segmented_sort.cpp sort/sort_lists.cpp sort/sort_structs.cpp)
+ConfigureNVBench(
+  SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
+  sort/sort_lists.cpp sort/sort_structs.cpp
+)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -286,8 +289,8 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
+  string/slice.cpp
   string/split.cpp
-  string/substring.cpp
   string/translate.cpp
   string/url_decode.cu
 )
