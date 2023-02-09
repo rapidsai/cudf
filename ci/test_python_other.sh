@@ -17,7 +17,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest dask_cudf"
-pushd python/dask_cudf
+pushd python/dask_cudf/dask_cudf
 pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
@@ -27,11 +27,11 @@ pytest \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term \
-  dask_cudf
+  tests
 popd
 
 rapids-logger "pytest custreamz"
-pushd python/custreamz
+pushd python/custreamz/custreamz
 pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
@@ -41,7 +41,7 @@ pytest \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term \
-  custreamz
+  tests
 popd
 
 set -e
