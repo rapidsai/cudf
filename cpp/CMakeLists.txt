@@ -784,12 +784,9 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
   rapids_cpm_gbench()
 
-  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
-  # do not support the latest version of fmt, which is automatically pulled into our conda
-  # environments by mamba.
-  set(CPM_DOWNLOAD_fmt TRUE)
-  include(${rapids-cmake-dir}/cpm/nvbench.cmake)
-  rapids_cpm_nvbench()
+  # Find or install nvbench
+  include(cmake/thirdparty/get_nvbench.cmake)
+
   add_subdirectory(benchmarks)
 endif()
 

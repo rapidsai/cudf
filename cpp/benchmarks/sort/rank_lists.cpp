@@ -26,8 +26,6 @@
 template <cudf::rank_method method>
 void nvbench_rank_lists(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const table = create_lists_data(state);
 
   auto const null_frequency{state.get_float64("null_frequency")};

@@ -23,9 +23,6 @@ void nvbench_inner_join(nvbench::state& state,
 {
   skip_helper(state);
 
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii pool_raii;
-
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
@@ -43,9 +40,6 @@ void nvbench_left_join(nvbench::state& state,
 {
   skip_helper(state);
 
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii pool_raii;
-
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
@@ -62,9 +56,6 @@ void nvbench_full_join(nvbench::state& state,
                        nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
 {
   skip_helper(state);
-
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii pool_raii;
 
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
