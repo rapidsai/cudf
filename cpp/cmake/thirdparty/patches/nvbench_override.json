@@ -1,7 +1,7 @@
 
 {
   "packages" : {
-    "Thrust" : {
+    "nvbench" : {
       "patches" : [
         {
           "file" : "${current_json_dir}/nvbench_global_setup.diff",
