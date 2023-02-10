@@ -20,7 +20,7 @@ install_requires = [
     "protobuf==4.21",
     "typing_extensions",
     # Allow floating minor versions for Arrow.
-    "pyarrow==10",
+    "pyarrow==11",
     f"rmm{cuda_suffix}==23.4.*",
     f"ptxcompiler{cuda_suffix}",
     f"cubinlinker{cuda_suffix}",

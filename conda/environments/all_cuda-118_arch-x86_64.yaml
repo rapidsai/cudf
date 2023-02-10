@@ -30,7 +30,7 @@ dependencies:
 - gcc_linux-64=9.*
 - hypothesis
 - ipython
-- libarrow=10
+- libarrow=11
 - librdkafka=1.7.0
 - mimesis>=4.1.0
 - moto>=4.0.8
@@ -50,7 +50,7 @@ dependencies:
 - pre-commit
 - protobuf=4.21
 - ptxcompiler
-- pyarrow=10
+- pyarrow=11
 - pydata-sphinx-theme
 - pyorc
 - pytest

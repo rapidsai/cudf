@@ -379,7 +379,7 @@ endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
-      10.0.1
+      11
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()

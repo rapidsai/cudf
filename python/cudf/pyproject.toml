@@ -11,7 +11,7 @@ requires = [
     "ninja",
     "numpy",
     # Hard pin the patch version used during the build.
-    "pyarrow==10.0.1",
+    "pyarrow==11.0.0",
     "protoc-wheel",
     "versioneer",
 ]
