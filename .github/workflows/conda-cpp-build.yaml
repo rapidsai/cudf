@@ -64,6 +64,8 @@ jobs:
         run: |
           set > "/__w/cudf/cudf/metrics/test.log"
           echo "RAPIDS_BMR_DIR=$RAPIDS_BMR_DIR"
+          echo ${{ env.RAPIDS_BMR_DIR }}
+          echo ${{ github.workspace }}
       # uses: actions/upload-artifact@v3
       #  with:
       #    name: test-log
@@ -73,7 +75,7 @@ jobs:
         with:
           name: build-metrics-report
           # path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
-          path: $RAPIDS_BMR_DIR
+          path: ${RAPIDS_BMR_DIR}
       # uses: actions/upload-artifact@v3
       #  with:
       #    name: ninja-log
