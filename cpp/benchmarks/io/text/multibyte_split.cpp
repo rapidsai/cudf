@@ -209,10 +209,21 @@ using source_type_list = nvbench::enum_type_list<data_chunk_source_type::device,
                                                  data_chunk_source_type::host_pinned,
                                                  data_chunk_source_type::file_bgzip>;
 
-NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
-  .set_name("multibyte_split")
+NVBENCH_BENCH_TYPES(bench_multibyte_split,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<data_chunk_source_type::file>))
+  .set_name("multibyte_split_delimiters")
+  .set_min_samples(4)
   .add_int64_axis("strip_delimiters", {0, 1})
   .add_int64_axis("delim_size", {1, 4, 7})
   .add_int64_axis("delim_percent", {1, 25})
+  .add_int64_power_of_two_axis("size_approx", {15})
+  .add_int64_axis("byte_range_percent", {50});
+
+NVBENCH_BENCH_TYPES(bench_multibyte_split, NVBENCH_TYPE_AXES(source_type_list))
+  .set_name("multibyte_split_source")
+  .set_min_samples(4)
+  .add_int64_axis("strip_delimiters", {1})
+  .add_int64_axis("delim_size", {1})
+  .add_int64_axis("delim_percent", {1})
   .add_int64_power_of_two_axis("size_approx", {15, 30})
-  .add_int64_axis("byte_range_percent", {1, 5, 25, 50, 100});
+  .add_int64_axis("byte_range_percent", {10, 100});
