@@ -64,7 +64,7 @@ jobs:
         with:
           name: test-log
           # path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
-          path: /__w/cudf/cudf/metrics/test.log
+          path: artifact_upload_test.log
       - uses: actions/upload-artifact@v3
         with:
           name: build-metrics-report
