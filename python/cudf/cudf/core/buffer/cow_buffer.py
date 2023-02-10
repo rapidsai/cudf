@@ -113,13 +113,11 @@ class CopyOnWriteBuffer(Buffer):
         Buffer.get_ptr
         SpillableBuffer.get_ptr
         """
-        if mode == "read":
-            return self._ptr
-        elif mode == "write":
+        if mode == "write":
             self._unlink_shared_buffers()
-            return self._ptr
-        else:
+        elif mode != "read":
             raise ValueError(f"Incorrect mode passed : {mode}")
+        return self._ptr
 
     def copy(self, deep: bool = True):
         if deep or self._zero_copied:

@@ -550,8 +550,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             # a deep copy later. This is different
             # from `hasattr` because, it doesn't
             # invoke the property we are looking
-            # for and the later actually invokes
-            # the property.
+            # for and the latter actually invokes
+            # the property, which in this case could
+            # be expensive or mark a buffer as
+            # unspillable.
             has_cai = (
                 type(
                     inspect.getattr_static(
