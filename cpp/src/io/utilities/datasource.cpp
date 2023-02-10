@@ -330,9 +330,8 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 {
-  // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
+  return create(
+    cudf::host_span<std::byte const>{reinterpret_cast<std::byte const*>(buffer.data), buffer.size});
 }
 
 std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)

@@ -245,7 +245,7 @@ struct source_info {
    * @param host_buffers Input buffers in host memory
    */
   template <typename T, CUDF_ENABLE_IF(is_byte_like_type<T>())>
-  explicit source_info(std::vector<cudf::host_span<T const>> const& host_buffers)
+  explicit source_info(cudf::host_span<cudf::host_span<T const>> const& host_buffers)
     : _type(io_type::HOST_BUFFER)
   {
     if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
