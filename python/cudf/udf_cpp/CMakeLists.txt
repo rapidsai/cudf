@@ -19,12 +19,12 @@ include(rapids-cpm)
 include(rapids-cuda)
 include(rapids-find)
 
-rapids_cuda_init_architectures(strings-udf-cpp)
+rapids_cuda_init_architectures(udf-cpp)
 
 # Create a project so that we can enable CUDA architectures in this file.
 project(
-  strings-udf-cpp
-  VERSION ${strings_udf_version}
+  udf-cpp
+  VERSION ${udf_version}
   LANGUAGES CUDA
 )
 
@@ -32,16 +32,16 @@ rapids_cpm_init()
 
 rapids_find_package(
   CUDAToolkit REQUIRED
-  BUILD_EXPORT_SET strings-udf-exports
-  INSTALL_EXPORT_SET strings-udf-exports
+  BUILD_EXPORT_SET udf-exports
+  INSTALL_EXPORT_SET udf-exports
 )
 
 include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET strings-udf-exports INSTALL_EXPORT_SET strings-udf-exports)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
-add_library(cudf_strings_udf SHARED src/strings/udf/udf_apis.cu)
+add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
-  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${strings-udf-cpp_SOURCE_DIR}/include>"
+  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${udf-cpp_SOURCE_DIR}/strings/include>"
 )
 
 set_target_properties(
@@ -104,15 +104,15 @@ list(REMOVE_DUPLICATES CMAKE_CUDA_ARCHITECTURES)
 foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set(tgt shim_${arch})
 
-  add_library(${tgt} OBJECT src/strings/udf/shim.cu)
+  add_library(${tgt} OBJECT shim.cu)
 
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
-  target_include_directories(${tgt} PUBLIC include)
+  target_include_directories(${tgt} PUBLIC strings/include)
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
-  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../strings_udf" ${tgt}.ptx)
+  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../udf" ${tgt}.ptx)
   install(
     FILES $<TARGET_OBJECTS:${tgt}>
     DESTINATION ./cudf/core/udf/
