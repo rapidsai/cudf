@@ -2753,3 +2753,11 @@ def test_parquet_reader_malformed_file(datadir):
     # expect a failure when reading the whole file
     with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
+
+
+def test_parquet_reader_unsupported_page_encoding(datadir):
+    fname = datadir / "delta_encoding.parquet"
+
+    # expect a failure when reading the whole file
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
