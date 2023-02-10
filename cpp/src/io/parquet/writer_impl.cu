@@ -946,7 +946,7 @@ void writer::impl::recalculate_page_fragments(device_span<gpu::PageFragment> fra
                                               host_span<size_type const> frag_sizes)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
-  InitPageFragments1D(frag, d_frag_sz, stream);
+  RecalculatePageFragments(frag, d_frag_sz, stream);
 }
 
 void writer::impl::gather_fragment_statistics(device_span<statistics_chunk> frag_stats,

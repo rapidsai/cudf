@@ -243,8 +243,8 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<size_type const> column_frag_sizes)
+  gpuRecalculatePageFragments(device_span<PageFragment> frag,
+                              device_span<size_type const> column_frag_sizes)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -2107,11 +2107,11 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
     frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
 
-void InitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<size_type const> column_frag_sizes,
-                         rmm::cuda_stream_view stream)
+void RecalculatePageFragments(device_span<PageFragment> frag,
+                              device_span<size_type const> column_frag_sizes,
+                              rmm::cuda_stream_view stream)
 {
-  gpuInitPageFragments1D<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
+  gpuRecalculatePageFragments<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
 }
 
 void InitFragmentStatistics(device_span<statistics_group> groups,

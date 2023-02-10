@@ -500,7 +500,7 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for initializing encoder page fragments with variable fragment sizes
+ * @brief Launches kernel for calculating encoder page fragments with variable fragment sizes
  *
  * Based on the number of rows in each fragment, populates the value count, the size of data in the
  * fragment, the number of unique values, and the data size of unique values.
@@ -511,9 +511,9 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[in] column_frag_sizes Number of rows per fragment per column [column_id]
  * @param[in] stream CUDA stream to use
  */
-void InitPageFragments1D(device_span<PageFragment> frag,
-                         device_span<size_type const> column_frag_sizes,
-                         rmm::cuda_stream_view stream);
+void RecalculatePageFragments(device_span<PageFragment> frag,
+                              device_span<size_type const> column_frag_sizes,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups with variable fragment sizes
