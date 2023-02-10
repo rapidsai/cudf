@@ -228,9 +228,9 @@ class writer::impl {
   statistics_freq stats_granularity_   = statistics_freq::STATISTICS_NONE;
   dictionary_policy dict_policy_       = dictionary_policy::ALWAYS;
   size_t max_dictionary_size_          = default_max_dictionary_size;
-  size_type max_page_fragment_size_    = default_max_page_fragment_size;
   bool int96_timestamps                = false;
   int32_t column_index_truncate_length = default_column_index_truncate_length;
+  std::optional<size_type> max_page_fragment_size_;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()

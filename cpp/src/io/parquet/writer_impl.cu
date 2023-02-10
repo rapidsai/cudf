@@ -1453,12 +1453,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   // 5000 is good enough for up to ~200-character strings. Longer strings and deeply nested columns
   // will start producing fragments larger than the desired page size, so calculate fragment sizes
   // for each leaf column.  Skip if the fragment size is not the default.
-  bool is_default_fragment_size = max_page_fragment_size_ == -1;
-  if (is_default_fragment_size) { max_page_fragment_size_ = default_max_page_fragment_size; }
+  auto max_page_fragment_size = max_page_fragment_size_.value_or(default_max_page_fragment_size);
 
-  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size_);
+  std::vector<size_type> column_frag_size(num_columns, max_page_fragment_size);
 
-  if (table.num_rows() > 0 && is_default_fragment_size) {
+  if (table.num_rows() > 0 && not max_page_fragment_size_.has_value()) {
     std::vector<size_t> column_sizes;
     std::transform(single_streams_table.begin(),
                    single_streams_table.end(),
@@ -1470,7 +1469,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, table.num_rows());
     if (avg_row_len > 0) {
       auto const rg_frag_size = util::div_rounding_up_safe(max_row_group_size, avg_row_len);
-      max_page_fragment_size_ = std::min<size_type>(rg_frag_size, max_page_fragment_size_);
+      max_page_fragment_size  = std::min<size_type>(rg_frag_size, max_page_fragment_size);
     }
 
     // dividing page size by average row length will tend to overshoot the desired
@@ -1484,9 +1483,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, table.num_rows());
       if (avg_len > 0) {
         auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
-        return std::min<size_type>(max_page_fragment_size_, frag_size);
+        return std::min<size_type>(max_page_fragment_size, frag_size);
       } else {
-        return max_page_fragment_size_;
+        return max_page_fragment_size;
       }
     };
 
@@ -1497,13 +1496,13 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    frag_size_fn);
   }
 
-  // do first pass with max_page_fragment_size_ to calculate row group boundaries
+  // do first pass with max_page_fragment_size to calculate row group boundaries
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
-                 [this](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size_);
+                 [this, max_page_fragment_size](auto const& part) {
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
                  });
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
@@ -1524,7 +1523,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size_);
+      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
   std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
@@ -1588,7 +1587,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = md->file(p).row_groups[global_r];
       uint32_t fragments_in_chunk =
-        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size_);
+        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1624,7 +1623,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         column_chunk_meta.num_values     = ck.num_values;
 
         frags_per_column[c] += util::div_rounding_up_unsafe(
-          row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size_));
+          row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size));
       }
       f += fragments_in_chunk;
       start_row += (uint32_t)row_group.num_rows;
@@ -1647,7 +1646,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   // until now we've been using a uniform fragment size. if there are any columns with
-  // a fragment size != max_page_fragment_size_ then resize the fragments array and
+  // a fragment size != max_page_fragment_size then resize the fragments array and
   // update chunks with new fragment info
 
   // first figure out the total number of fragments
