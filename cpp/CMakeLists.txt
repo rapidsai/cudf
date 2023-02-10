@@ -71,6 +71,18 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+if(${CUDA_STATIC_RUNTIME})
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+)
+mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
@@ -754,10 +766,34 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
-
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
+
+# * build cudf_identify_stream_usage --------------------------------------------------------------
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  if(CUDA_STATIC_RUNTIME)
+    message(
+      FATAL_ERROR
+        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+    )
+  endif()
+
+  # Libraries for stream-related testing.
+  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+
+  set_target_properties(
+    cudf_identify_stream_usage
+    PROPERTIES # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
+  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+endif()
+
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
 
@@ -828,6 +864,10 @@ if(CUDF_BUILD_TESTUTIL)
     INSTALL cudf-testing-exports
     "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
   )
+endif()
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
 endif()
 
 set(doc_string
