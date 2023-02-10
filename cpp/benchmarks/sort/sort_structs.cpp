@@ -22,8 +22,6 @@
 
 void nvbench_sort_struct(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const input = create_structs_data(state);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

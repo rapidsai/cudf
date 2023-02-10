@@ -24,8 +24,6 @@
 template <cudf::rank_method method>
 void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enum_type<method>>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const table = create_structs_data(state);
 
   const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};

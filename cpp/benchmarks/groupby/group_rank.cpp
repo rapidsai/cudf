@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ static void nvbench_groupby_rank(nvbench::state& state,
 {
   using namespace cudf;
   constexpr auto dtype = type_to_id<int64_t>();
-  cudf::rmm_pool_raii pool_raii;
 
   bool const is_sorted              = state.get_int64("is_sorted");
   cudf::size_type const column_size = state.get_int64("data_size");
