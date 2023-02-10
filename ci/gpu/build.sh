@@ -91,6 +91,9 @@ if [ "$SOURCE_BRANCH" != "main" ] && [[ "${INSTALL_DASK_MAIN}" == 0 ]]; then
   gpuci_mamba_retry install conda-forge::dask==$DASK_STABLE_VERSION conda-forge::distributed==$DASK_STABLE_VERSION conda-forge::dask-core==$DASK_STABLE_VERSION --force-reinstall
 fi
 
+gpuci_conda_retry remove --force pyarrow arrow-cpp
+gpuci_mamba_retry install -y "pyarrow=11" "libarrow=11"
+
 gpuci_logger "Check conda environment"
 conda info
 conda config --show-sources

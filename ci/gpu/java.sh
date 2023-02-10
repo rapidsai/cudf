@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -67,6 +67,9 @@ nvidia-smi
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
+
+gpuci_conda_retry remove --force pyarrow arrow-cpp
+gpuci_mamba_retry install -y "pyarrow=11" "libarrow=11"
 
 gpuci_logger "Check conda environment"
 conda info
