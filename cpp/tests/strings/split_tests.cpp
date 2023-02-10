@@ -312,7 +312,7 @@ TEST_F(StringsSplitTest, SplitRecordLong)
 {
   // TODO: create some more test-cases with larger delimiters which span string rows
   std::vector<const char*> h_strings{
-    " Héllo, this is a réally long string to test the long-strings path in the split-record code "
+    " Héllo; this is a réally long string to test the long-strings path in the split-record code "
     "logic.",
     nullptr,
     "The long strings need to be extra long to average out above 64 bytes per string overall for "
@@ -331,7 +331,7 @@ TEST_F(StringsSplitTest, SplitRecordLong)
   // clang-format off
    LCW expected(
     {LCW{
-      "","Héllo,","this","is","a","réally","long","string","to","test","the",
+      "","Héllo;","this","is","a","réally","long","string","to","test","the",
          "long-strings","path","in","the","split-record","code","logic."},
      LCW{},
      LCW{"The","long","strings","need","to","be","extra","long","to","average","out","above",
