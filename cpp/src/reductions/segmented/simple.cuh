@@ -216,7 +216,9 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
     simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
   auto const scale = [&] {
     if constexpr (std::is_same_v<Op, cudf::reduction::op::product>) {
-      // CUDF_FAIL("Segmented reduction for fixed point does not support product aggregation yet.");
+      // The product aggregation requires updating the scale of the fixed-point output column.
+      // The output scale needs to be the maximum valid count of all segments multiplied by
+      // the input scale value.
       auto d_col = column_device_view::create(col, stream);
       rmm::device_uvector<size_type> valid_counts =
         cudf::reduction::detail::segmented_valid_counts(*d_col,
@@ -225,6 +227,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                         null_handling,
                                                         stream,
                                                         rmm::mr::get_current_device_resource());
+
       auto max_valid_count = thrust::reduce(rmm::exec_policy(stream),
                                             valid_counts.begin(),
                                             valid_counts.end(),
@@ -232,6 +235,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                             thrust::maximum<size_type>{});
 
       auto new_scale = numeric::scale_type{col.type().scale() * max_valid_count};
+
       // adjust values in each segment to match the new scale
       thrust::transform(rmm::exec_policy(stream),
                         d_col->begin<InputType>(),
@@ -240,9 +244,11 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                         [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); });
       return new_scale;
     }
+
     if constexpr (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
+
     return numeric::scale_type{col.type().scale()};
   }();
 
