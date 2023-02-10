@@ -62,8 +62,6 @@ void BM_parquet_read_data(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
@@ -88,8 +86,6 @@ void BM_parquet_read_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
