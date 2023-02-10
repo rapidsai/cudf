@@ -215,7 +215,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   auto result =
     simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, init, stream, mr);
   auto const scale = [&] {
-    if (std::is_same_v<Op, cudf::reduction::op::product>) {
+    if constexpr (std::is_same_v<Op, cudf::reduction::op::product>) {
       // CUDF_FAIL("Segmented reduction for fixed point does not support product aggregation yet.");
       auto d_col = column_device_view::create(col, stream);
       rmm::device_uvector<size_type> valid_counts =
@@ -239,7 +239,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                         [new_scale] __device__(auto fp) { return fp.rescaled(new_scale); });
       return new_scale;
     }
-    if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
+    if constexpr (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
     return numeric::scale_type{col.type().scale()};
