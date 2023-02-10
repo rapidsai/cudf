@@ -57,9 +57,9 @@ void orc_read_common(cudf::io::orc_writer_options const& opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType, cudf::io::io_type IO>
+template <data_type DataType, cudf::io::io_type IOType>
 void BM_orc_read_data(nvbench::state& state,
-                      nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
+                      nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -73,17 +73,17 @@ void BM_orc_read_data(nvbench::state& state,
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(IO);
+  cuio_source_sink_pair source_sink(IOType);
   cudf::io::orc_writer_options opts =
     cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
 
   orc_read_common(opts, source_sink, state);
 }
 
-template <cudf::io::io_type IO, cudf::io::compression_type Compression>
+template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
 void BM_orc_read_io_compression(
   nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
+  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -104,7 +104,7 @@ void BM_orc_read_io_compression(
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(IO);
+  cuio_source_sink_pair source_sink(IOType);
   cudf::io::orc_writer_options opts =
     cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
       .compression(Compression);

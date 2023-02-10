@@ -64,20 +64,20 @@ void csv_read_common(DataType const& data_types,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType, cudf::io::io_type IO>
+template <data_type DataType, cudf::io::io_type IOType>
 void BM_csv_read_input(nvbench::state& state,
-                       nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
+                       nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const source_type = IO;
+  auto const source_type = IOType;
 
   csv_read_common(d_type, source_type, state);
 }
 
-template <cudf::io::io_type IO>
-void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
+template <cudf::io::io_type IOType>
+void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -87,7 +87,7 @@ void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type
                                          static_cast<int32_t>(data_type::TIMESTAMP),
                                          static_cast<int32_t>(data_type::DURATION),
                                          static_cast<int32_t>(data_type::STRING)});
-  auto const source_type = IO;
+  auto const source_type = IOType;
 
   csv_read_common(d_type, source_type, state);
 }
