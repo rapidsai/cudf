@@ -230,7 +230,8 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                             valid_counts.end(),
                                             size_type{0},
                                             thrust::maximum<size_type>{});
-      auto new_scale       = numeric::scale_type{col.type().scale() * max_valid_count};
+
+      auto new_scale = numeric::scale_type{col.type().scale() * max_valid_count};
       // adjust values in each segment to match the new scale
       thrust::transform(rmm::exec_policy(stream),
                         d_col->begin<InputType>(),
