@@ -70,6 +70,25 @@ def test_series_setitem_cow_on():
     assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
     assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
 
+    cudf.set_option("copy_on_write", original_cow_setting)
+
+
+def test_series_setitem_cow_off():
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", False)
+    actual = cudf.Series([1, 2, 3, 4, 5])
+    new_copy = actual.copy(deep=False)
+
+    actual[1] = 100
+    assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
+    assert_eq(new_copy, cudf.Series([1, 100, 3, 4, 5]))
+    cudf.set_option("copy_on_write", original_cow_setting)
+
+
+def test_series_setitem_both_slice_cow_on():
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", True)
+
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -80,7 +99,29 @@ def test_series_setitem_cow_on():
     new_copy[slice(2, 4, 1)] = 300
     assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
     assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
+    cudf.set_option("copy_on_write", original_cow_setting)
 
+
+def test_series_setitem_both_slice_cow_off():
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", False)
+
+    actual = cudf.Series([1, 2, 3, 4, 5])
+    new_copy = actual.copy(deep=False)
+
+    actual[slice(0, 2, 1)] = 100
+    assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
+    assert_eq(new_copy, cudf.Series([100, 100, 3, 4, 5]))
+
+    new_copy[slice(2, 4, 1)] = 300
+    assert_eq(actual, cudf.Series([100, 100, 300, 300, 5]))
+    assert_eq(new_copy, cudf.Series([100, 100, 300, 300, 5]))
+    cudf.set_option("copy_on_write", original_cow_setting)
+
+
+def test_series_setitem_partial_slice_cow_on():
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", True)
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -96,27 +137,9 @@ def test_series_setitem_cow_on():
     cudf.set_option("copy_on_write", original_cow_setting)
 
 
-def test_series_setitem_cow_off():
+def test_series_setitem_partial_slice_cow_off():
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", False)
-    actual = cudf.Series([1, 2, 3, 4, 5])
-    new_copy = actual.copy(deep=False)
-
-    actual[1] = 100
-    assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
-    assert_eq(new_copy, cudf.Series([1, 100, 3, 4, 5]))
-
-    actual = cudf.Series([1, 2, 3, 4, 5])
-    new_copy = actual.copy(deep=False)
-
-    actual[slice(0, 2, 1)] = 100
-    assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
-    assert_eq(new_copy, cudf.Series([100, 100, 3, 4, 5]))
-
-    new_copy[slice(2, 4, 1)] = 300
-    assert_eq(actual, cudf.Series([100, 100, 300, 300, 5]))
-    assert_eq(new_copy, cudf.Series([100, 100, 300, 300, 5]))
-
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 

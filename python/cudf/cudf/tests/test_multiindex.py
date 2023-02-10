@@ -790,7 +790,6 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
     """
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", copy_on_write)
-    same_ref = (not deep) or (cudf.get_option("copy_on_write") and not deep)
 
     if isinstance(data, dict):
         import operator
@@ -813,6 +812,9 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         assert all((x == y) for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
+        same_ref = (not deep) or (
+            cudf.get_option("copy_on_write") and not deep
+        )
         mi1 = data
         mi2 = mi1.copy(deep=deep)
 
