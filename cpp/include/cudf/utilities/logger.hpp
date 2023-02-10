@@ -32,9 +32,18 @@ namespace cudf {
  * This is a global instance of a spdlog logger. It can be used to configure logging behavior in
  * libcudf.
  *
- * Example: TODO
+ * Examples:
+ * @code{.cpp}
+ * // Turn off logging at runtime
+ * cudf::logger().set_level(spdlog::level::off);
+ * // Add a stdout sink to the logger
+ * cudf::logger().sinks().push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
+ * // Replace the default sink
+ * cudf::logger().sinks() ={std::make_shared<spdlog::sinks::stderr_sink_mt>()};
+ * @endcode
  *
- * Note: TODO
+ * Note: Changes to the sinks are not thread safe and should only be done during global
+ * initialization.
  *
  * @return spdlog::logger& The logger.
  */
