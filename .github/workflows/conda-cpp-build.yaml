@@ -42,6 +42,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
         PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
+        RAPIDS_BMR_DIR: ${{ env.RAPIDS_BMR_DIR }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -64,3 +65,9 @@ jobs:
         with:
           name: ninja-log
           path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
+      - name: Artifact test
+        run: echo "${{ env.RAPIDS_BMR_DIR }}" > "${{ env.RAPIDS_BMR_DIR }}/test.log"
+      - uses: actions/upload-artifact@v3
+        with:
+          name: test-log
+          path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
