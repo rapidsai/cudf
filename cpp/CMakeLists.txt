@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.12.00
+  VERSION 23.04.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -48,6 +48,8 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
+mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
@@ -69,6 +71,29 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+if(${CUDA_STATIC_RUNTIME})
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+)
+mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+
+# Option for whether the default stream is an error or whether we should search for a specific
+# stream.
+option(
+  STREAM_MODE_TESTING
+  "Change the behavior of cudf::test::get_default_stream instead of cudf::get_default_stream. This option has no effect if CUDF_BUILD_STREAMS_TEST_UTIL is OFF." OFF
+)
+mark_as_advanced(STREAM_MODE_TESTING)
+
+
+option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -92,6 +117,12 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 rapids_cmake_build_type("Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
+  message(
+    FATAL_ERROR
+      "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
+  )
+endif()
 
 set(CUDF_CXX_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
@@ -131,12 +162,14 @@ include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 # find zlib
 rapids_find_package(ZLIB REQUIRED)
 
-# find Threads (needed by cudftestutil)
-rapids_find_package(
-  Threads REQUIRED
-  BUILD_EXPORT_SET cudf-exports
-  INSTALL_EXPORT_SET cudf-exports
-)
+if(CUDF_BUILD_TESTUTIL)
+  # find Threads (needed by cudftestutil)
+  rapids_find_package(
+    Threads REQUIRED
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+  )
+endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
@@ -158,7 +191,9 @@ rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-expo
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
-include(cmake/thirdparty/get_gtest.cmake)
+if(CUDF_BUILD_TESTUTIL)
+  include(cmake/thirdparty/get_gtest.cmake)
+endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
@@ -327,7 +362,9 @@ add_library(
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
+  src/io/json/experimental/byte_range_info.cu
   src/io/json/experimental/read_json.cpp
+  src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
@@ -344,7 +381,10 @@ add_library(
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/reader_impl.cu
+  src/io/parquet/reader.cpp
+  src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_helpers.cpp
+  src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
@@ -363,7 +403,7 @@ add_library(
   src/io/utilities/type_conversion.cpp
   src/jit/cache.cpp
   src/jit/parser.cpp
-  src/jit/type.cpp
+  src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
@@ -393,6 +433,7 @@ add_library(
   src/lists/interleave_columns.cu
   src/lists/lists_column_factories.cu
   src/lists/lists_column_view.cu
+  src/lists/reverse.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
@@ -421,13 +462,18 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
-  src/reductions/segmented_all.cu
-  src/reductions/segmented_any.cu
-  src/reductions/segmented_max.cu
-  src/reductions/segmented_min.cu
-  src/reductions/segmented_product.cu
-  src/reductions/segmented_reductions.cpp
-  src/reductions/segmented_sum.cu
+  src/reductions/segmented/all.cu
+  src/reductions/segmented/any.cu
+  src/reductions/segmented/max.cu
+  src/reductions/segmented/mean.cu
+  src/reductions/segmented/min.cu
+  src/reductions/segmented/product.cu
+  src/reductions/segmented/reductions.cpp
+  src/reductions/segmented/std.cu
+  src/reductions/segmented/sum.cu
+  src/reductions/segmented/sum_of_squares.cu
+  src/reductions/segmented/update_validity.cu
+  src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
@@ -457,6 +503,7 @@ add_library(
   src/sort/segmented_sort.cu
   src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
@@ -499,15 +546,18 @@ add_library(
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
-  src/strings/regex/regexec.cu
+  src/strings/regex/regexec.cpp
+  src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
+  src/strings/reverse.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
+  src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_re.cu
@@ -516,7 +566,6 @@ add_library(
   src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
-  src/strings/substring.cu
   src/strings/translate.cu
   src/strings/utilities.cu
   src/strings/wrap.cu
@@ -558,6 +607,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
+  src/utilities/type_dispatcher.cpp
 )
 
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
@@ -687,48 +737,77 @@ add_library(cudf::cudf ALIAS cudf)
 # ##################################################################################################
 # * build cudftestutil ----------------------------------------------------------------------------
 
-add_library(
-  # TODO: We need this to be a shared library in order to support runtime
-  # symbol patching with LD_PRELOAD. Are we OK with that change?
-  cudftestutil SHARED
-  tests/io/metadata_utilities.cpp
-  tests/utilities/base_fixture.cpp
-  tests/utilities/column_utilities.cu
-  tests/utilities/default_stream.cpp
-  tests/utilities/table_utilities.cu
-  tests/utilities/tdigest_utilities.cu
-)
+  add_library(
+    # TODO: We need this to be a shared library in order to support runtime
+    # symbol patching with LD_PRELOAD. Are we OK with that change?
+    cudftestutil SHARED
+    tests/io/metadata_utilities.cpp
+    tests/utilities/base_fixture.cpp
+    tests/utilities/column_utilities.cu
+    tests/utilities/default_stream.cpp
+    tests/utilities/table_utilities.cu
+    tests/utilities/tdigest_utilities.cu
+  )
 
-set_target_properties(
-  cudftestutil
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN"
-             # set target compile options
-             CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON
-             CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON
-             POSITION_INDEPENDENT_CODE ON
-             INTERFACE_POSITION_INDEPENDENT_CODE ON
-)
+  set_target_properties(
+    cudftestutil
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
+  )
 
-target_compile_options(
-  cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
-)
+  target_compile_options(
+    cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+                        "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+  )
 
-target_link_libraries(
-  cudftestutil
-  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
-  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
-)
+  target_link_libraries(
+    cudftestutil
+    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+  )
 
-target_include_directories(
-  cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                      "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-)
+  target_include_directories(
+    cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+  )
+  add_library(cudf::cudftestutil ALIAS cudftestutil)
 
-add_library(cudf::cudftestutil ALIAS cudftestutil)
+endif()
+
+# * build cudf_identify_stream_usage --------------------------------------------------------------
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  if(CUDA_STATIC_RUNTIME)
+    message(
+      FATAL_ERROR
+        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+    )
+  endif()
+
+  # Libraries for stream-related testing.
+  add_library(cudf_identify_stream_usage SHARED tests/utilities/identify_stream_usage.cpp)
+
+  set_target_properties(
+    cudf_identify_stream_usage
+    PROPERTIES # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(cudf_identify_stream_usage PUBLIC CUDA::cudart rmm::rmm)
+  add_library(cudf::cudf_identify_stream_usage ALIAS cudf_identify_stream_usage)
+
+  if(STREAM_MODE_TESTING)
+    target_compile_definitions(cudf_identify_stream_usage PUBLIC STREAM_MODE_TESTING)
+  endif()
+endif()
 
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
@@ -756,12 +835,9 @@ if(CUDF_BUILD_BENCHMARKS)
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
   rapids_cpm_gbench()
 
-  # Find or install NVBench Temporarily force downloading of fmt because current versions of nvbench
-  # do not support the latest version of fmt, which is automatically pulled into our conda
-  # environments by mamba.
-  set(CPM_DOWNLOAD_fmt TRUE)
-  include(${rapids-cmake-dir}/cpm/nvbench.cmake)
-  rapids_cpm_nvbench()
+  # Find or install nvbench
+  include(cmake/thirdparty/get_nvbench.cmake)
+
   add_subdirectory(benchmarks)
 endif()
 
@@ -784,24 +860,30 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
                   ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(
-  TARGETS cudftestutil
-  DESTINATION ${lib_dir}
-  EXPORT cudf-testing-exports
-)
+if(CUDF_BUILD_TESTUTIL)
+  install(
+    TARGETS cudftestutil
+    DESTINATION ${lib_dir}
+    EXPORT cudf-testing-exports
+  )
 
-install(
-  EXPORT cudf-testing-exports
-  FILE cudf-testing-targets.cmake
-  NAMESPACE cudf::
-  DESTINATION "${lib_dir}/cmake/cudf"
-)
+  install(
+    EXPORT cudf-testing-exports
+    FILE cudf-testing-targets.cmake
+    NAMESPACE cudf::
+    DESTINATION "${lib_dir}/cmake/cudf"
+  )
 
-include("${rapids-cmake-dir}/export/write_dependencies.cmake")
-rapids_export_write_dependencies(
-  INSTALL cudf-testing-exports
-  "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
-)
+  include("${rapids-cmake-dir}/export/write_dependencies.cmake")
+  rapids_export_write_dependencies(
+    INSTALL cudf-testing-exports
+    "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
+  )
+endif()
+
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  install(TARGETS cudf_identify_stream_usage DESTINATION ${lib_dir})
+endif()
 
 set(doc_string
     [=[
@@ -891,6 +973,7 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
 ]=]
 )
+
 string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
@@ -902,15 +985,16 @@ rapids_export(
   FINAL_CODE_BLOCK build_code_string
 )
 
-export(
-  EXPORT cudf-testing-exports
-  FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-  NAMESPACE cudf::
-)
-rapids_export_write_dependencies(
-  BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
-)
-
+if(CUDF_BUILD_TESTUTIL)
+  export(
+    EXPORT cudf-testing-exports
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
+    NAMESPACE cudf::
+  )
+  rapids_export_write_dependencies(
+    BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
+  )
+endif()
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
 

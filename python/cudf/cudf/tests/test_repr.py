@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -31,7 +31,7 @@ def test_null_series(nrows, dtype):
     sr[np.random.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
-            sr._column.data_array_view.copy_to_host(),
+            sr._column.data_array_view(mode="read").copy_to_host(),
             dtype=np_dtypes_to_pandas_dtypes.get(
                 cudf.dtype(dtype), cudf.dtype(dtype)
             ),
@@ -135,8 +135,8 @@ def test_integer_dataframe(x):
 )
 @settings(deadline=None)
 def test_integer_series(x):
-    sr = cudf.Series(x)
-    ps = pd.Series(data=x)
+    sr = cudf.Series(x, dtype=int)
+    ps = pd.Series(data=x, dtype=int)
 
     assert repr(sr) == repr(ps)
 
@@ -144,7 +144,7 @@ def test_integer_series(x):
 @given(st.lists(st.floats()))
 @settings(deadline=None)
 def test_float_dataframe(x):
-    gdf = cudf.DataFrame({"x": cudf.Series(x, nan_as_null=False)})
+    gdf = cudf.DataFrame({"x": cudf.Series(x, dtype=float, nan_as_null=False)})
     pdf = gdf.to_pandas()
     assert repr(gdf) == repr(pdf)
 
@@ -152,8 +152,8 @@ def test_float_dataframe(x):
 @given(st.lists(st.floats()))
 @settings(deadline=None)
 def test_float_series(x):
-    sr = cudf.Series(x, nan_as_null=False)
-    ps = pd.Series(data=x)
+    sr = cudf.Series(x, dtype=float, nan_as_null=False)
+    ps = pd.Series(data=x, dtype=float)
     assert repr(sr) == repr(ps)
 
 
@@ -600,9 +600,10 @@ def test_series_null_index_repr(sr, pandas_special_case):
     ],
 )
 @pytest.mark.parametrize("dtype", ["timedelta64[s]", "timedelta64[us]"])
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
+)
 def test_timedelta_series_s_us_repr(data, dtype):
-    if not PANDAS_GE_110:
-        pytest.xfail(reason="pandas >= 1.1 requried")
     sr = cudf.Series(data, dtype=dtype)
     psr = sr.to_pandas()
 
@@ -1102,9 +1103,10 @@ def test_timedelta_dataframe_repr(df, expected_repr):
         ),
     ],
 )
+@pytest.mark.xfail(
+    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
+)
 def test_timedelta_index_repr(index, expected_repr):
-    if not PANDAS_GE_110:
-        pytest.xfail(reason="pandas >= 1.1 requried")
     actual_repr = repr(index)
 
     assert actual_repr.split() == expected_repr.split()

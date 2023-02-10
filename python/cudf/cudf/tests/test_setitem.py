@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -108,6 +108,16 @@ def test_series_set_item(psr, arg):
     assert_eq(psr, gsr)
 
 
+def test_series_setitem_singleton_range():
+    sr = cudf.Series([1, 2, 3], dtype=np.int64)
+    psr = sr.to_pandas()
+    value = np.asarray([7], dtype=np.int64)
+    sr.iloc[:1] = value
+    psr.iloc[:1] = value
+    assert_eq(sr, cudf.Series([7, 2, 3], dtype=np.int64))
+    assert_eq(sr, psr, check_dtype=True)
+
+
 @pytest.mark.parametrize(
     "df",
     [
@@ -205,7 +215,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_1], {}),
         ([mask, replace_data_1], {}),
-        compare_error_message=False,
     )
 
     psr = pd.Series(data)
@@ -215,7 +224,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_2], {}),
         ([mask, replace_data_2], {}),
-        compare_error_message=False,
     )
 
 
@@ -229,9 +237,6 @@ def test_categorical_setitem_invalid():
             rfunc=gs.__setitem__,
             lfunc_args_and_kwargs=([0, 5], {}),
             rfunc_args_and_kwargs=([0, 5], {}),
-            compare_error_message=False,
-            expected_error_message="Cannot setitem on a Categorical with a "
-            "new category, set the categories first",
         )
     else:
         # Following workaround is needed because:

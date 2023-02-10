@@ -1,17 +1,25 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import glob
+import os
 from typing import Any, Callable, Dict, List
 
 import cachetools
 import cupy as cp
+import llvmlite.binding as ll
 import numpy as np
+from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
 from numba import cuda, typeof
+from numba.core.datamodel import default_manager
 from numba.core.errors import TypingError
+from numba.cuda.cudadrv import nvvm
+from numba.cuda.cudadrv.driver import Linker
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
+import rmm
+
 from cudf.core.column.column import as_column
-from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -22,6 +30,9 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
 
+logger = get_logger()
+
+
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
 )
@@ -31,6 +42,9 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 arg_handlers: List[Any] = []
 ptx_files: List[Any] = []
+masked_array_types: Dict[Any, Any] = {}
+launch_arg_getters: Dict[Any, Any] = {}
+output_col_getters: Dict[Any, Any] = {}
 
 
 @_cudf_nvtx_annotate
@@ -54,6 +68,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(func, compile_sig)
+
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
@@ -64,6 +79,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
         if not isinstance(numba_output_type, MaskedType)
         else numba_output_type.value_type
     )
+    result = result if result.is_internal else result.return_type
 
     # _get_udf_return_type will throw a TypingError if the user tries to use
     # a field in the row containing an unsupported dtype, except in the
@@ -80,39 +96,29 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     return result
 
 
-def _is_jit_supported_type(dtype):
-    # category dtype isn't hashable
-    if isinstance(dtype, CategoricalDtype):
-        return False
-    return str(dtype) in JIT_SUPPORTED_TYPES
-
-
-def _all_dtypes_from_frame(frame):
+def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
-        if _is_jit_supported_type(col.dtype)
+        if str(col.dtype) in supported_types
         else np.dtype("O")
         for colname, col in frame._data.items()
     }
 
 
-def _supported_dtypes_from_frame(frame):
+def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col.dtype
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype)
+        if str(col.dtype) in supported_types
     }
 
 
-def _supported_cols_from_frame(frame):
+def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
         for colname, col in frame._data.items()
-        if _is_jit_supported_type(col.dtype)
+        if str(col.dtype) in supported_types
     }
-
-
-masked_array_types: Dict[Any, Any] = {}
 
 
 def _masked_array_type_from_col(col):
@@ -142,9 +148,12 @@ def _construct_signature(frame, return_type, args):
     actually JIT the kernel itself later, accounting for types
     and offsets. Skips columns with unsupported dtypes.
     """
-
+    if not return_type.is_internal:
+        return_type = CPointer(return_type)
+    else:
+        return_type = return_type[::1]
     # Tuple of arrays, first the output data array, then the mask
-    return_type = Tuple((return_type[::1], boolean[::1]))
+    return_type = Tuple((return_type, boolean[::1]))
     offsets = []
     sig = [return_type, int64]
     for col in _supported_cols_from_frame(frame).values():
@@ -213,7 +222,12 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     # could be a MaskedType or a scalar type.
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    np_return_type = (
+        numpy_support.as_dtype(scalar_return_type)
+        if scalar_return_type.is_internal
+        else scalar_return_type.np_dtype
+    )
+
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -228,9 +242,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
     kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
 
     return kernel
-
-
-launch_arg_getters: Dict[Any, Any] = {}
 
 
 def _get_input_args_from_frame(fr):
@@ -254,8 +265,158 @@ def _get_input_args_from_frame(fr):
 
 
 def _return_arr_from_dtype(dt, size):
+    if extensionty := masked_array_types.get(dt):
+        return rmm.DeviceBuffer(size=size * extensionty.return_type.size_bytes)
     return cp.empty(size, dtype=dt)
 
 
 def _post_process_output_col(col, retty):
+    if getter := output_col_getters.get(retty):
+        col = getter(col)
     return as_column(col, retty)
+
+
+def _get_best_ptx_file(archs, max_compute_capability):
+    """
+    Determine of the available PTX files which one is
+    the most recent up to and including the device cc
+    """
+    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
+    if filtered_archs:
+        return max(filtered_archs, key=lambda y: y[0])
+    else:
+        return None
+
+
+def _get_ptx_file(path, prefix):
+    if "RAPIDS_NO_INITIALIZE" in os.environ:
+        # cc=60 ptx is always built
+        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
+    else:
+        dev = cuda.get_current_device()
+
+        # Load the highest compute capability file available that is less than
+        # the current device's.
+        cc = int("".join(str(x) for x in dev.compute_capability))
+    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
+    if len(files) == 0:
+        raise RuntimeError(f"Missing PTX files for cc={cc}")
+    regular_sms = []
+
+    for f in files:
+        file_name = os.path.basename(f)
+        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
+        if sm_number.endswith("a"):
+            processed_sm_number = int(sm_number.rstrip("a"))
+            if processed_sm_number == cc:
+                return f
+        else:
+            regular_sms.append((int(sm_number), f))
+
+    regular_result = None
+
+    if regular_sms:
+        regular_result = _get_best_ptx_file(regular_sms, cc)
+
+    if regular_result is None:
+        raise RuntimeError(
+            "This cuDF installation is missing the necessary PTX "
+            f"files that are <={cc}."
+        )
+    else:
+        return regular_result[1]
+
+
+def _get_extensionty_size(ty):
+    """
+    Return the size of an extension type in bytes
+    """
+    data_layout = nvvm.data_layout
+    if isinstance(data_layout, dict):
+        data_layout = data_layout[64]
+    target_data = ll.create_target_data(data_layout)
+    llty = default_manager[ty].get_value_type()
+    return llty.get_abi_size(target_data)
+
+
+def _get_cuda_version_from_ptx_file(path):
+    """
+    https://docs.nvidia.com/cuda/parallel-thread-execution/
+    Each PTX module must begin with a .version
+    directive specifying the PTX language version
+
+    example header:
+    //
+    // Generated by NVIDIA NVVM Compiler
+    //
+    // Compiler Build ID: CL-31057947
+    // Cuda compilation tools, release 11.6, V11.6.124
+    // Based on NVVM 7.0.1
+    //
+
+    .version 7.6
+    .target sm_52
+    .address_size 64
+
+    """
+    with open(path) as ptx_file:
+        for line in ptx_file:
+            if line.startswith(".version"):
+                ver_line = line
+                break
+        else:
+            raise ValueError("Could not read CUDA version from ptx file.")
+    version = ver_line.strip("\n").split(" ")[1]
+    # from ptx_docs/release_notes above:
+    ver_map = {
+        "7.5": (11, 5),
+        "7.6": (11, 6),
+        "7.7": (11, 7),
+        "7.8": (11, 8),
+        "8.0": (12, 0),
+    }
+
+    cuda_ver = ver_map.get(version)
+    if cuda_ver is None:
+        raise ValueError(
+            f"Could not map PTX version {version} to a CUDA version"
+        )
+
+    return cuda_ver
+
+
+def _setup_numba_linker(path):
+    from ptxcompiler.patch import NO_DRIVER, safe_get_versions
+
+    from cudf.core.udf.utils import (
+        _get_cuda_version_from_ptx_file,
+        maybe_patch_numba_linker,
+    )
+
+    versions = safe_get_versions()
+    if versions != NO_DRIVER:
+        driver_version, runtime_version = versions
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(path)
+        maybe_patch_numba_linker(
+            driver_version, runtime_version, ptx_toolkit_version
+        )
+
+
+def maybe_patch_numba_linker(
+    driver_version, runtime_version, ptx_toolkit_version
+):
+    # Numba thinks cubinlinker is only needed if the driver is older than
+    # the ctk, but when PTX files are present, it might also need to patch
+    # because those PTX files may newer than the driver as well
+    if (driver_version < ptx_toolkit_version) or (
+        driver_version < runtime_version
+    ):
+        logger.debug(
+            "Driver version %s.%s needs patching due to PTX files"
+            % driver_version
+        )
+        if _numba_version_ok:
+            logger.debug("Patching Numba Linker")
+            Linker.new = new_patched_linker
+        else:
+            logger.debug("Cannot patch Numba Linker - unsupported version")

@@ -559,7 +559,7 @@ class path_state : private parser {
       case '[': {
         path_operator op;
         string_view term{"]", 1};
-        bool const is_string = *pos == '\'' ? true : false;
+        bool const is_string = *pos == '\'';
         if (parse_path_name(op.name, term)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
@@ -570,9 +570,10 @@ class path_state : private parser {
               op.type          = path_operator_type::CHILD;
               op.expected_type = OBJECT;
             } else {
-              op.type  = path_operator_type::CHILD_INDEX;
-              op.index = cudf::io::parse_numeric<int>(
-                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts, -1);
+              op.type          = path_operator_type::CHILD_INDEX;
+              auto const value = cudf::io::parse_numeric<int>(
+                op.name.data(), op.name.data() + op.name.size_bytes(), json_opts);
+              op.index = value.value_or(-1);
               CUDF_EXPECTS(op.index >= 0, "Invalid numeric index specified in JSONPath");
               op.expected_type = ARRAY;
             }
@@ -968,6 +969,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   auto preprocess = build_command_buffer(json_path, stream);
   CUDF_EXPECTS(std::get<1>(preprocess) <= max_command_stack_depth,
                "Encountered JSONPath string that is too complex");
+
+  if (col.is_empty()) return make_empty_column(type_id::STRING);
 
   // allocate output offsets buffer.
   auto offsets = cudf::make_fixed_width_column(

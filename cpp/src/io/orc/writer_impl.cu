@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,9 +118,9 @@ constexpr size_t compression_block_size(orc::CompressionKind compression)
   if (compression == orc::CompressionKind::NONE) { return 0; }
 
   auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_enabled(ncomp_type)
-                              ? nvcomp::compress_max_allowed_chunk_size(ncomp_type)
-                              : std::nullopt;
+  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
+                              ? std::nullopt
+                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
 
   constexpr size_t max_block_size = 256 * 1024;
   return std::min(nvcomp_limit.value_or(max_block_size), max_block_size);
@@ -537,7 +537,7 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
 auto uncomp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
     return 1u;
   }
 
@@ -547,7 +547,7 @@ auto uncomp_block_alignment(CompressionKind compression_kind)
 auto comp_block_alignment(CompressionKind compression_kind)
 {
   if (compression_kind == NONE or
-      not nvcomp::is_compression_enabled(to_nvcomp_compression_type(compression_kind))) {
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(compression_kind))) {
     return 1u;
   }
 
@@ -1322,16 +1322,18 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
     auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
-                      chunk_bytes,
-                      cudaMemcpyDeviceToDevice,
-                      stream);
-      cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
-                      per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
-                      merge_bytes,
-                      cudaMemcpyDeviceToDevice,
-                      stream);
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
+                        chunk_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
+                        per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
+                        merge_bytes,
+                        cudaMemcpyDefault,
+                        stream.value()));
     }
     num_entries_seen += stripes_per_col;
   }
@@ -1346,11 +1348,11 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  cudaMemcpyAsync(d_file_stats_merge,
-                  file_stats_merge.data(),
-                  num_file_blobs * sizeof(statistics_merge_group),
-                  cudaMemcpyHostToDevice,
-                  stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_file_stats_merge,
+                                file_stats_merge.data(),
+                                num_file_blobs * sizeof(statistics_merge_group),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -1497,7 +1499,7 @@ std::future<void> writer::impl::write_data_stream(gpu::StripeStream const& strm_
       return out_sink_->device_write_async(stream_in, length, stream);
     } else {
       CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
+        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
 
       out_sink_->host_write(stream_out, length);
@@ -2161,7 +2163,8 @@ void writer::impl::write(table_view const& table)
 
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
-  auto const uncomp_block_align = uncomp_block_alignment(compression_kind_);
+  auto const uncompressed_block_align = uncomp_block_alignment(compression_kind_);
+  auto const compressed_block_align   = comp_block_alignment(compression_kind_);
   auto streams =
     create_streams(orc_table.columns, segmentation, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(orc_table,
@@ -2169,7 +2172,7 @@ void writer::impl::write(table_view const& table)
                                  std::move(dec_chunk_sizes),
                                  segmentation,
                                  streams,
-                                 uncomp_block_align,
+                                 uncompressed_block_align,
                                  stream);
 
   // Assemble individual disparate column chunks into contiguous data streams
@@ -2187,9 +2190,9 @@ void writer::impl::write(table_view const& table)
     auto const max_compressed_block_size =
       max_compression_output_size(compression_kind_, compression_blocksize_);
     auto const padded_max_compressed_block_size =
-      util::round_up_unsafe<size_t>(max_compressed_block_size, uncomp_block_align);
+      util::round_up_unsafe<size_t>(max_compressed_block_size, compressed_block_align);
     auto const padded_block_header_size =
-      util::round_up_unsafe<size_t>(block_header_size, uncomp_block_align);
+      util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
 
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
@@ -2238,7 +2241,7 @@ void writer::impl::write(table_view const& table)
                                   compression_kind_,
                                   compression_blocksize_,
                                   max_compressed_block_size,
-                                  comp_block_alignment(compression_kind_),
+                                  compressed_block_align,
                                   strm_descs,
                                   enc_data.streams,
                                   comp_results,

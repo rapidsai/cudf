@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,8 +85,7 @@ std::vector<T> replace_nulls(std::vector<T> const& values,
 template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
-  static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic_v<T> || std::is_same_v<T, bool>) ? true : false;
+  static constexpr bool ret_non_arithmetic = (std::is_arithmetic_v<T> || std::is_same_v<T, bool>);
 
   ReductionTest() {}
 
@@ -295,7 +294,6 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
-using ReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -863,11 +861,11 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {
+struct ReductionEmptyTest : public cudf::test::BaseFixture {
 };
 
 // test case for empty input cases
-TEST_F(ReductionErrorTest, empty_column)
+TEST_F(ReductionEmptyTest, empty_column)
 {
   using T        = int32_t;
   auto statement = [](cudf::column_view const& col) {
@@ -894,8 +892,26 @@ TEST_F(ReductionErrorTest, empty_column)
   std::vector<T> col_data(col_size);
   std::vector<bool> valids(col_size, 0);
 
-  cudf::test::fixed_width_column_wrapper<T> col_empty = construct_null_column(col_data, valids);
-  CUDF_EXPECT_NO_THROW(statement(col_empty));
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(col_data, valids);
+  CUDF_EXPECT_NO_THROW(statement(col_nulls));
+
+  auto any_agg   = cudf::make_any_aggregation<cudf::reduce_aggregation>();
+  auto all_agg   = cudf::make_all_aggregation<cudf::reduce_aggregation>();
+  auto bool_type = cudf::data_type{cudf::type_id::BOOL8};
+
+  auto result = cudf::reduce(col0, *any_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+  result = cudf::reduce(col_nulls, *any_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), false);
+
+  result = cudf::reduce(col0, *all_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
+  result = cudf::reduce(col_nulls, *all_agg, bool_type);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(dynamic_cast<cudf::numeric_scalar<bool>*>(result.get())->value(), true);
 }
 
 // ----------------------------------------------------------------------------

@@ -1,4 +1,6 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -13,6 +15,7 @@ from cudf._lib.cpp.strings.capitalize cimport (
 )
 
 
+@acquire_spill_lock()
 def capitalize(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -23,6 +26,7 @@ def capitalize(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def title(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -33,6 +37,7 @@ def title(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_title(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

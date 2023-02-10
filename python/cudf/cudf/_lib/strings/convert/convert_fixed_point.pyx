@@ -5,6 +5,8 @@ import cudf
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -16,6 +18,7 @@ from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
 from cudf._lib.cpp.types cimport DECIMAL32, DECIMAL64, DECIMAL128, data_type
 
 
+@acquire_spill_lock()
 def from_decimal(Column input_col):
     """
     Converts a `Decimal64Column` to a `StringColumn`.
@@ -38,6 +41,7 @@ def from_decimal(Column input_col):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def to_decimal(Column input_col, object out_type):
     """
     Returns a `Decimal64Column` from the provided `StringColumn`
@@ -75,6 +79,7 @@ def to_decimal(Column input_col, object out_type):
     return result
 
 
+@acquire_spill_lock()
 def is_fixed_point(Column input_col, object dtype):
     """
     Returns a Column of boolean values with True for `input_col`

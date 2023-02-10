@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -512,18 +513,15 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto get_key    = [] __device__(auto const& element) { return element.first; };  // first = key
-  auto get_key_it = thrust::make_transform_iterator(map.data(), get_key);
-  auto key_used   = [unused = map.get_unused_key()] __device__(auto key) { return key != unused; };
-
-  auto end_it = thrust::copy_if(rmm::exec_policy(stream),
-                                get_key_it,
-                                get_key_it + map.capacity(),
-                                populated_keys.begin(),
-                                key_used);
+  auto const get_key = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
+    return key != unused;
+  };
+  auto const key_itr = thrust::make_transform_iterator(map.data(), get_key);
+  auto const end_it  = cudf::detail::copy_if_safe(
+    key_itr, key_itr + map.capacity(), populated_keys.begin(), key_used, stream);
 
   populated_keys.resize(std::distance(populated_keys.begin(), end_it), stream);
-
   return populated_keys;
 }
 
@@ -653,14 +651,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto const has_nested_column =
-    std::any_of(keys.begin(), keys.end(), [](cudf::column_view const& col) {
-      return cudf::is_nested(col.type());
-    });
-  if (has_nested_column and include_null_keys == cudf::null_policy::EXCLUDE) {
-    CUDF_FAIL("Null keys of nested type cannot be excluded.");
-  }
-
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =

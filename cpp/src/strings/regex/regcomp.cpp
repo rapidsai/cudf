@@ -39,7 +39,7 @@ namespace {
 enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
-  CAT          = 0205,  // Concatentation, implicit operator
+  CAT          = 0205,  // Concatenation, implicit operator
   STAR         = 0206,  // Closure, *
   STAR_LAZY    = 0207,
   PLUS         = 0210,  // a+ == aa*
@@ -123,7 +123,7 @@ int32_t reprog::add_class(reclass const& cls)
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
 
-reclass& reprog::class_at(int32_t id) { return _classes[id]; }
+reclass const& reprog::class_at(int32_t id) const { return _classes[id]; }
 
 void reprog::set_start_inst(int32_t id) { _startinst_id = id; }
 
@@ -502,8 +502,14 @@ class regex_parser {
         }
         case 'b': return BOW;
         case 'B': return NBOW;
-        case 'A': return BOL;
-        case 'Z': return EOL;
+        case 'A': {
+          _chr = chr;
+          return BOL;
+        }
+        case 'Z': {
+          _chr = chr;
+          return EOL;
+        }
         default: {
           // let valid escapable chars fall through as literal CHAR
           if (chr &&
@@ -533,11 +539,11 @@ class regex_parser {
                                                          : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
-        _chr = chr;
+        _chr = is_multiline(_flags) ? chr : '\n';
         return BOL;
       }
       case '$': {
-        _chr = chr;
+        _chr = is_multiline(_flags) ? chr : '\n';
         return EOL;
       }
       case '[': return build_cclass();
@@ -954,7 +960,7 @@ class regex_compiler {
     } else if (token == CHAR) {
       _prog.inst_at(inst_id).u1.c = yy;
     } else if (token == BOL || token == EOL) {
-      _prog.inst_at(inst_id).u1.c = is_multiline(_flags) ? yy : '\n';
+      _prog.inst_at(inst_id).u1.c = yy;
     }
     push_and(inst_id, inst_id);
     _last_was_and = true;

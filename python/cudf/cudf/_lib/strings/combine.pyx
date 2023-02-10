@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -19,6 +21,7 @@ from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport table_view_from_columns
 
 
+@acquire_spill_lock()
 def concatenate(list source_strings,
                 object sep,
                 object na_rep):
@@ -49,6 +52,7 @@ def concatenate(list source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def join(Column source_strings,
          object sep,
          object na_rep):
@@ -80,6 +84,7 @@ def join(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def join_lists_with_scalar(
         Column source_strings,
         object py_separator,
@@ -115,6 +120,7 @@ def join_lists_with_scalar(
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def join_lists_with_column(
         Column source_strings,
         Column separator_strings,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reshape.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -75,8 +75,8 @@ struct byte_list_conversion {
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
-    auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + input_column.size(), stream, mr);
+    auto offsets_column = std::get<0>(
+      cudf::detail::make_offsets_child_column(begin, begin + input_column.size(), stream, mr));
 
     rmm::device_buffer null_mask = detail::copy_bitmask(input_column, stream, mr);
 

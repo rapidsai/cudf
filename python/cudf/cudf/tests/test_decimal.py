@@ -16,6 +16,7 @@ from cudf.testing._utils import (
     SIGNED_TYPES,
     _decimal_series,
     assert_eq,
+    expect_warning_if,
 )
 
 data_ = [
@@ -200,7 +201,8 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     elif isinstance(to_dtype, Decimal64Dtype):
         expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
 
-    got = s.astype(to_dtype)
+    with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
+        got = s.astype(to_dtype)
 
     assert_eq(got, expected)
 

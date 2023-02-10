@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,10 +43,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
-#include <jit/type.hpp>
+#include <jit/util.hpp>
 
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
@@ -83,16 +84,9 @@ struct DeviceRolling {
   static constexpr bool is_supported()
   {
     return cudf::detail::is_valid_aggregation<T, O>() && has_corresponding_operator<O>() &&
-           // TODO: Delete all this extra logic once is_valid_aggregation<> cleans up some edge
-           // cases it isn't handling.
-           // MIN/MAX supports all fixed width types
+           // MIN/MAX only supports fixed width types
            (((O == aggregation::MIN || O == aggregation::MAX) && cudf::is_fixed_width<T>()) ||
-
-            // SUM supports all fixed width types except timestamps
-            ((O == aggregation::SUM) && (cudf::is_fixed_width<T>() && !cudf::is_timestamp<T>())) ||
-
-            // MEAN supports numeric and duration
-            ((O == aggregation::MEAN) && (cudf::is_numeric<T>() || cudf::is_duration<T>())));
+            (O == aggregation::SUM) || (O == aggregation::MEAN));
   }
 
   // operations we do support
@@ -122,10 +116,8 @@ struct DeviceRolling {
     using AggOp = typename corresponding_operator<op>::type;
     AggOp agg_op;
 
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-    OutputType val                 = AggOp::template identity<OutputType>();
+    cudf::size_type count = 0;
+    OutputType val        = AggOp::template identity<OutputType>();
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -190,11 +182,9 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     using AggOp     = typename corresponding_operator<op>::type;
     AggOp agg_op;
 
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-    InputType val                  = AggOp::template identity<InputType>();
-    OutputType val_index           = default_output;
+    cudf::size_type count = 0;
+    InputType val         = AggOp::template identity<InputType>();
+    OutputType val_index  = default_output;
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -284,13 +274,11 @@ struct DeviceRollingCountValid {
                              size_type end_index,
                              size_type current_index)
   {
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect
-    // results for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-
     bool output_is_valid = ((end_index - start_index) >= min_periods);
 
     if (output_is_valid) {
+      cudf::size_type count = 0;
+
       if (!has_nulls) {
         count = end_index - start_index;
       } else {
@@ -1257,11 +1245,10 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   std::string cuda_source;
   switch (udf_agg.kind) {
     case aggregation::Kind::PTX:
-      cuda_source +=
-        cudf::jit::parse_single_function_ptx(udf_agg._source,
-                                             udf_agg._function_name,
-                                             cudf::jit::get_type_name(udf_agg._output_type),
-                                             {0, 5});  // args 0 and 5 are pointers.
+      cuda_source += cudf::jit::parse_single_function_ptx(udf_agg._source,
+                                                          udf_agg._function_name,
+                                                          cudf::type_to_name(udf_agg._output_type),
+                                                          {0, 5});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
       cuda_source += cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
@@ -1277,8 +1264,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   std::string kernel_name =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
-      .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
-                   cudf::jit::get_type_name(output->type()),
+      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
+                   cudf::type_to_name(output->type()),
                    udf_agg._operator_name,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());
