@@ -57,17 +57,20 @@ jobs:
           echo "RAPIDS_NIGHTLY_DATE=${{ inputs.date }}" >> "${GITHUB_ENV}"
       - name: C++ build
         run: ${{ inputs.build_script }}
-      - uses: actions/upload-artifact@v3
-        with:
-          name: build-metrics-report
-          path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
-      - uses: actions/upload-artifact@v3
-        with:
-          name: ninja-log
-          path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
       - name: Artifact test
-        run: echo "${{ env.RAPIDS_BMR_DIR }}" > "${{ env.RAPIDS_BMR_DIR }}/test.log"
+        run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
       - uses: actions/upload-artifact@v3
         with:
           name: test-log
-          path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
+          # path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
+          path: /__w/cudf/cudf/metrics/test.log
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-metrics-report
+          # path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
+          path: /__w/cudf/cudf/metrics/ninja_log.html
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ninja-log
+          # path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
+          path: /__w/cudf/cudf/metrics/ninja.log
