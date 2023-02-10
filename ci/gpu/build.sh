@@ -191,10 +191,6 @@ else
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
     gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
-    # the CUDA component of strings_udf must be built on cuda 11.5 just like libcudf
-    # but because there is no separate python package, we must also build the python on the 11.5 jobs
-    # this means that at this point (on the GPU test jobs) the whole package is already built and has been
-    # copied by CI from the upstream 11.5 jobs into $CONDA_ARTIFACT_PATH
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka, and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
