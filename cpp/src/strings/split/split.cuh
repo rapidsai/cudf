@@ -197,22 +197,23 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
     auto const delim_count = static_cast<size_type>(d_delimiters.size());
 
     // build the index-pair of each token for this string
-    for (size_type t = 0; t < token_count; ++t) {
-      auto next_delim = (t < delim_count)                 // bounds check for delims in last string
-                          ? (base_ptr + d_delimiters[t])  // start of next delimiter
-                          : str_end;                      // or end of this string
+    size_type token_idx = 0;
+    for (auto d_pos : d_delimiters) {
+      auto next_delim = ((base_ptr + d_pos) < str_end) ? (base_ptr + d_pos) : str_end;
+      if (next_delim < str_ptr) continue;
 
-      auto eptr = (next_delim < str_end)        // make sure delimiter is inside this string
-                      && (t + 1 < token_count)  // and this is not the last token
-                    ? next_delim
-                    : str_end;
+      auto end_ptr = (token_idx + 1 < token_count) ? next_delim : str_end;
 
       // store the token into the output vector
-      d_tokens[t] =
-        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, eptr))};
+      d_tokens[token_idx++] =
+        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, end_ptr))};
 
       // setup for next token
-      str_ptr = eptr + d_delimiter.size_bytes();
+      str_ptr = end_ptr + d_delimiter.size_bytes();
+    }
+    if (token_idx < token_count) {
+      d_tokens[token_idx] =
+        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, str_end))};
     }
   }
 

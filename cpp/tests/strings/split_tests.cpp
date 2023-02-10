@@ -310,7 +310,6 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
 
 TEST_F(StringsSplitTest, SplitRecordLong)
 {
-  // TODO: create some more test-cases with larger delimiters which span string rows
   std::vector<const char*> h_strings{
     " Héllo; this is a réally long string to test the long-strings path in the split-record code "
     "logic.",
@@ -323,13 +322,14 @@ TEST_F(StringsSplitTest, SplitRecordLong)
     " "};
   auto validity =
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
-  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
+  auto const view      = cudf::strings_column_view(input);
+  auto const delimiter = cudf::string_scalar(" ");
 
-  auto result =
-    cudf::strings::split_record(cudf::strings_column_view(strings), cudf::string_scalar(" "));
-  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  auto result = cudf::strings::split_record(view, delimiter);
+  using LCW   = cudf::test::lists_column_wrapper<cudf::string_view>;
   // clang-format off
-   LCW expected(
+  LCW expected(
     {LCW{
       "","Héllo;","this","is","a","réally","long","string","to","test","the",
          "long-strings","path","in","the","split-record","code","logic."},
@@ -345,9 +345,25 @@ TEST_F(StringsSplitTest, SplitRecordLong)
     validity);
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
-  result =
-    cudf::strings::rsplit_record(cudf::strings_column_view(strings), cudf::string_scalar(" "));
+  result = cudf::strings::rsplit_record(view, delimiter);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, MultiByteDelimiters)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"u__", "w___x", "y____z", "{a=1}:{b=2}:", "{c=3}"});
+  auto view = cudf::strings_column_view(input);
+
+  auto result = cudf::strings::split_record(view, cudf::string_scalar("__"));
+  using LCW   = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected1(
+    {LCW{"u", ""}, LCW{"w", "_x"}, LCW{"y", "", "z"}, LCW{"{a=1}:{b=2}:"}, LCW{"{c=3}"}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected1);
+
+  result = cudf::strings::split_record(view, cudf::string_scalar("}:{"));
+  LCW expected2({LCW{"u__"}, LCW{"w___x"}, LCW{"y____z"}, LCW{"{a=1", "b=2}:"}, LCW{"{c=3}"}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected2);
 }
 
 TEST_F(StringsSplitTest, SplitRegex)
