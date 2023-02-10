@@ -152,7 +152,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
 
 class SpillableBuffer(Buffer):
-    """A spillable buffer that implements Buffer.
+    """A Buffer that supports spilling memory off the GPU to avoid OOMs.
 
     This buffer supports spilling the represented data to host memory.
     Spilling can be done manually by calling `.spill(target="cpu")` but
