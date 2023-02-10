@@ -58,7 +58,8 @@ jobs:
       - name: C++ build
         run: ${{ inputs.build_script }}
       - name: Artifact test
-        run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
+        # run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
+        run: echo "${{ env.RAPIDS_BMR_DIR }}" > artifact_upload_test.log
       - uses: actions/upload-artifact@v3
         with:
           name: test-log
