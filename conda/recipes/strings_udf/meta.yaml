@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -8,7 +8,7 @@
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
-  name: cudf
+  name: strings_udf
   version: {{ version }}
 
 source:
@@ -23,8 +23,8 @@ build:
     - CMAKE_C_COMPILER_LAUNCHER
     - CMAKE_CXX_COMPILER_LAUNCHER
     - CMAKE_CUDA_COMPILER_LAUNCHER
-    - SCCACHE_S3_KEY_PREFIX=cudf-aarch64 # [aarch64]
-    - SCCACHE_S3_KEY_PREFIX=cudf-linux64 # [linux64]
+    - SCCACHE_S3_KEY_PREFIX=strings-udf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=strings-udf-linux64 # [linux64]
     - SCCACHE_BUCKET
     - SCCACHE_REGION
     - SCCACHE_IDLE_TIMEOUT
@@ -45,46 +45,34 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf =4.21
     - python
     - cython >=0.29,<0.30
     - scikit-build >=0.13.1
     - setuptools
-    - numba >=0.56.2
-    - dlpack >=0.5,<0.6.0a0
-    - pyarrow =10
+    - numba >=0.54
     - libcudf ={{ version }}
-    - rmm ={{ minor_version }}
+    - cudf ={{ version }}
     - cudatoolkit ={{ cuda_version }}
   run:
-    - protobuf =4.21
     - python
     - typing_extensions
-    - pandas >=1.0,<1.6.0dev0
-    - cupy >=9.5.0,<12.0.0a0
-    - numba >=0.56.2
+    - numba >=0.54
     - numpy
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
-    - libcudf {{ version }}
-    - fastavro >=0.22.0
-    - {{ pin_compatible('rmm', max_pin='x.x') }}
-    - fsspec >=0.6.0
+    - libcudf ={{ version }}
+    - cudf ={{ version }}
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
-    - nvtx >=0.2.1
-    - packaging
     - cachetools
-    - cubinlinker  # CUDA enhanced compatibility.
-    - cuda-python >=11.7.1,<12.0
+    - ptxcompiler >=0.7.0  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
 
 test:
   requires:
     - cudatoolkit ={{ cuda_version }}
   imports:
-    - cudf
+    - strings_udf
 
 about:
   home: https://rapids.ai/
   license: Apache-2.0
   license_family: APACHE
   license_file: LICENSE
-  summary: cuDF GPU DataFrame core library
+  summary: strings_udf library
