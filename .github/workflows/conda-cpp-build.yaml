@@ -73,7 +73,7 @@ jobs:
         with:
           name: build-metrics-report
           # path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
-          path: /__w/cudf/cudf/metrics/
+          path: $RAPIDS_BMR_DIR
       # uses: actions/upload-artifact@v3
       #  with:
       #    name: ninja-log
