@@ -249,7 +249,7 @@ struct source_info {
     : _type(io_type::HOST_BUFFER)
   {
     if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
-      _host_buffers.resize(host_buffers.size());
+      _host_buffers.reserve(host_buffers.size());
       std::transform(host_buffers.begin(),
                      host_buffers.end(),
                      std::back_inserter(_host_buffers),
