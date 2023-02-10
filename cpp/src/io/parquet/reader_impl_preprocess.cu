@@ -341,11 +341,13 @@ void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
   gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
   pages.device_to_host(stream, true);
 
-  // validate page encodings
-  CUDF_EXPECTS(thrust::all_of(
+  // validate page encodings (avoiding use of thrust::any_of() NVIDIA/thrust #1016)
+  auto const num_valid_pages = static_cast<size_t>(thrust::count_if(
     rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), [] __device__(auto const& page) {
       return is_supported_encoding(page.encoding);
-    }), "Unsupported page encoding detected");
+    }));
+
+  CUDF_EXPECTS(num_valid_pages == pages.size(), "Unsupported page encoding detected");
 }
 
 /**
