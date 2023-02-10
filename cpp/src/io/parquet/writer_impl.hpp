@@ -137,14 +137,16 @@ class writer::impl {
                            uint32_t fragment_size);
 
   /**
-   * @brief Gather page fragments for columns with differing fragment sizes
-   * 
+   * @brief Recalculate page fragments
+   *
+   * This is to be called if the size of the fragments array changes due to using
+   * different fragment sizes per column.
+   *
    * @param frag Destination page fragments
    * @param frag_sizes Array of fragment sizes for each column
-  */
-  void init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
-                              host_span<size_type const> frag_sizes);
-
+   */
+  void recalculate_page_fragments(device_span<gpu::PageFragment> frag,
+                                  host_span<size_type const> frag_sizes);
 
   /**
    * @brief Gather per-fragment statistics

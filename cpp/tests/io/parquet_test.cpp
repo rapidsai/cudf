@@ -4043,7 +4043,7 @@ TEST_F(ParquetWriterTest, LargeColumnIndex)
   // pick fragment size that num_rows is divisible by, so we'll get equal sized row groups
   const std::string s1(1000, 'a');
   const std::string s2(1000, 'b');
-  constexpr auto num_rows = 512 * 1024;
+  constexpr auto num_rows  = 512 * 1024;
   constexpr auto frag_size = num_rows / 128;
 
   auto col0_elements = cudf::detail::make_counting_transform_iterator(

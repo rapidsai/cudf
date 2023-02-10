@@ -942,12 +942,11 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
   frag.device_to_host(stream, true);
 }
 
-void writer::impl::init_page_fragments_1d(hostdevice_vector<gpu::PageFragment>& frag,
-                                          host_span<size_type const> frag_sizes)
+void writer::impl::recalculate_page_fragments(device_span<gpu::PageFragment> frag,
+                                              host_span<size_type const> frag_sizes)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
   InitPageFragments1D(frag, d_frag_sz, stream);
-  frag.device_to_host(stream, true);
 }
 
 void writer::impl::gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
@@ -1624,13 +1623,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         column_chunk_meta.codec          = UNCOMPRESSED;
         column_chunk_meta.num_values     = ck.num_values;
 
-        if (column_frag_size[c] < max_page_fragment_size_) {
-          auto const new_frags_in_chunk =
-            util::div_rounding_up_unsafe(row_group.num_rows, column_frag_size[c]);
-          frags_per_column[c] += new_frags_in_chunk;
-        } else {
-          frags_per_column[c] += fragments_in_chunk;
-        }
+        frags_per_column[c] += util::div_rounding_up_unsafe(
+          row_group.num_rows, std::min(column_frag_size[c], max_page_fragment_size_));
       }
       f += fragments_in_chunk;
       start_row += (uint32_t)row_group.num_rows;
@@ -1713,7 +1707,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     // re-initialize page fragments
     if (is_resize_fragments) {
       expanded_fragments.host_to_device(stream);
-      init_page_fragments_1d(expanded_fragments, column_frag_size);
+      recalculate_page_fragments(expanded_fragments, column_frag_size);
     }
 
     // and gather fragment statistics
@@ -1721,7 +1715,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       gather_fragment_statistics(
         frag_stats,
         {is_resize_fragments ? expanded_fragments.device_ptr() : fragments.base_device_ptr(),
-        static_cast<size_t>(total_frags)});
+         static_cast<size_t>(total_frags)});
     }
   }
 

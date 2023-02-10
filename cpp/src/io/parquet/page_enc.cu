@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,9 +168,8 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 
   for (uint32_t i = 0; i < nvals; i += block_size) {
     auto const val_idx  = start_value_idx + i + t;
-    auto const is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
-                            ? s->col.leaf_column->is_valid(val_idx)
-                            : false;
+    auto const is_valid = i + t < nvals && val_idx < s->col.leaf_column->size() &&
+                          s->col.leaf_column->is_valid(val_idx);
     uint32_t len;
     if (is_valid) {
       len = dtype_len;
