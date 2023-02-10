@@ -116,8 +116,6 @@ template <data_chunk_source_type source_type>
 static void bench_multibyte_split(nvbench::state& state,
                                   nvbench::type_list<nvbench::enum_type<source_type>>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const delim_size         = state.get_int64("delim_size");
   auto const delim_percent      = state.get_int64("delim_percent");
   auto const file_size_approx   = state.get_int64("size_approx");
