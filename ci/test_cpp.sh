@@ -21,7 +21,6 @@ set -u
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
-SUITEERROR=0
 
 rapids-print-env
 
@@ -32,6 +31,8 @@ rapids-mamba-retry install \
 rapids-logger "Check GPU usage"
 nvidia-smi
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
 set +e
 
 # TODO: Disabling stream identification for now.
@@ -61,12 +62,6 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     #else
     #    GTEST_CUDF_STREAM_MODE="custom" LD_PRELOAD=${STREAM_IDENTIFY_LIB} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}
     #fi
-
-    exitcode=$?
-    if (( ${exitcode} != 0 )); then
-        SUITEERROR=${exitcode}
-        echo "FAILED: GTest ${gt}"
-    fi
 done
 
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
@@ -85,4 +80,5 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     # TODO: test-results/*.cs.log are processed in gpuci
 fi
 
-exit ${SUITEERROR}
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}
