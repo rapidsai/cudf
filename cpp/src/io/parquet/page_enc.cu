@@ -206,11 +206,11 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments(device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> part_frag_offset,
-                       uint32_t fragment_size)
+  gpuInitRowGroupFragments(device_2dspan<PageFragment> frag,
+                           device_span<parquet_column_device_view const> col_desc,
+                           device_span<partition_info const> partitions,
+                           device_span<int const> part_frag_offset,
+                           uint32_t fragment_size)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -243,8 +243,8 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuRecalculatePageFragments(device_span<PageFragment> frag,
-                              device_span<size_type const> column_frag_sizes)
+  gpuCalculatePageFragments(device_span<PageFragment> frag,
+                            device_span<size_type const> column_frag_sizes)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -2092,26 +2092,26 @@ __global__ void __launch_bounds__(1)
   ck_g->column_index_size = static_cast<uint32_t>(col_idx_end - ck_g->column_index_blob);
 }
 
-void InitPageFragments(device_2dspan<PageFragment> frag,
-                       device_span<parquet_column_device_view const> col_desc,
-                       device_span<partition_info const> partitions,
-                       device_span<int const> part_frag_offset,
-                       uint32_t fragment_size,
-                       rmm::cuda_stream_view stream)
+void InitRowGroupFragments(device_2dspan<PageFragment> frag,
+                           device_span<parquet_column_device_view const> col_desc,
+                           device_span<partition_info const> partitions,
+                           device_span<int const> part_frag_offset,
+                           uint32_t fragment_size,
+                           rmm::cuda_stream_view stream)
 {
   auto const num_columns              = frag.size().first;
   auto const num_fragments_per_column = frag.size().second;
   auto const grid_y = std::min(static_cast<uint32_t>(num_fragments_per_column), MAX_GRID_Y_SIZE);
   dim3 const dim_grid(num_columns, grid_y);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
+  gpuInitRowGroupFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
 
-void RecalculatePageFragments(device_span<PageFragment> frag,
-                              device_span<size_type const> column_frag_sizes,
-                              rmm::cuda_stream_view stream)
+void CalculatePageFragments(device_span<PageFragment> frag,
+                            device_span<size_type const> column_frag_sizes,
+                            rmm::cuda_stream_view stream)
 {
-  gpuRecalculatePageFragments<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
+  gpuCalculatePageFragments<512><<<frag.size(), 512, 0, stream>>>(frag, column_frag_sizes);
 }
 
 void InitFragmentStatistics(device_span<statistics_group> groups,

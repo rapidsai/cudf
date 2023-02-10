@@ -931,22 +931,23 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
   return desc;
 }
 
-void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
-                                       device_span<gpu::parquet_column_device_view const> col_desc,
-                                       host_span<partition_info const> partitions,
-                                       device_span<int const> part_frag_offset,
-                                       uint32_t fragment_size)
+void writer::impl::init_row_group_fragments(
+  cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
+  device_span<gpu::parquet_column_device_view const> col_desc,
+  host_span<partition_info const> partitions,
+  device_span<int const> part_frag_offset,
+  uint32_t fragment_size)
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(partitions, stream);
-  gpu::InitPageFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
+  gpu::InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream, true);
 }
 
-void writer::impl::recalculate_page_fragments(device_span<gpu::PageFragment> frag,
-                                              host_span<size_type const> frag_sizes)
+void writer::impl::calculate_page_fragments(device_span<gpu::PageFragment> frag,
+                                            host_span<size_type const> frag_sizes)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(frag_sizes, stream);
-  RecalculatePageFragments(frag, d_frag_sz, stream);
+  gpu::CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
 void writer::impl::gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
@@ -1496,7 +1497,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    frag_size_fn);
   }
 
-  // do first pass with max_page_fragment_size to calculate row group boundaries
+  // Fragments are calculated in two passes.  In the first pass, a uniform number of fragments
+  // per column is used.  This is done to satisfy the requirement that each column chunk within
+  // a row group has the same number of rows.  After the row group (and thus column chunk)
+  // boundaries are known, a second pass is done to calculate fragments to be used in determining
+  // page boundaries within each column chunk.
   std::vector<int> num_frag_in_part;
   std::transform(partitions.begin(),
                  partitions.end(),
@@ -1513,7 +1518,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
   auto d_part_frag_offset = cudf::detail::make_device_uvector_async(part_frag_offset, stream);
-  cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
+  cudf::detail::hostdevice_2dvector<gpu::PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 
   if (num_fragments != 0) {
@@ -1522,8 +1527,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(
-      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
+    init_row_group_fragments(
+      row_group_fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
   std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
@@ -1540,9 +1545,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
       size_t fragment_data_size = 0;
       for (auto c = 0; c < num_columns; c++) {
-        fragment_data_size += fragments[c][f].fragment_data_size;
+        fragment_data_size += row_group_fragments[c][f].fragment_data_size;
       }
-      size_type fragment_num_rows = fragments[0][f].num_rows;
+      size_type fragment_num_rows = row_group_fragments[0][f].num_rows;
 
       // If the fragment size gets larger than rg limit then break off a rg
       if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
@@ -1596,12 +1601,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck                   = {};
         ck.col_desc          = col_desc.device_ptr() + c;
         ck.col_desc_id       = c;
-        ck.fragments         = &fragments.device_view()[c][f];
+        ck.fragments         = &row_group_fragments.device_view()[c][f];
         ck.stats             = nullptr;
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
         ck.first_fragment    = c * num_fragments + f;
-        auto chunk_fragments = fragments[c].subspan(f, fragments_in_chunk);
+        auto chunk_fragments = row_group_fragments[c].subspan(f, fragments_in_chunk);
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
         for (auto& frag : chunk_fragments) {
@@ -1630,9 +1635,14 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
   }
 
-  fragments.host_to_device(stream);
-  auto dict_info_owner = build_chunk_dictionaries(
-    chunks, col_desc, fragments, compression_, dict_policy_, max_dictionary_size_, stream);
+  row_group_fragments.host_to_device(stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks,
+                                                  col_desc,
+                                                  row_group_fragments,
+                                                  compression_,
+                                                  dict_policy_,
+                                                  max_dictionary_size_,
+                                                  stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
       size_t global_rg = global_rowgroup_base[p] + rg;
@@ -1663,7 +1673,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
-  hostdevice_vector<gpu::PageFragment> expanded_fragments(total_frags, stream);
+  hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
 
   // update fragments and/or prepare for fragment statistics calculation if necessary
   if (total_frags != 0) {
@@ -1682,12 +1692,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           uint32_t const fragments_in_chunk =
             util::div_rounding_up_unsafe(row_group.num_rows, frag_size);
           gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
-          ck.fragments            = expanded_fragments.device_ptr(frag_offset);
+          ck.fragments            = page_fragments.device_ptr(frag_offset);
           ck.first_fragment       = frag_offset;
 
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            expanded_fragments[frag_offset + i].chunk =
+            page_fragments[frag_offset + i].chunk =
               &chunks.device_view()[r + first_rg_in_part[p]][c];
           }
 
@@ -1700,13 +1710,13 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     chunks.host_to_device(stream);
 
     // re-initialize page fragments
-    expanded_fragments.host_to_device(stream);
-    recalculate_page_fragments(expanded_fragments, column_frag_size);
+    page_fragments.host_to_device(stream);
+    calculate_page_fragments(page_fragments, column_frag_size);
 
     // and gather fragment statistics
     if (not frag_stats.is_empty()) {
-      gather_fragment_statistics(
-        frag_stats, {expanded_fragments.device_ptr(), static_cast<size_t>(total_frags)});
+      gather_fragment_statistics(frag_stats,
+                                 {page_fragments.device_ptr(), static_cast<size_t>(total_frags)});
     }
   }
 

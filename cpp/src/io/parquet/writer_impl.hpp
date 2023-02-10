@@ -122,31 +122,33 @@ class writer::impl {
 
  private:
   /**
-   * @brief Gather page fragments
+   * @brief Gather row group fragments
    *
-   * @param frag Destination page fragments
+   * This calculates fragments to be used in determining row group boundariesa.
+   *
+   * @param frag Destination row group fragments
    * @param col_desc column description array
    * @param[in] partitions Information about partitioning of table
    * @param[in] part_frag_offset A Partition's offset into fragment array
    * @param fragment_size Number of rows per fragment
    */
-  void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
-                           device_span<gpu::parquet_column_device_view const> col_desc,
-                           host_span<partition_info const> partitions,
-                           device_span<int const> part_frag_offset,
-                           uint32_t fragment_size);
+  void init_row_group_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
+                                device_span<gpu::parquet_column_device_view const> col_desc,
+                                host_span<partition_info const> partitions,
+                                device_span<int const> part_frag_offset,
+                                uint32_t fragment_size);
 
   /**
    * @brief Recalculate page fragments
    *
-   * This is to be called if the size of the fragments array changes due to using
-   * different fragment sizes per column.
+   * This calculates fragments to be used to determine page boundaries within
+   * column chunks.
    *
    * @param frag Destination page fragments
    * @param frag_sizes Array of fragment sizes for each column
    */
-  void recalculate_page_fragments(device_span<gpu::PageFragment> frag,
-                                  host_span<size_type const> frag_sizes);
+  void calculate_page_fragments(device_span<gpu::PageFragment> frag,
+                                host_span<size_type const> frag_sizes);
 
   /**
    * @brief Gather per-fragment statistics
