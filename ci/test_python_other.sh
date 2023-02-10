@@ -23,7 +23,7 @@ pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
-  --cov-config=.coveragerc \
+  --cov-config=../.coveragerc \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term \
@@ -37,7 +37,7 @@ pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
   --dist=loadscope \
-  --cov-config=.coveragerc \
+  --cov-config=../.coveragerc \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
   --cov-report=term \
