@@ -57,8 +57,10 @@ void parquet_read_common(cudf::io::parquet_writer_options const& write_opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType>
-void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
+template <data_type DataType, cudf::io::io_type IOType>
+void BM_parquet_read_data(
+  nvbench::state& state,
+  nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -66,7 +68,6 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   auto const compression            = cudf::io::compression_type::SNAPPY;
-  auto const source_type            = io_type::FILEPATH;
 
   auto const tbl =
     create_random_table(cycle_dtypes(d_type, num_cols),
@@ -74,7 +75,7 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
                         data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(source_type);
+  cuio_source_sink_pair source_sink(IOType);
   cudf::io::parquet_writer_options write_opts =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
       .compression(compression);
@@ -82,10 +83,10 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
   parquet_read_common(write_opts, source_sink, state);
 }
 
-template <cudf::io::io_type IO, cudf::io::compression_type Compression>
+template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
 void BM_parquet_read_io_compression(
   nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
+  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -101,7 +102,7 @@ void BM_parquet_read_io_compression(
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   auto const compression            = Compression;
-  auto const source_type            = IO;
+  auto const source_type            = IOType;
 
   auto const tbl =
     create_random_table(cycle_dtypes(d_type, num_cols),
@@ -133,9 +134,11 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
-NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
+NVBENCH_BENCH_TYPES(BM_parquet_read_data,
+                    NVBENCH_TYPE_AXES(d_type_list,
+                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
   .set_name("parquet_read_decode")
-  .set_type_axes_names({"data_type"})
+  .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});

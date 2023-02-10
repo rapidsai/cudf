@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,19 +64,20 @@ void csv_read_common(DataType const& data_types,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <data_type DataType>
-void BM_csv_read_input(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
+template <data_type DataType, cudf::io::io_type IOType>
+void BM_csv_read_input(nvbench::state& state,
+                       nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const source_type = io_type::FILEPATH;
+  auto const source_type = IOType;
 
   csv_read_common(d_type, source_type, state);
 }
 
-template <cudf::io::io_type IO>
-void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
+template <cudf::io::io_type IOType>
+void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IOType>>)
 {
   cudf::rmm_pool_raii rmm_pool;
 
@@ -86,7 +87,7 @@ void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type
                                          static_cast<int32_t>(data_type::TIMESTAMP),
                                          static_cast<int32_t>(data_type::DURATION),
                                          static_cast<int32_t>(data_type::STRING)});
-  auto const source_type = IO;
+  auto const source_type = IOType;
 
   csv_read_common(d_type, source_type, state);
 }
@@ -101,9 +102,11 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
 using io_list =
   nvbench::enum_type_list<cudf::io::io_type::FILEPATH, cudf::io::io_type::HOST_BUFFER>;
 
-NVBENCH_BENCH_TYPES(BM_csv_read_input, NVBENCH_TYPE_AXES(d_type_list))
+NVBENCH_BENCH_TYPES(BM_csv_read_input,
+                    NVBENCH_TYPE_AXES(d_type_list,
+                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
   .set_name("csv_read_data_type")
-  .set_type_axes_names({"data_type"})
+  .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4);
 
 NVBENCH_BENCH_TYPES(BM_csv_read_io, NVBENCH_TYPE_AXES(io_list))
