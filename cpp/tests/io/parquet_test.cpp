@@ -316,13 +316,16 @@ cudf::io::parquet::PageHeader read_page_header(const std::unique_ptr<cudf::io::d
 }
 
 // Base test fixture for tests
-struct ParquetWriterTest : public cudf::test::BaseFixture {};
+struct ParquetWriterTest : public cudf::test::BaseFixture {
+};
 
 // Base test fixture for tests
-struct ParquetReaderTest : public cudf::test::BaseFixture {};
+struct ParquetReaderTest : public cudf::test::BaseFixture {
+};
 
 // Base test fixture for "stress" tests
-struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
+struct ParquetWriterStressTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -374,7 +377,8 @@ using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, st
 TYPED_TEST_SUITE(ParquetReaderSourceTest, ByteLikeTypes);
 
 // Base test fixture for chunked writer tests
-struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -386,7 +390,8 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
 // Base test fixture for size-parameterized tests
-class ParquetSizedTest : public ::testing::TestWithParam<int> {};
+class ParquetSizedTest : public ::testing::TestWithParam<int> {
+};
 
 // test the allowed bit widths for dictionary encoding
 // values chosen to trigger 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, and 24 bit dictionaries
