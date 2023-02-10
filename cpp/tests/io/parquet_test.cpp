@@ -5154,11 +5154,10 @@ TEST_F(ParquetReaderTest, UnsupportedPageEncoding)
       0x33, 0x63, 0x66, 0x61, 0x36, 0x63, 0x33, 0x34, 0x62, 0x37, 0x65, 0x66, 0x33, 0x33, 0x32,
       0x31, 0x33, 0x32, 0x32, 0x63, 0x39, 0x34, 0x29, 0x19, 0x1c, 0x1c, 0x00, 0x00, 0x00, 0xe6,
       0x01, 0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
-    unsigned int delta_binary_parquet_len = 577;
 
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{
-        reinterpret_cast<const char*>(delta_binary_parquet), delta_binary_parquet_len});
+        reinterpret_cast<const char*>(delta_binary_parquet), sizeof(delta_binary_parquet)});
     EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
   }
 }
