@@ -68,8 +68,6 @@ template <data_type DataType, cudf::io::io_type IOType>
 void BM_csv_read_input(nvbench::state& state,
                        nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IOType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = IOType;
 
@@ -79,8 +77,6 @@ void BM_csv_read_input(nvbench::state& state,
 template <cudf::io::io_type IOType>
 void BM_csv_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IOType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const d_type      = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
