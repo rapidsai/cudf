@@ -4641,8 +4641,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native boolean hasNonEmptyNulls(long handle) throws CudfException;
 
-  static native boolean mayHaveNonEmptyNulls(long handle) throws CudfException;
-
   static native long purgeNonEmptyNulls(long handle) throws CudfException;
 
   /**
