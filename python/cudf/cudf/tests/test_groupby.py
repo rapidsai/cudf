@@ -519,6 +519,23 @@ def test_groupby_apply_jit_args(func, args, groupby_jit_data):
     run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"], *args)
 
 
+def test_groupby_apply_jit_block_divergence():
+    # https://github.com/rapidsai/cudf/issues/12686
+    df = cudf.DataFrame(
+        {
+            "a": [0, 0, 0, 1, 1, 1],
+            "b": [1, 1, 1, 2, 3, 4],
+        }
+    )
+
+    def diverging_block(grp_df):
+        if grp_df["a"].mean() > 0:
+            return grp_df["b"].mean()
+        return 0
+
+    run_groupby_apply_jit_test(df, diverging_block, ["a"])
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",

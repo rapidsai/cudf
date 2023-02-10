@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -261,6 +261,11 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif isinstance(other, str):
+            try:
+                return cudf.Scalar(other, dtype=self.dtype)
+            except ValueError:
+                pass
 
         return NotImplemented
 
