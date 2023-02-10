@@ -82,7 +82,7 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
         ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${RAPIDS_TESTS_DIR}${test_name}.cs.log"
     done
     unset GTEST_CUDF_RMM_MODE
-    # TODO: test-results/*.cs.log are processed in gpuci
+    # TODO: test-results/*.cs.log are processed in CI
 fi
 
 exit ${SUITEERROR}
