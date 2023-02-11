@@ -156,6 +156,10 @@ def test_series_setitem_partial_slice_cow_off():
 
 
 def test_multiple_series_cow():
+    # Verify constructing, modifying, deleting
+    # multiple copies of a series preserves
+    # the data appropriately when COW is enabled.
+
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", True)
     s = cudf.Series([10, 20, 30, 40, 50])
@@ -167,17 +171,26 @@ def test_multiple_series_cow():
     s6 = s3.copy(deep=False)
 
     s1[0:3] = 10000
+    # s1 will be unlinked from actual data in s,
+    # and then modified. Rest all should
+    # contain the original data.
     assert_eq(s1, cudf.Series([10000, 10000, 10000, 40, 50]))
     for ser in [s, s2, s3, s4, s5, s6]:
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
 
     s6[0:3] = 3000
+    # s6 will be unlinked from actual data in s,
+    # and then modified. Rest all should
+    # contain the original data.
     assert_eq(s1, cudf.Series([10000, 10000, 10000, 40, 50]))
     assert_eq(s6, cudf.Series([3000, 3000, 3000, 40, 50]))
     for ser in [s2, s3, s4, s5]:
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
 
     s2[1:4] = 4000
+    # s2 will be unlinked from actual data in s,
+    # and then modified. Rest all should
+    # contain the original data.
     assert_eq(s2, cudf.Series([10, 4000, 4000, 4000, 50]))
     assert_eq(s1, cudf.Series([10000, 10000, 10000, 40, 50]))
     assert_eq(s6, cudf.Series([3000, 3000, 3000, 40, 50]))
@@ -185,6 +198,9 @@ def test_multiple_series_cow():
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
 
     s4[2:4] = 5000
+    # s4 will be unlinked from actual data in s,
+    # and then modified. Rest all should
+    # contain the original data.
     assert_eq(s4, cudf.Series([10, 20, 5000, 5000, 50]))
     assert_eq(s2, cudf.Series([10, 4000, 4000, 4000, 50]))
     assert_eq(s1, cudf.Series([10000, 10000, 10000, 40, 50]))
@@ -193,6 +209,9 @@ def test_multiple_series_cow():
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
 
     s5[2:4] = 6000
+    # s5 will be unlinked from actual data in s,
+    # and then modified. Rest all should
+    # contain the original data.
     assert_eq(s5, cudf.Series([10, 20, 6000, 6000, 50]))
     assert_eq(s4, cudf.Series([10, 20, 5000, 5000, 50]))
     assert_eq(s2, cudf.Series([10, 4000, 4000, 4000, 50]))
@@ -204,6 +223,8 @@ def test_multiple_series_cow():
     s7 = s5.copy(deep=False)
     assert_eq(s7, cudf.Series([10, 20, 6000, 6000, 50]))
     s7[1:3] = 55
+    # Making a copy of s5, i.e., s7 and modifying shouldn't
+    # be touching/modifying data in other series.
     assert_eq(s7, cudf.Series([10, 55, 55, 6000, 50]))
 
     assert_eq(s4, cudf.Series([10, 20, 5000, 5000, 50]))
@@ -212,6 +233,10 @@ def test_multiple_series_cow():
     assert_eq(s6, cudf.Series([3000, 3000, 3000, 40, 50]))
     for ser in [s3]:
         assert_eq(ser, cudf.Series([10, 20, 30, 40, 50]))
+
+    # Deleting any of the following series objects
+    # shouldn't delete rest of the weekly referenced data
+    # else-where.
 
     del s2
 
@@ -254,11 +279,16 @@ def test_series_zero_copy_cow_on():
     s1 = s.copy(deep=False)
     cp_array = cp.asarray(s)
 
+    # Ensure all original data & zero-copied
+    # data is same.
     assert_eq(s, cudf.Series([1, 2, 3, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
     assert_eq(cp_array, cp.array([1, 2, 3, 4, 5]))
 
     cp_array[0:3] = 10
+    # Modifying a zero-copied array should only
+    # modify `s` and will leave rest of the copies
+    # un-touched.
 
     assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
@@ -266,8 +296,12 @@ def test_series_zero_copy_cow_on():
 
     s2 = cudf.Series(cp_array)
     assert_eq(s2, cudf.Series([10, 10, 10, 4, 5]))
+
     s3 = s2.copy(deep=False)
     cp_array[0] = 20
+    # Modifying a zero-copied array should modify
+    # `s2` and `s` only. Because `cp_array`
+    # is zero-copied shared with `s` & `s2`.
 
     assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
@@ -279,6 +313,8 @@ def test_series_zero_copy_cow_on():
     s5 = cudf.Series(s4)
     assert_eq(s5, cudf.Series([10, 20, 30, 40, 50]))
     s5[0:2] = 1
+    # Modifying `s5` should also modify `s4`
+    # because they are zero-copied.
     assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
     assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
     cudf.set_option("copy_on_write", original_cow_setting)
@@ -291,11 +327,16 @@ def test_series_zero_copy_cow_off():
     s1 = s.copy(deep=False)
     cp_array = cp.asarray(s)
 
+    # Ensure all original data & zero-copied
+    # data is same.
     assert_eq(s, cudf.Series([1, 2, 3, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
     assert_eq(cp_array, cp.array([1, 2, 3, 4, 5]))
 
     cp_array[0:3] = 10
+    # When COW is off, modifying a zero-copied array
+    # will need to modify `s` & `s1` since they are
+    # shallow copied.
 
     assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([10, 10, 10, 4, 5]))
@@ -305,6 +346,10 @@ def test_series_zero_copy_cow_off():
     assert_eq(s2, cudf.Series([10, 10, 10, 4, 5]))
     s3 = s2.copy(deep=False)
     cp_array[0] = 20
+
+    # Modifying `cp_array`, will propagate the changes
+    # across all Series objects, because they are
+    # either shallow copied or zero-copied.
 
     assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
@@ -316,6 +361,9 @@ def test_series_zero_copy_cow_off():
     s5 = cudf.Series(s4)
     assert_eq(s5, cudf.Series([10, 20, 30, 40, 50]))
     s5[0:2] = 1
+
+    # Modifying `s5` should also modify `s4`
+    # because they are zero-copied.
     assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
     assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
     cudf.set_option("copy_on_write", original_cow_setting)
