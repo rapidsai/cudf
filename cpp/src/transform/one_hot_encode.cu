@@ -43,7 +43,7 @@ struct ohe_equality_functor {
   {
   }
 
-  auto __device__ operator()(size_type i)
+  auto __device__ operator()(size_type i) const noexcept
   {
     auto const element_index  = cudf::experimental::row::lhs_index_type{i % _input_size};
     auto const category_index = cudf::experimental::row::rhs_index_type{i / _input_size};

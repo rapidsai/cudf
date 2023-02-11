@@ -204,57 +204,48 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
       auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
       auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
 
+      auto const insert_map = [&](auto const value_comp) {
+        if (cudf::detail::has_nested_columns(haystack)) {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<true>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert_if(haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        thrust::counting_iterator<size_type>(0),  // stencil
+                        row_is_valid{row_bitmask_ptr},
+                        d_hasher,
+                        d_eqcomp,
+                        stream.value());
+        } else {
+          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<false>(
+            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
+          map.insert_if(haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        thrust::counting_iterator<size_type>(0),  // stencil
+                        row_is_valid{row_bitmask_ptr},
+                        d_hasher,
+                        d_eqcomp,
+                        stream.value());
+        }
+      };
+
       // Insert only rows that do not have any null at any level.
-      if (cudf::detail::has_nested_columns(haystack)) {
-        auto const insert_map = [&](auto const value_comp) {
-          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<true>(
-            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-          map.insert_if(haystack_it,
-                        haystack_it + haystack.num_rows(),
-                        thrust::counting_iterator<size_type>(0),  // stencil
-                        row_is_valid{row_bitmask_ptr},
-                        d_hasher,
-                        d_eqcomp,
-                        stream.value());
-        };
-
-        dispatch_nan_comparator(compare_nans, insert_map);
-      } else {
-        auto const insert_map = [&](auto const value_comp) {
-          auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<false>(
-            nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-          map.insert_if(haystack_it,
-                        haystack_it + haystack.num_rows(),
-                        thrust::counting_iterator<size_type>(0),  // stencil
-                        row_is_valid{row_bitmask_ptr},
-                        d_hasher,
-                        d_eqcomp,
-                        stream.value());
-        };
-
-        dispatch_nan_comparator(compare_nans, insert_map);
-      }
-
+      dispatch_nan_comparator(compare_nans, insert_map);
     } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
-      if (cudf::detail::has_nested_columns(haystack)) {
-        auto const insert_map = [&](auto const value_comp) {
+      auto const insert_map = [&](auto const value_comp) {
+        if (cudf::detail::has_nested_columns(haystack)) {
           auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<true>(
             nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
           map.insert(
             haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
-        };
-
-        dispatch_nan_comparator(compare_nans, insert_map);
-      } else {
-        auto const insert_map = [&](auto const value_comp) {
+        } else {
           auto const d_eqcomp = strong_index_comparator_adapter{comparator.equal_to<false>(
             nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
           map.insert(
             haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
-        };
+        }
+      };
 
-        dispatch_nan_comparator(compare_nans, insert_map);
-      }
+      dispatch_nan_comparator(compare_nans, insert_map);
     }
   }
 
@@ -272,8 +263,9 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
-    if (cudf::detail::has_nested_columns(haystack) or cudf::detail::has_nested_columns(needles)) {
-      auto const check_contains = [&](auto const value_comp) {
+
+    auto const check_contains = [&](auto const value_comp) {
+      if (cudf::detail::has_nested_columns(haystack) or cudf::detail::has_nested_columns(needles)) {
         auto const d_eqcomp =
           comparator.equal_to<true>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
         map.contains(needles_it,
@@ -282,11 +274,7 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
                      d_hasher,
                      d_eqcomp,
                      stream.value());
-      };
-
-      dispatch_nan_comparator(compare_nans, check_contains);
-    } else {
-      auto const check_contains = [&](auto const value_comp) {
+      } else {
         auto const d_eqcomp =
           comparator.equal_to<false>(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
         map.contains(needles_it,
@@ -295,10 +283,10 @@ rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack
                      d_hasher,
                      d_eqcomp,
                      stream.value());
-      };
+      }
+    };
 
-      dispatch_nan_comparator(compare_nans, check_contains);
-    }
+    dispatch_nan_comparator(compare_nans, check_contains);
   }
 
   return contained;

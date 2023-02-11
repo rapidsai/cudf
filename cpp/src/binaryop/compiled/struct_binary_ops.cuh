@@ -109,19 +109,19 @@ void apply_struct_binary_op(mutable_column_view& out,
 template <typename OptionalIteratorType, typename DeviceComparatorType>
 struct struct_equality_functor {
   struct_equality_functor(OptionalIteratorType optional_iter,
+                          DeviceComparatorType device_comparator,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
-                          bool preserve_output,
-                          DeviceComparatorType device_comparator)
+                          bool preserve_output)
     : _optional_iter(optional_iter),
+      _device_comparator(device_comparator),
       _is_lhs_scalar(is_lhs_scalar),
       _is_rhs_scalar(is_rhs_scalar),
-      _preserve_output(preserve_output),
-      _device_comparator(device_comparator)
+      _preserve_output(preserve_output)
   {
   }
 
-  auto __device__ operator()(size_type i)
+  auto __device__ operator()(size_type i) const noexcept
   {
     auto const lhs = cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
     auto const rhs = cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
@@ -129,10 +129,10 @@ struct struct_equality_functor {
   }
 
   OptionalIteratorType _optional_iter;
+  DeviceComparatorType _device_comparator;
   bool _is_lhs_scalar;
   bool _is_rhs_scalar;
   bool _preserve_output;
-  DeviceComparatorType _device_comparator;
 };
 
 template <typename PhysicalEqualityComparator =
@@ -165,10 +165,10 @@ void apply_struct_equality_op(mutable_column_view& out,
                      out.end<bool>(),
                      struct_equality_functor<decltype(optional_iter), decltype(device_comparator)>(
                        optional_iter,
+                       device_comparator,
                        is_lhs_scalar,
                        is_rhs_scalar,
-                       op != binary_operator::NOT_EQUAL,
-                       device_comparator));
+                       op != binary_operator::NOT_EQUAL));
   };
 
   if (cudf::detail::has_nested_columns(tlhs) or cudf::detail::has_nested_columns(trhs)) {

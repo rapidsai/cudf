@@ -51,7 +51,7 @@ struct unique_identifier {
   {
   }
 
-  auto __device__ operator()(size_type row_index)
+  auto __device__ operator()(size_type row_index) const noexcept
   {
     auto const group_start = _offsets[_labels[row_index]];
     if constexpr (forward) {

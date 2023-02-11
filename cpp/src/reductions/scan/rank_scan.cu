@@ -39,7 +39,7 @@ struct rank_equality_functor {
   {
   }
 
-  auto __device__ operator()(size_type row_index)
+  auto __device__ operator()(size_type row_index) const noexcept
   {
     return _resolver(row_index == 0 || !_comparator(row_index, row_index - 1), row_index);
   }
@@ -67,8 +67,8 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const order_by_view = table_view{{order_by}};
-  auto comp = cudf::experimental::row::equality::self_comparator(order_by_view, stream);
+  auto const order_by_tview = table_view{{order_by}};
+  auto comp = cudf::experimental::row::equality::self_comparator(order_by_tview, stream);
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
@@ -82,7 +82,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                        device_comparator, resolver));
   };
 
-  if (cudf::detail::has_nested_columns(order_by_view)) {
+  if (cudf::detail::has_nested_columns(order_by_tview)) {
     auto const device_comparator =
       comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
     comparator_helper(device_comparator);

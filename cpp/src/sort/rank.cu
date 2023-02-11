@@ -55,7 +55,7 @@ struct unique_functor {
   {
   }
 
-  auto __device__ operator()(size_type index)
+  auto __device__ operator()(size_type index) const noexcept
   {
     return static_cast<size_type>(index == 0 ||
                                   not _device_comparator(_permute[index], _permute[index - 1]));

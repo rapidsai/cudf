@@ -76,11 +76,6 @@ using map_type =
                              device_row_hasher<cudf::detail::default_hash, cudf::nullate::DYNAMIC>,
                            ComparatorType>;
 
-template <bool has_nested_columns>
-using comparator_type =
-  cudf::experimental::row::equality::device_row_comparator<has_nested_columns,
-                                                           cudf::nullate::DYNAMIC>;
-
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
