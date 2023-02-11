@@ -87,10 +87,10 @@ mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 # stream.
 option(
   STREAM_MODE_TESTING
-  "Change the behavior of cudf::test::get_default_stream instead of cudf::get_default_stream. This option has no effect if CUDF_BUILD_STREAMS_TEST_UTIL is OFF." OFF
+  "Change the behavior of cudf::test::get_default_stream instead of cudf::get_default_stream. This option has no effect if CUDF_BUILD_STREAMS_TEST_UTIL is OFF."
+  OFF
 )
 mark_as_advanced(STREAM_MODE_TESTING)
-
 
 option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
 mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
@@ -737,47 +737,47 @@ add_library(cudf::cudf ALIAS cudf)
 # ##################################################################################################
 # * build cudftestutil ----------------------------------------------------------------------------
 
-  add_library(
-    # TODO: We need this to be a shared library in order to support runtime
-    # symbol patching with LD_PRELOAD. Are we OK with that change?
-    cudftestutil SHARED
-    tests/io/metadata_utilities.cpp
-    tests/utilities/base_fixture.cpp
-    tests/utilities/column_utilities.cu
-    tests/utilities/default_stream.cpp
-    tests/utilities/table_utilities.cu
-    tests/utilities/tdigest_utilities.cu
-  )
+add_library(
+  # TODO: We need this to be a shared library in order to support runtime
+  # symbol patching with LD_PRELOAD. Are we OK with that change?
+  cudftestutil SHARED
+  tests/io/metadata_utilities.cpp
+  tests/utilities/base_fixture.cpp
+  tests/utilities/column_utilities.cu
+  tests/utilities/default_stream.cpp
+  tests/utilities/table_utilities.cu
+  tests/utilities/tdigest_utilities.cu
+)
 
-  set_target_properties(
-    cudftestutil
-    PROPERTIES BUILD_RPATH "\$ORIGIN"
-               INSTALL_RPATH "\$ORIGIN"
-               # set target compile options
-               CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON
-               CUDA_STANDARD 17
-               CUDA_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-               INTERFACE_POSITION_INDEPENDENT_CODE ON
-  )
+set_target_properties(
+  cudftestutil
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
 
-  target_compile_options(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                        "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
-  )
+target_compile_options(
+  cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+                      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+)
 
-  target_link_libraries(
-    cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
-    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
-  )
+target_link_libraries(
+  cudftestutil
+  PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
 
-  target_include_directories(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  )
-  add_library(cudf::cudftestutil ALIAS cudftestutil)
+target_include_directories(
+  cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                      "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
 
