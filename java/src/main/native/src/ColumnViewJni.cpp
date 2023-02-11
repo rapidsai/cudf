@@ -1833,7 +1833,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
       default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
     }
 
-    if (cudf::may_have_nonempty_nulls(*copy)) {
+    if (cudf::has_nonempty_nulls(*copy)) {
       copy = cudf::purge_nonempty_nulls(*copy);
     }
 
