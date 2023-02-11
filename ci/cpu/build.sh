@@ -68,8 +68,8 @@ fi
 gpuci_logger "Check compiler versions"
 python --version
 
-gpuci_conda_retry remove --force pyarrow arrow-cpp openssl
-gpuci_mamba_retry install -y "pyarrow=11" "libarrow=11"
+gpuci_conda_retry remove --force pyarrow arrow-cpp openssl librdkafka
+gpuci_mamba_retry install -y "pyarrow=11" "libarrow=11" "librdkafka=1.7.0"
 
 gpuci_logger "Check conda environment"
 conda info
