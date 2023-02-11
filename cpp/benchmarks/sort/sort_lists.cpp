@@ -22,8 +22,6 @@
 
 void nvbench_sort_lists(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const table = create_lists_data(state);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
