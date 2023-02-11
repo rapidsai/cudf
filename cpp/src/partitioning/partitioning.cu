@@ -24,7 +24,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/partitioning.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -730,7 +730,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return std::pair(empty_like(input), std::vector<size_type>(num_partitions, 0));
   }
 
-  if (has_nested_nulls(table_to_hash)) {
+  if (has_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
