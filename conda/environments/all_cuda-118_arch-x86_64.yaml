@@ -31,7 +31,7 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow=11
-- librdkafka=1.7.0
+- librdkafka=1.9.2
 - mimesis>=4.1.0
 - moto>=4.0.8
 - myst-nb
