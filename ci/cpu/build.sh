@@ -68,7 +68,7 @@ fi
 gpuci_logger "Check compiler versions"
 python --version
 
-gpuci_conda_retry remove --force pyarrow arrow-cpp openssl
+gpuci_conda_retry remove --force pyarrow arrow-cpp
 gpuci_mamba_retry install -y "pyarrow=11" "libarrow=11"
 
 gpuci_logger "Check conda environment"
