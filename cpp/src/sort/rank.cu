@@ -61,6 +61,7 @@ struct unique_functor {
                                   not _device_comparator(_permute[index], _permute[index - 1]));
   }
 
+ private:
   PermutationIteratorType _permute;
   DeviceComparatorType _device_comparator;
 };

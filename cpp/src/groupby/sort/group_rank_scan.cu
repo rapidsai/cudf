@@ -66,6 +66,7 @@ struct unique_identifier {
     }
   }
 
+ private:
   size_type const* _labels;
   size_type const* _offsets;
   permuted_equal_t _permuted_equal;

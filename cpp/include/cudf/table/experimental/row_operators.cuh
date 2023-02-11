@@ -245,7 +245,7 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
- * @note: The operator overloads in sub-class `element_comparator` are templated via the
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
  *        `type_dispatcher` to help select an overload instance for each column in a table.
  *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
  *        but it will be a runtime error if template parameter `has_nested_columns != true`.
@@ -867,7 +867,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
-   * @note: The operator overloads in sub-class `element_comparator` are templated via the
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
    *        `type_dispatcher` to help select an overload instance for each column in a table.
    *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
    *        but it will be a runtime error if template parameter `has_nested_columns != true`.
@@ -1029,7 +1029,7 @@ class two_table_comparator {
    * only if row `i` of the right table compares lexicographically less than row
    * `j` of the left table.
    *
-   * @note: The operator overloads in sub-class `element_comparator` are templated via the
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
    *        `type_dispatcher` to help select an overload instance for each column in a table.
    *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
    *        but it will be a runtime error if template parameter `has_nested_columns != true`.
@@ -1161,7 +1161,7 @@ struct nan_equal_physical_equality_comparator {
  * returns false, representing unequal rows. If the rows are compared without mismatched elements,
  * the rows are equal.
  *
- * @note: The operator overloads in sub-class `element_comparator` are templated via the
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
  *        `type_dispatcher` to help select an overload instance for each column in a table.
  *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
  *        but it will be a runtime error if template parameter `has_nested_columns != true`.
@@ -1478,7 +1478,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
-   * @note: The operator overloads in sub-class `element_comparator` are templated via the
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
    *        `type_dispatcher` to help select an overload instance for each column in a table.
    *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
    *        but it will be a runtime error if template parameter `has_nested_columns != true`.
@@ -1592,7 +1592,7 @@ class two_table_comparator {
    * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
    * right table compares equal to row `j` of the left table.
    *
-   * @note: The operator overloads in sub-class `element_comparator` are templated via the
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
    *        `type_dispatcher` to help select an overload instance for each column in a table.
    *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
    *        but it will be a runtime error if template parameter `has_nested_columns != true`.

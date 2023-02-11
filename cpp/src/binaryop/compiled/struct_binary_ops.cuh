@@ -128,6 +128,7 @@ struct struct_equality_functor {
     return _optional_iter[i].has_value() and (_device_comparator(lhs, rhs) == _preserve_output);
   }
 
+ private:
   OptionalIteratorType _optional_iter;
   DeviceComparatorType _device_comparator;
   bool _is_lhs_scalar;

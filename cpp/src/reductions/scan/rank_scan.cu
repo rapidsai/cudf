@@ -44,6 +44,7 @@ struct rank_equality_functor {
     return _resolver(row_index == 0 || !_comparator(row_index, row_index - 1), row_index);
   }
 
+ private:
   device_comparator_type _comparator;
   value_resolver _resolver;
 };

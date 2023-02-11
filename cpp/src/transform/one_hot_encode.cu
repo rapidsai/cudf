@@ -50,6 +50,7 @@ struct ohe_equality_functor {
     return _d_equal(element_index, category_index);
   }
 
+ private:
   size_type _input_size;
   DeviceComparatorType _d_equal;
 };
