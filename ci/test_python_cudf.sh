@@ -13,7 +13,6 @@ set +e
 
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf
-# (TODO: Copied the comment below from gpuCI, need to verify on GitHub Actions)
 # It is essential to cd into python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
 pytest \
   --cache-clear \
