@@ -625,12 +625,9 @@ std::unique_ptr<table> groupby(table_view const& keys,
 
   if (cudf::detail::has_nested_columns(keys)) {
     auto const d_key_equal = comparator.equal_to<true>(has_null, null_keys_are_equal);
-
     return comparator_helper(d_key_equal);
-
   } else {
     auto const d_key_equal = comparator.equal_to<false>(has_null, null_keys_are_equal);
-
     return comparator_helper(d_key_equal);
   }
 }

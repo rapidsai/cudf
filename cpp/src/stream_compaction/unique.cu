@@ -93,12 +93,10 @@ std::unique_ptr<table> unique(table_view const& input,
   if (cudf::detail::has_nested_columns(keys_view)) {
     auto row_equal =
       comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
-
     return comparator_helper(row_equal);
   } else {
     auto row_equal =
       comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
-
     return comparator_helper(row_equal);
   }
 }

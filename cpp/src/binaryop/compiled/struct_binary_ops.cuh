@@ -123,8 +123,8 @@ struct struct_equality_functor {
 
   auto __device__ operator()(size_type i)
   {
-    auto lhs = cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
-    auto rhs = cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
+    auto const lhs = cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
+    auto const rhs = cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
     return _optional_iter[i].has_value() and (_device_comparator(lhs, rhs) == _preserve_output);
   }
 

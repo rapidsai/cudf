@@ -85,13 +85,10 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   if (cudf::detail::has_nested_columns(order_by_view)) {
     auto const device_comparator =
       comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
-
     comparator_helper(device_comparator);
-
   } else {
     auto const device_comparator =
       comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
-
     comparator_helper(device_comparator);
   }
 

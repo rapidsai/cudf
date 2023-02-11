@@ -91,12 +91,10 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
   if (cudf::detail::has_nested_columns(t_input)) {
     auto const device_comparator =
       comparator.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(t_input)});
-
     comparator_helper(device_comparator);
   } else {
     auto const device_comparator =
       comparator.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(t_input)});
-
     comparator_helper(device_comparator);
   }
 

@@ -89,12 +89,10 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   if (cudf::detail::has_nested_columns(t_lhs) or cudf::detail::has_nested_columns(t_rhs)) {
     auto const d_equal = comparator.equal_to<true>(
       nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
-
     comparator_helper(d_equal);
   } else {
     auto const d_equal = comparator.equal_to<false>(
       nullate::DYNAMIC{has_nested_nulls(t_lhs) || has_nested_nulls(t_rhs)});
-
     comparator_helper(d_equal);
   }
 

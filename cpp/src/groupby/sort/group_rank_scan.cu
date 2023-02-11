@@ -124,13 +124,10 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
   if (cudf::detail::has_nested_columns(grouped_values_view)) {
     auto const d_equal =
       comparator.equal_to<true>(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
-
     comparator_helper(d_equal);
-
   } else {
     auto const d_equal =
       comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
-
     comparator_helper(d_equal);
   }
 
