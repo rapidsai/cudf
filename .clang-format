@@ -71,7 +71,110 @@ ForEachMacros:
   - foreach
   - Q_FOREACH
   - BOOST_FOREACH
-IncludeBlocks: Preserve
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Local includes first
+  - Regex:           '".*"'
+    Priority:        0
+  # Internal includes from non-cudf source directories
+  - Regex:           '^<benchmarks/'
+    Priority:        1
+  - Regex:           '^<binaryop/'
+    Priority:        2
+  - Regex:           '^<groupby/'
+    Priority:        2
+  - Regex:           '^<hash/'
+    Priority:        3
+  - Regex:           '^<io/'
+    Priority:        3
+  - Regex:           '^<jit_preprocessed_files/'
+    Priority:        4
+  - Regex:           '^<jit/'
+    Priority:        5
+  - Regex:           '^<join/'
+    Priority:        3
+  - Regex:           '^<lists/'
+    Priority:        3
+  - Regex:           '^<quantiles/'
+    Priority:        3
+  - Regex:           '^<reductions/'
+    Priority:        3
+  - Regex:           '^<rolling/'
+    Priority:        3
+  - Regex:           '^<sort/'
+    Priority:        3
+  - Regex:           '^<src/'
+    Priority:        3
+  - Regex:           '^<strings/'
+    Priority:        3
+  - Regex:           '^<tests/'
+    Priority:        6
+  - Regex:           '^<text/'
+    Priority:        6
+  # cudf_test, cudf, nvtext are "proper" packages
+  - Regex:           '^<cudf_test/'
+    Priority:        7
+  - Regex:           '^<cudf/'
+    Priority:        8
+  - Regex:           '^<nvtext/'
+    Priority:        9
+  # Google Benchmark and NVBench
+  - Regex:           '^<benchmark/'
+    Priority:        10
+  - Regex:           '^<nvbench/'
+    Priority:        11
+  # gmock and gtest
+  - Regex:           '^<gmock/'
+    Priority:        12
+  - Regex:           '^<gtest/'
+    Priority:        13
+  # External dependencies (rmm, cub/thrust, cuco, arrow, ...)
+  - Regex:           '^<rmm/'
+    Priority:        12
+  - Regex:           '^<kvikio/'
+    Priority:        12
+  - Regex:           '^<cub/'
+    Priority:        13
+  - Regex:           '^<cuco/'
+    Priority:        14
+  - Regex:           '^<thrust/'
+    Priority:        15
+  - Regex:           '^<arrow/'
+    Priority:        16
+  - Regex:           '^<dlpack/'
+    Priority:        17
+  - Regex:           '^<jitify2.hpp>'
+    Priority:        20
+  - Regex:           '^<librdkafka/'
+    Priority:        18
+  - Regex:           '^<nvcomp'
+    Priority:        18
+  - Regex:           '^((<|")(gtest|gmock|isl|json)/)'
+    Priority:        19
+  - Regex:           '^<zlib.h>'
+    Priority:        20
+  # CUDA Toolkit and related libraries
+  - Regex:           '^<cuda[[:alnum:]_]+.h>'
+    Priority:        21
+  - Regex:           '^<cooperative_groups'
+    Priority:        22
+  - Regex:           '^<(nvtx3/.*|nvToolsExt.h)>'
+    Priority:        23
+  # CUDA math libraries (cuBLAS, cuRAND, ...)
+  - Regex:           '<cu[[:alnum:]_]+.h>'
+    Priority:        25
+    SortPriority:    24
+  # libcu++ and C/C++ STL includes
+  - Regex:           '^<cuda/'
+    Priority:        24
+    SortPriority:    25
+  - Regex:           '<[[:alnum:]._]+>'
+    Priority:        26
+  - Regex:           '<sys/'
+    Priority:        26
+  - Regex:           '<unicode/'
+    Priority:        26
+  # Anything not listed above goes last
 IncludeIsMainRegex: '([-_](test|unittest))?$'
 IndentCaseLabels: true
 IndentPPDirectives: None
