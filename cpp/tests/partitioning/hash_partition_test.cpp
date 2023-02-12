@@ -393,7 +393,8 @@ TEST_F(HashPartition, ListWithNulls)
                                  second_result->get_column(0).view());
 }
 
-TEST_F(HashPartition, StructofStructWithNulls) {
+TEST_F(HashPartition, StructofStructWithNulls)
+{
   //  +-----------------+
   //  |  s1{s2{a,b}, c} |
   //  +-----------------+
