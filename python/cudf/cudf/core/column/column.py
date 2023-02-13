@@ -2607,6 +2607,9 @@ def _proxy_cai_obj(cai, owner):
     Returns a proxy CAI SimpleNameSpace wrapped
     with the provided `cai` as `__cuda_array_interface__`
     and owner as `owner` to keep the object alive.
+    This is an internal utility for `data_array_view`
+    and `mask_array_view` where an object with
+    read-only CAI is required.
     """
     return cuda_array_interface_wrapper(
         ptr=cai["data"][0],
