@@ -31,7 +31,7 @@ dependencies:
 - hypothesis
 - ipython
 - libarrow=11
-- librdkafka=1.7.0
+- librdkafka>=1.9.0,<1.10.0a0
 - mimesis>=4.1.0
 - moto>=4.0.8
 - myst-nb
@@ -45,7 +45,7 @@ dependencies:
 - nvtx>=0.2.1
 - packaging
 - pandas>=1.0,<1.6.0dev0
-- pandoc<=2.0.0
+- pandoc
 - pip
 - pre-commit
 - protobuf=4.21
@@ -58,7 +58,7 @@ dependencies:
 - pytest-cases
 - pytest-cov
 - pytest-xdist
-- python-confluent-kafka=1.7.0
+- python-confluent-kafka>=1.9.0,<1.10.0a0
 - python-snappy>=0.6.0
 - python>=3.8,<3.11
 - pytorch<1.12.0

@@ -66,7 +66,7 @@ dependencies:
           - libarrow=11
           - c-compiler
           - cxx-compiler
-          - librdkafka=1.7.0
+          - librdkafka>=1.9.0,<1.10.0a0
           - protobuf=4.21
     specific:
       - output_types: conda
@@ -128,7 +128,7 @@ dependencies:
           - myst-nb
           - nbsphinx
           - numpydoc
-          - pandoc<=2.0.0 # We should check and fix all "<=" pinnings
+          - pandoc
           - pydata-sphinx-theme
           - sphinx
           - sphinx-autobuild
@@ -234,7 +234,7 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - pandas>=1.0,<1.6.0dev0
-          - python-confluent-kafka=1.7.0
+          - python-confluent-kafka>=1.9.0,<1.10.0a0
           - streamz
           - typing_extensions
       - output_types: conda

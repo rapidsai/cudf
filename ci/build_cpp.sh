@@ -8,7 +8,7 @@ source rapids-env-update
 export CMAKE_GENERATOR=Ninja
 
 gpuci_conda_retry remove --force pyarrow arrow-cpp openssl librdkafka
-rapids-mamba-retry install -y "pyarrow=11" "libarrow=11" "librdkafka=1.7.0"
+rapids-mamba-retry install -y "pyarrow=11" "libarrow=11" "librdkafka>=1.9.0,<1.10.0a0""
 
 rapids-print-env
 
