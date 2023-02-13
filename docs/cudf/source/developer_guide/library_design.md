@@ -363,8 +363,7 @@ with the buffer. If only read-only access is required (`mode="read"`), this indi
 that the caller has no intention of modifying the buffer through this pointer.
 In this case, any shallow copies are not unlinked. In contrast, if modification is
 required one may pass `mode="write"`, provoking unlinking of any shallow copies.
-The same mechanism is also used for `SpillableBuffer`, though in that case one must
-also consider acquiring a spill lock (see `Buffer` [design](Buffer-design) for more details).
+
 
 ### Variable width data types
 Weak references are implemented only for fixed-width data types as these are only column

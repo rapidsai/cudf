@@ -7,7 +7,12 @@ With this approach, any operation that generates an unmodified view of an object
 However, when either the existing or new object is _modified_, a copy of the data is made prior to the modification, ensuring that the changes do not propagate between the two objects.
 This behavior is best understood by looking at the examples below.
 
-The default behaviour in cuDF is for copy-on-write to be disabled, so to use it, one must explicitly opt in by setting a cuDF option. This can be done operation by operation if this is required, but the most common use case is to enable copy-on-write for the duration of a script.
+The default behaviour in cuDF is for copy-on-write to be disabled, so to use it, one must explicitly
+opt in by setting a cuDF option. It is recommended to set the copy-on-write at the beginning of the
+script execution, because when this setting is changed in middle of a script execution there will
+be un-intended behavior where the objects created when copy-on-write is enabled will still have the
+copy-on-write behavior whereas the objects created when copy-on-write is disabled will have
+different behavior.
 
 ## Enabling copy-on-write
 
@@ -85,7 +90,7 @@ dtype: int64
 
 When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cuDF will always trigger a copy and will not modify the original object.
 
-1. Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
+Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
 
 ```python
 
@@ -159,7 +164,6 @@ dtype: int64
 4    5
 dtype: int64
 ```
-2. There are numerous other inconsistencies, which are solved by copy-on-write. Read more about them [here](https://phofl.github.io/cow-introduction.html).
 
 
 ### Explicit deep and shallow copies comparison
