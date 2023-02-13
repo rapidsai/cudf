@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,9 +78,6 @@ constexpr std::size_t single_item = 1;
 
 void BM_FST_JSON(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
@@ -116,9 +113,6 @@ void BM_FST_JSON(nvbench::state& state)
 
 void BM_FST_JSON_no_outidx(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
@@ -154,9 +148,6 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
 
 void BM_FST_JSON_no_out(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
@@ -190,9 +181,6 @@ void BM_FST_JSON_no_out(nvbench::state& state)
 
 void BM_FST_JSON_no_str(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   CUDF_EXPECTS(state.get_int64("string_size") <= std::numeric_limits<size_type>::max(),
                "Benchmarks only support up to size_type's maximum number of items");
   auto const string_size{size_type(state.get_int64("string_size"))};
