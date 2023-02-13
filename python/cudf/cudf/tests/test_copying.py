@@ -288,7 +288,7 @@ def test_series_zero_copy_cow_on():
     cp_array[0:3] = 10
     # Modifying a zero-copied array should only
     # modify `s` and will leave rest of the copies
-    # un-touched.
+    # untouched.
 
     assert_eq(s, cudf.Series([10, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
