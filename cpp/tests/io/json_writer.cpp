@@ -365,7 +365,7 @@ TEST_F(JsonWriterTest, SpecialChars)
 TEST_F(JsonWriterTest, NullList)
 {
   std::string const data = R"(
-{"a": [1], "b": [[1, 2, 3], [null], [null, null, null], [4, null, 5]]}
+{"a": [null], "b": [[1, 2, 3], [null], [null, null, null], [4, null, 5]]}
 {"a": [2, null, null, 3] , "b": null}
 {"a": [null, null, 4], "b": [[2, null], null]}
 {"a": [5, null, null], "b": [null, [3, 4, 5]]} )";
@@ -386,7 +386,7 @@ TEST_F(JsonWriterTest, NullList)
                            .na_rep("null");
 
   cudf::io::write_json(options_builder.build(), rmm::mr::get_current_device_resource());
-  std::string const expected = R"({"a":[1],"b":[[1,2,3],[null],[null,null,null],[4,null,5]]}
+  std::string const expected = R"({"a":[null],"b":[[1,2,3],[null],[null,null,null],[4,null,5]]}
 {"a":[2,null,null,3],"b":null}
 {"a":[null,null,4],"b":[[2,null],null]}
 {"a":[5,null,null],"b":[null,[3,4,5]]}
