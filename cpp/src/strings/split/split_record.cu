@@ -179,7 +179,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& st
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // last entry is the total number of tokens to be generated
-  auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
+  auto total_tokens = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
   // split each string into an array of index-pair values
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   reader.d_token_offsets = d_offsets;

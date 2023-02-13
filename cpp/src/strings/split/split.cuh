@@ -142,10 +142,7 @@ struct base_split_tokenizer {
       cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
                                            d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
 
-    if (!is_valid(idx)) {
-      d_tokens[0] = string_index_pair{nullptr, 0};
-      return;
-    }
+    if (!is_valid(idx)) { return; }
 
     auto const d_str = get_string(idx);
 
