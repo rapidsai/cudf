@@ -307,6 +307,7 @@ template <typename T = uint8_t>
   return total_pages;
 }
 
+// see setupLocalPageInfo() in page_data.cu for supported page encodings
 constexpr bool is_supported_encoding(Encoding enc)
 {
   switch (enc) {
