@@ -58,14 +58,13 @@ jobs:
           echo "RAPIDS_BMR_DIR=${{ env.RAPIDS_BMR_DIR }}"
       - name: C++ build
         run: ${{ inputs.build_script }}
-      #- name: Artifact test
-      #  # run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
-      #  # run: echo "${{ env.RAPIDS_BMR_DIR }}"
-      #  run: |
-      #    set > "/__w/cudf/cudf/metrics/test.log"
-      #    echo "RAPIDS_BMR_DIR=$RAPIDS_BMR_DIR"
-      #    echo ${{ env.RAPIDS_BMR_DIR }}
-      #    echo ${{ github.workspace }}
+      - name: Report test
+        # run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
+        # run: echo "${{ env.RAPIDS_BMR_DIR }}"
+        run: |
+          echo REF=${{ env.RAPIDS_REF_NAME }}
+          echo SHA=${{ env.RAPIDS_SHA }}
+          echo DIR=${RAPIDS_REF_NAME}/${RAPIDS_SHA:0:5}
       # uses: actions/upload-artifact@v3
       #  with:
       #    name: test-log
