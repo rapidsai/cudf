@@ -54,8 +54,6 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
     state.skip("Skip unwanted benchmarks.");
   }
 
-  cudf::rmm_pool_raii pool_raii;
-
   cudf::size_type const num_rows = state.get_int64("NumRows");
   auto const sorting             = state.get_int64("Sort");
 
@@ -101,8 +99,6 @@ void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench
   if constexpr (Keep == cudf::duplicate_keep_option::KEEP_ANY) {
     state.skip("Skip unwanted benchmarks.");
   }
-
-  cudf::rmm_pool_raii pool_raii;
 
   auto const size               = state.get_int64("ColumnSize");
   auto const dtype              = cudf::type_to_id<Type>();
