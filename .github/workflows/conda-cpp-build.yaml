@@ -55,23 +55,29 @@ jobs:
           echo "RAPIDS_SHA=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           echo "RAPIDS_REF_NAME=${{ inputs.branch || github.ref_name }}" >> "${GITHUB_ENV}"
           echo "RAPIDS_NIGHTLY_DATE=${{ inputs.date }}" >> "${GITHUB_ENV}"
+          echo "RAPIDS_BMR_DIR=${{ env.RAPIDS_BMR_DIR }}"
       - name: C++ build
         run: ${{ inputs.build_script }}
       - name: Artifact test
         # run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
-        run: echo "${{ env.RAPIDS_BMR_DIR }}" > artifact_upload_test.log
-      - uses: actions/upload-artifact@v3
-        with:
-          name: test-log
-          # path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
-          path: /__w/cudf/cudf/metrics/test.log
+        # run: echo "${{ env.RAPIDS_BMR_DIR }}"
+        run: |
+          set > "/__w/cudf/cudf/metrics/test.log"
+          echo "RAPIDS_BMR_DIR=$RAPIDS_BMR_DIR"
+          echo ${{ env.RAPIDS_BMR_DIR }}
+          echo ${{ github.workspace }}
+      # uses: actions/upload-artifact@v3
+      #  with:
+      #    name: test-log
+      #    # path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
+      #    path: artifact_upload_test.log
       - uses: actions/upload-artifact@v3
         with:
           name: build-metrics-report
           # path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
-          path: /__w/cudf/cudf/metrics/ninja_log.html
-      - uses: actions/upload-artifact@v3
-        with:
-          name: ninja-log
-          # path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
-          path: /__w/cudf/cudf/metrics/ninja.log
+          path: ${RAPIDS_BMR_DIR}
+      # uses: actions/upload-artifact@v3
+      #  with:
+      #    name: ninja-log
+      #    # path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
+      #    path: /__w/cudf/cudf/metrics/ninja.log
