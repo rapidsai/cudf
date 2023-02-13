@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/segmented_reduction_functions.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/lists/stream_compaction.hpp>
@@ -104,7 +104,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, cudf::default_stream_value, mr);
+  return detail::apply_boolean_mask(input, boolean_mask, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf::lists

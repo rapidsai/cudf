@@ -115,7 +115,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
-def write_orc_partition(df, path, fs, filename, compression=None):
+def write_orc_partition(df, path, fs, filename, compression="snappy"):
     full_path = fs.sep.join([path, filename])
     with fs.open(full_path, mode="wb") as out_file:
         if not isinstance(out_file, IOBase):
@@ -129,7 +129,7 @@ def to_orc(
     path,
     write_index=True,
     storage_options=None,
-    compression=None,
+    compression="snappy",
     compute=True,
     **kwargs,
 ):

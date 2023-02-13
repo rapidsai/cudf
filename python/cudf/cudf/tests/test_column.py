@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -285,8 +285,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    gpu_ptr = gpu_data.data.ptr
-    assert gpu_ptr == got._column.data.ptr
+    gpu_ptr = gpu_data.data.get_ptr(mode="read")
+    assert gpu_ptr == got._column.data.get_ptr(mode="read")
     assert_eq(expect, got)
 
 
@@ -308,7 +308,6 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         rfunc=gpu_data.view,
         lfunc_args_and_kwargs=([to_dtype],),
         rfunc_args_and_kwargs=([to_dtype],),
-        expected_error_message="Can not divide",
     )
 
 
@@ -406,7 +405,7 @@ def test_column_view_string_slice(slc):
 )
 def test_as_column_buffer(data, expected):
     actual_column = cudf.core.column.as_column(
-        cudf.core.buffer.as_device_buffer_like(data), dtype=data.dtype
+        cudf.core.buffer.as_buffer(data), dtype=data.dtype
     )
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
 

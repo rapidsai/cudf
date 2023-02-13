@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import enum
 from collections import abc
@@ -18,7 +18,7 @@ import numpy as np
 from numba.cuda import as_cuda_array
 
 import cudf
-from cudf.core.buffer import Buffer, DeviceBufferLike
+from cudf.core.buffer import Buffer, as_buffer
 from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
@@ -64,12 +64,12 @@ class _CuDFBuffer:
 
     def __init__(
         self,
-        buf: DeviceBufferLike,
+        buf: Buffer,
         dtype: np.dtype,
         allow_copy: bool = True,
     ) -> None:
         """
-        Use DeviceBufferLike object.
+        Use Buffer object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -80,7 +80,7 @@ class _CuDFBuffer:
     @property
     def bufsize(self) -> int:
         """
-        The DeviceBufferLike size in bytes.
+        The Buffer size in bytes.
         """
         return self._buf.size
 
@@ -89,7 +89,7 @@ class _CuDFBuffer:
         """
         Pointer to start of the buffer as an integer.
         """
-        return self._buf.ptr
+        return self._buf.get_ptr(mode="write")
 
     def __dlpack__(self):
         # DLPack not implemented in NumPy yet, so leave it out here.
@@ -529,6 +529,16 @@ class _CuDFDataFrame:
         self._nan_as_null = nan_as_null
         self._allow_copy = allow_copy
 
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ) -> "_CuDFDataFrame":
+        """
+        See the docstring of the `cudf.DataFrame.__dataframe__` for details
+        """
+        return _CuDFDataFrame(
+            self._df, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
     @property
     def metadata(self):
         # `index` isn't a regular column, and the protocol doesn't support row
@@ -617,7 +627,7 @@ from_dataframe : construct a cudf.DataFrame from an input data frame which
 Notes
 -----
 
-- Interpreting a raw pointer (as in ``DeviceBufferLike.ptr``) is annoying and
+- Interpreting a raw pointer (as in ``Buffer.ptr``) is annoying and
   unsafe to do in pure Python. It's more general but definitely less friendly
   than having ``to_arrow`` and ``to_numpy`` methods. So for the buffers which
   lack ``__dlpack__`` (e.g., because the column dtype isn't supported by
@@ -711,7 +721,9 @@ def _protocol_to_cudf_column_numeric(
     _dbuffer, _ddtype = buffers["data"]
     _check_buffer_is_on_gpu(_dbuffer)
     cudfcol_num = build_column(
-        Buffer(data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None),
+        as_buffer(
+            data=_dbuffer.ptr, size=_dbuffer.bufsize, owner=None, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(_ddtype),
     )
     return _set_missing_values(col, cudfcol_num), buffers
@@ -741,8 +753,10 @@ def _set_missing_values(
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         bitmask = cp.asarray(
-            Buffer(
-                data=valid_mask[0].ptr, size=valid_mask[0].bufsize, owner=None
+            as_buffer(
+                data=valid_mask[0].ptr,
+                size=valid_mask[0].bufsize,
+                exposed=True,
             ),
             cp.bool8,
         )
@@ -782,7 +796,9 @@ def _protocol_to_cudf_column_categorical(
     _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
-        Buffer(data=codes_buffer.ptr, size=codes_buffer.bufsize, owner=None),
+        as_buffer(
+            data=codes_buffer.ptr, size=codes_buffer.bufsize, exposed=True
+        ),
         cdtype,
     )
 
@@ -814,7 +830,9 @@ def _protocol_to_cudf_column_string(
     data_buffer, data_dtype = buffers["data"]
     _check_buffer_is_on_gpu(data_buffer)
     encoded_string = build_column(
-        Buffer(data=data_buffer.ptr, size=data_buffer.bufsize, owner=None),
+        as_buffer(
+            data=data_buffer.ptr, size=data_buffer.bufsize, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(data_dtype),
     )
 
@@ -824,7 +842,9 @@ def _protocol_to_cudf_column_string(
     offset_buffer, offset_dtype = buffers["offsets"]
     _check_buffer_is_on_gpu(offset_buffer)
     offsets = build_column(
-        Buffer(data=offset_buffer.ptr, size=offset_buffer.bufsize, owner=None),
+        as_buffer(
+            data=offset_buffer.ptr, size=offset_buffer.bufsize, exposed=True
+        ),
         protocol_dtype_to_cupy_dtype(offset_dtype),
     )
 

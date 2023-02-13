@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,29 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <arrow/buffer.h>
+
+// We disable warning 611 because some Arrow subclasses of
+// `arrow::fs::FileSystem` only partially override the `Equals` method,
+// triggering warning 611-D from nvcc.
+#pragma nv_diag_suppress 611
 #include <arrow/filesystem/filesystem.h>
 #include <arrow/filesystem/s3fs.h>
+#pragma nv_diag_default 611
+
+// We disable warning 2810 to workaround the compile issue (warning treated as error):
+// result.h(263): error #2810-D: ignoring return value type with "nodiscard" attribute
+#pragma nv_diag_suppress 2810
+#include <arrow/result.h>
+#pragma nv_diag_default 2810
+
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include <arrow/result.h>
 #include <arrow/status.h>
 
 #include <future>
@@ -97,12 +110,20 @@ class datasource {
                                             size_t size   = 0);
 
   /**
-   * @brief Creates a source from a memory buffer.
+   * @brief Creates a source from a host memory buffer.
    *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(host_buffer const& buffer);
+
+  /**
+   * @brief Creates a source from a device memory buffer.
+   *
+   * @param buffer Device buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a from an Arrow file.
@@ -289,7 +310,7 @@ class datasource {
      * @param data The data buffer
      * @param size The size of the data buffer
      */
-    non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
+    non_owning_buffer(uint8_t const* data, size_t size) : _data(data), _size(size) {}
 
     /**
      * @brief Returns the size of the buffer.
@@ -306,8 +327,8 @@ class datasource {
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{nullptr};
-    size_t const _size{0};
+    uint8_t const* _data{nullptr};
+    size_t _size{0};
   };
 
   /**

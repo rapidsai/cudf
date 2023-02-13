@@ -197,13 +197,15 @@ def make_cache_key(udf, sig):
     """
     codebytes = udf.__code__.co_code
     constants = udf.__code__.co_consts
+    names = udf.__code__.co_names
+
     if udf.__closure__ is not None:
         cvars = tuple(x.cell_contents for x in udf.__closure__)
         cvarbytes = dumps(cvars)
     else:
         cvarbytes = b""
 
-    return constants, codebytes, cvarbytes, sig
+    return names, constants, codebytes, cvarbytes, sig
 
 
 def compile_udf(udf, type_signature):
@@ -248,7 +250,7 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    if not isinstance(return_type, cudf.core.udf.typing.MaskedType):
+    if not isinstance(return_type, cudf.core.udf.masked_typing.MaskedType):
         output_type = numpy_support.as_dtype(return_type).type
     else:
         output_type = return_type

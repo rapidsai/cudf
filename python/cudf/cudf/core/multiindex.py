@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
+import warnings
 from collections import abc
 from functools import cached_property
 from numbers import Integral
@@ -20,7 +21,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -382,6 +383,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         """
 
+        # TODO: Update message when set_levels is implemented.
+        # https://github.com/rapidsai/cudf/issues/12307
+        if levels is not None:
+            warnings.warn(
+                "parameter levels is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
+
+        # TODO: Update message when set_codes is implemented.
+        # https://github.com/rapidsai/cudf/issues/12308
+        if codes is not None:
+            warnings.warn(
+                "parameter codes is deprecated and will be removed in a "
+                "future version.",
+                FutureWarning,
+            )
+
         dtype = object if dtype is None else dtype
         if not pd.core.dtypes.common.is_object_dtype(dtype):
             raise TypeError("Dtype for MultiIndex only supports object type.")
@@ -451,8 +470,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if PANDAS_GE_120:
-                # TODO: Remove this whole `if` block,
+            if PANDAS_GE_120 and not PANDAS_GE_150:
+                # Need this whole `if` block,
                 # this is a workaround for the following issue:
                 # https://github.com/pandas-dev/pandas/issues/39984
                 preprocess_pdf = pd.DataFrame(
@@ -1131,7 +1150,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy._core.core.ndarray'>
+        <class 'cupy...ndarray'>
         """
         return self.to_frame(index=False).values
 
@@ -1458,7 +1477,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         return cls.from_frame(df, names=multiindex.names)
 
-    @cached_property
+    @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_unique(self):
         return len(self) == len(self.unique())
@@ -1724,7 +1743,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         if tolerance is not None:
             raise NotImplementedError(
-                "Parameter tolerance is unsupported yet."
+                "Parameter tolerance is not supported yet."
             )
         if method is not None:
             raise NotImplementedError(
@@ -1854,7 +1873,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(self: MultiIndex, other: MultiIndex) -> MultiIndex:
+    def _copy_type_metadata(
+        self: MultiIndex, other: MultiIndex, *, override_dtypes=None
+    ) -> MultiIndex:
         res = super()._copy_type_metadata(other)
         res._names = other._names
         return res

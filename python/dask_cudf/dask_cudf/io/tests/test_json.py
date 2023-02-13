@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+
 import os
 
 import pandas as pd
@@ -8,6 +10,19 @@ import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
+
+
+def test_read_json_backend_dispatch(tmp_path):
+    # Test ddf.read_json cudf-backend dispatch
+    df1 = dask.datasets.timeseries(
+        dtypes={"x": int, "y": int}, freq="120s"
+    ).reset_index(drop=True)
+    json_path = str(tmp_path / "data-*.json")
+    df1.to_json(json_path)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        df2 = dd.read_json(json_path)
+    assert isinstance(df2, dask_cudf.DataFrame)
+    dd.assert_eq(df1, df2)
 
 
 def test_read_json(tmp_path):
@@ -51,4 +66,29 @@ def test_read_json_lines(lines):
         df.to_json(f, orient="records", lines=lines)
         actual = dask_cudf.read_json(f, orient="records", lines=lines)
         actual_pd = pd.read_json(f, orient="records", lines=lines)
+        dd.assert_eq(actual, actual_pd)
+
+
+def test_read_json_nested(tmp_path):
+    # Check that `engine="cudf"` can
+    # be used to support nested data
+    df = pd.DataFrame(
+        {
+            "a": [{"y": 2}, {"y": 4}, {"y": 6}, {"y": 8}],
+            "b": [[1, 2, 3], [4, 5], [6], [7]],
+            "c": [1, 3, 5, 7],
+        }
+    )
+    kwargs = dict(orient="records", lines=True)
+    with tmp_path / "data.json" as f:
+        df.to_json(f, **kwargs)
+        # Ensure engine='cudf' is tested.
+        actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
+        actual_pd = pd.read_json(f, **kwargs)
+        dd.assert_eq(actual, actual_pd)
+        # Ensure not passing engine='cudf'(default i.e., auto) is tested.
+        actual = dask_cudf.read_json(f, **kwargs)
+        dd.assert_eq(actual, actual_pd)
+        # Ensure not passing kwargs also reads the file.
+        actual = dask_cudf.read_json(f)
         dd.assert_eq(actual, actual_pd)

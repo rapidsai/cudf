@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,7 +164,11 @@ rmm::device_buffer decompress_data(datasource& source,
   if (meta.codec == "deflate") {
     auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
     auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
-    auto inflate_stats = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
+    auto inflate_stats = hostdevice_vector<compression_result>(meta.block_list.size(), stream);
+    thrust::fill(rmm::exec_policy(stream),
+                 inflate_stats.d_begin(),
+                 inflate_stats.d_end(),
+                 compression_result{0, compression_status::FAILURE});
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.
@@ -190,8 +194,6 @@ rmm::device_buffer decompress_data(datasource& source,
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
       inflate_out.host_to_device(stream);
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        inflate_stats.device_ptr(), 0, inflate_stats.memory_size(), stream.value()));
       gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
       inflate_stats.device_to_host(stream, true);
 
@@ -204,9 +206,9 @@ rmm::device_buffer decompress_data(datasource& source,
                        inflate_stats.begin(),
                        std::back_inserter(actual_uncomp_sizes),
                        [](auto const& inf_out, auto const& inf_stats) {
-                         // If error status is 1 (buffer too small), the `bytes_written` field
+                         // If error status is OUTPUT_OVERFLOW, the `bytes_written` field
                          // actually contains the uncompressed data size
-                         return inf_stats.status == 1
+                         return inf_stats.status == compression_status::OUTPUT_OVERFLOW
                                   ? std::max(inf_out.size(), inf_stats.bytes_written)
                                   : inf_out.size();
                        });
@@ -431,7 +433,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
       CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
                                     valid_alias[i],
                                     out_buffers[i].null_mask_size(),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
     }
   }
@@ -558,7 +560,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                                      mr);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
     } else {
       // Create empty columns
@@ -568,11 +570,13 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     }
   }
 
-  // Return column names (must match order of returned columns)
-  metadata_out.column_names.resize(selected_columns.size());
-  for (size_t i = 0; i < selected_columns.size(); i++) {
-    metadata_out.column_names[i] = selected_columns[i].second;
-  }
+  // Return column names
+  metadata_out.schema_info.reserve(selected_columns.size());
+  std::transform(selected_columns.cbegin(),
+                 selected_columns.cend(),
+                 std::back_inserter(metadata_out.schema_info),
+                 [](auto const& c) { return column_name_info{c.second}; });
+
   // Return user metadata
   metadata_out.user_data          = meta.user_data;
   metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};

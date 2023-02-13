@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -2748,51 +2748,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testRepeatStringsWithColumnRepeatTimesAndPrecomputedOutputSizes() {
-    // Empty strings column.
-    try (ColumnVector input = ColumnVector.fromStrings("", "", "");
-         ColumnVector repeatTimes = ColumnVector.fromInts(-1, 0, 1);
-         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
-      assertEquals(0, outputSizes.getTotalSize());
-      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
-        assertColumnsAreEqual(input, results);
-      }
-    }
-
-    // Zero and negative repeatTimes.
-    try (ColumnVector input = ColumnVector.fromStrings("abc", "xyz", "123", "456", "789", "a1");
-         ColumnVector repeatTimes = ColumnVector.fromInts(-200, -100, 0, 0, 1, 2);
-         ColumnVector expected = ColumnVector.fromStrings("", "", "", "", "789", "a1a1");
-         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
-      assertEquals(7, outputSizes.getTotalSize());
-      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
-        assertColumnsAreEqual(expected, results);
-      }
-    }
-
-    // Strings column contains both null and empty, output is copied exactly from input.
-    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector repeatTimes = ColumnVector.fromInts(1, 1, 1, 1, 1);
-         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
-      assertEquals(6, outputSizes.getTotalSize());
-      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
-        assertColumnsAreEqual(input, results);
-      }
-    }
-
-    // Strings column contains both null and empty.
-    try (ColumnVector input = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector repeatTimes = ColumnVector.fromInts(2, 3, 1, 3, 2);
-         ColumnVector expected = ColumnVector.fromStrings("abcabc", "", null, "123123123", null);
-         ColumnView.StringSizes outputSizes = input.repeatStringsSizes(repeatTimes)) {
-      assertEquals(15, outputSizes.getTotalSize());
-      try (ColumnVector results = input.repeatStrings(repeatTimes, outputSizes.getStringSizes())) {
-        assertColumnsAreEqual(expected, results);
-      }
-    }
-  }
-
-  @Test
   void testListConcatByRow() {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
@@ -3942,7 +3897,7 @@ public class ColumnVectorTest extends CudfTestBase {
     "\\THE\t8\ud720", "tést strings", "", "éé");
         ColumnVector res = cv.asByteList(true);
         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-          new HostColumnVector.BasicType(true, DType.INT8)), list1, list2, list3, list4, list5,
+          new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5,
           list6, list7, list8)) {
       assertColumnsAreEqual(expected, res);
     }
@@ -4098,31 +4053,38 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testExtractAllRecord() {
     String pattern = "([ab])(\\d)";
+    RegexProgram regexProg = new RegexProgram(pattern);
     try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
-          ColumnVector expectedIdx0 = ColumnVector.fromLists(
-            new HostColumnVector.ListType(true,
-              new HostColumnVector.BasicType(true, DType.STRING)),
-            Arrays.asList("a1"),
-            Arrays.asList("b2"),
-            Arrays.asList(),
-            null,
-            Arrays.asList("a1", "b1", "a2"));
-          ColumnVector expectedIdx12 = ColumnVector.fromLists(
-              new HostColumnVector.ListType(true,
-                new HostColumnVector.BasicType(true, DType.STRING)),
-              Arrays.asList("a", "1"),
-              Arrays.asList("b", "2"),
-              null,
-              null,
-              Arrays.asList("a", "1", "b", "1", "a", "2"));
-
-          ColumnVector resultIdx0 = v.extractAllRecord(pattern, 0);
-          ColumnVector resultIdx1 = v.extractAllRecord(pattern, 1);
-          ColumnVector resultIdx2 = v.extractAllRecord(pattern, 2);
-    ) {
-      assertColumnsAreEqual(expectedIdx0, resultIdx0);
-      assertColumnsAreEqual(expectedIdx12, resultIdx1);
-      assertColumnsAreEqual(expectedIdx12, resultIdx2);
+         ColumnVector expectedIdx0 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("a1"),
+             Arrays.asList("b2"),
+             Arrays.asList(),
+             null,
+             Arrays.asList("a1", "b1", "a2"));
+         ColumnVector expectedIdx12 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("a", "1"),
+             Arrays.asList("b", "2"),
+             null,
+             null,
+             Arrays.asList("a", "1", "b", "1", "a", "2"))) {
+      try (ColumnVector resultIdx0 = v.extractAllRecord(pattern, 0);
+           ColumnVector resultIdx1 = v.extractAllRecord(pattern, 1);
+           ColumnVector resultIdx2 = v.extractAllRecord(pattern, 2)) {
+        assertColumnsAreEqual(expectedIdx0, resultIdx0);
+        assertColumnsAreEqual(expectedIdx12, resultIdx1);
+        assertColumnsAreEqual(expectedIdx12, resultIdx2);
+      }
+      try (ColumnVector resultIdx0 = v.extractAllRecord(regexProg, 0);
+           ColumnVector resultIdx1 = v.extractAllRecord(regexProg, 1);
+           ColumnVector resultIdx2 = v.extractAllRecord(regexProg, 2)) {
+        assertColumnsAreEqual(expectedIdx0, resultIdx0);
+        assertColumnsAreEqual(expectedIdx12, resultIdx1);
+        assertColumnsAreEqual(expectedIdx12, resultIdx2);
+      }
     }
   }
 
@@ -4132,26 +4094,39 @@ public class ColumnVectorTest extends CudfTestBase {
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
     String patternString3 = ".*";
     String patternString4 = "";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram(patternString2, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(patternString3, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram(patternString4, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
-          "lazy @dog", "1234", "00:0:00");
-         ColumnVector res1 = testStrings.matchesRe(patternString1);
-         ColumnVector res2 = testStrings.matchesRe(patternString2);
-         ColumnVector res3 = testStrings.matchesRe(patternString3);
-         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
-           true, true);
-         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
-           false, false);
-         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
-           true, true)) {
-      assertColumnsAreEqual(expected1, res1);
-      assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
-    }
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
              "lazy @dog", "1234", "00:0:00");
-           ColumnVector res = testStrings.matchesRe(patternString4)) {}
-    });
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+             true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+             false, false);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
+             true, true)) {
+      try (ColumnVector res1 = testStrings.matchesRe(patternString1);
+           ColumnVector res2 = testStrings.matchesRe(patternString2);
+           ColumnVector res3 = testStrings.matchesRe(patternString3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      try (ColumnVector res1 = testStrings.matchesRe(regexProg1);
+           ColumnVector res2 = testStrings.matchesRe(regexProg2);
+           ColumnVector res3 = testStrings.matchesRe(regexProg3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.matchesRe(patternString4)) {}
+      });
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.matchesRe(regexProg4)) {}
+      });
+    }
   }
 
   @Test
@@ -4160,37 +4135,112 @@ public class ColumnVectorTest extends CudfTestBase {
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
     String patternString3 = ".*";
     String patternString4 = "";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg2 = new RegexProgram(patternString2, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg3 = new RegexProgram(patternString3, CaptureGroups.NON_CAPTURE);
+    RegexProgram regexProg4 = new RegexProgram(patternString4, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings(null, "abCD", "ovér the",
-        "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
-         ColumnVector res1 = testStrings.containsRe(patternString1);
-         ColumnVector res2 = testStrings.containsRe(patternString2);
-         ColumnVector res3 = testStrings.containsRe(patternString3);
+             "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(null, false, false, false,
              true, true, true, true);
          ColumnVector expected2 = ColumnVector.fromBoxedBooleans(null, false, false, true,
              false, false, false, true);
          ColumnVector expected3 = ColumnVector.fromBoxedBooleans(null, true, true, true,
              true, true, true, true)) {
-      assertColumnsAreEqual(expected1, res1);
-      assertColumnsAreEqual(expected2, res2);
-      assertColumnsAreEqual(expected3, res3);
+      try (ColumnVector res1 = testStrings.containsRe(patternString1);
+           ColumnVector res2 = testStrings.containsRe(patternString2);
+           ColumnVector res3 = testStrings.containsRe(patternString3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
+      try (ColumnVector res1 = testStrings.containsRe(regexProg1);
+           ColumnVector res2 = testStrings.containsRe(regexProg2);
+           ColumnVector res3 = testStrings.containsRe(regexProg3)) {
+        assertColumnsAreEqual(expected1, res1);
+        assertColumnsAreEqual(expected2, res2);
+        assertColumnsAreEqual(expected3, res3);
+      }
     }
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
-          "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
-           ColumnVector res = testStrings.containsRe(patternString4)) {}
-    });
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+             "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs")) {
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.containsRe(patternString4)) {}
+      });
+      assertThrows(AssertionError.class, () -> {
+        try (ColumnVector res = testStrings.containsRe(regexProg4)) {}
+      });
+    }
   }
 
   @Test
-  @Disabled("Needs fix for https://github.com/rapidsai/cudf/issues/4671")
   void testContainsReEmptyInput() {
     String patternString1 = ".*";
+    RegexProgram regexProg1 = new RegexProgram(patternString1, CaptureGroups.NON_CAPTURE);
     try (ColumnVector testStrings = ColumnVector.fromStrings("");
          ColumnVector res1 = testStrings.containsRe(patternString1);
+         ColumnVector resReProg1 = testStrings.containsRe(regexProg1);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
       assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected1, resReProg1);
     }
+  }
+
+  @Test
+  void testLike() {
+    // Default escape character
+    try (ColumnVector testStrings = ColumnVector.fromStrings(
+           "a", "aa", "aaa", "aba", "b", "bb", "bba", "", "áéêú", "a1b2c3");
+         Scalar patternString1 = Scalar.fromString("a1b2c3");
+         Scalar patternString2 = Scalar.fromString("__a%");
+         Scalar defaultEscape = Scalar.fromString("\\");
+         ColumnVector res1 = testStrings.like(patternString1, defaultEscape);
+         ColumnVector res2 = testStrings.like(patternString2, defaultEscape);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+           false, false, false, false, false, false, false, false, false, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, false, true, true, false, false, true, false, false, false)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+    }
+    // Non-default escape character
+    try (ColumnVector testStrings = ColumnVector.fromStrings(
+           "10%-20%", "10-20", "10%%-20%", "a_b", "b_a", "___", "", "aéb", "_%_", "_%a");
+         Scalar patternString1 = Scalar.fromString("10%%%%-20%%");
+         Scalar patternString2 = Scalar.fromString("___%%");
+         Scalar escapeChar1 = Scalar.fromString("%");
+         Scalar escapeChar2 = Scalar.fromString("_");
+         ColumnVector res1 = testStrings.like(patternString1, escapeChar1);
+         ColumnVector res2 = testStrings.like(patternString2, escapeChar2);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(
+           false, false, true, false, false, false, false, false, false, false);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(
+           false, false, false, false, false, false, false, false, true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar defaultEscape = Scalar.fromString("\\");
+           ColumnVector res = testStrings.like(null, defaultEscape)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar patternString = Scalar.fromString("");
+           ColumnVector res = testStrings.like(patternString, null)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar patternString = Scalar.fromString("");
+           Scalar intScalar = Scalar.fromInt(1);
+           ColumnVector res = testStrings.like(patternString, intScalar)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("a", "B", "cd", null, "");
+           Scalar intScalar = Scalar.fromInt(1);
+           Scalar defaultEscape = Scalar.fromString("\\");
+           ColumnVector res = testStrings.like(intScalar, defaultEscape)) {}
+    });
   }
 
   @Test
@@ -4901,6 +4951,34 @@ public class ColumnVectorTest extends CudfTestBase {
           ColumnVector resultSorted = result.listSortRows(false, true)) {
         assertColumnsAreEqual(expected, resultSorted);
       }
+    }
+  }
+
+  @Test
+  void testReverseString() {
+    try (ColumnVector input = ColumnVector.fromStrings("abcdef", "12345", "", "", "aébé",
+           "A é Z", "X", "é");
+         ColumnVector expected = ColumnVector.fromStrings("fedcba", "54321", "", "", "ébéa",
+           "Z é A", "X", "é");
+         ColumnVector result = input.reverseStringsOrLists()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testReverseList() {
+    List<Integer> list0 = Arrays.asList(1, 2, 3);
+    List<Integer> list1 = Arrays.asList(4, 5, null);
+    List<Integer> emptyList = Collections.emptyList();
+    List<Integer> reversedList0 = Arrays.asList(3, 2, 1);
+    List<Integer> reversedList1 = Arrays.asList(null, 5, 4);
+
+    try (ColumnVector input = makeListsColumn(DType.INT32,
+           emptyList, list0, emptyList, null, list1);
+         ColumnVector expected = makeListsColumn(DType.INT32,
+           emptyList, reversedList0, emptyList, null, reversedList1);
+         ColumnVector result = input.reverseStringsOrLists()) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from typing import Any, Tuple
 
@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import as_buffer
 from cudf.core.column import build_column
 from cudf.core.df_protocol import (
     DataFrameObject,
@@ -25,7 +25,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
     col_from_buf = build_column(
-        Buffer(data=buf.ptr, size=buf.bufsize, owner=None),
+        as_buffer(data=buf.ptr, size=buf.bufsize),
         protocol_dtype_to_cupy_dtype(dtype),
     )
     # check that non null values are the equals as nulls are represented
@@ -40,8 +40,8 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     )
 
     if dtype[0] != _DtypeKind.BOOL:
-        array_from_dlpack = cp.fromDlpack(buf.__dlpack__()).get()
-        col_array = cp.asarray(cudfcol.data_array_view).get()
+        array_from_dlpack = cp.from_dlpack(buf.__dlpack__()).get()
+        col_array = cp.asarray(cudfcol.data_array_view(mode="read")).get()
         assert_eq(
             array_from_dlpack[non_null_idxs.to_numpy()].flatten(),
             col_array[non_null_idxs.to_numpy()].flatten(),
@@ -123,6 +123,9 @@ def test_from_dataframe():
     df1 = cudf.DataFrame(data=data)
     df2 = cudf.from_dataframe(df1)
     assert_eq(df1, df2)
+
+    df3 = cudf.from_dataframe(df2)
+    assert_eq(df1, df3)
 
 
 def test_int_dtype():

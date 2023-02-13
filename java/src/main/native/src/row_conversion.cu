@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1221,8 +1221,8 @@ static int calc_fixed_width_kernel_dims(const size_type num_columns, const size_
   CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
 
   // The maximum number of blocks supported in the x dimension is 2 ^ 31 - 1
-  // but in practice haveing too many can cause some overhead that I don't totally
-  // understand. Playing around with this haveing as little as 600 blocks appears
+  // but in practice having too many can cause some overhead that I don't totally
+  // understand. Playing around with this having as little as 600 blocks appears
   // to be able to saturate memory on V100, so this is an order of magnitude higher
   // to try and future proof this a bit.
   int const num_blocks = std::clamp((num_rows + block_size - 1) / block_size, 1, 10240);
@@ -1530,7 +1530,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     // more global lookups are necessary.
     if (!all_fixed_width) {
       cudaMemcpy(batch_row_offsets.data() + last_row_end, output_batch_row_offsets.data(),
-                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDeviceToDevice);
+                 num_rows_in_batch * sizeof(size_type), cudaMemcpyDefault);
     }
 
     batch_row_boundaries.push_back(row_end);
@@ -1885,7 +1885,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
                    return make_lists_column(
                        batch_info.row_batches[batch].row_count, std::move(offsets), std::move(data),
-                       0, rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
+                       0, rmm::device_buffer{0, cudf::get_default_stream(), mr}, stream, mr);
                  });
 
   return ret;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,7 +184,8 @@ void ProtobufReader::read(column_statistics& s, size_t maxlen)
                             make_field_reader(6, s.decimal_stats),
                             make_field_reader(7, s.date_stats),
                             make_field_reader(8, s.binary_stats),
-                            make_field_reader(9, s.timestamp_stats));
+                            make_field_reader(9, s.timestamp_stats),
+                            make_field_reader(10, s.has_null));
   function_builder(s, maxlen, op);
 }
 
@@ -382,7 +383,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_b
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
     case ZSTD:
-      m_log2MaxRatio = 11;
+      m_log2MaxRatio = 15;
       _compression   = compression_type::ZSTD;
       break;
     default: CUDF_FAIL("Invalid compression type");

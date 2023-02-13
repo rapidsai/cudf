@@ -1,8 +1,7 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import operator
-import re
 
 import cupy as cp
 import numpy as np
@@ -13,13 +12,14 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -28,7 +28,9 @@ def data1():
 
 
 def data2():
-    return pd.date_range("20010101", "20020215", freq="400h", name="times")
+    return pd.date_range(
+        "20010101", freq="243434324423423234N", name="times", periods=10
+    )
 
 
 def timeseries_us_data():
@@ -81,6 +83,8 @@ fields = [
     "hour",
     "minute",
     "second",
+    "microsecond",
+    "nanosecond",
     "weekday",
     "dayofweek",
     "dayofyear",
@@ -172,7 +176,7 @@ def test_dt_ops(data):
 
 
 # libcudf doesn't respect timezones
-@pytest.mark.parametrize("data", [data1()])
+@pytest.mark.parametrize("data", [data1(), data2()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())
@@ -182,7 +186,7 @@ def test_dt_series(data, field):
     assert_eq(base, test)
 
 
-@pytest.mark.parametrize("data", [data1()])
+@pytest.mark.parametrize("data", [data1(), data2()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_index(data, field):
     pd_data = data.copy()
@@ -411,9 +415,7 @@ def test_datetime_to_arrow(dtype):
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
-@pytest.mark.parametrize(
-    "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
     psr = data.copy()
 
@@ -426,7 +428,11 @@ def test_datetime_unique(data, nulls):
     expected = psr.unique()
     got = gsr.unique()
 
-    assert_eq(pd.Series(expected), got.to_pandas())
+    # Unique does not provide a guarantee on ordering.
+    assert_eq(
+        pd.Series(expected).sort_values(ignore_index=True),
+        got.sort_values(ignore_index=True).to_pandas(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -657,7 +663,10 @@ def test_to_datetime_errors(data):
         gd_data = pd_data
 
     assert_exceptions_equal(
-        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+        pd.to_datetime,
+        cudf.to_datetime,
+        ([pd_data],),
+        ([gd_data],),
     )
 
 
@@ -855,9 +864,6 @@ def test_str_to_datetime_error():
         lfunc_args_and_kwargs=(["datetime64[s]"],),
         rfunc_args_and_kwargs=(["datetime64[s]"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "Could not convert `None` value to datetime"
-        ),
     )
 
 
@@ -977,7 +983,6 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
             rfunc=operator.sub,
             lfunc_args_and_kwargs=([other_scalars, psr],),
             rfunc_args_and_kwargs=([other_scalars, gsr],),
-            compare_error_message=False,
         )
 
 
@@ -1035,7 +1040,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1043,7 +1047,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1051,7 +1054,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1059,7 +1061,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1067,7 +1068,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.floordiv,
         lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
         rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1075,7 +1075,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1083,7 +1082,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.truediv,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1091,7 +1089,6 @@ def test_datetime_invalid_ops():
         rfunc=operator.mul,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        compare_error_message=False,
     )
 
 
@@ -1212,7 +1209,10 @@ def test_datetime_reductions(data, op, dtype):
     psr = sr.to_pandas()
 
     actual = getattr(sr, op)()
-    expected = getattr(psr, op)()
+    with expect_warning_if(
+        psr.size > 0 and psr.isnull().all() and op == "median", RuntimeWarning
+    ):
+        expected = getattr(psr, op)()
 
     if (
         expected is pd.NaT
@@ -1272,10 +1272,6 @@ def test_datetime_to_datetime_error():
         lfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         rfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
         check_exception_type=False,
-        expected_error_message=re.escape(
-            "errors parameter has to be either one of: ['ignore', 'raise', "
-            "'coerce', 'warn'], found: %d-%B-%Y %H:%M"
-        ),
     )
 
 
@@ -1341,8 +1337,7 @@ def test_quarter():
     expect2 = pIndex.quarter
     got2 = gIndex.quarter
 
-    assert isinstance(got2, cudf.Int8Index)
-    assert_eq(expect2.values, got2.values, check_dtype=False)
+    assert_eq(expect2.values, got2.values)
 
 
 @pytest.mark.parametrize(
@@ -1476,7 +1471,7 @@ date_range_test_freq = [
     pytest.param(
         "110546789L",
         marks=pytest.mark.xfail(
-            True,
+            condition=not PANDAS_GE_150,
             reason="Pandas DateOffset ignores milliseconds. "
             "https://github.com/pandas-dev/pandas/issues/43371",
         ),
@@ -1515,7 +1510,17 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-def test_date_range_start_end_freq(start, end, freq):
+def test_date_range_start_end_freq(request, start, end, freq):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                start == "1831-05-08 15:23:21"
+                and end == "1996-11-21 04:05:30"
+                and freq == "110546789L"
+            ),
+            reason="https://github.com/rapidsai/cudf/issues/12133",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1547,12 +1552,20 @@ def test_date_range_start_freq_periods(start, freq, periods):
     )
 
 
-def test_date_range_end_freq_periods(end, freq, periods):
+def test_date_range_end_freq_periods(request, end, freq, periods):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                "nanoseconds" in freq
+                and periods != 1
+                and end == "1970-01-01 00:00:00"
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/46877",
+        )
+    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
-        if "nanoseconds" in freq:
-            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 
@@ -1591,7 +1604,11 @@ def test_date_range_raise_overflow():
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
-        cudf.date_range(start=start, periods=periods, freq=freq)
+        # Extending beyond the max value will trigger a warning when pandas
+        # does an internal conversion to a Python built-in datetime.datetime
+        # object, which only supports down to microsecond resolution.
+        with pytest.warns(UserWarning):
+            cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 @pytest.mark.parametrize(
@@ -1933,7 +1950,7 @@ def test_round(data, time_type, resolution):
     ],
 )
 def test_first(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.first(offset=offset)
@@ -2000,7 +2017,7 @@ def test_first_start_at_end_of_month(idx, offset):
     ],
 )
 def test_last(idx, offset):
-    p = pd.Series(range(len(idx)), index=idx)
+    p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
     expect = p.last(offset=offset)

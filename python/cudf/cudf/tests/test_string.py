@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import json
 import re
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
 from cudf.testing._utils import (
@@ -1769,7 +1769,8 @@ def test_strings_filling_tests(data, width, fillchar):
         pytest.param(
             ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
             marks=pytest.mark.xfail(
-                reason="pandas 1.5 upgrade TODO",
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/pandas-dev/pandas/issues/20868",
             ),
         ),
         [" ", "\t\r\n ", ""],
@@ -1841,7 +1842,14 @@ def test_string_wrap(data, width):
     ps = pd.Series(data)
 
     assert_eq(
-        gs.str.wrap(width=width),
+        gs.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         ps.str.wrap(
             width=width,
             break_long_words=False,
@@ -1856,7 +1864,14 @@ def test_string_wrap(data, width):
     pi = pd.Index(data)
 
     assert_eq(
-        gi.str.wrap(width=width),
+        gi.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         pi.str.wrap(
             width=width,
             break_long_words=False,
@@ -2012,10 +2027,26 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = cudf.Series(data)
 
-    assert_eq(
-        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
-    )
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+    if pat is None:
+        assert_exceptions_equal(
+            lfunc=ps.str.startswith,
+            rfunc=gs.str.startswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+        )
+        assert_exceptions_equal(
+            lfunc=ps.str.endswith,
+            rfunc=gs.str.endswith,
+            lfunc_args_and_kwargs=([pat],),
+            rfunc_args_and_kwargs=([pat],),
+        )
+    else:
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -2066,6 +2097,33 @@ def test_string_starts_ends_list_like_pat(data, pat):
     ends_expected = pd.Series(ends_expected)
     assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
     assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["str_foo", "str_bar", "no_prefix", "", None],
+        ["foo_str", "bar_str", "no_suffix", "", None],
+    ],
+)
+def test_string_remove_suffix_prefix(data):
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    got = gs.str.removeprefix("str_")
+    expect = ps.str.removeprefix("str_")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
+    got = gs.str.removesuffix("_str")
+    expect = ps.str.removesuffix("_str")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2570,7 +2628,6 @@ def test_string_typecast_error(data, obj_type, dtype):
         rfunc=gsr.astype,
         lfunc_args_and_kwargs=([dtype],),
         rfunc_args_and_kwargs=([dtype],),
-        compare_error_message=False,
     )
 
 
@@ -2963,9 +3020,6 @@ def test_string_product():
     assert_exceptions_equal(
         lfunc=psr.product,
         rfunc=sr.product,
-        expected_error_message=re.escape(
-            f"cannot perform product with type {sr.dtype}"
-        ),
     )
 
 
@@ -2973,18 +3027,14 @@ def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.var, rfunc=sr.var)
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
 def test_string_slice_with_mask():
@@ -3400,3 +3450,64 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
         sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
     )
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "patterns, expected",
+    [
+        (
+            lambda: ["a", "s", "g", "i", "o", "r"],
+            [
+                [-1, 0, 5, 3, -1, 2],
+                [-1, -1, -1, -1, 1, -1],
+                [2, 0, -1, -1, -1, 3],
+                [-1, -1, -1, 0, -1, -1],
+            ],
+        ),
+        (
+            lambda: cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"]),
+            [
+                [-1, 0, 5, -1, -1, 2, -1],
+                [-1, -1, -1, -1, 1, -1, -1],
+                [2, -1, -1, -1, -1, 3, 0],
+                [-1, -1, -1, -1, -1, -1, -1],
+            ],
+        ),
+    ],
+)
+def test_str_find_multiple(patterns, expected):
+    s = cudf.Series(["strings", "to", "search", "in"])
+    t = patterns()
+
+    expected = cudf.Series(expected)
+
+    # We convert to pandas because find_multiple returns ListDtype(int32)
+    # and expected is ListDtype(int64).
+    # Currently there is no easy way to type-cast these to match.
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+    s = cudf.Index(s)
+    t = cudf.Index(t)
+
+    expected.index = s
+
+    assert_eq(s.str.find_multiple(t).to_pandas(), expected.to_pandas())
+
+
+def test_str_find_multiple_error():
+    s = cudf.Series(["strings", "to", "search", "in"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "patterns should be an array-like or a Series object, found "
+            "<class 'str'>"
+        ),
+    ):
+        s.str.find_multiple("a")
+
+    t = cudf.Series([1, 2, 3])
+    with pytest.raises(
+        TypeError,
+        match=re.escape("patterns can only be of 'string' dtype, got: int64"),
+    ):
+        s.str.find_multiple(t)

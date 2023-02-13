@@ -79,7 +79,7 @@ struct column_buffer {
                 bool _is_nullable,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
-    : type(_type), is_nullable(_is_nullable)
+    : column_buffer(_type, _is_nullable)
   {
     create(_size, stream, mr);
   }
@@ -104,9 +104,13 @@ struct column_buffer {
   {
     return static_cast<T*>(_null_mask.data());
   }
-  auto null_mask_size() { return _null_mask.size(); };
+  auto null_mask_size() { return _null_mask.size(); }
 
   auto& null_count() { return _null_count; }
+
+  // Create a new column_buffer that has empty data but with the same basic information as the
+  // input column, including same type, nullability, name, and user_data.
+  static column_buffer empty_like(column_buffer const& input);
 
   std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};
@@ -119,6 +123,8 @@ struct column_buffer {
   std::vector<column_buffer> children;
   uint32_t user_data{0};  // arbitrary user data
   std::string name;
+
+  rmm::mr::device_memory_resource* mr;
 };
 
 /**
@@ -129,15 +135,13 @@ struct column_buffer {
  * @param buffer Column buffer descriptors
  * @param schema_info Schema information for the column to write optionally.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */
 std::unique_ptr<column> make_column(column_buffer& buffer,
                                     column_name_info* schema_info,
                                     std::optional<reader_column_schema> const& schema,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Creates an equivalent empty column from an existing set of device memory buffers.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/groupby.hpp>
@@ -56,13 +57,7 @@
 
 using cudf::host_span;
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace json {
-
-using namespace cudf::io;
-using namespace cudf::io::json;
+namespace cudf::io::json::detail {
 
 using col_map_type     = cudf::io::json::gpu::col_map_type;
 using col_map_ptr_type = std::unique_ptr<col_map_type, std::function<void(col_map_type*)>>;
@@ -165,18 +160,18 @@ std::vector<std::string> create_key_strings(char const* h_data,
 {
   auto const num_cols = sorted_info.num_rows();
   std::vector<uint64_t> h_offsets(num_cols);
-  cudaMemcpyAsync(h_offsets.data(),
-                  sorted_info.column(0).data<uint64_t>(),
-                  sizeof(uint64_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
+                                sorted_info.column(0).data<uint64_t>(),
+                                sizeof(uint64_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<uint16_t> h_lens(num_cols);
-  cudaMemcpyAsync(h_lens.data(),
-                  sorted_info.column(1).data<uint16_t>(),
-                  sizeof(uint16_t) * num_cols,
-                  cudaMemcpyDefault,
-                  stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_lens.data(),
+                                sorted_info.column(1).data<uint16_t>(),
+                                sizeof(uint16_t) * num_cols,
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   std::vector<std::string> names(num_cols);
   std::transform(h_offsets.cbegin(),
@@ -222,6 +217,7 @@ std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> c
                                       size_t range_size,
                                       size_t range_size_padded)
 {
+  CUDF_FUNC_RANGE();
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
   for (const auto& source : sources) {
@@ -313,6 +309,7 @@ rmm::device_uvector<char> upload_data_to_device(json_reader_options const& reade
                                                 rmm::device_uvector<uint64_t>& rec_starts,
                                                 rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   size_t end_offset = h_data.size();
 
   // Trim lines that are outside range
@@ -358,17 +355,14 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&first_row_len,
-                                  rec_starts.data() + 1,
-                                  sizeof(uint64_t),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &first_row_len, rec_starts.data() + 1, sizeof(uint64_t), cudaMemcpyDefault, stream.value()));
   }
   std::vector<char> first_row(first_row_len);
   CUDF_CUDA_TRY(cudaMemcpyAsync(first_row.data(),
                                 d_data.data(),
                                 first_row_len * sizeof(char),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   stream.synchronize();
 
@@ -432,6 +426,18 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
                            return it->second;
                          });
           return sorted_dtypes;
+        },
+        [&](const std::map<std::string, schema_element>& dtypes) {
+          std::vector<data_type> sorted_dtypes;
+          std::transform(std::cbegin(column_names),
+                         std::cend(column_names),
+                         std::back_inserter(sorted_dtypes),
+                         [&](auto const& column_name) {
+                           auto const it = dtypes.find(column_name);
+                           CUDF_EXPECTS(it != dtypes.end(), "Must specify types for all columns");
+                           return it->second.type;
+                         });
+          return sorted_dtypes;
         }},
       reader_opts.get_dtypes());
   } else {
@@ -452,7 +458,7 @@ std::vector<data_type> get_data_types(json_reader_options const& reader_opts,
         return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
         return type_id::TIMESTAMP_MILLISECONDS;
-      } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0) {
         return type_id::FLOAT64;
       } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
         return type_id::INT64;
@@ -491,7 +497,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   const auto num_records = rec_starts.size();
 
   // alloc output buffers.
-  std::vector<column_buffer> out_buffers;
+  std::vector<cudf::io::detail::column_buffer> out_buffers;
   for (size_t col = 0; col < num_columns; ++col) {
     out_buffers.emplace_back(dtypes[col], num_records, true, stream, mr);
   }
@@ -540,7 +546,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream, mr);
+    auto out_column = make_column(out_buffers[i], nullptr, std::nullopt, stream);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
@@ -563,7 +569,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 
   CUDF_EXPECTS(!out_columns.empty(), "No columns created from json input");
 
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {{}, column_infos}};
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {column_infos}};
 }
 
 /**
@@ -580,12 +586,14 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  if (reader_opts.is_enabled_experimental()) {
-    return experimental::read_json(sources, reader_opts, stream, mr);
+  CUDF_FUNC_RANGE();
+  if (not reader_opts.is_enabled_legacy()) {
+    return cudf::io::detail::json::experimental::read_json(sources, reader_opts, stream, mr);
   }
 
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
-
+  CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,
+               "Multiple compressed inputs are not supported");
   CUDF_EXPECTS(reader_opts.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
   auto parse_opts = parse_options{',', '\n', '\"', '.'};
@@ -645,7 +653,4 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
                                mr);
 }
 
-}  // namespace json
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::detail

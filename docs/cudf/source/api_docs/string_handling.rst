@@ -28,6 +28,7 @@ strings and apply several methods to it. These can be accessed like
    filter_tokens
    find
    findall
+   find_multiple
    get
    get_json_object
    hex_to_int
@@ -68,6 +69,8 @@ strings and apply several methods to it. These can be accessed like
    partition
    porter_stemmer_measure
    repeat
+   removeprefix
+   removesuffix
    replace
    replace_tokens
    replace_with_backrefs
@@ -94,4 +97,3 @@ strings and apply several methods to it. These can be accessed like
    url_encode
    wrap
    zfill
-   

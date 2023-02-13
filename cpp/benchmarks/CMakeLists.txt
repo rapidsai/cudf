@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -23,8 +23,10 @@ target_compile_options(
 )
 
 target_link_libraries(
-  cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
+  cudf_datagen
+  PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main benchmark::benchmark
+         nvbench::nvbench Threads::Threads cudf cudftestutil
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
 target_include_directories(
@@ -41,7 +43,7 @@ add_library(
   cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
                                synchronization/synchronization.cpp io/cuio_common.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -68,6 +70,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -96,6 +99,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -151,7 +155,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -165,7 +169,7 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
-ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/segmented_sort.cpp sort/sort_lists.cpp sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -183,7 +187,8 @@ ConfigureBench(
   reduction/reduce.cpp reduction/scan.cpp
 )
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/segment_reduce.cu
+  REDUCTION_NVBENCH reduction/distinct_count.cpp reduction/rank.cpp reduction/scan_structs.cpp
+  reduction/segment_reduce.cu
 )
 
 # ##################################################################################################
@@ -219,8 +224,10 @@ ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
-# * parquet writer chunks benchmark ---------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_CHUNKS_BENCH io/parquet/parquet_writer_chunks.cpp)
+# * parquet writer benchmark ----------------------------------------------------------------------
+ConfigureNVBench(
+  PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+)
 
 # ##################################################################################################
 # * parquet reader benchmark ----------------------------------------------------------------------
@@ -234,11 +241,7 @@ ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reade
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
-ConfigureBench(CSV_READER_BENCH io/csv/csv_reader.cpp)
-
-# ##################################################################################################
-# * parquet writer benchmark ----------------------------------------------------------------------
-ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
+ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
@@ -283,13 +286,13 @@ ConfigureBench(
   string/repeat_strings.cpp
   string/replace.cpp
   string/replace_re.cpp
+  string/slice.cpp
   string/split.cpp
-  string/substring.cpp
   string/translate.cpp
   string/url_decode.cu
 )
 
-ConfigureNVBench(STRINGS_NVBENCH string/like.cpp)
+ConfigureNVBench(STRINGS_NVBENCH string/like.cpp string/reverse.cpp)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
@@ -299,7 +302,8 @@ ConfigureNVBench(NESTED_JSON_NVBENCH io/json/nested_json.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
-ConfigureNVBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split.cpp)
+ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
+target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
 add_custom_target(
   run_benchmarks

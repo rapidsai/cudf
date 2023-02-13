@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from itertools import combinations
 
@@ -286,6 +286,7 @@ def test_dataframe_loc(scalar, step):
             "d": np.random.random(size).astype(np.float64),
         }
     )
+    pdf.index.name = "index"
 
     df = cudf.DataFrame.from_pandas(pdf)
 
@@ -628,6 +629,9 @@ def test_dataframe_iloc(nelem):
     pdf = pd.DataFrame()
     pdf["a"] = ha
     pdf["b"] = hb
+
+    gdf.index.name = "index"
+    pdf.index.name = "index"
 
     assert_eq(gdf.iloc[-1:1], pdf.iloc[-1:1])
     assert_eq(gdf.iloc[nelem - 1 : -1], pdf.iloc[nelem - 1 : -1])
@@ -984,9 +988,6 @@ def test_series_setitem_iloc(key, value, nulls):
         pytest.param(
             0,
             0.5,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/9913"
-            ),
         ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
@@ -1213,32 +1214,26 @@ def test_out_of_bounds_indexing():
     assert_exceptions_equal(
         lambda: psr[[0, 1, 9]],
         lambda: gsr[[0, 1, 9]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[[0, 1, -4]],
         lambda: gsr[[0, 1, -4]],
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, 9], 2),
         lambda: gsr.__setitem__([0, 1, 9], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr.__setitem__([0, 1, -4], 2),
         lambda: gsr.__setitem__([0, 1, -4], 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(-1, 2),
         lambda: gsr[4:6].iloc.__setitem__(-1, 2),
-        compare_error_message=False,
     )
     assert_exceptions_equal(
         lambda: psr[4:6].iloc.__setitem__(1, 2),
         lambda: gsr[4:6].iloc.__setitem__(1, 2),
-        compare_error_message=False,
     )
 
 
@@ -1272,7 +1267,7 @@ def test_iloc_categorical_index(index):
         slice("2001", "2002"),
         slice("2002", "2001"),
         slice(None, "2020"),
-        slice("2020", None),
+        slice("2001", None),
     ],
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
@@ -1678,10 +1673,6 @@ def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
                 [(slice(None, None, None), ["a", "b"]), array],
                 {},
             ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
         )
 
 
@@ -1692,3 +1683,10 @@ def test_iloc_single_row_with_nullable_column():
 
     df.iloc[0]  # before the fix for #11349 this would segfault
     assert_eq(pdf.iloc[0], df.iloc[0])
+
+
+def test_loc_single_row_from_slice():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    pdf = pd.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    df = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[5:10], df.loc[5:10])

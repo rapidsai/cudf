@@ -32,7 +32,7 @@ static void BM_case(benchmark::State& state)
   cudf::strings_column_view input(column->view());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::strings::to_lower(input);
   }
 

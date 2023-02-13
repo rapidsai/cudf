@@ -1020,14 +1020,14 @@ __device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
  * @tparam block_size Thread block dimension for this call
  * @param inputs Source and destination buffer information per block
  * @param outputs Destination buffer information per block
- * @param statuses Decompression status buffer per block
+ * @param results Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
-                 device_span<decompress_status> statuses,
+                 device_span<compression_result> results,
                  gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1133,9 +1133,15 @@ __global__ void __launch_bounds__(block_size)
       // Output buffer too small
       state->err = 1;
     }
-    statuses[z].bytes_written = state->out - state->outbase;
-    statuses[z].status        = state->err;
-    statuses[z].reserved      = (int)(state->end - state->cur);  // Here mainly for debug purposes
+    results[z].bytes_written = state->out - state->outbase;
+    results[z].status        = [&]() {
+      switch (state->err) {
+        case 0: return compression_status::SUCCESS;
+        case 1: return compression_status::OUTPUT_OVERFLOW;
+        default: return compression_status::FAILURE;
+      }
+    }();
+    results[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 
@@ -1200,14 +1206,14 @@ __global__ void __launch_bounds__(1024)
 
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 128;  // Threads per block
   if (inputs.size() > 0) {
     inflate_kernel<block_size>
-      <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, statuses, parse_hdr);
+      <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, results, parse_hdr);
   }
 }
 

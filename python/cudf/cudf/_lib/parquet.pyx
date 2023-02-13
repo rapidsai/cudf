@@ -1,14 +1,13 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
-import errno
 import io
-import os
 
 import pyarrow as pa
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 try:
     import ujson as json
@@ -20,20 +19,17 @@ import numpy as np
 from cython.operator cimport dereference
 
 from cudf.api.types import (
-    is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_struct_dtype,
 )
-from cudf.utils.dtypes import np_to_pa_dtype
 
-from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
+from cudf._lib.utils cimport data_from_unique_ptr
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 from libc.stdint cimport uint8_t
-from libc.stdlib cimport free
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
@@ -47,7 +43,6 @@ cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
-    chunked_parquet_writer_options_builder,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
@@ -59,9 +54,8 @@ from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
-from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
-    make_sink_info,
     make_sinks_info,
     make_source_info,
     update_struct_field_names,
@@ -69,6 +63,8 @@ from cudf._lib.io.utils cimport (
 from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
+
+from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 
 
 cdef class BufferArrayFromVector:
@@ -180,17 +176,17 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         args.set_columns(cpp_columns)
 
     # Read Parquet
-    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_result
 
     with nogil:
-        c_out_table = move(parquet_reader(args))
+        c_result = move(parquet_reader(args))
 
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
 
     # Access the Parquet per_file_user_data to find the index
     index_col = None
     cdef vector[unordered_map[string, string]] per_file_user_data = \
-        c_out_table.metadata.per_file_user_data
+        c_result.metadata.per_file_user_data
 
     index_col_names = None
     is_range_index = True
@@ -211,11 +207,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                             index_col_names[idx_col] = c['name']
 
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_out_table.tbl),
-        column_names=column_names
+        move(c_result.tbl),
+        column_names=names
     ))
 
-    update_struct_field_names(df, c_out_table.metadata.schema_info)
+    update_struct_field_names(df, c_result.metadata.schema_info)
 
     if meta is not None:
         # Book keep each column metadata as the order
@@ -226,7 +222,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         }
 
         # update the decimal precision of each column
-        for col in column_names:
+        for col in names:
             if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
@@ -290,7 +286,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 )
 
             df._index = idx
-        elif set(index_col).issubset(column_names):
+        elif set(index_col).issubset(names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
             if len(index_data._data) == 1:
@@ -311,19 +307,22 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     return df
 
-cpdef write_parquet(
-        table,
-        object filepaths_or_buffers,
-        object index=None,
-        object compression="snappy",
-        object statistics="ROWGROUP",
-        object metadata_file_path=None,
-        object int96_timestamps=False,
-        object row_group_size_bytes=None,
-        object row_group_size_rows=None,
-        object max_page_size_bytes=None,
-        object max_page_size_rows=None,
-        object partitions_info=None):
+
+@acquire_spill_lock()
+def write_parquet(
+    table,
+    object filepaths_or_buffers,
+    object index=None,
+    object compression="snappy",
+    object statistics="ROWGROUP",
+    object metadata_file_path=None,
+    object int96_timestamps=False,
+    object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
+    object row_group_size_rows=None,
+    object max_page_size_bytes=None,
+    object max_page_size_rows=None,
+    object partitions_info=None
+):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -487,8 +486,8 @@ cdef class ParquetWriter:
     cdef size_type max_page_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
-                  object compression=None, str statistics="ROWGROUP",
-                  int row_group_size_bytes=134217728,
+                  object compression="snappy", str statistics="ROWGROUP",
+                  int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
                   int max_page_size_rows=20000):
@@ -670,6 +669,8 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         return cudf_io_types.compression_type.NONE
     elif compression == "snappy":
         return cudf_io_types.compression_type.SNAPPY
+    elif compression == "ZSTD":
+        return cudf_io_types.compression_type.ZSTD
     else:
         raise ValueError("Unsupported `compression` type")
 

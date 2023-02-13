@@ -390,7 +390,7 @@ class writer::impl {
                           file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
-                          host_span<decompress_status const> comp_out,
+                          host_span<compression_result const> comp_out,
                           std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,

@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pyarrow as pa
@@ -21,6 +21,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
+from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -164,6 +165,11 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
+    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+        super().set_base_children(value)
+        _, values = value
+        self._dtype = cudf.ListDtype(element_type=values.dtype)
+
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
@@ -221,7 +227,7 @@ class ListColumn(ColumnBase):
                 offset += len(data)
                 offset_col.append(offset)
 
-        offset_col = column.as_column(offset_col, dtype="int32")
+        offset_col = column.as_column(offset_col, dtype=size_type_dtype)
 
         # Build ListColumn
         res = cls(
@@ -366,7 +372,12 @@ class ListMethods(ColumnMethods):
                 out = out._scatter_by_column(
                     out_of_bounds_mask, cudf.Scalar(default)
                 )
-
+        if out.dtype != self._column.dtype.element_type:
+            # libcudf doesn't maintain struct labels so we must transfer over
+            # manually from the input column if we lost some information
+            # somewhere. Not doing this unilaterally since the cost is
+            # non-zero..
+            out = out._with_type_metadata(self._column.dtype.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:

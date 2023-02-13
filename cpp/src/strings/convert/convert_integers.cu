@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/convert/string_to_int.cuh>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -157,10 +156,9 @@ struct dispatch_is_integer_fn {
 
 }  // namespace
 
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   auto const d_column = column_device_view::create(strings.parent(), stream);
   auto results        = make_numeric_column(data_type{type_id::BOOL8},
@@ -192,11 +190,10 @@ std::unique_ptr<column> is_integer(
   return results;
 }
 
-std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  data_type int_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> is_integer(strings_column_view const& strings,
+                                   data_type int_type,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
@@ -209,7 +206,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, cudf::default_stream_value, mr);
+  return detail::is_integer(strings, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
@@ -217,7 +214,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, cudf::default_stream_value, mr);
+  return detail::is_integer(strings, int_type, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
@@ -310,46 +307,42 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, cudf::default_stream_value, mr);
+  return detail::to_integers(strings, output_type, cudf::get_default_stream(), mr);
 }
 
 namespace detail {
 namespace {
-/**
- * @brief Calculate the size of the each string required for
- * converting each integer in base-10 format.
- */
 template <typename IntegerType>
-struct integer_to_string_size_fn {
-  column_device_view d_column;
-
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_column.is_null(idx)) return 0;
-    IntegerType value = d_column.element<IntegerType>(idx);
-    return count_digits(value);
-  }
-};
-
-/**
- * @brief Convert each integer into a string.
- *
- * The integer is converted into base-10 using only characters [0-9].
- * No formatting is done for the string other than prepending the '-'
- * character for negative values.
- */
-template <typename IntegerType>
-struct integer_to_string_fn {
-  column_device_view d_column;
-  const int32_t* d_offsets;
+struct from_integers_fn {
+  column_device_view d_integers;
+  size_type* d_offsets;
   char* d_chars;
+
+  /**
+   * @brief Converts an integer element into a string.
+   *
+   * The integer is converted into base-10 using only characters [0-9].
+   * No formatting is done for the string other than prepending the '-'
+   * character for negative values.
+   */
+  __device__ void integer_element_to_string(size_type idx)
+  {
+    IntegerType value = d_integers.element<IntegerType>(idx);
+    char* d_buffer    = d_chars + d_offsets[idx];
+    integer_to_string(value, d_buffer);
+  }
 
   __device__ void operator()(size_type idx)
   {
-    if (d_column.is_null(idx)) return;
-    IntegerType value = d_column.element<IntegerType>(idx);
-    char* d_buffer    = d_chars + d_offsets[idx];
-    integer_to_string(value, d_buffer);
+    if (d_integers.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+    if (d_chars != nullptr) {
+      integer_element_to_string(idx);
+    } else {
+      d_offsets[idx] = count_digits(d_integers.element<IntegerType>(idx));
+    }
   }
 };
 
@@ -369,27 +362,13 @@ struct dispatch_from_integers_fn {
 
     // copy the null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
-    // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0), integer_to_string_size_fn<IntegerType>{d_column});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view  = offsets_column->view();
-    auto d_new_offsets = offsets_view.template data<int32_t>();
 
-    // build chars column
-    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
-    auto chars_view   = chars_column->mutable_view();
-    auto d_chars      = chars_view.template data<char>();
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       integer_to_string_fn<IntegerType>{d_column, d_new_offsets, d_chars});
+    auto [offsets, chars] =
+      make_strings_children(from_integers_fn<IntegerType>{d_column}, strings_count, stream, mr);
 
     return make_strings_column(strings_count,
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                integers.null_count(),
                                std::move(null_mask));
   }
@@ -431,7 +410,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, cudf::default_stream_value, mr);
+  return detail::from_integers(integers, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

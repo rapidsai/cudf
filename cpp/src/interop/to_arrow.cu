@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/copy.h>
@@ -57,7 +58,7 @@ std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                                 input_view.data<T>(),
                                 data_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
 
   return std::move(data_buffer);
@@ -78,7 +79,7 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
       mask_buffer->mutable_data(),
       (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
       mask_size_in_bytes,
-      cudaMemcpyDeviceToHost,
+      cudaMemcpyDefault,
       stream.value()));
 
     // Resets all padded bits to 0
@@ -153,7 +154,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 
   auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(count,
+  thrust::for_each(rmm::exec_policy(cudf::get_default_stream()),
+                   count,
                    count + input.size(),
                    [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
                      auto const out_idx = in_idx * 2;
@@ -164,11 +166,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                buf.data(),
-                                buf_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
 
   auto type    = arrow::decimal(18, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
@@ -198,11 +197,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                buf.data(),
-                                buf_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
 
   auto type    = arrow::decimal(18, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
@@ -226,7 +222,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                                 bitmask.first->data(),
                                 bitmask.first->size(),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return to_arrow_array(id,
                         static_cast<int64_t>(input.size()),
@@ -414,7 +410,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_arrow(input, metadata, cudf::default_stream_value, ar_mr);
+  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 #include "timezone.cuh"
 
 #include "orc.hpp"
-#include "orc_common.hpp"
 
+#include <cudf/io/orc_types.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -56,12 +56,12 @@ struct CompressedStreamInfo {
   }
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;               // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl;    // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl;         // [in] output buffer to decompress into
-  device_span<decompress_status> decstatus;  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl;   // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl;        // [out] output buffer to copy to
+  size_t compressed_data_size;              // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl;        // [in] output buffer to decompress into
+  device_span<compression_result> dec_res;  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl;  // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl;       // [out] output buffer to copy to
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
   uint32_t num_uncompressed_blocks;      // [in,out] number of entries in dec_in_ctl(in), number of
@@ -211,14 +211,12 @@ constexpr uint32_t encode_block_size = 512;
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
  * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
  * compressed size)
- * @param[in] allow_block_size_estimate If true, estimate uncompressed size for small blocks
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
                                uint32_t compression_block_size,
                                uint32_t log2maxcr,
-                               bool allow_block_size_estimate,
                                rmm::cuda_stream_view stream);
 
 /**
@@ -287,6 +285,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level Current nesting level being processed
+ * @param[out] error_count Number of errors during decode
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void DecodeOrcColumnData(ColumnDesc* chunks,
@@ -299,6 +298,7 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride,
                          size_t level,
+                         size_type* error_count,
                          rmm::cuda_stream_view stream);
 
 /**
@@ -348,11 +348,10 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
  * @param[in] max_comp_blk_size Max size of any block after compression
+ * @param[in] comp_block_align Required alignment for compressed blocks
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
- * @param[out] comp_in Per-block compression input buffers
- * @param[out] comp_out Per-block compression output buffers
- * @param[out] comp_stat Per-block compression status
+ * @param[out] comp_res Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void CompressOrcDataStreams(uint8_t* compressed_data,
@@ -360,11 +359,10 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
                             uint32_t max_comp_blk_size,
+                            uint32_t comp_block_align,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<device_span<uint8_t const>> comp_in,
-                            device_span<device_span<uint8_t>> comp_out,
-                            device_span<decompress_status> comp_stat,
+                            device_span<compression_result> comp_res,
                             rmm::cuda_stream_view stream);
 
 /**

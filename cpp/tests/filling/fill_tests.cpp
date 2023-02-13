@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
             bool value_is_valid                     = true,
             BitInitializerType destination_validity = all_valid)
   {
-    static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+    static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
@@ -206,7 +206,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
         }));
 
     auto p_ret = cudf::fill(destination, begin, end, *p_val);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*p_ret, expected);
   }
 };
 

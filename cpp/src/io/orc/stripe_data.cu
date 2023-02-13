@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
-#include <rmm/cuda_stream_view.hpp>
-
-#include "orc_common.hpp"
 #include "orc_gpu.hpp"
+
+#include <cudf/io/orc_types.hpp>
+#include <io/utilities/block_utils.cuh>
+
+#include <cub/cub.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -745,17 +746,21 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
             if constexpr (sizeof(T) <= 4) {
-              uint32_t baseval, mask;
+              uint32_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask                = (1 << (bw * 8 - 1)) - 1;
-              rle->baseval.u32[r] = (baseval > mask) ? (-(int32_t)(baseval & mask)) : baseval;
+              uint32_t const mask = (1u << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u32[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int32_t>(baseval & mask)
+                                      : baseval;
             } else {
-              uint64_t baseval, mask;
+              uint64_t baseval;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-              mask = 1;
-              mask <<= (bw * 8) - 1;
-              mask -= 1;
-              rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
+              uint64_t const mask = (1ul << (bw * 8 - 1)) - 1;
+              // Negative values are represented with the highest bit set to 1
+              rle->baseval.u64[r] = (std::is_signed_v<T> and baseval > mask)
+                                      ? -static_cast<int64_t>(baseval & mask)
+                                      : baseval;
             }
             rle->m2_pw_byte3[r] = (pw << 8) | byte3;
             pos += bw;
@@ -1373,7 +1378,8 @@ __global__ void __launch_bounds__(block_size)
                          device_2dspan<RowGroup> row_groups,
                          size_t first_row,
                          uint32_t rowidx_stride,
-                         size_t level)
+                         size_t level,
+                         size_type* error_count)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using block_reduce = cub::BlockReduce<uint64_t, block_size>;
@@ -1405,6 +1411,12 @@ __global__ void __launch_bounds__(block_size)
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
+      if (s->top.data.index.strm_offset[0] > s->chunk.strm_len[CI_DATA]) {
+        atomicAdd(error_count, 1);
+      }
+      if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
+        atomicAdd(error_count, 1);
+      }
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
       uint32_t rowgroup_rowofs =
@@ -1758,12 +1770,16 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              uint64_t nanos  = secondary_val;
+              int64_t nanos   = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
-              if (seconds < 0 && nanos != 0) { seconds -= 1; }
+              // Adjust seconds only for negative timestamps with positive nanoseconds.
+              // Alternative way to represent negative timestamps is with negative nanoseconds
+              // in which case the adjustment in not needed.
+              // Comparing with 999999 instead of zero to match the apache writer.
+              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
 
               duration_ns d_ns{nanos};
               duration_s d_s{seconds};
@@ -1875,6 +1891,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,
+                                  size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
@@ -1882,7 +1899,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level);
+    chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
 }
 
 }  // namespace gpu

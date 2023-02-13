@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -177,7 +178,8 @@ auto build_json_string_column(int desired_bytes, int num_rows)
   auto d_store_order = cudf::column_device_view::create(float_2bool_columns->get_column(2));
   json_benchmark_row_builder jb{
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
-  auto children = cudf::strings::detail::make_strings_children(jb, num_rows);
+  auto children = cudf::strings::detail::make_strings_children(
+    jb, num_rows, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows, std::move(children.first), std::move(children.second), 0, {});
 }
@@ -196,7 +198,7 @@ void BM_case(benchmark::State& state, std::string query_arg)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
     auto result = cudf::strings::get_json_object(scv, json_path);
-    cudaStreamSynchronize(0);
+    CUDF_CUDA_TRY(cudaStreamSynchronize(0));
   }
 
   // this isn't strictly 100% accurate. a given query isn't necessarily

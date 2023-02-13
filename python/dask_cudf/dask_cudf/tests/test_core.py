@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import random
 
@@ -15,6 +15,20 @@ from dask.utils import M
 import cudf
 
 import dask_cudf as dgd
+
+
+def test_from_dict_backend_dispatch():
+    # Test ddf.from_dict cudf-backend dispatch
+    np.random.seed(0)
+    data = {
+        "x": np.random.randint(0, 5, size=10000),
+        "y": np.random.normal(size=10000),
+    }
+    expect = cudf.DataFrame(data)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict(data, npartitions=2)
+    assert isinstance(ddf, dgd.DataFrame)
+    dd.assert_eq(expect, ddf)
 
 
 def test_from_cudf():
@@ -337,20 +351,33 @@ def test_setitem_scalar_datetime():
 @pytest.mark.parametrize(
     "func",
     [
-        lambda: pd._testing.makeDataFrame().reset_index(),
-        pd._testing.makeDataFrame,
-        pd._testing.makeMixedDataFrame,
-        pd._testing.makeObjectSeries,
-        pd._testing.makeTimeSeries,
+        lambda: pd.DataFrame(
+            {"A": np.random.rand(10), "B": np.random.rand(10)},
+            index=list("abcdefghij"),
+        ),
+        lambda: pd.DataFrame(
+            {
+                "A": np.random.rand(10),
+                "B": list("a" * 10),
+                "C": pd.Series(
+                    [str(20090101 + i) for i in range(10)],
+                    dtype="datetime64[ns]",
+                ),
+            },
+            index=list("abcdefghij"),
+        ),
+        lambda: pd.Series(list("abcdefghijklmnop")),
+        lambda: pd.Series(
+            np.random.rand(10),
+            index=pd.Index(
+                [str(20090101 + i) for i in range(10)], dtype="datetime64[ns]"
+            ),
+        ),
     ],
 )
 def test_repr(func):
     pdf = func()
-    try:
-        gdf = cudf.from_pandas(pdf)
-    except Exception:
-        raise pytest.xfail()
-    # gddf = dd.from_pandas(gdf, npartitions=3, sort=False)  # TODO
+    gdf = cudf.from_pandas(pdf)
     gddf = dd.from_pandas(gdf, npartitions=3, sort=False)
 
     assert repr(gddf)
@@ -471,6 +498,15 @@ def test_repartition_hash(by, npartitions, max_branch):
         ignore_index=True,
     ).sort_values(by)
     dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
+def test_repartition_no_extra_row():
+    # see https://github.com/rapidsai/cudf/issues/11930
+    gdf = cudf.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
+    ddf = dgd.from_cudf(gdf, npartitions=1)
+    ddf_new = ddf.repartition([0, 5, 10, 30], force=True)
+    dd.assert_eq(ddf, ddf_new)
+    dd.assert_eq(gdf, ddf_new)
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -157,7 +156,7 @@ struct format_compiler {
     CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
                                   items.data(),
                                   items.size() * sizeof(items[0]),
-                                  cudaMemcpyHostToDevice,
+                                  cudaMemcpyDefault,
                                   stream.value()));
   }
 
@@ -186,11 +185,14 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
   }
 }
 
+namespace {
 template <typename T>
-struct duration_to_string_size_fn {
-  const column_device_view d_durations;
-  const format_item* d_format_items;
+struct from_durations_fn {
+  column_device_view d_durations;
+  format_item const* d_format_items;
   size_type items_count;
+  offset_type* d_offsets{};
+  char* d_chars{};
 
   __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
   {
@@ -207,48 +209,6 @@ struct duration_to_string_size_fn {
         break;
       default: return 2;
     }
-  }
-
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_durations.is_null(idx)) return 0;
-    auto duration                = d_durations.element<T>(idx);
-    duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
-    dissect_duration(duration, &timeparts);
-    return thrust::transform_reduce(
-      thrust::seq,
-      d_format_items,
-      d_format_items + items_count,
-      [this, &timeparts] __device__(format_item item) -> size_type {
-        if (item.item_type == format_char_type::literal)
-          return 1;
-        else if (item.length != -1)
-          return item.length;
-        else
-          return format_length(item.value, &timeparts);
-      },
-      size_type{0},
-      thrust::plus<size_type>());
-  }
-};
-
-template <typename T>
-struct duration_to_string_fn : public duration_to_string_size_fn<T> {
-  const int32_t* d_offsets;
-  char* d_chars;
-  using duration_to_string_size_fn<T>::d_durations;
-  using duration_to_string_size_fn<T>::d_format_items;
-  using duration_to_string_size_fn<T>::items_count;
-
-  duration_to_string_fn(const column_device_view d_durations,
-                        const format_item* d_format_items,
-                        size_type items_count,
-                        const int32_t* d_offsets,
-                        char* d_chars)
-    : duration_to_string_size_fn<T>{d_durations, d_format_items, items_count},
-      d_offsets(d_offsets),
-      d_chars(d_chars)
-  {
   }
 
   // utility to create (optionally) 0-padded integers (up to 10 chars) without negative sign.
@@ -319,7 +279,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
   {
     if (timeparts->subsecond == 0) return ptr;
-    const int digits = duration_to_string_size_fn<T>::format_length('S', timeparts) - 3;
+    const int digits = format_length('S', timeparts) - 3;
     *ptr             = '.';
     auto value       = timeparts->subsecond;
     for (int idx = digits; idx > 0; idx--) {
@@ -389,16 +349,46 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr;
   }
 
-  __device__ void operator()(size_type idx)
+  __device__ size_type string_size(T duration)
   {
-    if (d_durations.is_null(idx)) return;
+    duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
+    dissect_duration(duration, &timeparts);
+    return thrust::transform_reduce(
+      thrust::seq,
+      d_format_items,
+      d_format_items + items_count,
+      [this, &timeparts] __device__(format_item item) -> size_type {
+        if (item.item_type == format_char_type::literal) { return 1; }
+        return (item.length != -1) ? item.length : format_length(item.value, &timeparts);
+      },
+      size_type{0},
+      thrust::plus<size_type>());
+  }
+
+  __device__ void set_chars(size_type idx)
+  {
     auto duration                = d_durations.template element<T>(idx);
     duration_component timeparts = {0};  // days, hours, minutes, seconds, subseconds(9)
     dissect_duration(duration, &timeparts);
     // convert to characters
     format_from_parts(&timeparts, d_chars + d_offsets[idx]);
   }
+
+  __device__ void operator()(size_type idx)
+  {
+    if (d_durations.is_null(idx)) {
+      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      return;
+    }
+
+    if (d_chars != nullptr) {
+      set_chars(idx);
+    } else {
+      d_offsets[idx] = string_size(d_durations.template element<T>(idx));
+    }
+  }
 };
+}  // namespace
 
 /**
  * @brief This dispatch method is for converting durations into strings.
@@ -423,30 +413,16 @@ struct dispatch_from_durations_fn {
 
     // copy null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
-    // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0),
-      duration_to_string_size_fn<T>{d_column, d_format_items, compiler.items_count()});
-    auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view  = offsets_column->view();
-    auto d_new_offsets = offsets_view.template data<int32_t>();
 
-    // build chars column
-    auto const chars_bytes =
-      cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(chars_bytes, stream, mr);
-    auto d_chars      = chars_column->mutable_view().template data<char>();
-
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       duration_to_string_fn<T>{
-                         d_column, d_format_items, compiler.items_count(), d_new_offsets, d_chars});
+    auto [offsets, chars] =
+      make_strings_children(from_durations_fn<T>{d_column, d_format_items, compiler.items_count()},
+                            strings_count,
+                            stream,
+                            mr);
 
     return make_strings_column(strings_count,
-                               std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(offsets),
+                               std::move(chars),
                                durations.null_count(),
                                std::move(null_mask));
   }
@@ -748,7 +724,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, cudf::default_stream_value, mr);
+  return detail::from_durations(durations, format, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
@@ -757,7 +733,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(strings, duration_type, format, cudf::default_stream_value, mr);
+  return detail::to_durations(strings, duration_type, format, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

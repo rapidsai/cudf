@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -108,6 +108,7 @@ struct base_fn {
   {
     if (d_column.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
 
     auto& derived     = static_cast<Derived&>(*this);
@@ -278,6 +279,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                     thrust::make_counting_iterator<size_type>(input.size()),
                     results->mutable_view().data<bool>(),
                     is_title_fn{get_character_flags_table(), *d_column});
+  results->set_null_count(input.null_count());
   return results;
 }
 
@@ -288,7 +290,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(input, delimiter, cudf::default_stream_value, mr);
+  return detail::capitalize(input, delimiter, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
@@ -296,14 +298,14 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(input, sequence_type, cudf::default_stream_value, mr);
+  return detail::title(input, sequence_type, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_title(input, cudf::default_stream_value, mr);
+  return detail::is_title(input, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

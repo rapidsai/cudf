@@ -159,7 +159,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     auto result = std::make_unique<cudf::column>(input, stream, mr);
     auto mview  = result->mutable_view();
     cudf::detail::set_null_mask(mview.null_mask(), begin, end, false, stream);
-    mview.set_null_count(input.null_count() + (end - begin));
+    result->set_null_count(input.null_count() + (end - begin));
     return result;
   }
 
@@ -171,7 +171,8 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
     cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
   // get the index of the key just added
-  auto index_of_value = cudf::dictionary::detail::get_index(target_matched->view(), value, stream);
+  auto index_of_value = cudf::dictionary::detail::get_index(
+    target_matched->view(), value, stream, rmm::mr::get_current_device_resource());
   // now call fill using just the indices column and the new index
   auto new_indices =
     cudf::type_dispatcher(target_indices.type(),
@@ -211,11 +212,11 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value,
                    rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
+  CUDF_EXPECTS(cudf::is_fixed_width(destination.type()),
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) && (end <= destination.size()) && (begin <= end),
                "Range is out of bounds.");
-  CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid(stream) == true),
+  CUDF_EXPECTS(destination.nullable() || value.is_valid(stream),
                "destination should be nullable or value should be non-null.");
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
@@ -248,7 +249,7 @@ void fill_in_place(mutable_column_view& destination,
                    scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, cudf::default_stream_value);
+  return detail::fill_in_place(destination, begin, end, value, cudf::get_default_stream());
 }
 
 std::unique_ptr<column> fill(column_view const& input,
@@ -258,7 +259,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, cudf::default_stream_value, mr);
+  return detail::fill(input, begin, end, value, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

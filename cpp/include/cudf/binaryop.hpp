@@ -41,8 +41,14 @@ enum class binary_operator : int32_t {
   MUL,          ///< operator *
   DIV,          ///< operator / using common type of lhs and rhs
   TRUE_DIV,     ///< operator / after promoting type to floating point
-  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
-                ///< flooring the result
+  FLOOR_DIV,    ///< operator //
+                ///< integer division rounding towards negative
+                ///< infinity if both arguments are integral;
+                ///< floor division for floating types (using C++ type
+                ///< promotion for mixed integral/floating arguments)
+                ///< If different promotion semantics are required, it
+                ///< is the responsibility of the caller to promote
+                ///< manually before calling in to this function.
   MOD,          ///< operator %
   PMOD,         ///< positive modulo operator
                 ///< If remainder is negative, this returns (remainder + divisor) % divisor
@@ -232,7 +238,7 @@ namespace binops {
 std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 namespace compiled {
@@ -255,7 +261,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_lhs_scalar,
                                     bool is_rhs_scalar,
                                     binary_operator op,
-                                    rmm::cuda_stream_view stream = cudf::default_stream_value);
+                                    rmm::cuda_stream_view stream);
 }  // namespace detail
 }  // namespace compiled
 }  // namespace binops

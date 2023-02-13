@@ -14,6 +14,8 @@
  */
 #include <tests/iterator/pair_iterator_test.cuh>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/reduce.h>
@@ -80,9 +82,17 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   std::vector<T> host_values(column_size);
   std::vector<bool> host_bools(column_size);
 
-  cudf::test::UniformRandomGenerator<T> rng;
+  if constexpr (std::is_floating_point<T>()) {
+    cudf::test::UniformRandomGenerator<int32_t> rng;
+    std::generate(host_values.begin(), host_values.end(), [&rng]() {
+      return static_cast<T>(rng.generate() % 10);  // reduces float-op errors
+    });
+  } else {
+    cudf::test::UniformRandomGenerator<T> rng;
+    std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
+  }
+
   cudf::test::UniformRandomGenerator<bool> rbg;
-  std::generate(host_values.begin(), host_values.end(), [&rng]() { return rng.generate(); });
   std::generate(host_bools.begin(), host_bools.end(), [&rbg]() { return rbg.generate(); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
@@ -106,16 +116,15 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   expected_value.value_squared = std::accumulate(
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
-  // std::cout << "expected <mixed_output> = " << expected_value << std::endl;
-
   // GPU test
   auto it_dev         = d_col->pair_begin<T, true>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(it_dev_squared,
+  auto result         = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+                               it_dev_squared,
                                it_dev_squared + d_col->size(),
                                thrust::make_pair(T_output{}, true),
                                sum_if_not_null{});
-  if (not std::is_floating_point<T>()) {
+  if constexpr (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result.first) << "pair iterator reduction sum";
   } else {
     EXPECT_NEAR(expected_value.value, result.first.value, 1e-3) << "pair iterator reduction sum";

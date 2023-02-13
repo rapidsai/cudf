@@ -120,7 +120,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_gather(
-    source_column, gather_map_list, bounds_policy, cudf::default_stream_value, mr);
+    source_column, gather_map_list, bounds_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace lists

@@ -49,9 +49,9 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
- * @param ttimes Transition times; trailing `cycle_entry_cnt` entires are used for all times
+ * @param ttimes Transition times; trailing `cycle_entry_cnt` entries are used for all times
  * beyond the one covered by the TZif file
- * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entires are used
+ * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entries are used
  * for all times beyond the one covered by the TZif file
  * @param count Number of elements in @p ttimes and @p offsets
  * @param ts ORC timestamp
@@ -115,7 +115,7 @@ class timezone_table {
 
  public:
   // Safe to use the default stream, device_uvectors will not change after they are created empty
-  timezone_table() : ttimes{0, cudf::default_stream_value}, offsets{0, cudf::default_stream_value}
+  timezone_table() : ttimes{0, cudf::get_default_stream()}, offsets{0, cudf::get_default_stream()}
   {
   }
   timezone_table(int32_t gmt_offset,

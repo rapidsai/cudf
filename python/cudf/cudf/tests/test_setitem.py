@@ -1,11 +1,11 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120, PANDAS_LE_122
+from cudf.core._compat import PANDAS_GE_120, PANDAS_GE_150, PANDAS_LE_122
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -108,6 +108,16 @@ def test_series_set_item(psr, arg):
     assert_eq(psr, gsr)
 
 
+def test_series_setitem_singleton_range():
+    sr = cudf.Series([1, 2, 3], dtype=np.int64)
+    psr = sr.to_pandas()
+    value = np.asarray([7], dtype=np.int64)
+    sr.iloc[:1] = value
+    psr.iloc[:1] = value
+    assert_eq(sr, cudf.Series([7, 2, 3], dtype=np.int64))
+    assert_eq(sr, psr, check_dtype=True)
+
+
 @pytest.mark.parametrize(
     "df",
     [
@@ -205,7 +215,6 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_1], {}),
         ([mask, replace_data_1], {}),
-        compare_error_message=False,
     )
 
     psr = pd.Series(data)
@@ -215,28 +224,126 @@ def test_column_set_unequal_length_object_by_mask():
         gsr.__setitem__,
         ([mask, replace_data_2], {}),
         ([mask, replace_data_2], {}),
-        compare_error_message=False,
     )
 
 
 def test_categorical_setitem_invalid():
-    # ps = pd.Series([1, 2, 3], dtype="category")
+    ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
 
-    # TODO: After https://github.com/pandas-dev/pandas/issues/46646
-    # is fixed remove the following workaround and
-    # uncomment assert_exceptions_equal
-    # WORKAROUND
-    with pytest.raises(
-        ValueError,
-        match="Cannot setitem on a Categorical with a new category, set the "
-        "categories first",
-    ):
-        gs[0] = 5
+    if PANDAS_GE_150:
+        assert_exceptions_equal(
+            lfunc=ps.__setitem__,
+            rfunc=gs.__setitem__,
+            lfunc_args_and_kwargs=([0, 5], {}),
+            rfunc_args_and_kwargs=([0, 5], {}),
+        )
+    else:
+        # Following workaround is needed because:
+        # https://github.com/pandas-dev/pandas/issues/46646
+        with pytest.raises(
+            ValueError,
+            match="Cannot setitem on a Categorical with a new category, set "
+            "the categories first",
+        ):
+            gs[0] = 5
 
-    # assert_exceptions_equal(
-    #     lfunc=ps.__setitem__,
-    #     rfunc=gs.__setitem__,
-    #     lfunc_args_and_kwargs=([0, 5], {}),
-    #     rfunc_args_and_kwargs=([0, 5], {}),
-    # )
+
+def test_series_slice_setitem_list():
+    actual = cudf.Series([[[1, 2], [2, 3]], [[3, 4]], [[4, 5]], [[6, 7]]])
+    actual[slice(0, 3, 1)] = [[10, 11], [12, 23]]
+    expected = cudf.Series(
+        [
+            [[10, 11], [12, 23]],
+            [[10, 11], [12, 23]],
+            [[10, 11], [12, 23]],
+            [[6, 7]],
+        ]
+    )
+    assert_eq(actual, expected)
+
+    actual = cudf.Series([[[1, 2], [2, 3]], [[3, 4]], [[4, 5]], [[6, 7]]])
+    actual[0:3] = cudf.Scalar([[10, 11], [12, 23]])
+
+    assert_eq(actual, expected)
+
+
+def test_series_slice_setitem_struct():
+    actual = cudf.Series(
+        [
+            {"a": {"b": 10}, "b": 11},
+            {"a": {"b": 100}, "b": 5},
+            {"a": {"b": 50}, "b": 2},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    actual[slice(0, 3, 1)] = {"a": {"b": 5050}, "b": 101}
+    expected = cudf.Series(
+        [
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 5050}, "b": 101},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    assert_eq(actual, expected)
+
+    actual = cudf.Series(
+        [
+            {"a": {"b": 10}, "b": 11},
+            {"a": {"b": 100}, "b": 5},
+            {"a": {"b": 50}, "b": 2},
+            {"a": {"b": 1000}, "b": 67},
+            {"a": {"b": 4000}, "b": 1090},
+        ]
+    )
+    actual[0:3] = cudf.Scalar({"a": {"b": 5050}, "b": 101})
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("indices", [0, [1, 2]])
+def test_series_setitem_upcasting(dtype, indices):
+    sr = pd.Series([0, 0, 0], dtype=dtype)
+    cr = cudf.from_pandas(sr)
+    assert_eq(sr, cr)
+    # Must be a non-integral floating point value that can't be losslessly
+    # converted to float32, otherwise pandas will try and match the source
+    # column dtype.
+    new_value = np.float64(np.pi)
+    col_ref = cr._column
+    sr[indices] = new_value
+    cr[indices] = new_value
+    if PANDAS_GE_150:
+        assert_eq(sr, cr)
+    else:
+        # pandas bug, incorrectly fails to upcast from float32 to float64
+        assert_eq(sr.values, cr.values)
+    if dtype == np.float64:
+        # no-op type cast should not modify backing column
+        assert col_ref == cr._column
+
+
+# TODO: these two tests could perhaps be changed once specifics of
+# pandas compat wrt upcasting are decided on; this is just baking in
+# status-quo.
+def test_series_setitem_upcasting_string_column():
+    sr = pd.Series([0, 0, 0], dtype=str)
+    cr = cudf.from_pandas(sr)
+    new_value = np.float64(10.5)
+    sr[0] = str(new_value)
+    cr[0] = new_value
+    assert_eq(sr, cr)
+
+
+def test_series_setitem_upcasting_string_value():
+    sr = cudf.Series([0, 0, 0], dtype=int)
+    # This is a distinction with pandas, which lets you instead make an
+    # object column with ["10", 0, 0]
+    sr[0] = "10"
+    assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
+    with pytest.raises(ValueError):
+        sr[0] = "non-integer"

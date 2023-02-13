@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/lists/extract.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <tests/strings/utilities.h>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/lists/extract.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -212,34 +211,6 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElementNestedLists)
     auto result = cudf::lists::extract_list_element(cudf::lists_column_view(list), -3);
     std::vector<int32_t> expected_validity{0, 0, 1, 1};
     LCW expected({LCW{}, LCW{}, LCW{6, 7, 8}, LCW{19, 20}}, expected_validity.begin());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-  }
-}
-
-TYPED_TEST(ListsExtractNumericsTest, ExtractElementsFromNonCompactedNullLists)
-{
-  using namespace cudf::test::iterators;
-  using indices       = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
-  using lcw           = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using result_column = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr X    = -1;  // Value indicating null.
-
-  auto input =
-    lcw{{{1, 2, 3}, {4, 5, 6}, {}, {7, 8, 9}, {0, 1, 2}, {}, {3, 4, 5}}, nulls_at({2, 5})}
-      .release();
-
-  // Set null at index 4.
-  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 4, 5, false);
-
-  {
-    auto result   = cudf::lists::extract_list_element(cudf::lists_column_view{*input}, 0);
-    auto expected = result_column{{1, 4, X, 7, X, X, 3}, nulls_at({2, 4, 5})};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-  }
-  {
-    auto index    = indices{0, 1, 2, 0, 1, 2, 0};
-    auto result   = cudf::lists::extract_list_element(cudf::lists_column_view{*input}, index);
-    auto expected = result_column{{1, 5, X, 7, X, X, 3}, nulls_at({2, 4, 5})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }

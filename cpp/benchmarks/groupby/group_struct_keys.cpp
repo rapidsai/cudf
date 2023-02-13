@@ -83,7 +83,7 @@ void bench_groupby_struct_keys(nvbench::state& state)
   requests[0].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
 
   // Set up nvbench default stream
-  auto stream = cudf::default_stream_value;
+  auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync,

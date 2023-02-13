@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -23,17 +23,20 @@ import pyarrow as pa
 from numba import cuda
 
 import cudf
+import cudf.api.types
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     is_integer,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
@@ -57,47 +60,47 @@ if TYPE_CHECKING:
 
 
 _str_to_numeric_typecast_functions = {
-    cudf.dtype("int8"): str_cast.stoi8,
-    cudf.dtype("int16"): str_cast.stoi16,
-    cudf.dtype("int32"): str_cast.stoi,
-    cudf.dtype("int64"): str_cast.stol,
-    cudf.dtype("uint8"): str_cast.stoui8,
-    cudf.dtype("uint16"): str_cast.stoui16,
-    cudf.dtype("uint32"): str_cast.stoui,
-    cudf.dtype("uint64"): str_cast.stoul,
-    cudf.dtype("float32"): str_cast.stof,
-    cudf.dtype("float64"): str_cast.stod,
-    cudf.dtype("bool"): str_to_boolean,
+    cudf.api.types.dtype("int8"): str_cast.stoi8,
+    cudf.api.types.dtype("int16"): str_cast.stoi16,
+    cudf.api.types.dtype("int32"): str_cast.stoi,
+    cudf.api.types.dtype("int64"): str_cast.stol,
+    cudf.api.types.dtype("uint8"): str_cast.stoui8,
+    cudf.api.types.dtype("uint16"): str_cast.stoui16,
+    cudf.api.types.dtype("uint32"): str_cast.stoui,
+    cudf.api.types.dtype("uint64"): str_cast.stoul,
+    cudf.api.types.dtype("float32"): str_cast.stof,
+    cudf.api.types.dtype("float64"): str_cast.stod,
+    cudf.api.types.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
-    cudf.dtype("int8"): str_cast.i8tos,
-    cudf.dtype("int16"): str_cast.i16tos,
-    cudf.dtype("int32"): str_cast.itos,
-    cudf.dtype("int64"): str_cast.ltos,
-    cudf.dtype("uint8"): str_cast.ui8tos,
-    cudf.dtype("uint16"): str_cast.ui16tos,
-    cudf.dtype("uint32"): str_cast.uitos,
-    cudf.dtype("uint64"): str_cast.ultos,
-    cudf.dtype("float32"): str_cast.ftos,
-    cudf.dtype("float64"): str_cast.dtos,
-    cudf.dtype("bool"): str_cast.from_booleans,
+    cudf.api.types.dtype("int8"): str_cast.i8tos,
+    cudf.api.types.dtype("int16"): str_cast.i16tos,
+    cudf.api.types.dtype("int32"): str_cast.itos,
+    cudf.api.types.dtype("int64"): str_cast.ltos,
+    cudf.api.types.dtype("uint8"): str_cast.ui8tos,
+    cudf.api.types.dtype("uint16"): str_cast.ui16tos,
+    cudf.api.types.dtype("uint32"): str_cast.uitos,
+    cudf.api.types.dtype("uint64"): str_cast.ultos,
+    cudf.api.types.dtype("float32"): str_cast.ftos,
+    cudf.api.types.dtype("float64"): str_cast.dtos,
+    cudf.api.types.dtype("bool"): str_cast.from_booleans,
 }
 
 _datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
-    # cudf.dtype("datetime64[D]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[s]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[us]"): str_cast.int2timestamp,
-    cudf.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    # cudf.api.types.dtype("datetime64[D]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[s]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[us]"): str_cast.int2timestamp,
+    cudf.api.types.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 _timedelta_to_str_typecast_functions = {
-    cudf.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    cudf.api.types.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -114,8 +117,8 @@ class StringMethods(ColumnMethods):
 
     This mimics pandas ``df.str`` interface. nulls stay null
     unless handled otherwise by a particular method.
-    Patterned after Python’s string methods, with some
-    inspiration from R’s stringr package.
+    Patterned after Python's string methods, with some
+    inspiration from R's stringr package.
     """
 
     _column: StringColumn
@@ -707,7 +710,7 @@ class StringMethods(ColumnMethods):
         >>> idx.str.contains('23', regex=False)
         GenericIndex([False, False, False, True, <NA>], dtype='bool')
 
-        Returning ‘house’ or ‘dog’ when either expression occurs in a string.
+        Returning 'house' or 'dog' when either expression occurs in a string.
 
         >>> s1.str.contains('house|dog', regex=True)
         0    False
@@ -730,7 +733,7 @@ class StringMethods(ColumnMethods):
         Ensure ``pat`` is a not a literal pattern when ``regex`` is set
         to True. Note in the following example one might expect
         only `s2[1]` and `s2[3]` to return True. However,
-        ‘.0’ as a regex matches any character followed by a 0.
+        '.0' as a regex matches any character followed by a 0.
 
         >>> s2 = cudf.Series(['40', '40.0', '41', '41.0', '35'])
         >>> s2.str.contains('.0', regex=True)
@@ -985,10 +988,11 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         if can_convert_to_column(pat) and can_convert_to_column(repl):
-            warnings.warn(
-                "`n` parameter is not supported when "
-                "`pat` and `repl` are list-like inputs"
-            )
+            if n != -1:
+                warnings.warn(
+                    "`n` parameter is not supported when "
+                    "`pat` and `repl` are list-like inputs"
+                )
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
@@ -1641,7 +1645,7 @@ class StringMethods(ColumnMethods):
         also includes other characters that can represent
         quantities such as unicode fractions.
 
-        >>> s2 = pd.Series(['23', '³', '⅕', ''])
+        >>> s2 = pd.Series(['23', '³', '⅕', ''], dtype='str')
         >>> s2.str.isnumeric()
         0     True
         1     True
@@ -2901,7 +2905,7 @@ class StringMethods(ColumnMethods):
             additional characters will be filled with
             character defined in fillchar.
 
-        side : {‘left’, ‘right’, ‘both’}, default ‘left’
+        side : {'left', 'right', 'both'}, default 'left'
             Side from which to fill resulting string.
 
         fillchar : str,  default ' ' (whitespace)
@@ -2928,7 +2932,7 @@ class StringMethods(ColumnMethods):
             Equivalent to ``Series.str.pad(side='both')``.
 
         zfill
-            Pad strings in the Series/Index by prepending ‘0’ character.
+            Pad strings in the Series/Index by prepending '0' character.
             Equivalent to ``Series.str.pad(side='left', fillchar='0')``.
 
         Examples
@@ -2968,7 +2972,7 @@ class StringMethods(ColumnMethods):
             side = libstrings.SideType[side.upper()]
         except KeyError:
             raise ValueError(
-                "side has to be either one of {‘left’, ‘right’, ‘both’}"
+                "side has to be either one of {'left', 'right', 'both'}"
             )
 
         return self._return_or_inplace(
@@ -2977,9 +2981,9 @@ class StringMethods(ColumnMethods):
 
     def zfill(self, width: int) -> SeriesOrIndex:
         """
-        Pad strings in the Series/Index by prepending ‘0’ characters.
+        Pad strings in the Series/Index by prepending '0' characters.
 
-        Strings in the Series/Index are padded with ‘0’ characters
+        Strings in the Series/Index are padded with '0' characters
         on the left of the string to reach a total string length
         width. Strings in the Series/Index with length greater
         or equal to width are unchanged.
@@ -2992,12 +2996,12 @@ class StringMethods(ColumnMethods):
         width : int
             Minimum length of resulting string;
             strings with length less than width
-            be prepended with ‘0’ characters.
+            be prepended with '0' characters.
 
         Returns
         -------
         Series/Index of str dtype
-            Returns Series or Index with prepended ‘0’ characters.
+            Returns Series or Index with prepended '0' characters.
 
         See Also
         --------
@@ -3403,7 +3407,7 @@ class StringMethods(ColumnMethods):
         `expand_tabsbool` are not yet supported and will raise a
         NotImplementedError if they are set to any value.
 
-        This method currently achieves behavior matching R’s
+        This method currently achieves behavior matching R's
         stringr library ``str_wrap`` function, the equivalent
         pandas implementation can be obtained using the
         following parameter setting:
@@ -3574,7 +3578,7 @@ class StringMethods(ColumnMethods):
         >>> import cudf
         >>> s = cudf.Series(['Lion', 'Monkey', 'Rabbit'])
 
-        The search for the pattern ‘Monkey’ returns one match:
+        The search for the pattern 'Monkey' returns one match:
 
         >>> s.str.findall('Monkey')
         0          []
@@ -3593,7 +3597,7 @@ class StringMethods(ColumnMethods):
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
-        the word ‘on’ is shown next:
+        the word 'on' is shown next:
 
         >>> s.str.findall('on$')
         0    [on]
@@ -3621,6 +3625,70 @@ class StringMethods(ColumnMethods):
         data = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(data)
 
+    def find_multiple(self, patterns: SeriesOrIndex) -> "cudf.Series":
+        """
+        Find all first occurrences of patterns in the Series/Index.
+
+        Parameters
+        ----------
+        patterns : array-like, Sequence or Series
+            Patterns to search for in the given Series/Index.
+
+        Returns
+        -------
+        Series
+            A Series with a list of indices of each pattern's first occurrence.
+            If a pattern is not found, -1 is returned for that index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["strings", "to", "search", "in"])
+        >>> s
+        0    strings
+        1         to
+        2     search
+        3         in
+        dtype: object
+        >>> t = cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"])
+        >>> t
+        0         a
+        1    string
+        2         g
+        3       inn
+        4         o
+        5         r
+        6       sea
+        dtype: object
+        >>> s.str.find_multiple(t)
+        0       [-1, 0, 5, -1, -1, 2, -1]
+        1     [-1, -1, -1, -1, 1, -1, -1]
+        2       [2, -1, -1, -1, -1, 3, 0]
+        3    [-1, -1, -1, -1, -1, -1, -1]
+        dtype: list
+        """
+        if can_convert_to_column(patterns):
+            patterns_column = column.as_column(patterns)
+        else:
+            raise TypeError(
+                "patterns should be an array-like or a Series object, "
+                f"found {type(patterns)}"
+            )
+
+        if not isinstance(patterns_column, StringColumn):
+            raise TypeError(
+                "patterns can only be of 'string' dtype, "
+                f"got: {patterns_column.dtype}"
+            )
+
+        return cudf.Series(
+            libstrings.find_multiple(self._column, patterns_column),
+            index=self._parent.index
+            if isinstance(self._parent, cudf.Series)
+            else self._parent,
+            name=self._parent.name,
+        )
+
     def isempty(self) -> SeriesOrIndex:
         """
         Check whether each string is an empty string.
@@ -3643,7 +3711,12 @@ class StringMethods(ColumnMethods):
         4    False
         dtype: bool
         """
-        return self._return_or_inplace((self._column == "").fillna(False))
+        return self._return_or_inplace(
+            # mypy can't deduce that the return value of
+            # StringColumn.__eq__ is ColumnBase because the binops are
+            # dynamically added by a mixin class
+            cast(ColumnBase, self._column == "").fillna(False)
+        )
 
     def isspace(self) -> SeriesOrIndex:
         r"""
@@ -3745,8 +3818,9 @@ class StringMethods(ColumnMethods):
         dtype: bool
         """
         if pat is None:
-            result_col = column.column_empty(
-                len(self._column), dtype="bool", masked=True
+            raise TypeError(
+                f"expected a string or a sequence-like object, not "
+                f"{type(pat).__name__}"
             )
         elif is_scalar(pat):
             result_col = libstrings.endswith(
@@ -3807,8 +3881,9 @@ class StringMethods(ColumnMethods):
         dtype: bool
         """
         if pat is None:
-            result_col = column.column_empty(
-                len(self._column), dtype="bool", masked=True
+            raise TypeError(
+                f"expected a string or a sequence-like object, not "
+                f"{type(pat).__name__}"
             )
         elif is_scalar(pat):
             result_col = libstrings.startswith(
@@ -3820,6 +3895,94 @@ class StringMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(result_col)
+
+    def removesuffix(self, suffix: str) -> SeriesOrIndex:
+        """
+        Remove a suffix from an object series.
+
+        If the suffix is not present, the original string will be returned.
+
+        Parameters
+        ----------
+        suffix : str
+            Remove the suffix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given suffix removed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["foo_str", "bar_str", "no_suffix"])
+        >>> s
+        0    foo_str
+        1    bar_str
+        2    no_suffix
+        dtype: object
+        >>> s.str.removesuffix("_str")
+        0    foo
+        1    bar
+        2    no_suffix
+        dtype: object
+        """
+        if suffix is None or len(suffix) == 0:
+            return self._return_or_inplace(self._column)
+        ends_column = libstrings.endswith(
+            self._column, cudf.Scalar(suffix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, 0, -len(suffix), None
+        )
+        result = cudf._lib.copying.copy_if_else(
+            removed_column, self._column, ends_column
+        )
+        return self._return_or_inplace(result)
+
+    def removeprefix(self, prefix: str) -> SeriesOrIndex:
+        """
+        Remove a prefix from an object series.
+
+        If the prefix is not present, the original string will be returned.
+
+        Parameters
+        ----------
+        prefix : str
+            Remove the prefix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given prefix removed.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["str_foo", "str_bar", "no_prefix"])
+        >>> s
+        0    str_foo
+        1    str_bar
+        2    no_prefix
+        dtype: object
+        >>> s.str.removeprefix("str_")
+        0    foo
+        1    bar
+        2    no_prefix
+        dtype: object
+        """
+        if prefix is None or len(prefix) == 0:
+            return self._return_or_inplace(self._column)
+        starts_column = libstrings.startswith(
+            self._column, cudf.Scalar(prefix, "str")
+        )
+        removed_column = libstrings.slice_strings(
+            self._column, len(prefix), None, None
+        )
+        result = cudf._lib.copying.copy_if_else(
+            removed_column, self._column, starts_column
+        )
+        return self._return_or_inplace(result)
 
     def find(self, sub: str, start: int = 0, end: int = None) -> SeriesOrIndex:
         """
@@ -4155,7 +4318,7 @@ class StringMethods(ColumnMethods):
         Returns a URL-encoded format of each string.
         No format checking is performed.
         All characters are encoded except for ASCII letters,
-        digits, and these characters: ``‘.’,’_’,’-‘,’~’``.
+        digits, and these characters: ``'.','_','-','~'``.
         Encoding converts to hex using UTF-8 encoded bytes.
 
         Returns
@@ -5100,7 +5263,7 @@ class StringColumn(column.ColumnBase):
 
     Parameters
     ----------
-    mask : DeviceBufferLike
+    mask : Buffer
         The validity mask
     offset : int
         Data offset
@@ -5134,13 +5297,13 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        dtype = cudf.dtype("object")
+        dtype = cudf.api.types.dtype("object")
 
         if size is None:
             for child in children:
@@ -5158,7 +5321,7 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype="int32")
+            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)
@@ -5232,8 +5395,9 @@ class StringColumn(column.ColumnBase):
         else:
             return self.base_children[0].size - 1
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
     def to_arrow(self) -> pa.Array:
@@ -5298,7 +5462,7 @@ class StringColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
         string_col = self
         if out_dtype.kind in {"i", "u"}:
             if not libstrings.is_integer(string_col).all():
@@ -5340,7 +5504,7 @@ class StringColumn(column.ColumnBase):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
@@ -5364,7 +5528,7 @@ class StringColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = cudf.dtype(dtype)
+        out_dtype = cudf.api.types.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
@@ -5406,7 +5570,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = cudf.dtype(to_dtype)
+        to_dtype = cudf.api.types.dtype(to_dtype)
 
         if self.dtype == to_dtype:
             return True
@@ -5579,7 +5743,7 @@ class StringColumn(column.ColumnBase):
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = cudf.dtype(dtype)
+        dtype = cudf.api.types.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size

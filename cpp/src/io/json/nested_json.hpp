@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,90 +16,36 @@
 
 #pragma once
 
-#include <cudf/io/json.hpp>
+#include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/error.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
+#include <map>
 #include <vector>
 
 namespace cudf::io::json {
-
-/// Type used to represent the atomic symbol type used within the finite-state machine
-using SymbolT = char;
-
-/// Type used to represent the stack alphabet (i.e.: empty-stack, struct, list)
-using StackSymbolT = char;
-
-/// Type used to index into the symbols within the JSON input
-using SymbolOffsetT = uint32_t;
-
-/// Type large enough to support indexing up to max nesting level (must be signed)
-using StackLevelT = int8_t;
-
-/// Type used to represent a symbol group id of the input alphabet in the pushdown automaton
-using PdaInputSymbolGroupIdT = char;
-
-/// Type used to represent a symbol group id of the stack alphabet in the pushdown automaton
-using PdaStackSymbolGroupIdT = char;
-
-/// Type used to represent a (input-symbol, stack-symbol)-tuple in stack-symbol-major order
-using PdaSymbolGroupIdT = char;
-
-/// Type being emitted by the pushdown automaton transducer
-using PdaTokenT = char;
-
-/// Type used to represent the class of a node (or a node "category") within the tree representation
-using NodeT = char;
-
-/// Type used to index into the nodes within the tree of structs, lists, field names, and value
-/// nodes
-using NodeIndexT = uint32_t;
-
-/// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
-using TreeDepthT = StackLevelT;
 
 /**
  * @brief Struct that encapsulate all information of a columnar tree representation.
  */
 struct tree_meta_t {
-  std::vector<NodeT> node_categories;
-  std::vector<NodeIndexT> parent_node_ids;
-  std::vector<TreeDepthT> node_levels;
-  std::vector<SymbolOffsetT> node_range_begin;
-  std::vector<SymbolOffsetT> node_range_end;
-};
-
-constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
-
-/**
- * @brief Class of a node (or a node "category") within the tree representation
- */
-enum node_t : NodeT {
-  /// A node representing a struct
-  NC_STRUCT,
-  /// A node representing a list
-  NC_LIST,
-  /// A node representing a field name
-  NC_FN,
-  /// A node representing a string value
-  NC_STR,
-  /// A node representing a numeric or literal value (e.g., true, false, null)
-  NC_VAL,
-  /// A node representing a parser error
-  NC_ERR,
-  /// Total number of node classes
-  NUM_NODE_CLASSES
+  rmm::device_uvector<NodeT> node_categories;
+  rmm::device_uvector<NodeIndexT> parent_node_ids;
+  rmm::device_uvector<TreeDepthT> node_levels;
+  rmm::device_uvector<SymbolOffsetT> node_range_begin;
+  rmm::device_uvector<SymbolOffsetT> node_range_end;
 };
 
 /**
  * @brief A column type
  */
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
+
+// Default name for a list's child column
+constexpr auto list_child_name{"element"};
 
 /**
  * @brief Intermediate representation of data from a nested JSON input
@@ -125,6 +71,7 @@ struct json_column {
   // Following "items" as the default child column's name of a list column
   // Using the struct's field names
   std::map<std::string, json_column> child_columns;
+  std::vector<std::string> column_order;
 
   // Counting the current number of items in this column
   row_offset_t current_offset = 0;
@@ -140,19 +87,7 @@ struct json_column {
    *
    * @param up_to_row_offset The row offset up to which to fill with nulls.
    */
-  void null_fill(row_offset_t up_to_row_offset)
-  {
-    // Fill all the rows up to up_to_row_offset with "empty"/null rows
-    validity.resize(word_index(up_to_row_offset) + 1);
-    std::fill_n(std::back_inserter(string_offsets),
-                up_to_row_offset - string_offsets.size(),
-                (string_offsets.size() > 0) ? string_offsets.back() : 0);
-    std::fill_n(std::back_inserter(string_lengths), up_to_row_offset - string_lengths.size(), 0);
-    std::fill_n(std::back_inserter(child_offsets),
-                up_to_row_offset + 1 - child_offsets.size(),
-                (child_offsets.size() > 0) ? child_offsets.back() : 0);
-    current_offset = up_to_row_offset;
-  }
+  void null_fill(row_offset_t up_to_row_offset);
 
   /**
    * @brief Recursively iterates through the tree of columns making sure that all child columns of a
@@ -160,26 +95,7 @@ struct json_column {
    *
    * @param min_row_count The minimum number of rows to be filled.
    */
-  void level_child_cols_recursively(row_offset_t min_row_count)
-  {
-    // Fill this columns with nulls up to the given row count
-    null_fill(min_row_count);
-
-    // If this is a struct column, we need to level all its child columns
-    if (type == json_col_t::StructColumn) {
-      for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
-        it->second.level_child_cols_recursively(min_row_count);
-      }
-    }
-    // If this is a list column, we need to make sure that its child column levels its children
-    else if (type == json_col_t::ListColumn) {
-      auto it = std::begin(child_columns);
-      // Make that child column fill its child columns up to its own row count
-      if (it != std::end(child_columns)) {
-        it->second.level_child_cols_recursively(it->second.current_offset);
-      }
-    }
-  }
+  void level_child_cols_recursively(row_offset_t min_row_count);
 
   /**
    * @brief Appends the row at the given index to the column, filling all rows between the column's
@@ -193,72 +109,56 @@ struct json_column {
    * the offsets
    */
   void append_row(uint32_t row_index,
-                  json_col_t const& row_type,
+                  json_col_t row_type,
                   uint32_t string_offset,
                   uint32_t string_end,
-                  uint32_t child_count)
-  {
-    // If, thus far, the column's type couldn't be inferred, we infer it to the given type
-    if (type == json_col_t::Unknown) { type = row_type; }
-
-    // We shouldn't run into this, as we shouldn't be asked to append an "unknown" row type
-    // CUDF_EXPECTS(type != json_col_t::Unknown, "Encountered invalid JSON token sequence");
-
-    // Fill all the omitted rows with "empty"/null rows (if needed)
-    null_fill(row_index);
-
-    // Table listing what we intend to use for a given column type and row type combination
-    // col type | row type  => {valid, FAIL, null}
-    // -----------------------------------------------
-    // List     | List      => valid
-    // List     | Struct    => FAIL
-    // List     | String    => null
-    // Struct   | List      => FAIL
-    // Struct   | Struct    => valid
-    // Struct   | String    => null
-    // String   | List      => null
-    // String   | Struct    => null
-    // String   | String    => valid
-    bool const is_valid = (type == row_type);
-    if (static_cast<size_type>(validity.size()) < word_index(current_offset))
-      validity.push_back({});
-    set_bit_unsafe(&validity.back(), intra_word_index(current_offset));
-    valid_count += (is_valid) ? 1U : 0U;
-    string_offsets.push_back(string_offset);
-    string_lengths.push_back(string_end - string_offset);
-    child_offsets.push_back((child_offsets.size() > 0) ? child_offsets.back() + child_count : 0);
-    current_offset++;
-  };
+                  uint32_t child_count);
 };
 
 /**
- * @brief Tokens emitted while parsing a JSON input
+ * @brief Intermediate representation of data from a nested JSON input, in device memory.
+ * Device memory equivalent of `json_column`.
  */
-enum token_t : PdaTokenT {
-  /// Beginning-of-struct token (on encounter of semantic '{')
-  StructBegin,
-  /// End-of-struct token (on encounter of semantic '}')
-  StructEnd,
-  /// Beginning-of-list token (on encounter of semantic '[')
-  ListBegin,
-  /// End-of-list token (on encounter of semantic ']')
-  ListEnd,
-  /// Beginning-of-field-name token (on encounter of first quote)
-  FieldNameBegin,
-  /// End-of-field-name token (on encounter of a field name's second quote)
-  FieldNameEnd,
-  /// Beginning-of-string-value token (on encounter of the string's first quote)
-  StringBegin,
-  /// End-of-string token (on encounter of a string's second quote)
-  StringEnd,
-  /// Beginning-of-value token (first character of literal or numeric)
-  ValueBegin,
-  /// Post-value token (first character after a literal or numeric string)
-  ValueEnd,
-  /// Beginning-of-error token (on first encounter of a parsing error)
-  ErrorBegin,
-  /// Total number of tokens
-  NUM_TOKENS
+struct device_json_column {
+  // Type used to count number of rows
+  using row_offset_t = size_type;
+
+  // The inferred type of this column (list, struct, or value/string column)
+  json_col_t type = json_col_t::Unknown;
+
+  rmm::device_uvector<row_offset_t> string_offsets;
+  rmm::device_uvector<row_offset_t> string_lengths;
+
+  // Row offsets
+  rmm::device_uvector<row_offset_t> child_offsets;
+
+  // Validity bitmap
+  rmm::device_uvector<bitmask_type> validity;
+
+  // Map of child columns, if applicable.
+  // Following "element" as the default child column's name of a list column
+  // Using the struct's field names
+  std::map<std::string, device_json_column> child_columns;
+  std::vector<std::string> column_order;
+  // Counting the current number of items in this column
+  row_offset_t num_rows = 0;
+
+  /**
+   * @brief Construct a new d json column object
+   *
+   * @note `mr` is used for allocating the device memory for child_offsets, and validity
+   * since it will moved into cudf::column later.
+   *
+   * @param stream The CUDA stream to which kernels are dispatched
+   * @param mr Optional, resource with which to allocate
+   */
+  device_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+    : string_offsets(0, stream),
+      string_lengths(0, stream),
+      child_offsets(0, stream, mr),
+      validity(0, stream, mr)
+  {
+  }
 };
 
 namespace detail {
@@ -282,18 +182,84 @@ void get_stack_context(device_span<SymbolT const> json_in,
                        rmm::cuda_stream_view stream);
 
 /**
- * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
- * sections from the input.
+ * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
- * @param json_in The JSON input
- * @param options Parsing options specifying the parsing behaviour
+ * @param tokens Vector of token types in the json string
+ * @param token_indices The indices within the input string corresponding to each token
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
- * @return Pair of device vectors, where the first vector represents the token types and the second
- * vector represents the index within the input corresponding to each token
+ * @return A tree representation of the input JSON string as vectors of node type, parent index,
+ * level, begin index, and end index in the input JSON string
  */
-std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
-  device_span<SymbolT const> json_in,
+tree_meta_t get_tree_representation(
+  device_span<PdaTokenT const> tokens,
+  device_span<SymbolOffsetT const> token_indices,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Traverse the tree representation of the JSON input in records orient format and populate
+ * the output columns indices and row offsets within that column.
+ *
+ * @param d_input The JSON input
+ * @param d_tree A tree representation of the input JSON string as vectors of node type, parent
+ * index, level, begin index, and end index in the input JSON string
+ * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param is_enabled_lines Whether the input is a line-delimited JSON
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return A tuple of the output column indices and the row offsets within each column for each node
+ */
+std::tuple<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+records_orient_tree_traversal(
+  device_span<SymbolT const> d_input,
+  tree_meta_t const& d_tree,
+  bool is_array_of_arrays,
+  bool is_enabled_lines,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
+ * node, the function outputs the original index of that node (i.e., the nodes index within
+ * `node_levels`) and also generates the child index of that node relative to other children of the
+ * same parent. E.g., the child indices of the following string nodes relative to their respective
+ * list parents are: `[["a", "b", "c"], ["d", "e"]]`: `"a": 0, "b": 1, "c": 2, "d": 0, "e": 1`.
+ *
+ * @param row_array_children_level Level of the nodes to search for
+ * @param node_levels Levels of each node in the tree
+ * @param parent_node_ids Parent node ids of each node in the tree
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A pair of device_uvector containing the original node indices and their corresponding
+ * child index
+ */
+std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>>
+get_array_children_indices(TreeDepthT row_array_children_level,
+                           device_span<TreeDepthT const> node_levels,
+                           device_span<NodeIndexT const> parent_node_ids,
+                           rmm::cuda_stream_view stream);
+/**
+ * @brief Reduce node tree into column tree by aggregating each property of column.
+ *
+ * @param tree json node tree to reduce (modified in-place, but restored to original state)
+ * @param col_ids column ids of each node (modified in-place, but restored to original state)
+ * @param row_offsets row offsets of each node (modified in-place, but restored to original state)
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return A tuple containing the column tree, identifier for each column and the maximum row index
+ * in each column
+ */
+std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+reduce_to_column_tree(tree_meta_t& tree,
+                      device_span<NodeIndexT> col_ids,
+                      device_span<size_type> row_offsets,
+                      rmm::cuda_stream_view stream);
+
+/** @copydoc host_parse_nested_json
+ * All processing is done in device memory.
+ *
+ */
+table_with_metadata device_parse_nested_json(
+  device_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -307,10 +273,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
  * @param mr Optional, resource with which to allocate
  * @return The data parsed from the given JSON input
  */
-table_with_metadata parse_nested_json(
-  host_span<SymbolT const> input,
+table_with_metadata host_parse_nested_json(
+  device_span<SymbolT const> input,
   cudf::io::json_reader_options const& options,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

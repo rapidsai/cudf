@@ -1,7 +1,8 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -16,7 +17,7 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
@@ -104,7 +105,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> "cudf.core.index.GenericIndex":
         """
         The categories of this categorical.
         """
@@ -181,6 +182,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_ordered(), inplace=inplace
         )
@@ -248,6 +256,13 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
+        if inplace:
+            warnings.warn(
+                "The inplace parameter is deprecated and will be removed in a "
+                "future release. set_ordered will always return a new Series "
+                "in the future.",
+                FutureWarning,
+            )
         return self._return_or_inplace(
             self._column.as_unordered(), inplace=inplace
         )
@@ -595,7 +610,7 @@ class CategoricalColumn(column.ColumnBase):
     Parameters
     ----------
     dtype : CategoricalDtype
-    mask : DeviceBufferLike
+    mask : Buffer
         The validity mask
     offset : int
         Data offset
@@ -619,7 +634,7 @@ class CategoricalColumn(column.ColumnBase):
     def __init__(
         self,
         dtype: CategoricalDtype,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,
         offset: int = 0,
         null_count: int = None,
@@ -678,7 +693,7 @@ class CategoricalColumn(column.ColumnBase):
         rhs = cudf.core.column.as_column(values, dtype=self.dtype)
         return lhs, rhs
 
-    def set_base_mask(self, value: Optional[DeviceBufferLike]):
+    def set_base_mask(self, value: Optional[Buffer]):
         super().set_base_mask(value)
         self._codes = None
 
@@ -755,7 +770,7 @@ class CategoricalColumn(column.ColumnBase):
             )
 
         if to_add_categories > 0:
-            raise ValueError(
+            raise TypeError(
                 "Cannot setitem on a Categorical with a new "
                 "category, set the categories first"
             )
@@ -941,9 +956,10 @@ class CategoricalColumn(column.ColumnBase):
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view
+    def data_array_view(
+        self, *, mode="write"
+    ) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view(mode=mode)
 
     def unique(self, preserve_order=False) -> CategoricalColumn:
         codes = self.as_numerical.unique(preserve_order=preserve_order)
@@ -1101,7 +1117,7 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.unary.is_null(self)
 
         if self.categories.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = libcudf.unary.is_nan(self.categories)
             if categories.any():
@@ -1117,7 +1133,7 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.unary.is_valid(self)
 
         if self.categories.dtype.kind == "f":
-            # Need to consider `np.nan` values incase
+            # Need to consider `np.nan` values in case
             # of an underlying float column
             categories = libcudf.unary.is_nan(self.categories)
             if categories.any():
@@ -1254,7 +1270,7 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype("int32").fillna(0)
+        gather_map = self.codes.astype(libcudf.types.size_type_dtype).fillna(0)
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out

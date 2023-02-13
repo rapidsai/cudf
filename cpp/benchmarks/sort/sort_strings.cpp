@@ -32,7 +32,7 @@ static void BM_sort(benchmark::State& state)
   auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::sort(table->view());
   }
 }

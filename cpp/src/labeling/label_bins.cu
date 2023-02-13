@@ -244,7 +244,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                             left_inclusive,
                             right_edges,
                             right_inclusive,
-                            cudf::default_stream_value,
+                            cudf::get_default_stream(),
                             mr);
 }
 }  // namespace cudf

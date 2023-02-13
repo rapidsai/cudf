@@ -19,9 +19,9 @@
 #include <strings/regex/regex.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -44,8 +44,10 @@ __global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, 
 
   auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
   auto const stride     = s_prog.thread_count();
-  for (auto idx = thread_idx; idx < size; idx += stride) {
-    fn(idx, s_prog, thread_idx);
+  if (thread_idx < stride) {
+    for (auto idx = thread_idx; idx < size; idx += stride) {
+      fn(idx, s_prog, thread_idx);
+    }
   }
 }
 
@@ -79,8 +81,10 @@ __global__ void transform_kernel(TransformFunction fn,
 
   auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
   auto const stride     = s_prog.thread_count();
-  for (auto idx = thread_idx; idx < size; idx += stride) {
-    d_output[idx] = fn(idx, s_prog, thread_idx);
+  if (thread_idx < stride) {
+    for (auto idx = thread_idx; idx < size; idx += stride) {
+      d_output[idx] = fn(idx, s_prog, thread_idx);
+    }
   }
 }
 
@@ -127,13 +131,14 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
       size_and_exec_fn, d_prog, strings_count);
   }
 
-  // Convert sizes to offsets
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  auto const char_bytes =
+    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+  CUDF_EXPECTS(char_bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds column size limit");
 
   // Now build the chars column
-  auto const char_bytes = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
-  std::unique_ptr<column> chars = create_chars_child_column(char_bytes, stream, mr);
+  std::unique_ptr<column> chars =
+    create_chars_child_column(static_cast<size_type>(char_bytes), stream, mr);
   if (char_bytes > 0) {
     size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(

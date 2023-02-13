@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
   constexpr cudf::size_type repeat_count{10};
@@ -75,7 +75,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
 
@@ -112,7 +112,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
 TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{10};
 
@@ -120,7 +120,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   std::iota(input_values.begin(), input_values.end(), 0);
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < input_valids.size(); i++) {
-    input_valids[i] = (i % 2) == 0 ? true : false;
+    input_valids[i] = (i % 2) == 0;
   }
 
   std::vector<cudf::size_type> counts(num_values);
@@ -156,7 +156,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
 TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
 {
   using T = TypeParam;
-  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+  static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
                                                            thrust::make_counting_iterator(0));
@@ -190,7 +190,7 @@ TEST_F(RepeatStringTestFixture, RepeatNullable)
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < num_values; i++) {
     input_values[i] = "#" + std::to_string(i);
-    input_valids[i] = (i % 2) == 0 ? true : false;
+    input_valids[i] = (i % 2) == 0;
   }
 
   std::vector<cudf::size_type> counts(num_values);
@@ -271,25 +271,4 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls)
 
   // input_table.has_nulls() == true
   EXPECT_THROW(auto ret = cudf::repeat(input_table, count), cudf::logic_error);
-}
-
-TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
-{
-  auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
-
-  auto count_neg = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    thrust::make_constant_iterator(-1, 0), thrust::make_constant_iterator(-1, 100));
-
-  auto value          = std::numeric_limits<cudf::size_type>::max() / 10;
-  auto count_overflow = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    thrust::make_constant_iterator(value, 0), thrust::make_constant_iterator(value, 100));
-
-  cudf::table_view input_table{{input}};
-
-  // negative
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_neg, true), cudf::logic_error);
-
-  // overflow
-  EXPECT_THROW(auto p_ret = cudf::repeat(input_table, count_overflow, true), cudf::logic_error);
 }

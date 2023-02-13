@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case cudf::io::io_type::FILEPATH: return "FILEPATH";
       case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case cudf::io::io_type::DEVICE_BUFFER: return "DEVICE_BUFFER";
       case cudf::io::io_type::VOID: return "VOID";
       default: return "Unknown";
     }
@@ -122,7 +123,11 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case row_selection::ALL: return "ALL";
+      case row_selection::BYTE_RANGE: return "BYTE_RANGE";
       case row_selection::NROWS: return "NROWS";
+      case row_selection::SKIPFOOTER: return "SKIPFOOTER";
+      case row_selection::STRIPES: return "STRIPES";
+      case row_selection::ROW_GROUPS: return "ROW_GROUPS";
       default: return "Unknown";
     }
   },
@@ -134,18 +139,6 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case cudf::type_id::EMPTY: return "EMPTY";
       case cudf::type_id::TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::io::statistics_freq,
-  [](auto value) {
-    switch (value) {
-      case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
-      case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "ORC_STATISTICS_STRIPE";
-      case cudf::io::statistics_freq::STATISTICS_PAGE: return "ORC_STATISTICS_ROW_GROUP";
       default: return "Unknown";
     }
   },

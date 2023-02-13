@@ -48,21 +48,31 @@ Computations / descriptive stats
    GroupBy.cummax
    GroupBy.cummin
    GroupBy.cumsum
+   GroupBy.diff
    GroupBy.ffill
+   GroupBy.first
+   GroupBy.get_group
+   GroupBy.groups
+   GroupBy.idxmax
+   GroupBy.idxmin
+   GroupBy.last
    GroupBy.max
    GroupBy.mean
    GroupBy.median
    GroupBy.min
+   GroupBy.ngroup
    GroupBy.nth
+   GroupBy.nunique
    GroupBy.pad
    GroupBy.prod
+   GroupBy.shift
    GroupBy.size
    GroupBy.std
    GroupBy.sum
    GroupBy.var
    GroupBy.corr
    GroupBy.cov
-   
+
 The following methods are available in both ``SeriesGroupBy`` and
 ``DataFrameGroupBy`` objects, but may differ slightly, usually in that
 the ``DataFrameGroupBy`` version usually permits the specification of an

@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+
 import gzip
 import os
 import warnings
@@ -12,6 +14,18 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+
+
+def test_csv_roundtrip_backend_dispatch(tmp_path):
+    # Test ddf.read_csv cudf-backend dispatch
+    df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    csv_path = str(tmp_path / "data-*.csv")
+    ddf.to_csv(csv_path, index=False)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf2 = dd.read_csv(csv_path)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
 def test_csv_roundtrip(tmp_path):
@@ -71,7 +85,7 @@ def test_read_csv_w_bytes(tmp_path):
     df = pd.DataFrame(dict(x=np.arange(20), y=np.arange(20)))
     df.to_csv(tmp_path / "data-*.csv", index=False)
 
-    df2 = dask_cudf.read_csv(tmp_path / "*.csv", chunksize="50 B")
+    df2 = dask_cudf.read_csv(tmp_path / "*.csv", blocksize="50 B")
     assert df2.npartitions == 3
     dd.assert_eq(df2, df, check_index=False)
 
@@ -81,7 +95,7 @@ def test_read_csv_compression(tmp_path):
     df.to_csv(tmp_path / "data.csv.gz", index=False)
 
     with pytest.warns(UserWarning) as w:
-        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize="50 B")
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", blocksize="50 B")
 
     assert len(w) == 1
     msg = str(w[0].message)
@@ -91,7 +105,7 @@ def test_read_csv_compression(tmp_path):
     dd.assert_eq(df2, df, check_index=False)
 
     with warnings.catch_warnings(record=True) as record:
-        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize=None)
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", blocksize=None)
 
         assert not record
 
@@ -116,7 +130,7 @@ def test_read_csv_compression_file_list(tmp_path):
 
 @pytest.mark.parametrize("size", [0, 3, 20])
 @pytest.mark.parametrize("compression", ["gzip", None])
-def test_read_csv_chunksize_none(tmp_path, compression, size):
+def test_read_csv_blocksize_none(tmp_path, compression, size):
     df = pd.DataFrame(dict(x=np.arange(size), y=np.arange(size)))
 
     path = (
@@ -132,8 +146,13 @@ def test_read_csv_chunksize_none(tmp_path, compression, size):
         typ = None
 
     df.to_csv(path, index=False, compression=compression)
-    df2 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
+    df2 = dask_cudf.read_csv(path, blocksize=None, dtype=typ)
     dd.assert_eq(df, df2)
+
+    # Test chunksize deprecation
+    with pytest.warns(FutureWarning, match="deprecated"):
+        df3 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
+    dd.assert_eq(df, df3)
 
 
 @pytest.mark.parametrize("dtype", [{"b": str, "c": int}, None])

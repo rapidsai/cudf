@@ -20,7 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
@@ -86,11 +86,10 @@ struct translate_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> translate(
-  strings_column_view const& strings,
-  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> translate(strings_column_view const& strings,
+                                  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -130,7 +129,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table, cudf::default_stream_value, mr);
+  return detail::translate(strings, chars_table, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

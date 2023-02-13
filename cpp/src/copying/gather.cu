@@ -38,7 +38,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
+  CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls");
 
   // create index type normalizing iterator for the gather_map
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);
@@ -85,7 +85,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, cudf::default_stream_value, mr);
+    source_table, gather_map, bounds_policy, index_policy, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

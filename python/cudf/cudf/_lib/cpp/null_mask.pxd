@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
@@ -34,3 +34,11 @@ cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef pair[device_buffer, size_type] bitmask_or(
         table_view tview,
     ) except +
+
+    cdef pair[device_buffer, size_type] bitmask_and(
+        table_view view
+    )
+
+    cdef pair[device_buffer, size_type] bitmask_or(
+        table_view view
+    )

@@ -1,8 +1,7 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
@@ -34,8 +33,13 @@ from cudf.api.types import (
     is_integer,
     is_integer_dtype,
     is_number,
+    is_scalar,
 )
-from cudf.core.buffer import DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -65,10 +69,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     Parameters
     ----------
-    data : DeviceBufferLike
+    data : Buffer
     dtype : np.dtype
-        The dtype associated with the data DeviceBufferLike
-    mask : DeviceBufferLike, optional
+        The dtype associated with the data Buffer
+    mask : Buffer, optional
     """
 
     _nan_count: Optional[int]
@@ -76,9 +80,9 @@ class NumericalColumn(NumericalBaseColumn):
 
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: DtypeObj,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make this non-optional
         offset: int = 0,
         null_count: int = None,
@@ -86,9 +90,7 @@ class NumericalColumn(NumericalBaseColumn):
         dtype = cudf.dtype(dtype)
 
         if data.size % dtype.itemsize:
-            raise ValueError(
-                "DeviceBufferLike size must be divisible by element size"
-            )
+            raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
         self._nan_count = None
@@ -112,8 +114,8 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.data_array_view.dtype):
-                item = self.data_array_view.dtype.type(item)
+            if np.can_cast(item, self.dtype):
+                item = self.dtype.type(item)
             else:
                 return False
         except (TypeError, ValueError):
@@ -128,6 +130,43 @@ class NumericalColumn(NumericalBaseColumn):
             self.nan_count != 0 if include_nan else False
         )
 
+    def __setitem__(self, key: Any, value: Any):
+        """
+        Set the value of ``self[key]`` to ``value``.
+
+        If ``value`` and ``self`` are of different types, ``value`` is coerced
+        to ``self.dtype``.
+        """
+
+        # Normalize value to scalar/column
+        device_value = (
+            cudf.Scalar(
+                value,
+                dtype=self.dtype
+                if cudf._lib.scalar._is_null_host_scalar(value)
+                else None,
+            )
+            if is_scalar(value)
+            else as_column(value)
+        )
+
+        if not is_bool_dtype(self.dtype) and is_bool_dtype(device_value.dtype):
+            raise TypeError(f"Invalid value {value} for dtype {self.dtype}")
+        else:
+            device_value = device_value.astype(self.dtype)
+
+        out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
+        if isinstance(key, slice):
+            out = self._scatter_by_slice(key, device_value)
+        else:
+            key = as_column(key)
+            if not isinstance(key, cudf.core.column.NumericalColumn):
+                raise ValueError(f"Invalid scatter map type {key.dtype}.")
+            out = self._scatter_by_column(key, device_value)
+
+        if out:
+            self._mimic_inplace(out, inplace=True)
+
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
@@ -139,19 +178,16 @@ class NumericalColumn(NumericalBaseColumn):
         }
 
         if self.nullable and self.has_nulls():
-
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
             )
-            output["mask"] = mask
 
         return output
 
@@ -193,10 +229,18 @@ class NumericalColumn(NumericalBaseColumn):
                     (tmp.dtype.type in int_float_dtype_mapping)
                     and (tmp.dtype.type != np.bool_)
                     and (
-                        (np.isscalar(tmp) and (0 == tmp))
-                        or (
-                            (isinstance(tmp, NumericalColumn)) and (0.0 in tmp)
+                        (
+                            (
+                                np.isscalar(tmp)
+                                or (
+                                    isinstance(tmp, cudf.Scalar)
+                                    # host to device copy
+                                    and tmp.is_valid()
+                                )
+                            )
+                            and (0 == tmp)
                         )
+                        or ((isinstance(tmp, NumericalColumn)) and (0 in tmp))
                     )
                 ):
                     out_dtype = cudf.dtype("float64")
@@ -242,7 +286,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> Union[ColumnBase, cudf.Scalar]:
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalColumn):
                 return NotImplemented
@@ -253,25 +297,24 @@ class NumericalColumn(NumericalBaseColumn):
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
-        other_dtype = np.min_scalar_type(other)
-        if other_dtype.kind in {"b", "i", "u", "f"}:
-            if isinstance(other, cudf.Scalar):
-                return other
-            other_dtype = np.promote_types(self.dtype, other_dtype)
-            if other_dtype == np.dtype("float16"):
-                other_dtype = cudf.dtype("float32")
-                other = other_dtype.type(other)
+        # Try and match pandas and hence numpy. Deduce the common
+        # dtype via the _value_ of other, and the dtype of self. TODO:
+        # When NEP50 is accepted, this might want changed or
+        # simplified.
+        # This is not at all simple:
+        # np.result_type(np.int64(0), np.uint8)
+        #   => np.uint8
+        # np.result_type(np.asarray([0], dtype=np.int64), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.int64(0), np.uint8)
+        #   => np.int64
+        # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
+        #   => np.int64
+        common_dtype = np.result_type(self.dtype, other)
+        if common_dtype.kind in {"b", "i", "u", "f"}:
             if self.dtype.kind == "b":
-                other_dtype = min_signed_type(other)
-            if np.isscalar(other):
-                return cudf.dtype(other_dtype).type(other)
-            else:
-                ary = full(len(self), other, dtype=other_dtype)
-                return column.build_column(
-                    data=as_device_buffer_like(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
-                )
+                common_dtype = min_signed_type(other)
+            return cudf.Scalar(other, dtype=common_dtype)
         else:
             return NotImplemented
 
@@ -525,6 +568,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return super(NumericalColumn, col).fillna(fill_value, method)
 
+    @acquire_spill_lock()
     def _find_value(
         self, value: ScalarLike, closest: bool, find: Callable, compare: str
     ) -> int:
@@ -534,14 +578,14 @@ class NumericalColumn(NumericalBaseColumn):
         found = 0
         if len(self):
             found = find(
-                self.data_array_view,
+                self.data_array_view(mode="read"),
                 value,
                 mask=self.mask,
             )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
-                    self.data_array_view,
+                    self.data_array_view(mode="read"),
                     value,
                     mask=self.mask,
                     compare=compare,

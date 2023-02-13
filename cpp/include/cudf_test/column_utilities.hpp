@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-namespace cudf {
-namespace test {
+namespace cudf::test {
 
 /**
  * @brief Verbosity level of output from column and table comparison functions.
@@ -42,8 +41,13 @@ enum class debug_output_level {
 
 constexpr size_type default_ulp = 4;
 
+namespace detail {
+
 /**
  * @brief Verifies the property equality of two columns.
+ *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL`
+ * instead.
  *
  * @param lhs The first column
  * @param rhs The second column
@@ -62,6 +66,9 @@ bool expect_column_properties_equal(cudf::column_view const& lhs,
  * i.e. the two columns are considered equivalent even if one has a null mask
  * and the other doesn't.
  *
+ * @note This function should not be used directly. Use
+ * `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT` instead.
+ *
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
@@ -77,6 +84,9 @@ bool expect_column_properties_equivalent(
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
+ *
+ * @note This function should not be used directly. Use
+ * `CUDF_TEST_EXPECT_COLUMNS_EQUAL` instead.
  *
  * @param lhs The first column
  * @param rhs The second column
@@ -94,6 +104,9 @@ bool expect_columns_equal(cudf::column_view const& lhs,
  * Uses machine epsilon to compare floating point types.
  * Treats null elements as equivalent.
  *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT`
+ * instead.
+ *
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
@@ -110,11 +123,22 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
  *
+ * @note This function should not be used directly. Use `CUDF_TEST_EXPECT_EQUAL_BUFFERS` instead.
+ *
  * @param lhs The first buffer
  * @param rhs The second buffer
  * @param size_bytes The number of bytes to check for equality
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes);
+
+}  // namespace detail
+
+/**
+ * @brief Verifies the given column is empty
+ *
+ * @param col The column to check
+ */
+void expect_column_empty(cudf::column_view const& col);
 
 /**
  * @brief Formats a column view as a string
@@ -184,8 +208,7 @@ template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
-  CUDF_CUDA_TRY(
-    cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDefault));
   return {host_data, bitmask_to_host(c)};
 }
 
@@ -208,8 +231,8 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
-  CUDF_CUDA_TRY(cudaMemcpy(
-    host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
   auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
@@ -234,11 +257,11 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   auto const scv     = strings_column_view(c);
   auto const h_chars = cudf::detail::make_std_vector_sync<char>(
     cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-    cudf::default_stream_value);
+    cudf::get_default_stream());
   auto const h_offsets = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::offset_type const>(
       scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
-    cudf::default_stream_value);
+    cudf::get_default_stream());
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;
@@ -253,36 +276,35 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   return {host_data, bitmask_to_host(c)};
 }
 
-}  // namespace test
-}  // namespace cudf
+}  // namespace cudf::test
 
 // Macros for showing line of failure.
-#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs) \
-  do {                                                     \
-    SCOPED_TRACE(" <--  line of failure\n");               \
-    cudf::test::expect_column_properties_equal(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs)        \
+  do {                                                            \
+    SCOPED_TRACE(" <--  line of failure\n");                      \
+    cudf::test::detail::expect_column_properties_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(lhs, rhs) \
-  do {                                                          \
-    SCOPED_TRACE(" <--  line of failure\n");                    \
-    cudf::test::expect_column_properties_equivalent(lhs, rhs);  \
+#define CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(lhs, rhs)        \
+  do {                                                                 \
+    SCOPED_TRACE(" <--  line of failure\n");                           \
+    cudf::test::detail::expect_column_properties_equivalent(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs...) \
-  do {                                              \
-    SCOPED_TRACE(" <--  line of failure\n");        \
-    cudf::test::expect_columns_equal(lhs, rhs);     \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs...)     \
+  do {                                                  \
+    SCOPED_TRACE(" <--  line of failure\n");            \
+    cudf::test::detail::expect_columns_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs...) \
-  do {                                                   \
-    SCOPED_TRACE(" <--  line of failure\n");             \
-    cudf::test::expect_columns_equivalent(lhs, rhs);     \
-  } while (0)
-
-#define CUDF_TEST_EXPECT_EQUAL_BUFFERS(lhs, rhs, size_bytes) \
+#define CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lhs, rhs...)     \
   do {                                                       \
     SCOPED_TRACE(" <--  line of failure\n");                 \
-    cudf::test::expect_equal_buffers(lhs, rhs, size_bytes);  \
+    cudf::test::detail::expect_columns_equivalent(lhs, rhs); \
+  } while (0)
+
+#define CUDF_TEST_EXPECT_EQUAL_BUFFERS(lhs, rhs, size_bytes)        \
+  do {                                                              \
+    SCOPED_TRACE(" <--  line of failure\n");                        \
+    cudf::test::detail::expect_equal_buffers(lhs, rhs, size_bytes); \
   } while (0)

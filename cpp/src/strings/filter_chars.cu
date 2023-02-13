@@ -22,6 +22,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -160,7 +161,7 @@ std::unique_ptr<column> filter_characters(
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters(
-    strings, characters_to_filter, keep_characters, replacement, cudf::default_stream_value, mr);
+    strings, characters_to_filter, keep_characters, replacement, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings

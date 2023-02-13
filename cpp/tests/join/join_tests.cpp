@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -341,14 +341,6 @@ TEST_F(JoinTest, FullJoinOnNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-#if 0
-  std::cout << "Actual Results:\n";
-  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
-#endif
-
   column_wrapper<int32_t> col_gold_0{{   3,   -1,   -1,    -1},
                                      {   1,    0,    0,     0}};
   strcol_wrapper          col_gold_1{{ "s0", "s1",  "",    ""},
@@ -372,14 +364,6 @@ TEST_F(JoinTest, FullJoinOnNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-
-#if 0
-  std::cout << "Expected Results:\n";
-  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
-#endif
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 
@@ -631,14 +615,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-#if 0
-  std::cout << "Actual Results:\n";
-  cudf::test::print(sorted_result->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_result->get_column(3).view(), std::cout, ",\t\t");
-#endif
-
   column_wrapper<int32_t> col_gold_0{{   3,    -1,    2},
                                      {   1,     0,    1}};
   strcol_wrapper          col_gold_1({ "s0",  "s1", "s2"},
@@ -663,14 +639,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-
-#if 0
-  std::cout << "Expected Results:\n";
-  cudf::test::print(sorted_gold->get_column(0).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(1).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(2).view(), std::cout, ",\t\t");
-  cudf::test::print(sorted_gold->get_column(3).view(), std::cout, ",\t\t");
-#endif
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 
@@ -1499,9 +1467,9 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
 {
   // self-join a table of zeroes to generate an output row count that would overflow int32_t
   std::size_t col_size = 65567;
-  rmm::device_buffer zeroes(col_size * sizeof(int32_t), cudf::default_stream_value);
+  rmm::device_buffer zeroes(col_size * sizeof(int32_t), cudf::get_default_stream());
   CUDF_CUDA_TRY(
-    cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::default_stream_value.value()));
+    cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::get_default_stream().value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
   cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);
@@ -1880,7 +1848,8 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
     auto fact_ints    = ints{0, 1, 2, 3, 4};
     auto fact_structs = structs{{fact_ints}, no_nulls()}.release();
     // Now set struct validity to invalidate index#3.
-    cudf::detail::set_null_mask(fact_structs->mutable_view().null_mask(), 3, 4, false);
+    cudf::detail::set_null_mask(
+      fact_structs->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
     // Struct row#3 is null, but Struct.child has a non-null value.
     return make_table(std::move(fact_structs));
   }();
@@ -1896,7 +1865,8 @@ TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
 
   // Note: Join result might not have nulls pushed down, since it's an output of gather().
   // Must superimpose parent nulls before comparisons.
-  auto [superimposed_results, _] = cudf::structs::detail::superimpose_parent_nulls(*result);
+  auto [superimposed_results, _] =
+    cudf::structs::detail::push_down_nulls(*result, cudf::get_default_stream());
 
   auto const expected = [] {
     auto fact_ints    = ints{0};

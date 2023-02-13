@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import hashlib
 import operator
 import re
+from collections import OrderedDict, defaultdict
 from string import ascii_letters, digits
 
 import cupy as cp
@@ -19,6 +20,7 @@ from cudf.testing._utils import (
     _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
     gen_rand,
 )
 
@@ -100,8 +102,10 @@ def test_series_append_basic(data, others, ignore_index):
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -145,8 +149,10 @@ def test_series_append_basic_str(data, others, ignore_index):
     other_ps = pd.Series(others)
     other_gs = cudf.Series(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -196,8 +202,10 @@ def test_series_append_series_with_index(data, others, ignore_index):
     other_ps = others
     other_gs = cudf.from_pandas(others)
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -210,14 +218,16 @@ def test_series_append_error_mixed_types():
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        gsr.append(other)
+        with pytest.warns(FutureWarning):
+            gsr.append(other)
 
     with pytest.raises(
         TypeError,
         match="cudf does not support mixed types, please type-cast "
         "both series to same dtypes.",
     ):
-        gsr.append([gsr, other, gsr, other])
+        with pytest.warns(FutureWarning):
+            gsr.append([gsr, other, gsr, other])
 
 
 @pytest.mark.parametrize(
@@ -275,8 +285,10 @@ def test_series_append_list_series_with_index(data, others, ignore_index):
     other_ps = others
     other_gs = [cudf.from_pandas(obj) for obj in others]
 
-    expected = psr.append(other_ps, ignore_index=ignore_index)
-    actual = gsr.append(other_gs, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        expected = psr.append(other_ps, ignore_index=ignore_index)
+    with pytest.warns(FutureWarning):
+        actual = gsr.append(other_gs, ignore_index=ignore_index)
     assert_eq(expected, actual)
 
 
@@ -286,13 +298,15 @@ def test_series_append_existing_buffers():
 
     # Add new buffer
     a2 = cudf.Series(np.arange(5))
-    gs = gs.append(a2)
+    with pytest.warns(FutureWarning):
+        gs = gs.append(a2)
     assert len(gs) == 15
     np.testing.assert_equal(gs.to_numpy(), np.hstack([a1, a2.to_numpy()]))
 
     # Ensure appending to previous buffer
     a3 = cudf.Series(np.arange(3))
-    gs = gs.append(a3)
+    with pytest.warns(FutureWarning):
+        gs = gs.append(a3)
     assert len(gs) == 18
     a4 = np.hstack([a1, a2.to_numpy(), a3.to_numpy()])
     np.testing.assert_equal(gs.to_numpy(), a4)
@@ -300,11 +314,13 @@ def test_series_append_existing_buffers():
     # Appending different dtype
     a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
     a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
-    gs = a5.append(a6)
+    with pytest.warns(FutureWarning):
+        gs = a5.append(a6)
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a5.to_numpy(), a6.to_numpy()])
     )
-    gs = cudf.Series(a6).append(a5)
+    with pytest.warns(FutureWarning):
+        gs = cudf.Series(a6).append(a5)
     np.testing.assert_equal(
         gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
@@ -395,7 +411,7 @@ def test_series_describe_numeric(dtype):
     actual = gs.describe()
     expected = ps.describe()
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_dtype=True)
 
 
 @pytest.mark.parametrize("dtype", ["datetime64[ns]"])
@@ -468,7 +484,8 @@ def test_series_factorize(data, na_sentinel):
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
+    with pytest.warns(FutureWarning):
+        expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
     actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
@@ -983,7 +1000,10 @@ def test_series_update(data, other):
     ps = gs.to_pandas()
 
     ps.update(p_other)
-    gs.update(g_other)
+    with expect_warning_if(
+        isinstance(other, cudf.Series) and other.isna().any(), UserWarning
+    ):
+        gs.update(g_other)
     assert_eq(gs, ps)
 
 
@@ -1143,7 +1163,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1151,7 +1170,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=([], {}),
         rfunc_args_and_kwargs=([], {}),
-        expected_error_message="Need to specify at least one",
     )
 
     assert_exceptions_equal(
@@ -1159,7 +1177,6 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["b"], {"axis": 1}),
         rfunc_args_and_kwargs=(["b"], {"axis": 1}),
-        expected_error_message="No axis named 1",
     )
 
 
@@ -1172,7 +1189,6 @@ def test_series_drop_raises():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["p"],),
         rfunc_args_and_kwargs=(["p"],),
-        expected_error_message="One or more values not found in axis",
     )
 
     # dtype specified mismatch
@@ -1181,7 +1197,6 @@ def test_series_drop_raises():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=([3],),
         rfunc_args_and_kwargs=([3],),
-        expected_error_message="One or more values not found in axis",
     )
 
     expect = ps.drop("p", errors="ignore")
@@ -1396,7 +1411,10 @@ def test_reset_index(level, drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    expect = ps.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+    with expect_warning_if(name is None and not drop):
+        expect = ps.reset_index(
+            level=level, drop=drop, name=name, inplace=inplace
+        )
     got = gs.reset_index(level=level, drop=drop, name=name, inplace=inplace)
     if inplace:
         expect = ps
@@ -1421,7 +1439,10 @@ def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    with expect_warning_if(name is None and not drop):
+        expect = ps.reset_index(
+            level=level, drop=drop, inplace=inplace, name=name
+        )
     got = gs.reset_index(level=level, drop=drop, inplace=inplace, name=name)
     if inplace:
         expect = ps
@@ -1447,7 +1468,8 @@ def test_reset_index_named(drop, inplace, original_name, name):
             "test_reset_index_dup_level_name_exceptions"
         )
 
-    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    with expect_warning_if(name is None and not drop):
+        expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
     got = gs.reset_index(drop=drop, inplace=inplace, name=name)
 
     if inplace:
@@ -1474,7 +1496,6 @@ def test_reset_index_dup_level_name_exceptions():
             [],
             {"level": [None]},
         ),
-        expected_error_message="occurs multiple times, use a level number",
     )
 
     # Cannot use drop=False and inplace=True to turn a series into dataframe.
@@ -1538,7 +1559,13 @@ def test_autocorr(cudf_series, lag):
     psr = cudf_series.to_pandas()
 
     cudf_corr = cudf_series.autocorr(lag=lag)
-    pd_corr = psr.autocorr(lag=lag)
+
+    # autocorrelation is undefined (nan) for less than two entries, but pandas
+    # short-circuits when there are 0 entries and bypasses the numpy function
+    # call that generates an error.
+    num_both_valid = (psr.notna() & psr.shift(lag).notna()).sum()
+    with expect_warning_if(num_both_valid == 1, RuntimeWarning):
+        pd_corr = psr.autocorr(lag=lag)
 
     assert_eq(pd_corr, cudf_corr)
 
@@ -1614,6 +1641,47 @@ def test_axes(data):
         assert_eq(e, a)
 
 
+def test_series_truncate():
+    csr = cudf.Series([1, 2, 3, 4])
+    psr = csr.to_pandas()
+
+    assert_eq(csr.truncate(), psr.truncate())
+    assert_eq(csr.truncate(1, 2), psr.truncate(1, 2))
+    assert_eq(csr.truncate(before=1, after=2), psr.truncate(before=1, after=2))
+
+
+def test_series_truncate_errors():
+    csr = cudf.Series([1, 2, 3, 4])
+    with pytest.raises(ValueError):
+        csr.truncate(axis=1)
+    with pytest.raises(ValueError):
+        csr.truncate(copy=False)
+
+    csr.index = [3, 2, 1, 6]
+    psr = csr.to_pandas()
+    assert_exceptions_equal(
+        lfunc=csr.truncate,
+        rfunc=psr.truncate,
+    )
+
+
+def test_series_truncate_datetimeindex():
+    dates = cudf.date_range(
+        "2021-01-01 23:45:00", "2021-01-02 23:46:00", freq="s"
+    )
+    csr = cudf.Series(range(len(dates)), index=dates)
+    psr = csr.to_pandas()
+
+    assert_eq(
+        csr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+        psr.truncate(
+            before="2021-01-01 23:45:18", after="2021-01-01 23:45:27"
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1650,7 +1718,7 @@ def test_isin_numeric(data, values):
     assert_eq(got, expected)
 
 
-@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.xfail(raises=TypeError)
 def test_fill_new_category():
     gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
     gs[0:1] = "d"
@@ -1937,3 +2005,78 @@ def test_series_ordered_dedup():
     expect = pd.Series(sr.to_pandas().unique())
     got = cudf.Series(sr._column.unique(preserve_order=True))
     assert_eq(expect.values, got.values)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "float64"])
+@pytest.mark.parametrize("bool_scalar", [True, False])
+def test_set_bool_error(dtype, bool_scalar):
+    sr = cudf.Series([1, 2, 3], dtype=dtype)
+    psr = sr.to_pandas(nullable=True)
+
+    assert_exceptions_equal(
+        lfunc=sr.__setitem__,
+        rfunc=psr.__setitem__,
+        lfunc_args_and_kwargs=([bool_scalar],),
+        rfunc_args_and_kwargs=([bool_scalar],),
+    )
+
+
+def test_int64_equality():
+    s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
+    assert (s != np.int64(2**63 - 1)).all()
+    assert (s != cudf.Scalar(2**63 - 1, dtype=np.int64)).all()
+
+
+@pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
+def test_series_to_dict(into):
+    gs = cudf.Series(["ab", "de", "zx"], index=[10, 20, 100])
+    ps = gs.to_pandas()
+
+    actual = gs.to_dict(into=into)
+    expected = ps.to_dict(into=into)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        pytest.param(
+            [np.nan, 10, 15, 16],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/49818"
+            ),
+        ),
+        [np.nan, None, 10, 20],
+        ["ab", "zx", "pq"],
+        ["ab", "zx", None, "pq"],
+        [],
+    ],
+)
+def test_series_hasnans(data):
+    gs = cudf.Series(data, nan_as_null=False)
+    ps = gs.to_pandas(nullable=True)
+
+    assert_eq(gs.hasnans, ps.hasnans)
+
+
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ([1, 2, 3], [10, 11, 12]),
+        ([1, 2, 3, 1, 1, 2, 3, 2], [10, 20, 23, 24, 25, 26, 27, 28]),
+        ([1, None, 2, None, 3, None, 3, 1], [5, 6, 7, 8, 9, 10, 11, 12]),
+        ([np.nan, 1.0, np.nan, 5.4, 5.4, 1.0], ["a", "b", "c", "d", "e", "f"]),
+        (
+            ["lama", "cow", "lama", None, "beetle", "lama", None, None],
+            [1, 4, 10, 11, 2, 100, 200, 400],
+        ),
+    ],
+)
+@pytest.mark.parametrize("keep", ["first", "last", False])
+def test_series_duplicated(data, index, keep):
+    gs = cudf.Series(data, index=index)
+    ps = gs.to_pandas()
+
+    assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))

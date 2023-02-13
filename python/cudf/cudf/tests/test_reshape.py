@@ -9,12 +9,25 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
 )
+
+pytest_xfail = pytest.mark.xfail
+pytestmark = pytest.mark.spilling
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    # To save time, we skip tests marked "pytest.mark.xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2])
@@ -78,7 +91,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     + [
         pytest.param(
             "str",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 condition=not PANDAS_GE_120, reason="pandas bug"
             ),
         )
@@ -376,7 +389,13 @@ def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.pivot("index", "column")
+    # In pandas 2.0 this will be a failure because pandas will require all of
+    # these as keyword arguments. Matching that check in cudf is a bit
+    # cumbersome and not worth the effort to match the warning, so this code
+    # just catches pandas's warning (rather than updating the signature) so
+    # that when it starts failing we know to update our impl of pivot.
+    with pytest.warns(FutureWarning):
+        expect = pdf.pivot("index", "column")
     got = gdf.pivot("index", "column")
 
     check_index_and_columns = expect.shape != (0, 0)
@@ -441,7 +460,7 @@ def test_pivot_values(values):
         0,
         pytest.param(
             1,
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -449,7 +468,7 @@ def test_pivot_values(values):
         "foo",
         pytest.param(
             "bar",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -457,24 +476,24 @@ def test_pivot_values(values):
         [],
         pytest.param(
             [0, 1],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         ["foo"],
         pytest.param(
             ["foo", "bar"],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         pytest.param(
             [0, 1, 2],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
         pytest.param(
             ["foo", "bar", "baz"],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
     ],
 )
@@ -506,7 +525,7 @@ def test_unstack_multiindex(level):
         pd.Index(range(0, 5), name="row_index"),
         pytest.param(
             pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -587,6 +606,42 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
     cdf = cudf.DataFrame(data)
     actual = cudf.pivot_table(
         cdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "A": ["one", "one", "two", "three"] * 6,
+            "B": ["A", "B", "C"] * 8,
+            "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+            "D": np.random.randn(24),
+            "E": np.random.randn(24),
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_dataframe_pivot_table_simple(data, aggfunc, fill_value):
+    pdf = pd.DataFrame(data)
+    expected = pdf.pivot_table(
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    cdf = cudf.DataFrame(data)
+    actual = cdf.pivot_table(
         values=["D", "E"],
         index=["A", "B"],
         columns=["C"],

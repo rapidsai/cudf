@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common_utils.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -26,7 +28,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/strings/string_view.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -44,48 +46,6 @@
 #include <numeric>
 #include <tuple>
 
-namespace {
-/**
- * @brief Compares two `table` rows for equality as if the table were
- * ordered according to a specified permutation map.
- */
-struct permuted_row_equality_comparator {
-  cudf::row_equality_comparator<cudf::nullate::DYNAMIC> _comparator;
-  cudf::size_type const* _map;
-
-  /**
-   * @brief Construct a permuted_row_equality_comparator.
-   *
-   * @param t The `table` whose rows will be compared
-   * @param map The permutation map that specifies the effective ordering of
-   * `t`. Must be the same size as `t.num_rows()`
-   */
-  permuted_row_equality_comparator(cudf::table_device_view const& t,
-                                   cudf::size_type const* map,
-                                   bool nullable = true)
-    : _comparator(cudf::nullate::DYNAMIC{nullable}, t, t, cudf::null_equality::EQUAL), _map{map}
-  {
-  }
-
-  /**
-   * @brief Returns true if the two rows at the specified indices in the permuted
-   * order are equivalent.
-   *
-   * For example, comparing rows `i` and `j` is
-   * equivalent to comparing rows `map[i]` and `map[j]` in the original table.
-   *
-   * @param lhs The index of the first row
-   * @param rhs The index of the second row
-   * @returns true if the two specified rows in the permuted order are equivalent
-   */
-  __device__ inline bool operator()(cudf::size_type lhs, cudf::size_type rhs)
-  {
-    return _comparator(_map[lhs], _map[rhs]);
-  }
-};
-
-}  // namespace
-
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -93,19 +53,15 @@ namespace sort {
 
 sort_groupby_helper::sort_groupby_helper(table_view const& keys,
                                          null_policy include_null_keys,
-                                         sorted keys_pre_sorted)
-  : _unflattened_keys(keys),
+                                         sorted keys_pre_sorted,
+                                         std::vector<null_order> const& null_precedence)
+  : _keys(keys),
     _num_keys(-1),
     _keys_pre_sorted(keys_pre_sorted),
-    _include_null_keys(include_null_keys)
+    _include_null_keys(include_null_keys),
+    _null_precedence(null_precedence)
 {
   using namespace cudf::structs::detail;
-
-  _flattened                 = flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
-  _keys                      = _flattened;
-  auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
-  CUDF_EXPECTS(std::all_of(_keys.begin(), _keys.end(), is_supported_key_type),
-               "Unsupported groupby key type does not support equality comparison");
 
   // Cannot depend on caller's sorting if the column contains nulls,
   // and null values are to be excluded.
@@ -158,25 +114,27 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
-    _key_sorted_order = cudf::detail::stable_sorted_order(
-      _keys,
-      {},
-      std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-      stream,
-      rmm::mr::get_current_device_resource());
+    auto const precedence = _null_precedence.empty()
+                              ? std::vector(_keys.num_columns(), null_order::AFTER)
+                              : _null_precedence;
+    _key_sorted_order     = cudf::detail::stable_sorted_order(
+      _keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
     // contain a null value to the end of the sorted order.
 
-    auto augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
+    auto const augmented_keys = table_view({table_view({keys_bitmask_column(stream)}), _keys});
+    auto const precedence     = [&]() {
+      auto precedence = _null_precedence.empty()
+                              ? std::vector<null_order>(_keys.num_columns(), null_order::AFTER)
+                              : _null_precedence;
+      precedence.insert(precedence.begin(), null_order::AFTER);
+      return precedence;
+    }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      augmented_keys,
-      {},
-      std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
-      stream,
-      rmm::mr::get_current_device_resource());
+      augmented_keys, {}, precedence, stream, rmm::mr::get_current_device_resource());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
@@ -191,16 +149,17 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
-  auto device_input_table = table_device_view::create(_keys, stream);
-  auto sorted_order       = key_sort_order(stream).data<size_type>();
+  auto const comparator  = cudf::experimental::row::equality::self_comparator{_keys, stream};
+  auto const d_key_equal = comparator.equal_to(
+    cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
+  auto const sorted_order = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
-  result_end = thrust::unique_copy(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_keys(stream)),
-    _group_offsets->begin(),
-    permuted_row_equality_comparator(*device_input_table, sorted_order, has_nulls(_keys)));
+  result_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                   thrust::counting_iterator<size_type>(0),
+                                   thrust::counting_iterator<size_type>(num_keys(stream)),
+                                   _group_offsets->begin(),
+                                   permuted_row_equality_comparator(d_key_equal, sorted_order));
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
   _group_offsets->set_element(num_groups, num_keys(stream), stream);
@@ -244,7 +203,6 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
     cudf::detail::scatter(table_view({group_labels_view}),
                           scatter_map,
                           table_view({temp_labels->view()}),
-                          false,
                           stream,
                           rmm::mr::get_current_device_resource());
 
@@ -316,7 +274,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
-  return cudf::detail::gather(_unflattened_keys,
+  return cudf::detail::gather(_keys,
                               gather_map_it,
                               gather_map_it + num_groups(stream),
                               out_of_bounds_policy::DONT_CHECK,
@@ -327,7 +285,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  return cudf::detail::gather(_unflattened_keys,
+  return cudf::detail::gather(_keys,
                               key_sort_order(stream),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,22 @@ namespace io {
 class json_reader_options_builder;
 
 /**
+ * @brief Allows specifying the target types for nested JSON data via json_reader_options'
+ * `set_dtypes` method.
+ */
+struct schema_element {
+  /**
+   * @brief The type that this column should be converted to
+   */
+  data_type type;
+
+  /**
+   * @brief Allows specifying this column's child columns target type
+   */
+  std::map<std::string, schema_element> child_types;
+};
+
+/**
  * @brief Input arguments to the `read_json` interface.
  *
  * Available parameters are closely patterned after PANDAS' `read_json` API.
@@ -65,7 +81,10 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>>
+    _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -80,8 +99,11 @@ class json_reader_options {
   // Whether to parse dates as DD/MM versus MM/DD
   bool _dayfirst = false;
 
-  // Whether to use the experimental reader
-  bool _experimental = false;
+  // Whether to use the legacy reader
+  bool _legacy = false;
+
+  // Whether to keep the quote characters of string values
+  bool _keep_quotes = false;
 
   /**
    * @brief Constructor from source info.
@@ -120,7 +142,10 @@ class json_reader_options {
    *
    * @returns Data types of the columns
    */
-  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
+  std::variant<std::vector<data_type>,
+               std::map<std::string, data_type>,
+               std::map<std::string, schema_element>> const&
+  get_dtypes() const
   {
     return _dtypes;
   }
@@ -197,11 +222,18 @@ class json_reader_options {
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
-   * @brief Whether the experimental reader should be used.
+   * @brief Whether the legacy reader should be used.
    *
-   * @returns true if the experimental reader will be used, false otherwise
+   * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_experimental() const { return _experimental; }
+  bool is_enabled_legacy() const { return _legacy; }
+
+  /**
+   * @brief Whether the reader should keep quotes of string values.
+   *
+   * @returns true if the reader should keep quotes, false otherwise
+   */
+  bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
    * @brief Set data types for columns to be read.
@@ -216,6 +248,13 @@ class json_reader_options {
    * @param types Vector dtypes in string format
    */
   void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
@@ -253,11 +292,19 @@ class json_reader_options {
   void enable_dayfirst(bool val) { _dayfirst = val; }
 
   /**
-   * @brief Set whether to use the experimental reader.
+   * @brief Set whether to use the legacy reader.
    *
-   * @param val Boolean value to enable/disable the experimental reader
+   * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_experimental(bool val) { _experimental = val; }
+  void enable_legacy(bool val) { _legacy = val; }
+
+  /**
+   * @brief Set whether the reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the reader should keep quotes
+   * of string values
+   */
+  void enable_keep_quotes(bool val) { _keep_quotes = val; }
 };
 
 /**
@@ -300,6 +347,18 @@ class json_reader_options_builder {
    * @return this for chaining
    */
   json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> schema_element map
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, schema_element> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -366,14 +425,27 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to use the experimental reader.
+   * @brief Set whether to use the legacy reader.
    *
-   * @param val Boolean value to enable/disable experimental parsing
+   * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& experimental(bool val)
+  json_reader_options_builder& legacy(bool val)
   {
-    options._experimental = val;
+    options._legacy = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should keep quotes of string values.
+   *
+   * @param val Boolean value to indicate whether the reader should keep quotes
+   * of string values
+   * @return this for chaining
+   */
+  json_reader_options_builder& keep_quotes(bool val)
+  {
+    options._keep_quotes = val;
     return *this;
   }
 
@@ -411,6 +483,351 @@ class json_reader_options_builder {
 table_with_metadata read_json(
   json_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
+
+/**
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
+/**
+ *@brief Builder to build options for `writer_json()`.
+ */
+class json_writer_options_builder;
+
+/**
+ * @brief Settings to use for `write_json()`.
+ */
+class json_writer_options {
+  // Specify the sink to use for writer output
+  sink_info _sink;
+  // Set of columns to output
+  table_view _table;
+  // string to use for null entries
+  std::string _na_rep = "";
+  // Indicates whether to output nulls as 'null' or exclude the field
+  bool _include_nulls = false;
+  // Indicates whether to use JSON lines for records format
+  bool _lines = false;
+  // maximum number of rows to write in each chunk (limits memory use)
+  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
+  // string to use for values != 0 in INT8 types (default 'true')
+  std::string _true_value = std::string{"true"};
+  // string to use for values == 0 in INT8 types (default 'false')
+  std::string _false_value = std::string{"false"};
+  // Names of all columns; if empty, writer will generate column names
+  std::optional<table_metadata> _metadata;  // Optional column names
+
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   */
+  explicit json_writer_options(sink_info const& sink, table_view const& table)
+    : _sink(sink), _table(table), _rows_per_chunk(table.num_rows())
+  {
+  }
+
+  friend json_writer_options_builder;
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit json_writer_options() = default;
+
+  /**
+   * @brief Create builder to create `json_writer_options`.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   *
+   * @return Builder to build json_writer_options
+   */
+  static json_writer_options_builder builder(sink_info const& sink, table_view const& table);
+
+  /**
+   * @brief Returns sink used for writer output.
+   *
+   * @return sink used for writer output
+   */
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+
+  /**
+   * @brief Returns table that would be written to output.
+   *
+   * @return Table that would be written to output
+   */
+  [[nodiscard]] table_view const& get_table() const { return _table; }
+
+  /**
+   * @brief Returns metadata information.
+   *
+   * @return Metadata information
+   */
+  [[nodiscard]] std::optional<table_metadata> const& get_metadata() const { return _metadata; }
+
+  /**
+   * @brief Returns string to used for null entries.
+   *
+   * @return string to used for null entries
+   */
+  [[nodiscard]] std::string const& get_na_rep() const { return _na_rep; }
+
+  /**
+   * @brief Whether to output nulls as 'null'.
+   *
+   * @return `true` if nulls are output as 'null'
+   */
+  [[nodiscard]] bool is_enabled_include_nulls() const { return _include_nulls; }
+
+  /**
+   * @brief Whether to use JSON lines for records format.
+   *
+   * @return `true` if JSON lines is used for records format
+   */
+  [[nodiscard]] bool is_enabled_lines() const { return _lines; }
+
+  /**
+   * @brief Returns maximum number of rows to process for each file write.
+   *
+   * @return Maximum number of rows to process for each file write
+   */
+  [[nodiscard]] size_type get_rows_per_chunk() const { return _rows_per_chunk; }
+
+  /**
+   * @brief Returns string used for values != 0 in INT8 types.
+   *
+   * @return string used for values != 0 in INT8 types
+   */
+  [[nodiscard]] std::string const& get_true_value() const { return _true_value; }
+
+  /**
+   * @brief Returns string used for values == 0 in INT8 types.
+   *
+   * @return string used for values == 0 in INT8 types
+   */
+  [[nodiscard]] std::string const& get_false_value() const { return _false_value; }
+
+  // Setter
+
+  /**
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output
+   */
+  void set_table(table_view tbl) { _table = tbl; }
+
+  /**
+   * @brief Sets metadata.
+   *
+   * @param metadata Associated metadata
+   */
+  void set_metadata(table_metadata metadata) { _metadata = std::move(metadata); }
+
+  /**
+   * @brief Sets string to used for null entries.
+   *
+   * @param val String to represent null value
+   */
+  void set_na_rep(std::string val) { _na_rep = std::move(val); }
+
+  /**
+   * @brief Enables/Disables output of nulls as 'null'.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void enable_include_nulls(bool val) { _include_nulls = val; }
+
+  /**
+   * @brief Enables/Disables JSON lines for records format.
+   *
+   * @param val Boolean value to enable/disable JSON lines
+   */
+  void enable_lines(bool val) { _lines = val; }
+
+  /**
+   * @brief Sets maximum number of rows to process for each file write.
+   *
+   * @param val Number of rows per chunk
+   */
+  void set_rows_per_chunk(size_type val) { _rows_per_chunk = val; }
+
+  /**
+   * @brief Sets string used for values != 0 in INT8 types.
+   *
+   * @param val String to represent values != 0 in INT8 types
+   */
+  void set_true_value(std::string val) { _true_value = std::move(val); }
+
+  /**
+   * @brief Sets string used for values == 0 in INT8 types.
+   *
+   * @param val String to represent values == 0 in INT8 types
+   */
+  void set_false_value(std::string val) { _false_value = std::move(val); }
+};
+
+/**
+ * @brief Builder to build options for `writer_json()`
+ */
+class json_writer_options_builder {
+  json_writer_options options;  ///< Options to be built.
+
+ public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit json_writer_options_builder() = default;
+
+  /**
+   * @brief Constructor from sink and table.
+   *
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
+   */
+  explicit json_writer_options_builder(sink_info const& sink, table_view const& table)
+    : options{sink, table}
+  {
+  }
+
+  /**
+   * @brief Sets table to be written to output.
+   *
+   * @param tbl Table for the output
+   * @return this for chaining
+   */
+  json_writer_options_builder& table(table_view tbl)
+  {
+    options._table = tbl;
+    return *this;
+  }
+
+  /**
+   * @brief Sets optional metadata (with column names).
+   *
+   * @param metadata metadata (with column names)
+   * @return this for chaining
+   */
+  json_writer_options_builder& metadata(table_metadata metadata)
+  {
+    options._metadata = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets string to used for null entries.
+   *
+   * @param val String to represent null value
+   * @return this for chaining
+   */
+  json_writer_options_builder& na_rep(std::string val)
+  {
+    options._na_rep = std::move(val);
+    return *this;
+  };
+
+  /**
+   * @brief Enables/Disables output of nulls as 'null'.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  json_writer_options_builder& include_nulls(bool val)
+  {
+    options._include_nulls = val;
+    return *this;
+  }
+
+  /**
+   * @brief Enables/Disables JSON lines for records format.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  json_writer_options_builder& lines(bool val)
+  {
+    options._lines = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets maximum number of rows to process for each file write.
+   *
+   * @param val Number of rows per chunk
+   * @return this for chaining
+   */
+  json_writer_options_builder& rows_per_chunk(int val)
+  {
+    options._rows_per_chunk = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets string used for values != 0 in INT8 types.
+   *
+   * @param val String to represent values != 0 in INT8 types
+   * @return this for chaining
+   */
+  json_writer_options_builder& true_value(std::string val)
+  {
+    options._true_value = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets string used for values == 0 in INT8 types.
+   *
+   * @param val String to represent values == 0 in INT8 types
+   * @return this for chaining
+   */
+  json_writer_options_builder& false_value(std::string val)
+  {
+    options._false_value = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief move `json_writer_options` member once it's built.
+   */
+  operator json_writer_options&&() { return std::move(options); }
+
+  /**
+   * @brief move `json_writer_options` member once it's built.
+   *
+   * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `json_writer_options` object's r-value reference
+   */
+  json_writer_options&& build() { return std::move(options); }
+};
+
+/**
+ * @brief Writes a set of columns to JSON format.
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  auto destination = cudf::io::sink_info("dataset.json");
+ *  auto options     = cudf::io::json_writer_options(destination, table->view())
+ *    .na_rep(na)
+ *    .lines(lines)
+ *    .rows_per_chunk(rows_per_chunk);
+ *
+ *  cudf::io::write_json(options);
+ * @endcode
+ *
+ * @param options Settings for controlling writing behavior
+ * @param mr Device memory resource to use for device memory allocation
+ */
+void write_json(json_writer_options const& options,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace io

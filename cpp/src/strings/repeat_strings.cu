@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -233,6 +235,8 @@ struct compute_size_and_repeat_separately_fn {
  * This function is similar to `strings::detail::make_strings_children`, except that it accepts an
  * optional input `std::optional<column_view>` that can contain the precomputed sizes of the output
  * strings.
+ *
+ * @deprecated This will be removed with issue 12542
  */
 template <typename Func>
 auto make_strings_children(Func fn,
@@ -260,8 +264,10 @@ auto make_strings_children(Func fn,
     for_each_fn(fn);
 
     // Compute the offsets values.
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+    auto const bytes =
+      cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
+    CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Size of output exceeds column size limit");
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
@@ -385,7 +391,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_string(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_string(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -393,7 +399,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_strings(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> repeat_strings(strings_column_view const& input,
@@ -403,7 +409,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::repeat_strings(
-    input, repeat_times, output_strings_sizes, cudf::default_stream_value, mr);
+    input, repeat_times, output_strings_sizes, cudf::get_default_stream(), mr);
 }
 
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
@@ -412,7 +418,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_strings_output_sizes(input, repeat_times, cudf::default_stream_value, mr);
+  return detail::repeat_strings_output_sizes(input, repeat_times, cudf::get_default_stream(), mr);
 }
 
 }  // namespace strings
