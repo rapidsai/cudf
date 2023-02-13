@@ -34,7 +34,7 @@ jobs:
       - ${{ inputs.node_type }}
       - ${{ matrix.ARCH }}
     env:
-      RAPIDS_ARTIFACTS_DIR: ${{ github.workspace }}/metrics
+      RAPIDS_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
     container:
       image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
       env:
@@ -42,7 +42,6 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
         PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
-        RAPIDS_ARTIFACTS_DIR: ${{ env.RAPIDS_ARTIFACTS_DIR }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -58,10 +57,3 @@ jobs:
           echo "RAPIDS_ARTIFACTS_DIR=${{ env.RAPIDS_ARTIFACTS_DIR }}"
       - name: C++ build
         run: ${{ inputs.build_script }}
-      - name: Report test
-        run: |
-          echo REF=${{ env.RAPIDS_REF_NAME }}
-          SHA=${{ env.RAPIDS_SHA }}
-          echo SHA=${SHA}
-          PSHA=${SHA:0:5}
-          echo PSHA=${PSHA}
