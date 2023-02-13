@@ -34,7 +34,7 @@ jobs:
       - ${{ inputs.node_type }}
       - ${{ matrix.ARCH }}
     env:
-      RAPIDS_BMR_DIR: ${{ github.workspace }}/metrics
+      RAPIDS_ARTIFACTS_DIR: ${{ github.workspace }}/metrics
     container:
       image: rapidsai/ci:cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}
       env:
@@ -42,7 +42,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.RAPIDSAI_GHA_AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.RAPIDSAI_GHA_AWS_SECRET_ACCESS_KEY }}
         PARALLEL_LEVEL: ${{ env.PARALLEL_LEVEL }}
-        RAPIDS_BMR_DIR: ${{ env.RAPIDS_BMR_DIR }}
+        RAPIDS_ARTIFACTS_DIR: ${{ env.RAPIDS_ARTIFACTS_DIR }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -55,28 +55,13 @@ jobs:
           echo "RAPIDS_SHA=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
           echo "RAPIDS_REF_NAME=${{ inputs.branch || github.ref_name }}" >> "${GITHUB_ENV}"
           echo "RAPIDS_NIGHTLY_DATE=${{ inputs.date }}" >> "${GITHUB_ENV}"
-          echo "RAPIDS_BMR_DIR=${{ env.RAPIDS_BMR_DIR }}"
+          echo "RAPIDS_ARTIFACTS_DIR=${{ env.RAPIDS_ARTIFACTS_DIR }}"
       - name: C++ build
         run: ${{ inputs.build_script }}
       - name: Report test
-        # run: echo "${{ env.RAPIDS_BMR_DIR }}" > "/__w/cudf/cudf/metrics/test.log"
-        # run: echo "${{ env.RAPIDS_BMR_DIR }}"
         run: |
           echo REF=${{ env.RAPIDS_REF_NAME }}
-          echo SHA=${{ env.RAPIDS_SHA }}
-          echo DIR=${RAPIDS_REF_NAME}/${RAPIDS_SHA:0:5}
-      # uses: actions/upload-artifact@v3
-      #  with:
-      #    name: test-log
-      #    # path: "${{ env.RAPIDS_BMR_DIR }}/test.log"
-      #    path: artifact_upload_test.log
-      #- uses: actions/upload-artifact@v3
-      #  with:
-      #    name: build-metrics-report
-      #    # path: "${{ env.RAPIDS_BMR_DIR }}/ninja_log.html"
-      #    path: ${RAPIDS_BMR_DIR}
-      # uses: actions/upload-artifact@v3
-      #  with:
-      #    name: ninja-log
-      #    # path: "${{ env.RAPIDS_BMR_DIR }}/ninja.log"
-      #    path: /__w/cudf/cudf/metrics/ninja.log
+          SHA=${{ env.RAPIDS_SHA }}
+          echo SHA=${SHA}
+          PSHA=${SHA:0:5}
+          echo PSHA=${PSHA}
