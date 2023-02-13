@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -557,9 +557,9 @@ class DatetimeColumn(column.ColumnBase):
 class TZDatetimeColumn(DatetimeColumn):
     def __init__(
         self,
-        data: DeviceBufferLike,
+        data: Buffer,
         dtype: DtypeObj,
-        mask: DeviceBufferLike = None,
+        mask: Buffer = None,
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,

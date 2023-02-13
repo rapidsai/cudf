@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from enum import Enum
 
@@ -23,8 +23,6 @@ from cudf._lib.cpp.null_mask cimport (
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport mask_state, size_type
 from cudf._lib.utils cimport table_view_from_columns
-
-from cudf.core.buffer import as_device_buffer_like
 
 
 class MaskState(Enum):

@@ -1,3 +1,5 @@
+# Copyright (c) 2023, NVIDIA CORPORATION.
+
 import os
 
 import cudf
@@ -9,9 +11,8 @@ TZDIR = os.path.join(os.path.dirname(__file__), "TimeZoneDB.csv")
 countries = cudf.read_csv(os.path.join(TZDIR, "country.csv"))
 tz = cudf.read_csv(
     os.path.join(TZDIR, "time_zone.csv"),
-    names="zone_name,country_code,abbreviation,time_start,gmt_offset,dst".split(
-        ","
-    ),
+    names="zone_name,country_code,"
+    "abbreviation,time_start,gmt_offset,dst".split(","),
     dtype=["str", "str", "str", "int64", int, int],
 )
 
@@ -54,7 +55,8 @@ def tz_localize(data, zone):
     if len(local_time_old_offsets) == 0:  # no transitions
         return
 
-    # ambiguous time periods happen when the clock is moved backward after the transition
+    # ambiguous time periods happen when the clock is
+    # moved backward after the transition
     ambiguous_begin = local_time_new_offsets.apply_boolean_mask(
         local_time_new_offsets < local_time_old_offsets
     )
@@ -62,7 +64,8 @@ def tz_localize(data, zone):
         local_time_new_offsets < local_time_old_offsets
     )
 
-    # nonexistent time periods happen when the clock is moved forward after the transition
+    # nonexistent time periods happen when the clock is
+    # moved forward after the transition
     nonexistent_begin = local_time_old_offsets.apply_boolean_mask(
         local_time_new_offsets > local_time_old_offsets
     )
