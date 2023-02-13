@@ -301,7 +301,7 @@ def test_series_zero_copy_cow_on():
     cp_array[0] = 20
     # Modifying a zero-copied array should modify
     # `s2` and `s` only. Because `cp_array`
-    # is zero-copied shared with `s` & `s2`.
+    # is zero-copy shared with `s` & `s2`.
 
     assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
     assert_eq(s1, cudf.Series([1, 2, 3, 4, 5]))
