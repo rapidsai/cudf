@@ -86,7 +86,7 @@ jobs:
   docs-build:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
     with:
       build_type: pull-request
       node_type: "gpu-latest-1"

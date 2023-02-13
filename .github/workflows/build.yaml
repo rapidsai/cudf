@@ -57,7 +57,7 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/heads/branch-') }}
     needs: python-build
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
     with:
       build_type: branch
       node_type: "gpu-latest-1"
