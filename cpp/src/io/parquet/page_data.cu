@@ -1167,6 +1167,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->dict_bits = 0;
       s->dict_base = nullptr;
       s->dict_size = 0;
+      // NOTE:  if additional encodings are supported in the future, modifications must
+      // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
         case Encoding::RLE_DICTIONARY:
