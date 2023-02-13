@@ -236,7 +236,7 @@ def test_multiple_series_cow():
 
     # Deleting any of the following series objects
     # shouldn't delete rest of the weekly referenced data
-    # else-where.
+    # elsewhere.
 
     del s2
 
