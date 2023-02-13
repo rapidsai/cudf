@@ -315,15 +315,15 @@ if buildAll || hasArg libcudf; then
            LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
            MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
         fi
-        # BMR_DIR=${RAPIDS_BMR_DIR:-"${LIB_BUILD_DIR}"}
-        BMR_DIR=/__w/cudf/cudf/metrics
+        BMR_DIR=${RAPIDS_BMR_DIR:-"${LIB_BUILD_DIR}"}
+        #BMR_DIR=/__w/cudf/cudf/metrics
         echo "Metrics output dir: [$RAPIDS_BMR_DIR]"
-        if [[ -d "/__w/cudf/cudf/" ]]; then
+        #if [[ -d "/__w/cudf/cudf/" ]]; then
            echo "Creating directory $BMR_DIR"
            mkdir -p ${BMR_DIR}
            python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${BMR_DIR}/ninja_log.html
            cp ${LIB_BUILD_DIR}/.ninja_log ${BMR_DIR}/ninja.log
-        fi
+        #fi
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then

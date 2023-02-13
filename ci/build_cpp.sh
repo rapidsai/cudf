@@ -16,9 +16,14 @@ rapids-mamba-retry mambabuild conda/recipes/libcudf
 rapids-upload-conda-to-s3 cpp
 
 echo "++++++++++++++++++++++++++++++++++++++++++++"
-printenv
+printenv | sort
 echo "++++++++++++++++++++++++++++++++++++++++++++"
+ls -l ${RAPIDS_BMR_DIR}
 
-#UPLOAD_NAME=cpp_cuda${RAPIDS_CUDA_VERSION%%.*}_$(arch).ninja_log
-#FILE=$(echo /opt/conda/conda-bld/*libraft-split*/cpp/build/.ninja_log)
-#rapids-upload-to-s3 "${UPLOAD_NAME}" "${FILE}"
+UPLOAD_NAME=cpp_cuda${RAPIDS_CUDA_VERSION%%.*}_$(arch).ninja.log
+FILE=${RAPIDS_BMR_DIR}/ninja.log
+rapids-upload-to-s3 "${UPLOAD_NAME}" "${FILE}"
+
+UPLOAD_NAME=cpp_cuda${RAPIDS_CUDA_VERSION%%.*}_$(arch).BuildMetricsReport.html
+FILE=${RAPIDS_BMR_DIR}/ninja_log.html
+rapids-upload-to-s3 "${UPLOAD_NAME}" "${FILE}"
