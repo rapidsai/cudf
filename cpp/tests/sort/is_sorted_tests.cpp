@@ -225,7 +225,7 @@ auto nulls_before<cudf::struct_view>()
 }
 
 using lcw = cudf::test::lists_column_wrapper<int32_t>;
-using cudf::test::iterators::nulls_at;
+using cudf::test::iterators::null_at;
 /*
 List<List<List<int>
 [
@@ -240,47 +240,40 @@ List<List<List<int>
 template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::list_view>, lcw> ascending()
 {
-  lcw col{lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
-          lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
-          lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
-          lcw{lcw{lcw{0, 0, 0}}},
-          lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
-
-  return col;
+  return lcw{lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+             lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0, 0, 0}}},
+             lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::list_view>, lcw> descending()
 {
-  lcw col{lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}},
-          lcw{lcw{lcw{0, 0, 0}}},
-          lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
+  return lcw{lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0, 0, 0}}},
+             lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
 
-          lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
-          lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
-
-  return col;
+             lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+             lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
 }
 
 template <>
 auto empty<cudf::list_view>()
 {
-  lcw col{};
-  return col;
+  return lcw{};
 }
 
 template <>
 auto nulls_after<cudf::list_view>()
 {
-  lcw col{{{1}, {2, 2}, {0}}, nulls_at({2})};
-  return col;
+  return lcw{{{1}, {2, 2}, {0}}, null_at(2)};
 }
 
 template <>
 auto nulls_before<cudf::list_view>()
 {
-  lcw col{{{0}, {1}, {2, 2}}, nulls_at({0})};
-  return col;
+  return lcw{{{0}, {1}, {2, 2}}, null_at(0)};
 }
 
 }  // namespace testdata
