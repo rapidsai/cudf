@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
+import contextlib
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -8,6 +10,17 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+
+
+# TODO: Make use of set_option context manager
+# once https://github.com/rapidsai/cudf/issues/12736
+# is resolved.
+@contextlib.contextmanager
+def with_copy_on_write(on):
+    original_cow_setting = cudf.get_option("copy_on_write")
+    cudf.set_option("copy_on_write", on)
+    yield
+    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
@@ -55,14 +68,8 @@ def test_null_copy():
     assert len(col) == 2049
 
 
-# TODO: Make use of set_option context manager
-# once https://github.com/rapidsai/cudf/issues/12736
-# is resolved.
-
-
+@with_copy_on_write(on=True)
 def test_series_setitem_cow_on():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -70,25 +77,19 @@ def test_series_setitem_cow_on():
     assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
     assert_eq(new_copy, cudf.Series([1, 2, 3, 4, 5]))
 
-    cudf.set_option("copy_on_write", original_cow_setting)
 
-
+@with_copy_on_write(on=False)
 def test_series_setitem_cow_off():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", False)
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
     actual[1] = 100
     assert_eq(actual, cudf.Series([1, 100, 3, 4, 5]))
     assert_eq(new_copy, cudf.Series([1, 100, 3, 4, 5]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=True)
 def test_series_setitem_both_slice_cow_on():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
-
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -99,13 +100,10 @@ def test_series_setitem_both_slice_cow_on():
     new_copy[slice(2, 4, 1)] = 300
     assert_eq(actual, cudf.Series([100, 100, 3, 4, 5]))
     assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=False)
 def test_series_setitem_both_slice_cow_off():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", False)
-
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -116,12 +114,10 @@ def test_series_setitem_both_slice_cow_off():
     new_copy[slice(2, 4, 1)] = 300
     assert_eq(actual, cudf.Series([100, 100, 300, 300, 5]))
     assert_eq(new_copy, cudf.Series([100, 100, 300, 300, 5]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=True)
 def test_series_setitem_partial_slice_cow_on():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -134,12 +130,10 @@ def test_series_setitem_partial_slice_cow_on():
     new_slice[0:2] = 10
     assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
     assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=False)
 def test_series_setitem_partial_slice_cow_off():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", False)
     actual = cudf.Series([1, 2, 3, 4, 5])
     new_copy = actual.copy(deep=False)
 
@@ -152,16 +146,13 @@ def test_series_setitem_partial_slice_cow_off():
     new_slice[0:2] = 10
     assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
     assert_eq(actual, cudf.Series([1, 2, 10, 10, 5]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=True)
 def test_multiple_series_cow():
     # Verify constructing, modifying, deleting
     # multiple copies of a series preserves
     # the data appropriately when COW is enabled.
-
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
     s = cudf.Series([10, 20, 30, 40, 50])
     s1 = s.copy(deep=False)
     s2 = s.copy(deep=False)
@@ -269,12 +260,10 @@ def test_multiple_series_cow():
 
     del s3
     assert_eq(s7, cudf.Series([10, 55, 55, 6000, 50]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=True)
 def test_series_zero_copy_cow_on():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
     s = cudf.Series([1, 2, 3, 4, 5])
     s1 = s.copy(deep=False)
     cp_array = cp.asarray(s)
@@ -317,12 +306,10 @@ def test_series_zero_copy_cow_on():
     # because they are zero-copied.
     assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
     assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=False)
 def test_series_zero_copy_cow_off():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", False)
     s = cudf.Series([1, 2, 3, 4, 5])
     s1 = s.copy(deep=False)
     cp_array = cp.asarray(s)
@@ -366,7 +353,6 @@ def test_series_zero_copy_cow_off():
     # because they are zero-copied.
     assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
     assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
-    cudf.set_option("copy_on_write", original_cow_setting)
 
 
 @pytest.mark.parametrize("copy_on_write", [True, False])
@@ -419,9 +405,8 @@ def test_series_cat_copy(copy_on_write):
     cudf.set_option("copy_on_write", original_cow_setting)
 
 
+@with_copy_on_write(on=True)
 def test_dataframe_cow_slice_setitem():
-    original_cow_setting = cudf.get_option("copy_on_write")
-    cudf.set_option("copy_on_write", True)
     df = cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]})
     slice_df = df[1:4]
 
@@ -444,4 +429,3 @@ def test_dataframe_cow_slice_setitem():
         df,
         cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}),
     )
-    cudf.set_option("copy_on_write", original_cow_setting)
