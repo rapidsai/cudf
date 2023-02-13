@@ -2470,8 +2470,8 @@ Java_ai_rapids_cudf_ColumnView_hasNonEmptyNulls(JNIEnv *env, jclass, jlong colum
 
 JNIEXPORT jlong JNICALL
 Java_ai_rapids_cudf_ColumnView_purgeNonEmptyNulls(JNIEnv *env, jclass, jlong column_view_handle) {
-   JNI_NULL_CHECK(env, column_view_handle, "column_view handle is null", 0);
-   try {
+  JNI_NULL_CHECK(env, column_view_handle, "column_view handle is null", 0);
+  try {
     cudf::jni::auto_set_device(env);
     auto const *cv = reinterpret_cast<cudf::column_view const *>(column_view_handle);
     return release_as_jlong(cudf::purge_nonempty_nulls(*cv));
