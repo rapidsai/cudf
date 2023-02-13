@@ -157,9 +157,6 @@ auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stre
 
 void BM_NESTED_JSON(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   auto const default_options = cudf::io::json_reader_options{};
 
@@ -189,9 +186,6 @@ NVBENCH_BENCH(BM_NESTED_JSON)
 
 void BM_NESTED_JSON_DEPTH(nvbench::state& state)
 {
-  // TODO: to be replaced by nvbench fixture once it's ready
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const string_size{cudf::size_type(state.get_int64("string_size"))};
   auto const depth{cudf::size_type(state.get_int64("depth"))};
 
