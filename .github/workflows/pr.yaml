@@ -39,8 +39,7 @@ jobs:
   conda-cpp-tests:
     needs: conda-cpp-build
     secrets: inherit
-    # uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.04
-    uses: ./.github/workflows/conda-cpp-tests.yaml
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.04
     with:
       build_type: pull-request
   # conda-python-build:
