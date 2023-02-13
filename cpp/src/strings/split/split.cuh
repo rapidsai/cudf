@@ -45,6 +45,8 @@ namespace detail {
  * @brief Base class for delimiter-based tokenizers
  *
  * These are common methods used by both split and rsplit tokenizer functors.
+ *
+ * The Derived class is required to implement the `process_tokens` function.
  */
 template <typename Derived>
 struct base_split_tokenizer {
@@ -59,6 +61,23 @@ struct base_split_tokenizer {
   }
 
   __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
+
+  /**
+   * @brief Returns `true` if the byte at `idx` is the start of the delimiter
+   *
+   * @param idx Index of a byte in the chars column
+   * @param d_offsets Offsets values to locate the chars ranges
+   * @param chars_bytes Total number of characters to process
+   * @return true if delimiter is found starting at position `idx`
+   */
+  __device__ bool is_delimiter(size_type idx,
+                               size_type const* d_offsets,
+                               size_type chars_bytes) const
+  {
+    auto const d_chars = get_base_ptr() + d_offsets[0];
+    if (idx + d_delimiter.size_bytes() > chars_bytes) { return false; }
+    return d_delimiter.compare(d_chars + idx, d_delimiter.size_bytes()) == 0;
+  }
 
   /**
    * @brief This counts the tokens for strings that contain delimiters
@@ -104,6 +123,8 @@ struct base_split_tokenizer {
    *
    * Each token is placed in `d_all_tokens` so they align consecutively
    * with other tokens for the same output column.
+   *
+   * The actual token extraction is performed in the subclass process_tokens() function.
    *
    * @param idx Index of the string to tokenize
    * @param d_tokens_offsets Token offsets for each string
@@ -152,30 +173,13 @@ struct base_split_tokenizer {
  protected:
   column_device_view const d_strings;  // strings to split
   string_view const d_delimiter;       // delimiter for split
-  size_type max_tokens;
+  size_type max_tokens;                // maximum number of tokens to identify
 };
 
 /**
  * @brief The tokenizer functions for forward splitting
  */
 struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
-  /**
-   * @brief Returns `true` if the byte at `idx` is the start of the delimiter
-   *
-   * @param idx Index of a byte in the chars column
-   * @param d_offsets Offsets values to locate the chars ranges
-   * @param chars_bytes Total number of characters to process
-   * @return true if delimiter is found starting at position `idx`
-   */
-  __device__ bool is_delimiter(size_type idx,
-                               size_type const* d_offsets,
-                               size_type chars_bytes) const
-  {
-    auto const d_chars = get_base_ptr() + d_offsets[0];
-    if (idx + d_delimiter.size_bytes() > chars_bytes) { return false; }
-    return d_delimiter.compare(d_chars + idx, d_delimiter.size_bytes()) == 0;
-  }
-
   /**
    * @brief This will create tokens around each delimiter honoring the string boundaries
    *
@@ -194,23 +198,23 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
     auto str_ptr           = d_str.data();
     auto const str_end     = str_ptr + d_str.size_bytes();  // end of the string
     auto const token_count = static_cast<size_type>(d_tokens.size());
-    auto const delim_count = static_cast<size_type>(d_delimiters.size());
+    auto const delim_size  = d_delimiter.size_bytes();
 
     // build the index-pair of each token for this string
     size_type token_idx = 0;
     for (auto d_pos : d_delimiters) {
-      auto next_delim = ((base_ptr + d_pos) < str_end) ? (base_ptr + d_pos) : str_end;
-      if (next_delim < str_ptr) continue;
-
-      auto end_ptr = (token_idx + 1 < token_count) ? next_delim : str_end;
+      auto const next_delim = base_ptr + d_pos;
+      if (next_delim < str_ptr || ((next_delim + delim_size) > str_end)) { continue; }
+      auto const end_ptr = (token_idx + 1 < token_count) ? next_delim : str_end;
 
       // store the token into the output vector
       d_tokens[token_idx++] =
         string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, end_ptr))};
 
       // setup for next token
-      str_ptr = end_ptr + d_delimiter.size_bytes();
+      str_ptr = end_ptr + delim_size;
     }
+    // include anything leftover
     if (token_idx < token_count) {
       d_tokens[token_idx] =
         string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, str_end))};
@@ -232,21 +236,6 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
  */
 struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
   /**
-   * @brief Returns `true` if the byte at `idx` is the end of the delimiter
-   *
-   * @param idx Index of a byte in the chars column
-   * @param d_offsets Offset values to locate the byte ranges
-   * @return true if delimiter is found ending at position `idx`
-   */
-  __device__ bool is_delimiter(size_type idx, size_type const* d_offsets, size_type) const
-  {
-    auto const delim_length = d_delimiter.size_bytes();
-    if (idx < delim_length - 1) { return false; }
-    auto const d_chars = get_base_ptr() + d_offsets[0];
-    return d_delimiter.compare(d_chars + idx - (delim_length - 1), delim_length) == 0;
-  }
-
-  /**
    * @brief This will create tokens around each delimiter honoring the string boundaries
    *
    * The tokens are processed from the end of each string ignoring overlapping
@@ -264,26 +253,28 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
     auto const str_begin   = d_str.data();    // beginning of the string
     auto const token_count = static_cast<size_type>(d_tokens.size());
     auto const delim_count = static_cast<size_type>(d_delimiters.size());
+    auto const delim_size  = d_delimiter.size_bytes();
 
     // build the index-pair of each token for this string
-    auto str_ptr = str_begin + d_str.size_bytes();
-    for (size_type t = 0; t < token_count; ++t) {
-      auto prev_delim =
-        (t < delim_count)                                       // boundary check;
-          ? (base_ptr + d_delimiters[delim_count - 1 - t] + 1)  // end of prev delimiter
-          : str_begin;                                          // or the start of this string
+    auto str_ptr        = str_begin + d_str.size_bytes();
+    size_type token_idx = 0;
+    for (auto d = delim_count - 1; d >= 0; --d) {  // read right-to-left
+      auto const prev_delim = base_ptr + d_delimiters[d] + delim_size;
+      if (prev_delim > str_ptr || ((prev_delim - delim_size) < str_begin)) { continue; }
+      auto const start_ptr = (token_idx + 1 < token_count) ? prev_delim : str_begin;
 
-      auto sptr = (prev_delim > str_begin)      // make sure delimiter is inside the string
-                      && (t + 1 < token_count)  // and this is not the last token
-                    ? prev_delim
-                    : str_begin;
+      // store the token into the output vector right-to-left
+      d_tokens[token_count - token_idx - 1] =
+        string_index_pair{start_ptr, static_cast<size_type>(thrust::distance(start_ptr, str_ptr))};
 
-      // store the token into the output -- building the array backwards
-      d_tokens[(token_count - 1 - t)] =
-        string_index_pair{sptr, static_cast<size_type>(str_ptr - sptr)};
-
-      // setup for next/prev token
-      str_ptr = sptr - d_delimiter.size_bytes();
+      // setup for next token
+      str_ptr = start_ptr - delim_size;
+      ++token_idx;
+    }
+    // include anything leftover (rightover?)
+    if (token_idx < token_count) {
+      d_tokens[0] =
+        string_index_pair{str_begin, static_cast<size_type>(thrust::distance(str_begin, str_ptr))};
     }
   }
 
@@ -295,6 +286,19 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
   }
 };
 
+/**
+ * @brief Helper function used by split/rsplit and split_record/rsplit_record
+ *
+ * This function returns all the token/split positions within the input column as processed by
+ * the given tokenizer. It also returns the offsets for each set of tokens identified per string.
+ *
+ * @tparam Tokenizer Type of the tokenizer object
+ *
+ * @param input The input column of strings to split
+ * @param tokenizer Object used for counting and identifying delimiters and tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned objects' device memory.
+ */
 template <typename Tokenizer>
 std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_helper(
   strings_column_view const& input,
@@ -317,7 +321,6 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
                      [tokenizer, d_offsets, chars_bytes] __device__(size_type idx) {
                        return tokenizer.is_delimiter(idx, d_offsets, chars_bytes);
                      });
-
   // Create a vector of every delimiter position in the chars column.
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
