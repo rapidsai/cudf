@@ -86,7 +86,7 @@ enum class Encoding : uint8_t {
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
   RLE                     = 3,
-  BIT_PACKED              = 4,  // Deprecated
+  BIT_PACKED              = 4,  // Deprecated by parquet-format in 2013, superseded by RLE
   DELTA_BINARY_PACKED     = 5,
   DELTA_LENGTH_BYTE_ARRAY = 6,
   DELTA_BYTE_ARRAY        = 7,
