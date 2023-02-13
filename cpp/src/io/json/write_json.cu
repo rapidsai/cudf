@@ -581,14 +581,13 @@ std::unique_ptr<column> make_column_names_column(host_span<column_name_info cons
 
 void write_chunked(data_sink* out_sink,
                    strings_column_view const& str_column_view,
-                   std::string const& line_terminator,
+                   string_scalar const& d_line_terminator,
                    json_writer_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  string_scalar d_line_terminator{line_terminator};
   auto p_str_col_w_nl = cudf::strings::detail::join_strings(str_column_view,
                                                             d_line_terminator,
                                                             string_scalar("", false),
@@ -608,15 +607,6 @@ void write_chunked(data_sink* out_sink,
       device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
-  }
-
-  // Needs newline at the end, to separate from next chunk
-  if (options.is_enabled_lines()) {
-    if (out_sink->is_device_write_preferred(d_line_terminator.size())) {
-      out_sink->device_write(d_line_terminator.data(), d_line_terminator.size(), stream);
-    } else {
-      out_sink->host_write(line_terminator.data(), line_terminator.size());
-    }
   }
 }
 
@@ -697,7 +687,16 @@ void write_json(data_sink* out_sink,
       // struct converter for the table
       auto str_concat_col = converter(sub_view.begin(), sub_view.end(), user_column_names);
 
-      write_chunked(out_sink, str_concat_col->view(), line_terminator, options, stream, mr);
+      write_chunked(out_sink, str_concat_col->view(), d_line_terminator, options, stream, mr);
+
+      // Needs line_terminator at the end, to separate from next chunk
+      if (&sub_view != &vector_views.back() or options.is_enabled_lines()) {
+        if (out_sink->is_device_write_preferred(d_line_terminator.size())) {
+          out_sink->device_write(d_line_terminator.data(), d_line_terminator.size(), stream);
+        } else {
+          out_sink->host_write(line_terminator.data(), line_terminator.size());
+        }
+      }
     }
   } else {
     if (options.is_enabled_lines()) {
