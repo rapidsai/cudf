@@ -214,7 +214,7 @@ struct source_info {
    */
   explicit source_info(std::vector<host_buffer> const& host_buffers) : _type(io_type::HOST_BUFFER)
   {
-    _host_buffers.resize(host_buffers.size());
+    _host_buffers.reserve(host_buffers.size());
     std::transform(host_buffers.begin(),
                    host_buffers.end(),
                    std::back_inserter(_host_buffers),
