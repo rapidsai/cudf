@@ -424,7 +424,7 @@ __global__ void __launch_bounds__(128)
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
-          rows_in_page >= max_page_size_rows) {
+          rows_in_page + frag_g.num_rows > max_page_size_rows) {
         if (ck_g.use_dictionary) {
           // Additional byte to store entry bit width
           page_size = 1 + max_RLE_page_size(ck_g.dict_rle_bits, values_in_page);
