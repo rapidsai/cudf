@@ -133,7 +133,6 @@ class CopyOnWriteBuffer(Buffer):
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        self._unlink_shared_buffers()
         # Unlink if there are any weak references.
         # Mark the Buffer as ``zero_copied=True``,
         # which will prevent any copy-on-write
@@ -142,6 +141,7 @@ class CopyOnWriteBuffer(Buffer):
         # control over knowing if a third-party library
         # has modified the data this Buffer is
         # pointing to.
+        self._unlink_shared_buffers()
         self._zero_copied = True
         return self._get_cuda_array_interface(readonly=False)
 
