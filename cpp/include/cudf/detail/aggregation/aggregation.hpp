@@ -292,7 +292,9 @@ class all_aggregation final : public reduce_aggregation, public segmented_reduce
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation,
+                                         public reduce_aggregation,
+                                         public segmented_reduce_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -313,7 +315,8 @@ class sum_of_squares_aggregation final : public groupby_aggregation, public redu
  */
 class mean_aggregation final : public rolling_aggregation,
                                public groupby_aggregation,
-                               public reduce_aggregation {
+                               public reduce_aggregation,
+                               public segmented_reduce_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -353,7 +356,8 @@ class m2_aggregation : public groupby_aggregation {
  */
 class std_var_aggregation : public rolling_aggregation,
                             public groupby_aggregation,
-                            public reduce_aggregation {
+                            public reduce_aggregation,
+                            public segmented_reduce_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 

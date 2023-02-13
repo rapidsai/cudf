@@ -57,8 +57,6 @@ void BM_parquet_read_options(nvbench::state& state,
                                                 nvbench::enum_type<UsesPandasMetadata>,
                                                 nvbench::enum_type<Timestamp>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto constexpr str_to_categories = ConvertsStrings == converts_strings::YES;
   auto constexpr uses_pd_metadata  = UsesPandasMetadata == uses_pandas_metadata::YES;
 
