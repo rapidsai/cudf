@@ -9,7 +9,7 @@ from weakref import WeakSet
 
 import rmm
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.buffer import Buffer
 
 T = TypeVar("T", bound="CopyOnWriteBuffer")
 
@@ -153,23 +153,6 @@ class CopyOnWriteBuffer(Buffer):
             "typestr": "|u1",
             "version": 0,
         }
-
-    @property
-    def _readonly_proxy_cai_obj(self) -> dict:
-        """
-        Returns a proxy object with a read-only CUDA Array Interface.
-
-        See `Copy-on-write` section in `library_design.md` for
-        more information on this API.
-        """
-        return cuda_array_interface_wrapper(
-            ptr=self._ptr,
-            size=self.size,
-            owner=self,
-            readonly=True,
-            typestr="|u1",
-            version=0,
-        )
 
     def _unlink_shared_buffers(self):
         """

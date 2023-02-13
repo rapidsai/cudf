@@ -64,7 +64,12 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    as_buffer,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -137,7 +142,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.data is not None:
             if mode == "read":
-                obj = self.data._readonly_proxy_cai_obj
+                obj = _proxy_cai_obj(
+                    self.data._get_cuda_array_interface(readonly=True),
+                    owner=self.data,
+                )
             elif mode == "write":
                 obj = self.data
             else:
@@ -170,7 +178,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.mask is not None:
             if mode == "read":
-                obj = self.mask._readonly_proxy_cai_obj
+                obj = _proxy_cai_obj(
+                    self.mask._get_cuda_array_interface(readonly=True),
+                    owner=self.mask,
+                )
             elif mode == "write":
                 obj = self.mask
             else:
@@ -2589,3 +2600,14 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
                 ) from e
             raise
     return col
+
+
+def _proxy_cai_obj(cai, owner):
+    return cuda_array_interface_wrapper(
+        ptr=cai["data"][0],
+        size=cai["shape"][0],
+        owner=owner,
+        readonly=cai["data"][1],
+        typestr=cai["typestr"],
+        version=cai["version"],
+    )

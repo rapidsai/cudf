@@ -262,20 +262,6 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    @property
-    def _readonly_proxy_cai_obj(self):
-        """
-        Returns a proxy object with a read-only CUDA Array Interface.
-        """
-        return cuda_array_interface_wrapper(
-            ptr=self.get_ptr(mode="read"),
-            size=self.size,
-            owner=self,
-            readonly=True,
-            typestr="|u1",
-            version=0,
-        )
-
     def get_ptr(self, *, mode) -> int:
         """Device pointer to the start of the buffer.
 

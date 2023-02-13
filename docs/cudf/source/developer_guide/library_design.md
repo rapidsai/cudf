@@ -346,9 +346,8 @@ rather than a copy-on-write shallow copy with weak references.
 ### Obtaining a read-only object
 
 A read-only object can be quite useful for operations that will not
-mutate the data. This can be achieved by calling `._readonly_proxy_cai_obj`.
-This function will return a proxy object that has `__cuda_array_interface__`
-implemented and will not trigger a deep copy even if the `CopyOnWriteBuffer`
+mutate the data. This can be achieved by calling `._get_cuda_array_interface(readonly=True)`, and creating a `SimpleNameSpace` object around it.
+This will not trigger a deep copy even if the `CopyOnWriteBuffer`
 has weak references. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
 
