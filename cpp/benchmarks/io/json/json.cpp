@@ -27,7 +27,7 @@
 
 // Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr size_t data_size         = 1 << 26;  // 512 << 20;
+constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void json_read_common(cudf::io::json_writer_options const& write_opts,
@@ -96,11 +96,12 @@ NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_read_io")
   .set_type_axes_names({"io"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0})
+  .add_int64_axis("run_length", {1});
 
 void json_write_common(cudf::io::json_writer_options const& write_opts,
                        cuio_source_sink_pair& source_sink,
+                       size_t const data_size,
                        nvbench::state& state)
 {
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -150,7 +151,7 @@ void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
   cudf::io::json_writer_options write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
 
-  json_write_common(write_opts, source_sink, state);
+  json_write_common(write_opts, source_sink, data_size, state);
 }
 
 NVBENCH_BENCH_TYPES(BM_json_write_io, NVBENCH_TYPE_AXES(io_list))
