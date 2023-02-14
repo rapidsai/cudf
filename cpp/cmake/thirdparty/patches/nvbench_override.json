@@ -9,7 +9,7 @@
           "fixed_in" : ""
         },
         {
-          "file" : "${current_json_dir}/nvbench_use_existing_fmt.diff",
+          "file" : "nvbench/use_existing_fmt.diff",
           "issue" : "Fix add support for using an existing fmt [https://github.com/NVIDIA/nvbench/pull/125]",
           "fixed_in" : ""
         }
