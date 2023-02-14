@@ -54,13 +54,15 @@ set(cython_sources
     unary.pyx
     utils.pyx
 )
-set(linked_libraries cudf::cudf cudf_strings_udf)
+set(linked_libraries cudf::cudf)
 
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
+
+target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
