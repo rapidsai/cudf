@@ -903,27 +903,28 @@ void trivial_types_only(T t){
 
 # Logging
 
-libcudf includes logging utilities (built on top of [spdlog](#https://github.com/gabime/spdlog.git)
-library), which should be used to log important events (e.g. warnings). This utility can also be
-used to log debug information, as long as correct logging level is used. libcudf contains six macros
+libcudf includes logging utilities (built on top of [spdlog](https://github.com/gabime/spdlog)
+library), which should be used to log important events (e.g. user warnings). This utility can also
+be used to log debug information, as long as the correct logging level is used. There are six macros
 that should be used for logging at different levels:
 
-* `CUDF_LOG_TRACE` - verbose debug messages (only relevant for developers);
-* `CUDF_LOG_DEBUG` - debug messages (only relevant for developers);
-* `CUDF_LOG_INFO` - information about rare events that occur during normal execution;
-* `CUDF_LOG_WARN` - warnings about potentially unexpected behavior, deprecations;
+* `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers);
+* `CUDF_LOG_DEBUG` - debug messages (targeted at developers);
+* `CUDF_LOG_INFO` - information about rare events (e.g. once per run) that occur during normal
+execution;
+* `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior, deprecations;
 * `CUDF_LOG_ERROR` - recoverable errors
 * `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
 
-By default, messages below the info level are excluded from the log. In public builds, the code that
-logs at these levels is compiled out. This prevents logging of potentially sensitive data that might
-be done for debug purposes. Also, this allows developers to include expensive computation in the
-trace/debug logs, as the overhead will not be present in the public builds. The minimum enabled
-logging level is info, but it can be modified in multiple ways:
+By default, messages below the `INFO` level are excluded from the log. In public builds, the code
+that logs at these levels is compiled out. This prevents logging of potentially sensitive data that
+might be done for debug purposes. Also, this allows developers to include expensive computation in
+the trace/debug logs, as the overhead will not be present in the public builds. The minimum enabled
+logging level is `INFO`, and it can be modified in multiple ways:
 
 * CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
 will be compiled in the build.
-Available levels are TRACE, DEBUG, INFO, WARN, ERROR, CRITICAL and OFF.
+Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` and `OFF`.
 * Environment variable `LIBCUDF_LOGGING_LEVEL`, with the same values as the CMake variable.
 The difference is that disabled levels are present in the build, but the messages are excluded from
 the log.
