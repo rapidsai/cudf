@@ -335,18 +335,34 @@ public class TableTest extends CudfTestBase {
     JSONOptions opts = JSONOptions.builder()
         .withDayFirst(true)
         .build();
-    byte[] data = ("[false,A,1,2,05/03/2001]\n" +
-        "[true,B,2,3,31/10/2010]'\n" +
-        "[false,C,3,4,20/10/1994]\n" +
-        "[true,D,4,5,18/10/1990]").getBytes(StandardCharsets.UTF_8);
+    byte[] data = ("[false,A,1,2]\n" +
+        "[true,B,2,3]\n" +
+        "[false,C,3,4]\n" +
+        "[true,D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
         .column(false, true, false, true)
         .column("A", "B", "C", "D")
         .column(1L, 2L, 3L, 4L)
         .column(2L, 3L, 4L, 5L)
-        .timestampMillisecondsColumn(983750400000L, 1288483200000L, 782611200000L, 656208000000L)
         .build();
          Table table = Table.readJSON(Schema.INFERRED, opts, data)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONSubColumns() {
+    // JSON file has 2 columns, here only read 1 column
+    Schema schema = Schema.builder()
+        .column(DType.INT32, "age")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(null, 30, 19)
+        .build();
+         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -363,7 +379,7 @@ public class TableTest extends CudfTestBase {
     JSONOptions opts = JSONOptions.builder()
         .build();
     byte[] data = ("[A,1,2]\n" +
-        "[B,2,3]'\n" +
+        "[B,2,3]\n" +
         "[C,3,4]\n" +
         "[D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
@@ -389,7 +405,7 @@ public class TableTest extends CudfTestBase {
         .build();
     int bytesToIgnore = 8;
     byte[] data = ("[A,1,2]\n" +
-        "[B,2,3]'\n" +
+        "[B,2,3]\n" +
         "[C,3,4]\n" +
         "[D,4,5]").getBytes(StandardCharsets.UTF_8);
     try (Table expected = new Table.TestBuilder()
