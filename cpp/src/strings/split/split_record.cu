@@ -49,7 +49,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
   if (input.is_empty()) { return make_empty_column(type_id::LIST); }
   if (input.size() == input.null_count()) {
     auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
-    auto results = std::make_unique<column>(input.parent(), stream, mr);
+    auto results = make_empty_column(type_id::STRING);
     return make_lists_column(input.size(),
                              std::move(offsets),
                              std::move(results),
