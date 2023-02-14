@@ -348,7 +348,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     auto d_delimiter_offsets = delimiter_offsets.data();
 
     // memset to zero-out the delimiter counts for any null-entries or strings with no delimiters
-    cudaMemsetAsync(d_delimiter_offsets, 0, delimiter_offsets.size() * sizeof(size_type), stream);
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      d_delimiter_offsets, 0, delimiter_offsets.size() * sizeof(size_type), stream.value()));
 
     // next, count the number of delimiters per string
     auto d_string_indices = string_indices.data();  // identifies strings with delimiters only
