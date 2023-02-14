@@ -44,4 +44,4 @@ pytest \
   custreamz
 popd
 
-exit ${SUITEERROR}
+exit ${EXITCODE}
