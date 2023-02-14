@@ -24,7 +24,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -371,31 +371,34 @@ struct column_property_comparator {
   }
 };
 
+template <typename DeviceComparator>
 class corresponding_rows_unequal {
  public:
-  corresponding_rows_unequal(table_device_view d_lhs,
-                             table_device_view d_rhs,
+  corresponding_rows_unequal(table_device_view /*d_lhs*/,
+                             table_device_view /*d_rhs*/,
                              column_device_view lhs_row_indices_,
                              column_device_view rhs_row_indices_,
-                             size_type /*fp_ulps*/)
-    : comp(cudf::nullate::YES{}, d_lhs, d_rhs, cudf::null_equality::EQUAL),
-      lhs_row_indices(lhs_row_indices_),
-      rhs_row_indices(rhs_row_indices_)
+                             size_type /*fp_ulps*/,
+                             DeviceComparator comp_)
+    : lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_), comp(comp_)
   {
   }
 
-  cudf::row_equality_comparator<cudf::nullate::YES> comp;
-
   __device__ bool operator()(size_type index)
   {
-    return !comp(lhs_row_indices.element<size_type>(index),
-                 rhs_row_indices.element<size_type>(index));
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
+    return !comp(lhs_index_type{lhs_row_indices.element<size_type>(index)},
+                 rhs_index_type{rhs_row_indices.element<size_type>(index)});
   }
 
   column_device_view lhs_row_indices;
   column_device_view rhs_row_indices;
+  DeviceComparator comp;
 };
 
+template <typename DeviceComparator>
 class corresponding_rows_not_equivalent {
   table_device_view d_lhs;
   table_device_view d_rhs;
@@ -410,7 +413,8 @@ class corresponding_rows_not_equivalent {
                                     table_device_view d_rhs,
                                     column_device_view lhs_row_indices_,
                                     column_device_view rhs_row_indices_,
-                                    size_type fp_ulps_)
+                                    size_type fp_ulps_,
+                                    DeviceComparator /*comp*/)
     : d_lhs(d_lhs),
       d_rhs(d_rhs),
       comp(cudf::nullate::YES{}, d_lhs, d_rhs, null_equality::EQUAL),
@@ -536,28 +540,47 @@ struct column_comparator_impl {
                   size_type fp_ulps,
                   int depth)
   {
-    auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
-    auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
+    auto lhs_tview = table_view{{lhs}};
+    auto rhs_tview = table_view{{rhs}};
+
+    auto d_lhs = cudf::table_device_view::create(lhs_tview);
+    auto d_rhs = cudf::table_device_view::create(rhs_tview);
 
     auto d_lhs_row_indices = cudf::column_device_view::create(lhs_row_indices);
     auto d_rhs_row_indices = cudf::column_device_view::create(rhs_row_indices);
 
-    using ComparatorType = std::conditional_t<check_exact_equality,
-                                              corresponding_rows_unequal,
-                                              corresponding_rows_not_equivalent>;
-
     auto differences = rmm::device_uvector<int>(
       lhs.size(), cudf::get_default_stream());  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
-    auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(cudf::get_default_stream()),
-      input_iter,
-      input_iter + lhs_row_indices.size(),
-      differences.begin(),
-      ComparatorType(*d_lhs, *d_rhs, *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps));
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter),
-                       cudf::get_default_stream());  // shrink back down
+    auto const comparator_helper = [&](auto const device_comparator) {
+      using ComparatorType =
+        std::conditional_t<check_exact_equality,
+                           corresponding_rows_unequal<decltype(device_comparator)>,
+                           corresponding_rows_not_equivalent<decltype(device_comparator)>>;
+
+      auto diff_iter = thrust::copy_if(
+        rmm::exec_policy(cudf::get_default_stream()),
+        input_iter,
+        input_iter + lhs_row_indices.size(),
+        differences.begin(),
+        ComparatorType(
+          *d_lhs, *d_rhs, *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator));
+
+      differences.resize(thrust::distance(differences.begin(), diff_iter),
+                         cudf::get_default_stream());  // shrink back down
+    };
+
+    auto const comparator = cudf::experimental::row::equality::two_table_comparator{
+      lhs_tview, rhs_tview, cudf::get_default_stream()};
+    auto const has_nulls = cudf::has_nested_nulls(lhs_tview) or cudf::has_nested_nulls(rhs_tview);
+    if (cudf::detail::has_nested_columns(lhs_tview)) {
+      auto const device_comparator = comparator.equal_to<true>(cudf::nullate::DYNAMIC{has_nulls});
+      comparator_helper(device_comparator);
+    } else {
+      auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
+      comparator_helper(device_comparator);
+    }
 
     if (not differences.is_empty()) {
       if (verbosity != debug_output_level::QUIET) {
