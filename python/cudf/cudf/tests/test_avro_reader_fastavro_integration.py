@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import io
+from typing import Optional, Union
 
 import fastavro
 import pytest
@@ -22,8 +24,7 @@ from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
-def cudf_from_avro_util(schema, records):
-
+def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
     schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)
@@ -244,3 +245,115 @@ def test_avro_compression(rows, codec):
     got_df = cudf.read_avro(buffer)
 
     assert_eq(expected_df, got_df)
+
+
+avro_logical_type_params = [
+    # (avro logical type, avro primitive type, cudf expected dtype)
+    ("date", "int", "datetime64[s]"),
+]
+
+
+@pytest.mark.parametrize(
+    "logical_type, primitive_type, expected_dtype", avro_logical_type_params
+)
+@pytest.mark.parametrize("namespace", [None, "root_ns"])
+@pytest.mark.parametrize("nullable", [True, False])
+@pytest.mark.parametrize("prepend_null", [True, False])
+def test_can_detect_dtypes_from_avro_logical_type(
+    logical_type,
+    primitive_type,
+    expected_dtype,
+    namespace,
+    nullable,
+    prepend_null,
+):
+    avro_type = [{"logicalType": logical_type, "type": primitive_type}]
+    if nullable:
+        if prepend_null:
+            avro_type.insert(0, "null")
+        else:
+            avro_type.append("null")
+
+    schema = fastavro.parse_schema(
+        {
+            "type": "record",
+            "name": "test",
+            "namespace": namespace,
+            "fields": [{"name": "prop", "type": avro_type}],
+        }
+    )
+
+    actual = cudf_from_avro_util(schema, [])
+
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(None, None, expected_dtype)}
+    )
+
+    assert_eq(expected, actual)
+
+
+def get_days_from_epoch(date: Optional[datetime.date]) -> Union[int, None]:
+    if date is None:
+        return None
+    return (date - datetime.date(1970, 1, 1)).days
+
+
+@pytest.mark.parametrize("namespace", [None, "root_ns"])
+@pytest.mark.parametrize("nullable", [True, False])
+@pytest.mark.parametrize("prepend_null", [True, False])
+def test_can_parse_avro_date_logical_type2(namespace, nullable, prepend_null):
+
+    avro_type = {"logicalType": "date", "type": "int"}
+    if nullable:
+        avro_type = [avro_type]
+        if prepend_null:
+            avro_type.insert(0, "null")
+        else:
+            avro_type.append("null")
+
+    schema_dict = {
+        "type": "record",
+        "name": "test",
+        "fields": [
+            {"name": "o_date", "type": avro_type},
+        ],
+    }
+
+    if namespace:
+        schema_dict["namespace"] = namespace
+
+    schema = fastavro.parse_schema(schema_dict)
+
+    if nullable:
+        dates = [
+            datetime.date(1970, 1, 1),
+            None,
+            datetime.date(1970, 1, 2),
+            None,
+            datetime.date(1981, 10, 25),
+            None,
+            datetime.date(2012, 5, 18),
+            None,
+            datetime.date(2019, 9, 3),
+            None,
+        ]
+    else:
+        dates = [
+            datetime.date(1970, 1, 1),
+            datetime.date(1970, 1, 2),
+            datetime.date(1981, 10, 25),
+            datetime.date(2012, 5, 18),
+            datetime.date(2019, 9, 3),
+        ]
+
+    days_from_epoch = [get_days_from_epoch(date) for date in dates]
+
+    records = [{"o_date": day} for day in days_from_epoch]
+
+    actual = cudf_from_avro_util(schema, records)
+
+    expected = cudf.DataFrame(
+        {"o_date": cudf.Series(dates, dtype="datetime64[s]")}
+    )
+
+    assert_eq(expected, actual)
