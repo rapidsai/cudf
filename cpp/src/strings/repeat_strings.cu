@@ -36,8 +36,6 @@
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
-#include <stdexcept>
-
 namespace cudf {
 namespace strings {
 namespace detail {
