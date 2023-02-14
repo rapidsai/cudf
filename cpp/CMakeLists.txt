@@ -120,15 +120,15 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
-# Set RMM logging level
-set(RMM_LOGGING_LEVEL
+# Set logging level
+set(LIBCUDF_LOGGING_LEVEL
     "INFO"
     CACHE STRING "Choose the logging level."
 )
 set_property(
-  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+  CACHE LIBCUDF_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
 )
-message(VERBOSE "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
 
 if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
@@ -677,8 +677,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Define RMM logging level
+target_compile_definitions(cudf PUBLIC "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
+
 # Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
+target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
