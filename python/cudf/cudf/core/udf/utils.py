@@ -2,7 +2,6 @@
 
 import glob
 import os
-from functools import lru_cache
 from typing import Any, Callable, Dict, List
 
 import cachetools
@@ -41,7 +40,7 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.utils import _cudf_nvtx_annotate, initfunc
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
@@ -444,7 +443,7 @@ def maybe_patch_numba_linker(
             logger.debug("Cannot patch Numba Linker - unsupported version")
 
 
-@lru_cache(maxsize=None)
+@initfunc
 def set_malloc_heap_size(size=None):
     """
     Heap size control for strings_udf, size in bytes.
