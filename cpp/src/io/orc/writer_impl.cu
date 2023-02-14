@@ -2246,6 +2246,11 @@ void writer::impl::write(table_view const& table)
                                   enc_data.streams,
                                   comp_results,
                                   stream);
+
+      // deallocate encoded data as it is not needed anymore
+      enc_data.data.resize(0, stream);
+      enc_data.data.shrink_to_fit(stream);
+
       strm_descs.device_to_host(stream);
       comp_results.device_to_host(stream, true);
     }
