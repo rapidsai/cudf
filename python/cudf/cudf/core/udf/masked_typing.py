@@ -78,7 +78,7 @@ def _format_error_string(err):
 
 
 def _type_to_masked_type(t):
-    if t in (types.pyobject, string_view):
+    if t == string_view:
         return string_view
     elif t == udf_string:
         return t

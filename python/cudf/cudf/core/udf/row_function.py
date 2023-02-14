@@ -59,7 +59,13 @@ def _get_frame_row_type(dtype):
         # instead, we compute the correct offset based on the masked type.
         elemdtype = info[0]
         title = info[2] if len(info) == 3 else None
-        ty = numpy_support.from_dtype(elemdtype)
+
+        # columns of dtype string start life as string_view
+        ty = (
+            string_view
+            if elemdtype == np.dtype("O")
+            else numpy_support.from_dtype(elemdtype)
+        )
         infos = {
             "type": MaskedType(ty),
             "offset": offset,
