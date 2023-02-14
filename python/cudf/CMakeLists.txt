@@ -89,6 +89,7 @@ if(NOT cudf_FOUND)
     # We don't build C++ tests when building wheels, so we can also omit the test util and shrink
     # the wheel by avoiding embedding GTest.
     set(CUDF_BUILD_TESTUTIL OFF)
+    set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 
     # Statically link cudart if building wheels
     set(CUDA_STATIC_RUNTIME ON)
