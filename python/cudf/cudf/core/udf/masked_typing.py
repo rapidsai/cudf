@@ -28,6 +28,7 @@ from cudf.core.udf._ops import (
 )
 from cudf.core.udf.strings_typing import (
     StringView,
+    UDFString,
     bool_binary_funcs,
     id_unary_funcs,
     int_binary_funcs,
@@ -67,6 +68,8 @@ SUPPORTED_NUMBA_TYPES = (
     types.Boolean,
     types.NPDatetime,
     types.NPTimedelta,
+    StringView,
+    UDFString,
 )
 
 
@@ -78,11 +81,7 @@ def _format_error_string(err):
 
 
 def _type_to_masked_type(t):
-    if t == string_view:
-        return string_view
-    elif t == udf_string:
-        return t
-    elif isinstance(t, SUPPORTED_NUMBA_TYPES):
+    if isinstance(t, SUPPORTED_NUMBA_TYPES):
         return t
     else:
         # Unsupported Dtype. Numba tends to print out the type info

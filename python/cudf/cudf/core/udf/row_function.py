@@ -60,8 +60,8 @@ def _get_frame_row_type(dtype):
         elemdtype = info[0]
         title = info[2] if len(info) == 3 else None
 
-        # columns of dtype string start life as string_view
         ty = (
+            # columns of dtype string start life as string_view
             string_view
             if elemdtype == np.dtype("O")
             else numpy_support.from_dtype(elemdtype)
