@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,11 +24,17 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <algorithm>
 #include <cmath>
+
+using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
+using structs_col = cudf::test::structs_column_wrapper;
+
+using cudf::test::iterators::nulls_at;
 
 using cudf::nan_policy;
 using cudf::null_equality;
@@ -305,4 +311,49 @@ TEST_F(DistinctCount, TableWithStringColumnWithNull)
   cudf::table_view input{{col1, col2}};
   EXPECT_EQ(9, cudf::distinct_count(input, null_equality::EQUAL));
   EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
+}
+
+TEST_F(DistinctCount, NullableLists)
+{
+  auto const keys = lists_col{
+    {{}, {1, 1}, {1}, {} /*NULL*/, {1}, {} /*NULL*/, {2}, {2, 1}, {2}, {2, 2}, {}, {2, 2}},
+    nulls_at({3, 5})};
+  auto const input = cudf::table_view{{keys}};
+
+  EXPECT_EQ(7, cudf::distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(8, cudf::distinct_count(input, null_equality::UNEQUAL));
+}
+
+TEST_F(DistinctCount, NullableStructOfStructs)
+{
+  //  +-----------------+
+  //  |  s1{s2{a,b}, c} |
+  //  +-----------------+
+  // 0 |  { {1, 1}, 5}  |
+  // 1 |  { Null,   4}  |
+  // 2 |  { {1, 1}, 5}  |  // Same as 0
+  // 3 |  { {1, 2}, 4}  |
+  // 4 |  { Null,   6}  |
+  // 5 |  { Null,   4}  |  // Same as 4
+  // 6 |  Null          |  // Same as 6
+  // 7 |  { {2, 1}, 5}  |
+  // 8 |  Null          |
+
+  auto const keys = [&] {
+    auto a  = cudf::test::fixed_width_column_wrapper<int32_t>{1, XXX, 1, 1, XXX, XXX, 0, 2, 0};
+    auto b  = cudf::test::fixed_width_column_wrapper<int32_t>{1, XXX, 1, 2, XXX, XXX, 0, 1, 0};
+    auto s2 = structs_col{{a, b}, nulls_at({1, 4, 5})};
+
+    auto c = cudf::test::fixed_width_column_wrapper<int32_t>{5, 4, 5, 4, 6, 4, 0, 5, 0};
+    std::vector<std::unique_ptr<cudf::column>> s1_children;
+    s1_children.emplace_back(s2.release());
+    s1_children.emplace_back(c.release());
+    auto const null_it = nulls_at({6, 8});
+    return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
+  }();
+
+  auto const input = cudf::table_view{{keys}};
+
+  EXPECT_EQ(6, cudf::distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(8, cudf::distinct_count(input, null_equality::UNEQUAL));
 }
