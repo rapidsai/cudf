@@ -187,14 +187,23 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(pdf_string, gdf_string)
 
 
-def test_cudf_json_writer(pdf):
+@pytest.mark.parametrize(
+    "lines", [True, False], ids=["lines=True", "lines=False"]
+)
+def test_cudf_json_writer(pdf, lines):
     # removing datetime column because pandas doesn't support it
     for col_name in pdf.columns:
         if "datetime" in col_name:
             pdf.drop(col_name, axis=1, inplace=True)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_string = pdf.to_json(orient="records", lines=True)
-    gdf_string = gdf.to_json(orient="records", lines=True, engine="cudf")
+    pdf_string = pdf.to_json(orient="records", lines=lines)
+    gdf_string = gdf.to_json(orient="records", lines=lines, engine="cudf")
+
+    assert_eq(pdf_string, gdf_string)
+
+    gdf_string = gdf.to_json(
+        orient="records", lines=lines, engine="cudf", rows_per_chunk=8
+    )
 
     assert_eq(pdf_string, gdf_string)
 
