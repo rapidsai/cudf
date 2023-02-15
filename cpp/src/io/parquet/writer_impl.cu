@@ -1497,9 +1497,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                    frag_size_fn);
   }
 
-  // Fragments are calculated in two passes.  In the first pass, a uniform number of fragments
-  // per column is used.  This is done to satisfy the requirement that each column chunk within
-  // a row group has the same number of rows.  After the row group (and thus column chunk)
+  // Fragments are calculated in two passes. In the first pass, a uniform number of fragments
+  // per column is used. This is done to satisfy the requirement that each column chunk within
+  // a row group has the same number of rows. After the row group (and thus column chunk)
   // boundaries are known, a second pass is done to calculate fragments to be used in determining
   // page boundaries within each column chunk.
   std::vector<int> num_frag_in_part;
