@@ -297,11 +297,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         2  object  int64
         3  object  int64
         """
-        non_grouped = [
-            name
-            for name in self.obj._data.names
-            if name not in self.grouping.names
-        ]
+        non_grouped = self.grouping.values._column_names
         return pd.DataFrame(
             {
                 name: pd.Series([self.obj._dtypes[name]]).repeat(len(index))
