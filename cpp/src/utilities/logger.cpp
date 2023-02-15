@@ -53,7 +53,7 @@ struct logger_wrapper {
     if (str == "DEBUG") return spdlog::level::debug;
     if (str == "INFO") return spdlog::level::info;
     if (str == "WARN") return spdlog::level::warn;
-    if (str == "ERR") return spdlog::level::err;
+    if (str == "ERROR") return spdlog::level::err;
     if (str == "CRITICAL") return spdlog::level::critical;
     if (str == "OFF") return spdlog::level::off;
 
