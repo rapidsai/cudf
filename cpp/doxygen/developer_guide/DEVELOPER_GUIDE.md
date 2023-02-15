@@ -908,11 +908,11 @@ library), which should be used to log important events (e.g. user warnings). Thi
 be used to log debug information, as long as the correct logging level is used. There are six macros
 that should be used for logging at different levels:
 
-* `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers);
-* `CUDF_LOG_DEBUG` - debug messages (targeted at developers);
+* `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers)
+* `CUDF_LOG_DEBUG` - debug messages (targeted at developers)
 * `CUDF_LOG_INFO` - information about rare events (e.g. once per run) that occur during normal
-execution;
-* `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior, deprecations;
+execution
+* `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior or deprecations
 * `CUDF_LOG_ERROR` - recoverable errors
 * `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
 
@@ -924,13 +924,13 @@ logging level is `INFO`, and it can be modified in multiple ways:
 
 * CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - controls the minimum level of logging that
 will be compiled in the build.
-Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL` and `OFF`.
+Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
 * Environment variable `LIBCUDF_LOGGING_LEVEL`, with the same values as the CMake variable.
 The difference is that disabled levels are present in the build, but the messages are excluded from
 the log.
 * Global logger object exposed via `cudf::logger()`. This API should not be used within libcudf to
 manipulate logging,
-it's purpose is to allow upstream users to configure libcudf logging to fit their application.
+its purpose is to allow upstream users to configure libcudf logging to fit their application.
 
 The default log file is `cudf_log.txt` in the current working directory.
 The environment variable `LIBCUDF_DEBUG_LOG_FILE` can be set to specify the path and file name.
