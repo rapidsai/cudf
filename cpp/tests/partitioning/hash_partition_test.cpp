@@ -412,11 +412,7 @@ TEST_F(HashPartition, StructofStructWithNulls)
     auto s2 = structs_col{{a, b}, nulls_at({4, 5})};
 
     auto c = fixed_width_column_wrapper<int32_t>{5, 5, 4, 0, 4, 4};
-    std::vector<std::unique_ptr<cudf::column>> s1_children;
-    s1_children.emplace_back(s2.release());
-    s1_children.emplace_back(c.release());
-    auto const null_it = null_at(3);
-    return structs_col(std::move(s1_children), std::vector<bool>(null_it, null_it + 6));
+    return structs_col({s2, c}, null_at(3));
   }();
 
   fixed_width_column_wrapper<int32_t> first_col({7, 8, 9, 10, 11, 12});
