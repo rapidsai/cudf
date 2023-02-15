@@ -314,7 +314,8 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::PLAIN:
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE:
-    case Encoding::RLE_DICTIONARY: return true;
+    case Encoding::RLE_DICTIONARY:
+    case Encoding::DELTA_BINARY_PACKED: return true;
     default: return false;
   }
 }

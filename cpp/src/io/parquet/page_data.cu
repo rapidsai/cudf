@@ -165,6 +165,28 @@ inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
   return v;
 }
 
+inline __device__ unsigned int getb(const uint8_t*& cur, const uint8_t* end)
+{
+  return (cur < end) ? *cur++ : 0;
+}
+
+__device__ uint64_t get_u64(const uint8_t*& cur, const uint8_t* end)
+{
+  uint64_t v = 0, l = 0, c;
+  do {
+    c = getb(cur, end);
+    v |= (c & 0x7f) << l;
+    l += 7;
+  } while (c & 0x80);
+  return v;
+}
+
+inline __device__ int64_t get_i64(const uint8_t*& cur, const uint8_t* end)
+{
+  uint64_t u = get_u64(cur, end);
+  return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
+}
+
 /**
  * @brief Parse the beginning of the level section (definition or repetition),
  * initializes the initial RLE run & value, and returns the section length
@@ -1193,6 +1215,10 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: s->dict_run = 0; break;
+        case Encoding::DELTA_BINARY_PACKED:
+          // not sure if we should do the header here.  would need uint64_t first_value.
+          // need to ensure num_values from header matches page num_values - num_nulls?
+          break;
         default:
           s->error = 1;  // Unsupported encoding
           break;
@@ -1899,6 +1925,76 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
     __syncthreads();
+    if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
+      // need to pull header info from data_start, then increment
+      // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
+      uint32_t block_size, mini_blk_count, value_count;
+      int64_t first_value;  // should be int128_t, but in all likelyhood we'll never see an int96
+                            // with this encoding
+      if (t == 0) {
+        if (blockIdx.x == 0) {
+          auto d_start     = s->data_start;
+          auto const d_end = s->data_end;
+          block_size       = get_vlq32(d_start, d_end);  // multiple of 128
+          mini_blk_count =
+            get_vlq32(d_start, d_end);  // block_size / mini_blk_count is multiple of 32
+          value_count      = get_vlq32(d_start, d_end);
+          first_value      = get_i64(d_start, d_end);
+          auto vals_per_mb = block_size / mini_blk_count;
+          printf("%05d: block_sz %d mbc %d num_val %d first %ld\n",
+                 blockIdx.x,
+                 block_size,
+                 mini_blk_count,
+                 value_count,
+                 first_value);
+
+          auto num_block = (value_count + block_size - 1) / block_size;
+          printf("num_blocks %d\n", num_block);
+          for (int i = 0; i < num_block; i++) {
+            // start of a miniblock
+            int64_t min_delta = get_i64(d_start, d_end);
+            auto bit_widths   = d_start;
+            d_start += mini_blk_count;
+            printf("%05d: min_delta %ld\n", blockIdx.x, min_delta);
+            for (int mb = 0; mb < mini_blk_count; mb++) {
+              auto dict_bits = bit_widths[mb];
+              printf("mb bits %d\n", dict_bits);
+              int dict_idx = 0;
+              d_start += (vals_per_mb * bit_widths[mb]) / 8;
+              for (int tt = 0; tt < vals_per_mb; tt++) {
+                if (tt < vals_per_mb) {
+                  //dict_idx = s->dict_val;
+                  int32_t ofs      = (tt - ((vals_per_mb + 7) & ~7)) * dict_bits;
+                  const uint8_t* p = d_start + (ofs >> 3);
+                  ofs &= 7;
+                  if (p < d_end) {
+                    uint32_t c = 8 - ofs;
+                    dict_idx   = (*p++) >> ofs;
+                    if (c < dict_bits && p < d_end) {
+                      dict_idx |= (*p++) << c;
+                      c += 8;
+                      if (c < dict_bits && p < d_end) {
+                        dict_idx |= (*p++) << c;
+                        c += 8;
+                        if (c < dict_bits && p < d_end) { dict_idx |= (*p++) << c; }
+                      }
+                    }
+                    dict_idx &= (1 << dict_bits) - 1;
+                    auto delta = dict_idx + min_delta;
+                    first_value += delta;
+                    printf("  dict_idx %d delta %ld value %ld\n", dict_idx, delta, first_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      __syncthreads();
+
+      // FIXME: hack, fix this when it works
+      break;
+    }
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
