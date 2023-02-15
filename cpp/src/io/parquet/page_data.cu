@@ -1926,70 +1926,131 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     }
     __syncthreads();
     if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
+      struct delta_binary_state_s {
+        uint8_t* block_start;
+        uint8_t* block_end;
+        uint32_t block_size;        // usually 128, must be multiple of 128
+        uint32_t mini_block_count;  // usually 4, block_size/mini_block_count must be multiple of 32
+        uint32_t value_count;       // total values encoded in the block
+        int64_t last_value;         // last value decoded, initialized to first_value from header
+        uint32_t current_value_idx; // current value index, initialized to 0 at start of block
+
+        uint32_t cur_mb;
+        uint8_t* cur_mb_start;
+        uint8_t* cur_bitwidths;
+      };
+
+      const bool dopr = blockIdx.x == 0;
       // need to pull header info from data_start, then increment
       // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
-      uint32_t block_size, mini_blk_count, value_count;
-      int64_t first_value;  // should be int128_t, but in all likelyhood we'll never see an int96
-                            // with this encoding
+      __shared__ uint32_t block_size, mini_blk_count, value_count;
+      __shared__ int64_t first_value;  // should be int128_t, but in all likelyhood we'll never see
+                                       // an int96 with this encoding
+
+      auto const d_end = s->data_end;
       if (t == 0) {
-        if (blockIdx.x == 0) {
-          auto d_start     = s->data_start;
-          auto const d_end = s->data_end;
-          block_size       = get_vlq32(d_start, d_end);  // multiple of 128
-          mini_blk_count =
-            get_vlq32(d_start, d_end);  // block_size / mini_blk_count is multiple of 32
-          value_count      = get_vlq32(d_start, d_end);
-          first_value      = get_i64(d_start, d_end);
-          auto vals_per_mb = block_size / mini_blk_count;
-          printf("%05d: block_sz %d mbc %d num_val %d first %ld\n",
-                 blockIdx.x,
+        auto d_start = s->data_start;
+        block_size   = get_vlq32(d_start, d_end);  // multiple of 128
+        mini_blk_count =
+          get_vlq32(d_start, d_end);  // block_size / mini_blk_count is multiple of 32
+        value_count   = get_vlq32(d_start, d_end);
+        first_value   = get_i64(d_start, d_end);
+        s->data_start = d_start;
+        if (dopr) {
+          printf("block_size %d mbc %d val_count %d 1st %ld\n",
                  block_size,
                  mini_blk_count,
                  value_count,
                  first_value);
+        }
+      }
+      __syncthreads();
 
-          auto num_block = (value_count + block_size - 1) / block_size;
-          printf("num_blocks %d\n", num_block);
-          for (int i = 0; i < num_block; i++) {
-            // start of a miniblock
-            int64_t min_delta = get_i64(d_start, d_end);
-            auto bit_widths   = d_start;
-            d_start += mini_blk_count;
-            printf("%05d: min_delta %ld\n", blockIdx.x, min_delta);
-            for (int mb = 0; mb < mini_blk_count; mb++) {
-              auto dict_bits = bit_widths[mb];
-              printf("mb bits %d\n", dict_bits);
-              int dict_idx = 0;
-              d_start += (vals_per_mb * bit_widths[mb]) / 8;
-              for (int tt = 0; tt < vals_per_mb; tt++) {
-                if (tt < vals_per_mb) {
-                  //dict_idx = s->dict_val;
-                  int32_t ofs      = (tt - ((vals_per_mb + 7) & ~7)) * dict_bits;
-                  const uint8_t* p = d_start + (ofs >> 3);
-                  ofs &= 7;
-                  if (p < d_end) {
-                    uint32_t c = 8 - ofs;
-                    dict_idx   = (*p++) >> ofs;
-                    if (c < dict_bits && p < d_end) {
-                      dict_idx |= (*p++) << c;
-                      c += 8;
-                      if (c < dict_bits && p < d_end) {
-                        dict_idx |= (*p++) << c;
-                        c += 8;
-                        if (c < dict_bits && p < d_end) { dict_idx |= (*p++) << c; }
-                      }
-                    }
-                    dict_idx &= (1 << dict_bits) - 1;
-                    auto delta = dict_idx + min_delta;
-                    first_value += delta;
-                    printf("  dict_idx %d delta %ld value %ld\n", dict_idx, delta, first_value);
-                  }
-                }
+      // do this first since we'll want all 4 warps to do mini-block decoding
+      if (t < 32) {
+        // decode repetition and definition levels.
+        // - update validity vectors
+        // - updates offsets (for nested columns)
+        // - produces non-NULL value indices in s->nz_idx for subsequent decoding
+        gpuDecodeLevels(s, target_pos, t);
+      }
+      __syncthreads();
+
+      auto const vals_per_mb = block_size / mini_blk_count;
+
+      auto const num_block = (value_count + block_size - 1) / block_size;
+      int values_decoded   = 0;
+      for (int i = 0; i < num_block; i++) {
+        // start of a miniblock
+        __shared__ int64_t min_delta;
+        __shared__ uint8_t const* bit_widths;
+        __shared__ __align__(16) uint64_t mb_values[128];
+        if (t == 0) {
+          if (dopr) printf("data_start %p\n", s->data_start);
+          min_delta  = get_i64(s->data_start, d_end);
+          bit_widths = s->data_start;
+          s->data_start += mini_blk_count;
+          if (dopr) printf("min_delta %ld bw0 %d\n", min_delta, bit_widths[0]);
+        }
+
+        __syncthreads();
+
+        auto const mb  = t / vals_per_mb;
+        auto dict_bits = bit_widths[mb];
+
+        // find the end of this warp's mini-block
+        auto d_start = s->data_start + (vals_per_mb * bit_widths[0]) / 8;
+        if (mb > 0) {
+          d_start += (vals_per_mb * bit_widths[1]) / 8;
+          if (mb > 1) {
+            d_start += (vals_per_mb * bit_widths[2]) / 8;
+            if (mb > 2) { d_start += (vals_per_mb * bit_widths[3]) / 8; }
+          }
+        }
+        if (dopr && (t & 0x1f) == 0) { printf("  %d dstart %p\n", mb, d_start); }
+
+        if (t + values_decoded < value_count) {
+          int delta        = 0;
+          int32_t ofs      = ((t & 0x1f) - ((vals_per_mb + 7) & ~7)) * dict_bits;
+          const uint8_t* p = d_start + (ofs >> 3);
+          ofs &= 7;
+          if (p < d_end) {
+            uint32_t c = 8 - ofs;
+            delta      = (*p++) >> ofs;
+            if (c < dict_bits && p < d_end) {
+              delta |= (*p++) << c;
+              c += 8;
+              if (c < dict_bits && p < d_end) {
+                delta |= (*p++) << c;
+                c += 8;
+                if (c < dict_bits && p < d_end) { delta |= (*p++) << c; }
               }
+            }
+            delta &= (1 << dict_bits) - 1;
+            delta += min_delta;
+            mb_values[t] = delta;
+          }
+        }
+        if (t == 96) { s->data_start = d_start; }
+
+        __syncthreads();
+        if (t == 0) {
+          for (int j = 0; j < 128; j++) {
+            // need to account for first value in header
+            if (values_decoded + j + 1 < value_count) {
+              first_value += mb_values[j];
+              if (dopr)
+                printf("idx %03d delta %10ld value %10ld\n",
+                       t + values_decoded + j + 2,
+                       mb_values[j],
+                       first_value);
             }
           }
         }
+
+        values_decoded += block_size;
       }
+
       __syncthreads();
 
       // FIXME: hack, fix this when it works
