@@ -44,4 +44,5 @@ pytest \
   custreamz
 popd
 
+rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

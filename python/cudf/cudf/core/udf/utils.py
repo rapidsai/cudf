@@ -2,7 +2,7 @@
 
 import glob
 import os
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict
 
 import cachetools
 import cupy as cp
@@ -64,7 +64,6 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-ptx_files: List[Any] = []
 launch_arg_getters: Dict[Any, Any] = {}
 
 
@@ -259,7 +258,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=ptx_files, extensions=[str_view_arg_handler])(
+    kernel = cuda.jit(sig, link=[ptx_file], extensions=[str_view_arg_handler])(
         _kernel
     )
 
@@ -466,5 +465,4 @@ def column_to_string_view_array_init_heap(col):
     return column_to_string_view_array(col)
 
 
-strings_ptx_file = _get_ptx_file(os.path.dirname(__file__), "shim_")
-ptx_files.append(strings_ptx_file)
+ptx_file = _get_ptx_file(os.path.dirname(__file__), "shim_")
