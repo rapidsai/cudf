@@ -298,14 +298,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         3  object  int64
         """
         index = self.grouping.keys.unique().to_pandas()
-        result = pd.DataFrame(
+        return pd.DataFrame(
             {
-                name: pd.Series([self.obj._dtypes[name]]).repeat(len(index))
+                name: [self.obj._dtypes[name]] * len(index)
                 for name in self.grouping.values._column_names
             },
+            index=index,
         )
-        result.index = index
-        return result
 
     @cached_property
     def groups(self):
