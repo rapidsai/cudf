@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,12 +163,12 @@ TEST_F(groupby_max_scan_string_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
+struct GroupByMaxScanFixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(GroupByMaxScanFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestAllReps, GroupBySortMaxScanDecimalAsValue)
+TYPED_TEST(GroupByMaxScanFixedPointTest, GroupBySortMaxScanDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

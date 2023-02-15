@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -37,11 +38,11 @@ using null_iter_t        = decltype(nulls_at({}));
 auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
 auto const all_valid = nulls_at({});
 
-inline void test_rank_scans(column_view const& keys,
-                            column_view const& order,
-                            column_view const& expected_dense,
-                            column_view const& expected_rank,
-                            column_view const& expected_percent_rank)
+void test_rank_scans(column_view const& keys,
+                     column_view const& order,
+                     column_view const& expected_dense,
+                     column_view const& expected_rank,
+                     column_view const& expected_percent_rank)
 {
   test_single_scan(
     keys,
