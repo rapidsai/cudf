@@ -89,11 +89,11 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
-  if (column.num_children() == 0) {
-    return is_fixed_width(column.type()) ? size_of(column.type()) * column.size() : 0;
-  }
+  if (column.size() == 0) { return 0; }
 
-  if (column.type().id() == type_id::STRING) {
+  if (is_fixed_width(column.type())) {
+    return size_of(column.type()) * column.size();
+  } else if (column.type().id() == type_id::STRING) {
     auto const scol = strings_column_view(column);
     return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
            cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
@@ -109,7 +109,7 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
     return column_size(lcol.get_sliced_child(stream), stream);
   }
 
-  return 0;
+  CUDF_FAIL("Unexpected compound type");
 }
 
 // checks to see if the given column has a fixed size.  This doesn't
