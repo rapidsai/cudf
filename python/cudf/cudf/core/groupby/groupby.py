@@ -302,16 +302,13 @@ class GroupBy(Serializable, Reducible, Scannable):
             for name in self.obj._data.names
             if name not in self.grouping.names
         ]
-        all_dtypes = self.obj._dtypes
-        index = self.grouping.keys.unique().to_pandas()
-        df = pd.DataFrame(
+        return pd.DataFrame(
             {
-                name: pd.Series([all_dtypes[name]]).repeat(len(index))
+                name: pd.Series([self.obj._dtypes[name]]).repeat(len(index))
                 for name in non_grouped
-            }
+            },
+            index=index
         )
-        df.index = index
-        return df
 
     @cached_property
     def groups(self):
