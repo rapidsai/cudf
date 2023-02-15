@@ -118,16 +118,11 @@ size_type column_size(column_view const& column, rmm::cuda_stream_view stream)
 // TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
 bool is_col_fixed_width(column_view const& column)
 {
-  if (is_fixed_width(column.type())) {
-    return true;
-  } else if (column.type().id() == type_id::STRUCT) {
-    for (int i = 0; i < column.num_children(); i++) {
-      if (not is_fixed_width(column.child(i).type())) { return false; }
-    }
-    return true;
+  if (column.type().id() == type_id::STRUCT) {
+    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
   }
 
-  return false;
+  return is_fixed_width(column.type());
 }
 
 }  // namespace
