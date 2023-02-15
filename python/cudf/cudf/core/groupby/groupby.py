@@ -1851,10 +1851,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    # @property
-    # def dtypes(self):
-    #     return pd.Series
-
     def __getitem__(self, key):
         return self.obj[key].groupby(
             by=self.grouping.keys,
