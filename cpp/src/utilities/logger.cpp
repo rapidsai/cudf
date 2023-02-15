@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/logger.hpp>
-
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/logger.hpp>
 
 #include <spdlog/sinks/basic_file_sink.h>
 
