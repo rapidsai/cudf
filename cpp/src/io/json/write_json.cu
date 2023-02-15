@@ -438,7 +438,7 @@ struct column_to_strings_fn {
           ->view(),
         narep,
         stream_,
-        mr_);
+        rmm::mr::get_current_device_resource());
       auto const list_child_string =
         column_view(column.type(),
                     column.size(),
