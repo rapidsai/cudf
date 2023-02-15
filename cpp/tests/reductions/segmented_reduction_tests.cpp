@@ -1214,8 +1214,9 @@ TYPED_TEST(SegmentedReductionFixedPointTest, Sum)
       cudf::test::fixed_point_column_wrapper<RepType>({-10, 0, 33, 100, XXX, 53, 11, XXX, XXX, XXX},
                                                       {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                       numeric::scale_type{scale});
-    auto out_type = cudf::column_view(input).type();
-    auto expect   = cudf::test::fixed_point_column_wrapper<RepType>(
+    auto const out_type = cudf::column_view(input).type();
+
+    auto expect = cudf::test::fixed_point_column_wrapper<RepType>(
       {23, XXX, 11, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale});
     auto result =
       cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);
@@ -1251,7 +1252,7 @@ TYPED_TEST(SegmentedReductionFixedPointTest, Product)
       {-10, 1, 33, 40, XXX, 50, 11000, XXX, XXX, XXX},
       {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
       numeric::scale_type{scale});
-    auto out_type = cudf::column_view(input).type();
+    auto const out_type = cudf::column_view(input).type();
     auto result =
       cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);
     auto expect = cudf::test::fixed_point_column_wrapper<RepType>(
@@ -1288,8 +1289,9 @@ TYPED_TEST(SegmentedReductionFixedPointTest, SumOfSquares)
       cudf::test::fixed_point_column_wrapper<RepType>({-10, 0, 33, 100, XXX, 53, 11, XXX, XXX, XXX},
                                                       {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
                                                       numeric::scale_type{scale});
-    auto out_type = cudf::column_view(input).type();
-    auto expect   = cudf::test::fixed_point_column_wrapper<RepType>(
+    auto const out_type = cudf::column_view(input).type();
+
+    auto expect = cudf::test::fixed_point_column_wrapper<RepType>(
       {1189, XXX, 121, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale * 2});
     auto result =
       cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);

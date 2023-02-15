@@ -66,7 +66,7 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
 
   // Compute valid counts
   rmm::device_uvector<size_type> valid_counts =
-    cudf::reduction::detail::segmented_valid_counts(*d_col,
+    cudf::reduction::detail::segmented_valid_counts(col.null_mask(),
                                                     col.has_nulls(),
                                                     offsets,
                                                     null_handling,

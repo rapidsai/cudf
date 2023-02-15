@@ -24,7 +24,7 @@ namespace cudf {
 namespace reduction {
 namespace detail {
 
-rmm::device_uvector<size_type> segmented_valid_counts(column_device_view const& d_col,
+rmm::device_uvector<size_type> segmented_valid_counts(bitmask_type const* null_mask,
                                                       bool has_nulls,
                                                       device_span<size_type const> offsets,
                                                       null_policy null_handling,
@@ -34,7 +34,7 @@ rmm::device_uvector<size_type> segmented_valid_counts(column_device_view const& 
   auto const num_segments = offsets.size() - 1;
 
   if (has_nulls && (null_handling == null_policy::EXCLUDE)) {
-    return cudf::detail::segmented_count_bits(d_col.null_mask(),
+    return cudf::detail::segmented_count_bits(null_mask,
                                               offsets.begin(),
                                               offsets.end() - 1,
                                               offsets.begin() + 1,

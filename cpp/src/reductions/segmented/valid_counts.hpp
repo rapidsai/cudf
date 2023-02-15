@@ -35,14 +35,14 @@ namespace detail {
  * segment omits any null entries. Otherwise, this returns the number
  * of elements in each segment.
  *
- * @param d_col Input column
+ * @param null_mask Null values over which the segment offsets apply
  * @param has_nulls True if d_col contains any nulls
  * @param offsets Indices to segment boundaries
  * @param null_handling How null entries are processed within each segment
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-rmm::device_uvector<size_type> segmented_valid_counts(column_device_view const& col,
+rmm::device_uvector<size_type> segmented_valid_counts(bitmask_type const* null_mask,
                                                       bool has_nulls,
                                                       device_span<size_type const> offsets,
                                                       null_policy null_handling,
