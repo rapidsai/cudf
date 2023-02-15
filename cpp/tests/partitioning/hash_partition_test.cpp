@@ -32,6 +32,7 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using structs_col = cudf::test::structs_column_wrapper;
 
+using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
 // Transform vector of column wrappers to vector of column views
@@ -414,7 +415,8 @@ TEST_F(HashPartition, StructofStructWithNulls)
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
-    return structs_col(std::move(s1_children), null_at(3));
+    auto const null_it = null_at(3);
+    return structs_col(std::move(s1_children), std::vector<bool>(null_it, null_it + 6));
   }();
 
   fixed_width_column_wrapper<int32_t> first_col({7, 8, 9, 10, 11, 12});
