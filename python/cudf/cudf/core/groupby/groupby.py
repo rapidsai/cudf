@@ -275,6 +275,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
+    @property
+    def dtypes(self):
+        non_grouped = [
+            name
+            for name in self.obj._data.names
+            if name not in self.grouping.names
+        ]
+        all_dtypes = self.obj._dtypes
+        index = self.grouping.keys.unique().to_pandas()
+        df = pd.DataFrame(
+            {
+                name: pd.Series([all_dtypes[name]]).repeat(len(index))
+                for name in non_grouped
+            }
+        )
+        df.index = index
+        return df
+
     @cached_property
     def groups(self):
         """
@@ -1832,6 +1850,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     obj: "cudf.core.dataframe.DataFrame"
 
     _PROTECTED_KEYS = frozenset(("obj",))
+
+    # @property
+    # def dtypes(self):
+    #     return pd.Series
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
