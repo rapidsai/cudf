@@ -67,6 +67,60 @@ precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 launch_arg_getters: Dict[Any, Any] = {}
 
 
+def _get_best_ptx_file(archs, max_compute_capability):
+    """
+    Determine of the available PTX files which one is
+    the most recent up to and including the device cc
+    """
+    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
+    if filtered_archs:
+        return max(filtered_archs, key=lambda y: y[0])
+    else:
+        return None
+
+
+def _get_ptx_file(path, prefix):
+    if "RAPIDS_NO_INITIALIZE" in os.environ:
+        # cc=60 ptx is always built
+        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
+    else:
+        dev = cuda.get_current_device()
+
+        # Load the highest compute capability file available that is less than
+        # the current device's.
+        cc = int("".join(str(x) for x in dev.compute_capability))
+    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
+    if len(files) == 0:
+        raise RuntimeError(f"Missing PTX files for cc={cc}")
+    regular_sms = []
+
+    for f in files:
+        file_name = os.path.basename(f)
+        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
+        if sm_number.endswith("a"):
+            processed_sm_number = int(sm_number.rstrip("a"))
+            if processed_sm_number == cc:
+                return f
+        else:
+            regular_sms.append((int(sm_number), f))
+
+    regular_result = None
+
+    if regular_sms:
+        regular_result = _get_best_ptx_file(regular_sms, cc)
+
+    if regular_result is None:
+        raise RuntimeError(
+            "This cuDF installation is missing the necessary PTX "
+            f"files that are <={cc}."
+        )
+    else:
+        return regular_result[1]
+
+
+_PTX_FILE = _get_ptx_file(os.path.dirname(__file__), "shim_")
+
+
 @_cudf_nvtx_annotate
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
@@ -258,9 +312,9 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=[ptx_file], extensions=[str_view_arg_handler])(
-        _kernel
-    )
+    kernel = cuda.jit(
+        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
+    )(_kernel)
 
     return kernel
 
@@ -294,57 +348,6 @@ def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
         return column_from_udf_string_array(col)
     return as_column(col, retty)
-
-
-def _get_best_ptx_file(archs, max_compute_capability):
-    """
-    Determine of the available PTX files which one is
-    the most recent up to and including the device cc
-    """
-    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
-    if filtered_archs:
-        return max(filtered_archs, key=lambda y: y[0])
-    else:
-        return None
-
-
-def _get_ptx_file(path, prefix):
-    if "RAPIDS_NO_INITIALIZE" in os.environ:
-        # cc=60 ptx is always built
-        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
-    else:
-        dev = cuda.get_current_device()
-
-        # Load the highest compute capability file available that is less than
-        # the current device's.
-        cc = int("".join(str(x) for x in dev.compute_capability))
-    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
-    if len(files) == 0:
-        raise RuntimeError(f"Missing PTX files for cc={cc}")
-    regular_sms = []
-
-    for f in files:
-        file_name = os.path.basename(f)
-        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
-        if sm_number.endswith("a"):
-            processed_sm_number = int(sm_number.rstrip("a"))
-            if processed_sm_number == cc:
-                return f
-        else:
-            regular_sms.append((int(sm_number), f))
-
-    regular_result = None
-
-    if regular_sms:
-        regular_result = _get_best_ptx_file(regular_sms, cc)
-
-    if regular_result is None:
-        raise RuntimeError(
-            "This cuDF installation is missing the necessary PTX "
-            f"files that are <={cc}."
-        )
-    else:
-        return regular_result[1]
 
 
 def _get_extensionty_size(ty):
@@ -463,6 +466,3 @@ def set_malloc_heap_size(size=None):
 def column_to_string_view_array_init_heap(col):
     # lazily allocate heap only when a string needs to be returned
     return column_to_string_view_array(col)
-
-
-ptx_file = _get_ptx_file(os.path.dirname(__file__), "shim_")

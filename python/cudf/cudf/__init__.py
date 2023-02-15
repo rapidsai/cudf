@@ -91,9 +91,9 @@ else:
     # cuDF requires a stronger set of conditions than what is
     # checked by patch_numba_linker_if_needed due to the PTX
     # files needed for JIT Groupby Apply and string UDFs
-    from cudf.core.udf.utils import _setup_numba_linker, ptx_file
+    from cudf.core.udf.utils import _PTX_FILE, _setup_numba_linker
 
-    _setup_numba_linker(ptx_file)
+    _setup_numba_linker(_PTX_FILE)
 
     del patch_numba_linker_if_needed
 
