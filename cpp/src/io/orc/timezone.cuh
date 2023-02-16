@@ -52,7 +52,6 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  * beyond the one covered by the TZif file
  * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entries are used
  * for all times beyond the one covered by the TZif file
- * @param count Number of elements in @p ttimes and @p offsets
  * @param ts ORC timestamp
  *
  * @return GMT offset
@@ -64,7 +63,7 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
   if (ttimes.empty()) { return 0; }
 
   auto const ts_ttime_it = [&]() {
-    auto last_less_equal = [](auto begin, auto end, int64_t value) {
+    auto last_less_equal = [](auto begin, auto end, auto value) {
       auto const first_larger = thrust::upper_bound(thrust::seq, begin, end, value);
       // Return start of the range if all elements are larger than the value
       if (first_larger == begin) return begin;
