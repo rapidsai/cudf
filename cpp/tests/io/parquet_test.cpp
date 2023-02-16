@@ -359,7 +359,6 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 
 template <typename T>
 struct ParquetReaderSourceTest : public ParquetReaderTest {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 // Declare typed test cases
@@ -5132,12 +5131,23 @@ TYPED_TEST(ParquetReaderSourceTest, BufferSourceTypes)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer), *table);
   cudf::io::write_parquet(out_opts);
 
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(
-      cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size())));
-  const auto result = cudf::io::read_parquet(in_opts);
+  {
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(
+        cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size())));
+    const auto result = cudf::io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*table, result.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*table, result.tbl->view());
+  }
+
+  {
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(cudf::host_span<T const>(
+        reinterpret_cast<T const*>(out_buffer.data()), out_buffer.size())));
+    const auto result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*table, result.tbl->view());
+  }
 }
 
 TYPED_TEST(ParquetReaderSourceTest, BufferSourceArrayTypes)
@@ -5152,16 +5162,29 @@ TYPED_TEST(ParquetReaderSourceTest, BufferSourceArrayTypes)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&out_buffer), *table);
   cudf::io::write_parquet(out_opts);
 
-  auto spans = std::vector<cudf::host_span<T>>{
-    cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size()),
-    cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size())};
-  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info(cudf::host_span<cudf::host_span<T>>(spans.data(), spans.size())));
-  const auto result = cudf::io::read_parquet(in_opts);
-
   auto full_table = cudf::concatenate(std::vector<table_view>({*table, *table}));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*full_table, result.tbl->view());
+  {
+    auto spans = std::vector<cudf::host_span<T>>{
+      cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size()),
+      cudf::host_span<T>(reinterpret_cast<T*>(out_buffer.data()), out_buffer.size())};
+    cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info(cudf::host_span<cudf::host_span<T>>(spans.data(), spans.size())));
+    const auto result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*full_table, result.tbl->view());
+  }
+
+  {
+    auto spans = std::vector<cudf::host_span<T const>>{
+      cudf::host_span<T const>(reinterpret_cast<T const*>(out_buffer.data()), out_buffer.size()),
+      cudf::host_span<T const>(reinterpret_cast<T const*>(out_buffer.data()), out_buffer.size())};
+    cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info(cudf::host_span<cudf::host_span<T const>>(spans.data(), spans.size())));
+    const auto result = cudf::io::read_parquet(in_opts);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*full_table, result.tbl->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
