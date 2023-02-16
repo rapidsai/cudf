@@ -28,8 +28,7 @@ concurrency:
 jobs:
   cpp-build:
     secrets: inherit
-    # uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
-    uses: ./.github/workflows/conda-cpp-build.yaml
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
