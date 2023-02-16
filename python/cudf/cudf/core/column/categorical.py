@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from numba import cuda
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -130,7 +129,7 @@ class CategoricalAccessor(ColumnMethods):
         """
         return self._column.ordered
 
-    def as_ordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_ordered(self) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be ordered.
 
@@ -182,18 +181,12 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
         """
-        if inplace:
-            warnings.warn(
-                "The inplace parameter is deprecated and will be removed in a "
-                "future release. set_ordered will always return a new Series "
-                "in the future.",
-                FutureWarning,
-            )
+
         return self._return_or_inplace(
-            self._column.as_ordered(), inplace=inplace
+            self._column.as_ordered(),
         )
 
-    def as_unordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_unordered(self) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be unordered.
 
@@ -256,15 +249,8 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
-        if inplace:
-            warnings.warn(
-                "The inplace parameter is deprecated and will be removed in a "
-                "future release. set_ordered will always return a new Series "
-                "in the future.",
-                FutureWarning,
-            )
         return self._return_or_inplace(
-            self._column.as_unordered(), inplace=inplace
+            self._column.as_unordered(),
         )
 
     def add_categories(

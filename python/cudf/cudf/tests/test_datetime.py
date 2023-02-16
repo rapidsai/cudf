@@ -5,12 +5,12 @@ import operator
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
+import pandas as pd
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
@@ -191,8 +191,8 @@ def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())
     gdf_data = Series(pd_data)
     base = getattr(pd_data.dt, field)
-    test = getattr(gdf_data.dt, field).to_pandas().astype("int64")
-    assert_eq(base, test)
+    test = getattr(gdf_data.dt, field)
+    assert_eq(base, test, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])

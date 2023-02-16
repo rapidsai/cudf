@@ -7299,17 +7299,15 @@ def test_series_keys(ps):
 )
 @pytest.mark.parametrize("sort", [False, True])
 @pytest.mark.parametrize("ignore_index", [True, False])
-def test_dataframe_append_dataframe(df, other, sort, ignore_index):
+def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     pdf = df
     other_pd = other
 
     gdf = cudf.from_pandas(df)
     other_gd = cudf.from_pandas(other)
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = pdf.append(other_pd, sort=sort, ignore_index=ignore_index)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
+    expected = pd.concat([pdf, other_pd], sort=sort, ignore_index=ignore_index)
+    actual = cudf.concat([gdf, other_gd], sort=sort, ignore_index=ignore_index)
 
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)

@@ -1574,68 +1574,68 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             other = other.to_pandas()
         return self.to_pandas().difference(other, sort)
 
-    # @_cudf_nvtx_annotate
-    # def append(self, other):
-    #     """
-    #     Append a collection of MultiIndex objects together
+    @_cudf_nvtx_annotate
+    def append(self, other):
+        """
+        Append a collection of MultiIndex objects together
 
-    #     Parameters
-    #     ----------
-    #     other : MultiIndex or list/tuple of MultiIndex objects
+        Parameters
+        ----------
+        other : MultiIndex or list/tuple of MultiIndex objects
 
-    #     Returns
-    #     -------
-    #     appended : Index
+        Returns
+        -------
+        appended : Index
 
-    #     Examples
-    #     --------
-    #     >>> import cudf
-    #     >>> idx1 = cudf.MultiIndex(
-    #     ...     levels=[[1, 2], ['blue', 'red']],
-    #     ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
-    #     ... )
-    #     >>> idx2 = cudf.MultiIndex(
-    #     ...     levels=[[3, 4], ['blue', 'red']],
-    #     ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
-    #     ... )
-    #     >>> idx1
-    #     MultiIndex([(1,  'red'),
-    #                 (1, 'blue'),
-    #                 (2,  'red'),
-    #                 (2, 'blue')],
-    #                )
-    #     >>> idx2
-    #     MultiIndex([(3,  'red'),
-    #                 (3, 'blue'),
-    #                 (4,  'red'),
-    #                 (4, 'blue')],
-    #                )
-    #     >>> idx1.append(idx2)
-    #     MultiIndex([(1,  'red'),
-    #                 (1, 'blue'),
-    #                 (2,  'red'),
-    #                 (2, 'blue'),
-    #                 (3,  'red'),
-    #                 (3, 'blue'),
-    #                 (4,  'red'),
-    #                 (4, 'blue')],
-    #                )
-    #     """
-    #     if isinstance(other, (list, tuple)):
-    #         to_concat = [self]
-    #         to_concat.extend(other)
-    #     else:
-    #         to_concat = [self, other]
+        Examples
+        --------
+        >>> import cudf
+        >>> idx1 = cudf.MultiIndex(
+        ...     levels=[[1, 2], ['blue', 'red']],
+        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        ... )
+        >>> idx2 = cudf.MultiIndex(
+        ...     levels=[[3, 4], ['blue', 'red']],
+        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        ... )
+        >>> idx1
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue')],
+                   )
+        >>> idx2
+        MultiIndex([(3,  'red'),
+                    (3, 'blue'),
+                    (4,  'red'),
+                    (4, 'blue')],
+                   )
+        >>> idx1.append(idx2)
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue'),
+                    (3,  'red'),
+                    (3, 'blue'),
+                    (4,  'red'),
+                    (4, 'blue')],
+                   )
+        """
+        if isinstance(other, (list, tuple)):
+            to_concat = [self]
+            to_concat.extend(other)
+        else:
+            to_concat = [self, other]
 
-    #     for obj in to_concat:
-    #         if not isinstance(obj, MultiIndex):
-    #             raise TypeError(
-    #                 f"all objects should be of type "
-    #                 f"MultiIndex for MultiIndex.append, "
-    #                 f"found object of type: {type(obj)}"
-    #             )
+        for obj in to_concat:
+            if not isinstance(obj, MultiIndex):
+                raise TypeError(
+                    f"all objects should be of type "
+                    f"MultiIndex for MultiIndex.append, "
+                    f"found object of type: {type(obj)}"
+                )
 
-    #     return MultiIndex._concat(to_concat)
+        return MultiIndex._concat(to_concat)
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):

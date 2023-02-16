@@ -7,10 +7,10 @@ from contextlib import contextmanager
 from textwrap import dedent
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import cudf
+import pandas as pd
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_134
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -363,8 +363,7 @@ def test_categorical_set_categories_preserves_order():
     )
 
 
-@pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_as_ordered(pd_str_cat, inplace):
+def test_categorical_as_ordered(pd_str_cat):
 
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(False))
@@ -372,39 +371,23 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
     assert cd_sr.cat.ordered is False
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
-    # inside as_ordered.
-    with pytest.warns(FutureWarning):
-        pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
-    with expect_warning_if(inplace, FutureWarning):
-        cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
-    if inplace:
-        pd_sr_1 = pd_sr
-        cd_sr_1 = cd_sr
+    pd_sr_1 = pd_sr.cat.as_ordered()
+    cd_sr_1 = cd_sr.cat.as_ordered()
 
     assert cd_sr_1.cat.ordered is True
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
     assert str(cd_sr_1) == str(pd_sr_1)
 
 
-@pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_as_unordered(pd_str_cat, inplace):
-
+def test_categorical_as_unordered(pd_str_cat):
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(True))
 
     assert cd_sr.cat.ordered is True
     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    # pandas internally uses a deprecated call to set_ordered(inplace=inplace)
-    # inside as_unordered.
-    with pytest.warns(FutureWarning):
-        pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
-    with expect_warning_if(inplace, FutureWarning):
-        cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
-    if inplace:
-        pd_sr_1 = pd_sr
-        cd_sr_1 = cd_sr
+    pd_sr_1 = pd_sr.cat.as_unordered()
+    cd_sr_1 = cd_sr.cat.as_unordered()
 
     assert cd_sr_1.cat.ordered is False
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import math
 import re
@@ -603,6 +603,7 @@ class DateOffset:
                 f"{op} not supported between {type(self).__name__}"
                 f" and {type(datetime_col).__name__}"
             )
+        actual_dtype = datetime_col.dtype
         if not self._is_no_op:
             if "months" in self._scalars:
                 rhs = self._generate_months_column(len(datetime_col), op)
@@ -615,7 +616,7 @@ class DateOffset:
                         value, length=len(datetime_col)
                     )
 
-        return datetime_col
+        return datetime_col.astype(actual_dtype)
 
     def _generate_months_column(self, size, op):
         months = self._scalars["months"]

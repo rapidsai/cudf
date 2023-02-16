@@ -5759,6 +5759,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # will stop supporting numeric_only=None and users will have to
             # specify True/False. At that time we should also top our implicit
             # removal of non-numeric columns here.
+            # TODO: PREM
             assert Version(pd.__version__) < Version("2.0.0")
             msg = (
                 "Row-wise operations currently only support int, float "
