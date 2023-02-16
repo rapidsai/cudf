@@ -1771,9 +1771,10 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              int64_t nanos   = secondary_val;
-              nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
+
+              int64_t nanos = secondary_val;
+              nanos         = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
 
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
@@ -1788,18 +1789,16 @@ __global__ void __launch_bounds__(block_size)
                 using cuda::std::chrono::duration_cast;
                 switch (s->chunk.timestamp_type_id) {
                   case type_id::TIMESTAMP_SECONDS:
-                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                    return (d_s + duration_cast<duration_s>(d_ns)).count();
                   case type_id::TIMESTAMP_MILLISECONDS:
-                    return duration_cast<duration_ms>(d_s).count() +
-                           duration_cast<duration_ms>(d_ns).count();
+                    return (d_s + duration_cast<duration_ms>(d_ns)).count();
                   case type_id::TIMESTAMP_MICROSECONDS:
-                    return duration_cast<duration_us>(d_s).count() +
-                           duration_cast<duration_us>(d_ns).count();
+                    return (d_s + duration_cast<duration_us>(d_ns)).count();
                   case type_id::TIMESTAMP_NANOSECONDS:
                   default:
-                    return duration_cast<duration_ns>(d_s).count() +
-                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
-                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                    // nanoseconds as output in case of `type_id::EMPTY` and
+                    // `type_id::TIMESTAMP_NANOSECONDS`
+                    return (d_s + d_ns).count();
                 }
               }();
 
