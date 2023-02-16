@@ -79,9 +79,9 @@ extensions = [
                 CUDF_KAFKA_ROOT,
             ]
         ),
-        libraries=["cudf", "cudf_kafka", "fmt"],
+        libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++17"],
+        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1"],
     )
 ]
 
