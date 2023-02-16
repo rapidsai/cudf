@@ -20,7 +20,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -41,7 +40,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-#include <cub/cub.cuh>
+#include <cub/warp/warp_reduce.cuh>
 
 namespace cudf {
 namespace strings {
@@ -103,6 +102,36 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   return results;
 }
 
+struct count_characters_parallel_fn {
+  column_device_view const d_strings;
+  size_type* d_lengths;
+
+  __device__ void operator()(size_type idx)
+  {
+    using warp_reduce = cub::WarpReduce<size_type>;
+    __shared__ typename warp_reduce::TempStorage temp_storage;
+
+    auto const str_idx  = idx / cudf::detail::warp_size;
+    auto const lane_idx = idx % cudf::detail::warp_size;
+    if (d_strings.is_null(str_idx)) {
+      d_lengths[str_idx] = 0;
+      return;
+    }
+    auto const d_str = d_strings.element<string_view>(str_idx);
+    if (d_str.size_bytes() < cudf::detail::warp_size) {
+      d_lengths[str_idx] = d_str.length();
+      return;
+    }
+    auto count   = 0;
+    auto str_ptr = d_str.data();
+    for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
+      count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
+    }
+    auto char_count = warp_reduce(temp_storage).Sum(count);
+    if (lane_idx == 0) { d_lengths[str_idx] = char_count; }
+  }
+};
+
 std::unique_ptr<column> count_characters_parallel(strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
@@ -122,30 +151,7 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size() * cudf::detail::warp_size,
-                     [d_strings = *d_strings, d_lengths] __device__(size_type idx) {
-                       using warp_reduce = cub::WarpReduce<size_type>;
-                       __shared__ typename warp_reduce::TempStorage temp_storage;
-
-                       auto const str_idx  = idx / cudf::detail::warp_size;
-                       auto const lane_idx = idx % cudf::detail::warp_size;
-                       if (d_strings.is_null(str_idx)) {
-                         d_lengths[str_idx] = 0;
-                         return;
-                       }
-                       auto const d_str = d_strings.element<string_view>(str_idx);
-                       if (d_str.size_bytes() < cudf::detail::warp_size) {
-                         d_lengths[str_idx] = d_str.length();
-                         return;
-                       }
-                       auto count   = 0;
-                       auto str_ptr = d_str.data();
-                       for (auto i = lane_idx; i < d_str.size_bytes();
-                            i += cudf::detail::warp_size) {
-                         count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
-                       }
-                       auto char_count = warp_reduce(temp_storage).Sum(count);
-                       if (lane_idx == 0) { d_lengths[str_idx] = char_count; }
-                     });
+                     count_characters_parallel_fn{*d_strings, d_lengths});
 
   results->set_null_count(input.null_count());  // reset null count
   return results;
