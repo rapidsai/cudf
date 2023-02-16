@@ -68,6 +68,8 @@ dependencies:
           - cxx-compiler
           - librdkafka=1.7.0
           - protobuf=4.21
+          - fmt>=9.1.0,<10
+          - spdlog>=1.11.0,<1.12
     specific:
       - output_types: conda
         matrices:
