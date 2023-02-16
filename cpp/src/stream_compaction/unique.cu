@@ -65,28 +65,40 @@ std::unique_ptr<table> unique(table_view const& input,
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view    = input.select(keys);
 
-  auto comp      = cudf::experimental::row::equality::self_comparator(keys_view, stream);
-  auto row_equal = comp.equal_to(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+  auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
 
-  // get indices of unique rows
-  auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
-                                thrust::counting_iterator<size_type>(num_rows),
-                                mutable_view->begin<size_type>(),
-                                row_equal,
-                                keep,
-                                stream);
-  auto indices_view =
-    cudf::detail::slice(column_view(*unique_indices),
-                        0,
-                        thrust::distance(mutable_view->begin<size_type>(), result_end));
+  auto const comparator_helper = [&](auto const row_equal) {
+    // get indices of unique rows
+    auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
+                                  thrust::counting_iterator<size_type>(num_rows),
+                                  mutable_view->begin<size_type>(),
+                                  row_equal,
+                                  keep,
+                                  stream);
 
-  // gather unique rows and return
-  return detail::gather(input,
-                        indices_view,
-                        out_of_bounds_policy::DONT_CHECK,
-                        detail::negative_index_policy::NOT_ALLOWED,
-                        stream,
-                        mr);
+    auto indices_view =
+      cudf::detail::slice(column_view(*unique_indices),
+                          0,
+                          thrust::distance(mutable_view->begin<size_type>(), result_end));
+
+    // gather unique rows and return
+    return detail::gather(input,
+                          indices_view,
+                          out_of_bounds_policy::DONT_CHECK,
+                          detail::negative_index_policy::NOT_ALLOWED,
+                          stream,
+                          mr);
+  };
+
+  if (cudf::detail::has_nested_columns(keys_view)) {
+    auto row_equal =
+      comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+    return comparator_helper(row_equal);
+  } else {
+    auto row_equal =
+      comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(keys_view)}, nulls_equal);
+    return comparator_helper(row_equal);
+  }
 }
 }  // namespace detail
 
