@@ -89,8 +89,8 @@ dtype: int64
 ## Notes
 
 When copy-on-write is enabled, there is no longer a concept of views when
-slicing or indexing. In this sense indexing behaves as one would expect for
-builtin Python containers like `lists`, rather than indexing `numpy arrays`.
+slicing or indexing. In this sense, indexing behaves as one would expect for
+built-in Python containers like `lists`, rather than indexing `numpy arrays`.
 Modifying a "view" created by cuDF will always trigger a copy and will not
 modify the original object.
 
