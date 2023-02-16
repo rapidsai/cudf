@@ -16,17 +16,9 @@ cmake_minimum_required(VERSION 3.23.1)
 
 include(rapids-cmake)
 include(rapids-cpm)
-include(rapids-cuda)
 include(rapids-find)
 
 rapids_cuda_init_architectures(udf-cpp)
-
-# Create a project so that we can enable CUDA architectures in this file.
-project(
-  udf-cpp
-  VERSION ${udf_version}
-  LANGUAGES CUDA
-)
 
 rapids_cpm_init()
 
@@ -41,7 +33,7 @@ rapids_cpm_libcudacxx(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-export
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
-  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${udf-cpp_SOURCE_DIR}/strings/include>"
+  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
 )
 
 set_target_properties(
@@ -108,7 +100,9 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
 
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
-  target_include_directories(${tgt} PUBLIC strings/include)
+  target_include_directories(
+    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+  )
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
