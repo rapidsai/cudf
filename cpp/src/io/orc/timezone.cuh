@@ -33,7 +33,6 @@ namespace cudf {
 namespace io {
 
 struct timezone_table_view {
-  int32_t gmt_offset = 0;
   cudf::device_span<int64_t const> ttimes;
   cudf::device_span<int32_t const> offsets;
 };
@@ -58,58 +57,36 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-CUDF_HOST_DEVICE inline int32_t get_gmt_offset_impl(int64_t const* ttimes,
-                                                    int32_t const* offsets,
-                                                    size_t count,
-                                                    int64_t ts)
-{
-  // Returns start of the range if all elements are larger than the input timestamp
-  auto last_less_equal_ttime_idx = [&](long begin_idx, long end_idx, int64_t ts) {
-    auto const first_larger_ttime =
-      thrust::upper_bound(thrust::seq, ttimes + begin_idx, ttimes + end_idx, ts);
-    // Element before the first larger element is the last one less of equal
-    return std::max(first_larger_ttime - ttimes - 1, begin_idx);
-  };
-
-  auto const file_entry_cnt = count - cycle_entry_cnt;
-  // Search in the file entries if the timestamp is in range
-  if (ts <= ttimes[file_entry_cnt - 1]) {
-    return offsets[last_less_equal_ttime_idx(0, file_entry_cnt, ts)];
-  } else {
-    // Search in the 400-year cycle if outside of the file entries range
-    return offsets[last_less_equal_ttime_idx(
-      file_entry_cnt, count, (ts + cycle_seconds) % cycle_seconds)];
-  }
-}
-
-/**
- * @brief Host `get_gmt_offset` interface.
- *
- * Implemented in `get_gmt_offset_impl`.
- */
-inline __host__ int32_t get_gmt_offset(cudf::host_span<int64_t const> ttimes,
-                                       cudf::host_span<int32_t const> offsets,
-                                       int64_t ts)
-{
-  CUDF_EXPECTS(ttimes.size() == offsets.size(),
-               "transition times and offsets must have the same length");
-  return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);
-}
-
-/**
- * @brief Device `get_gmt_offset` interface.
- *
- * Implemented in `get_gmt_offset_impl`.
- */
 inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes,
                                          cudf::device_span<int32_t const> offsets,
                                          int64_t ts)
 {
-  return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);
+  if (ttimes.empty()) { return 0; }
+
+  auto const ts_ttime_it = [&]() {
+    auto last_less_equal = [](auto begin, auto end, int64_t value) {
+      auto const first_larger = thrust::upper_bound(thrust::seq, begin, end, value);
+      // Return start of the range if all elements are larger than the value
+      if (first_larger == begin) return begin;
+      // Element before the first larger element is the last one less or equal
+      return first_larger - 1;
+    };
+
+    auto const file_entry_end = ttimes.begin() + (ttimes.size() - cycle_entry_cnt);
+
+    if (ts <= *(file_entry_end - 1)) {
+      // Search the file entries if the timestamp is in range
+      return last_less_equal(ttimes.begin(), file_entry_end, ts);
+    } else {
+      // Search the 400-year cycle if outside of the file entries range
+      return last_less_equal(file_entry_end, ttimes.end(), (ts + cycle_seconds) % cycle_seconds);
+    }
+  }();
+
+  return offsets[ts_ttime_it - ttimes.begin()];
 }
 
 class timezone_table {
-  int32_t gmt_offset = 0;
   rmm::device_uvector<int64_t> ttimes;
   rmm::device_uvector<int32_t> offsets;
 
@@ -118,13 +95,11 @@ class timezone_table {
   timezone_table() : ttimes{0, cudf::get_default_stream()}, offsets{0, cudf::get_default_stream()}
   {
   }
-  timezone_table(int32_t gmt_offset,
-                 rmm::device_uvector<int64_t>&& ttimes,
-                 rmm::device_uvector<int32_t>&& offsets)
-    : gmt_offset{gmt_offset}, ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
+  timezone_table(rmm::device_uvector<int64_t>&& ttimes, rmm::device_uvector<int32_t>&& offsets)
+    : ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
   {
   }
-  [[nodiscard]] timezone_table_view view() const { return {gmt_offset, ttimes, offsets}; }
+  [[nodiscard]] timezone_table_view view() const { return {ttimes, offsets}; }
 };
 
 /**

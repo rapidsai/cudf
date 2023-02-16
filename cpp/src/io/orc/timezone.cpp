@@ -26,9 +26,6 @@ namespace io {
 constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
 std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 
-// Seconds from Jan 1st, 1970 to Jan 1st, 2015
-constexpr int64_t orc_utc_offset = 1420070400;
-
 #pragma pack(push, 1)
 /**
  * @brief 32-bit TZif header
@@ -461,12 +458,9 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
                         .count();
   }
 
-  rmm::device_uvector<int64_t> d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
-  rmm::device_uvector<int32_t> d_offsets = cudf::detail::make_device_uvector_async(offsets, stream);
-  auto const gmt_offset                  = get_gmt_offset(ttimes, offsets, orc_utc_offset);
-  stream.synchronize();
-
-  return {gmt_offset, std::move(d_ttimes), std::move(d_offsets)};
+  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
+  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream);
+  return {std::move(d_ttimes), std::move(d_offsets)};
 }
 
 }  // namespace io

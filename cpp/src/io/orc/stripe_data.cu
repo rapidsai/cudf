@@ -1446,7 +1446,8 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
+    s->top.data.utc_epoch =
+      kORCTimeToUTC - get_gmt_offset(tz_table.ttimes, tz_table.offsets, kORCTimeToUTC);
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1772,9 +1773,8 @@ __global__ void __launch_bounds__(block_size)
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
               int64_t nanos   = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-              if (!tz_table.ttimes.empty()) {
-                seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
-              }
+              seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
+
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
