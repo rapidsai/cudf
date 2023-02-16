@@ -36,7 +36,7 @@ trap "EXITCODE=1" ERR
 set +e
 
 # Run gtests with compute-sanitizer
-rapids-logger "Run libcudf/libcudf_kafka gtests with compute-sanitizer"
+echo "RAPIDS_BUILD_TYPE=${RAPIDS_BUILD_TYPE}"
 
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     rapids-logger "Memcheck gtests with rmm_mode=cuda"

@@ -42,6 +42,20 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.04
     with:
       build_type: pull-request
+  # Just testing this for now
+  conda-cpp-memcheck-tests:
+    needs: conda-cpp-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-latest-1"
+      arch: "amd64"
+      container_image: "rapidsai/ci:latest"
+      run_script: "ci/test_cpp_memcheck.sh"
   # conda-python-build:
   #   needs: conda-cpp-build
   #   secrets: inherit
