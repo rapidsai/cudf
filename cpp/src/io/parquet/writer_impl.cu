@@ -1650,22 +1650,22 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     }
   }
 
-  // until now we've been using a uniform fragment size. if there are any columns with
-  // a fragment size != max_page_fragment_size then resize the fragments array and
-  // update chunks with new fragment info
+  // The code preceding this used a uniform fragment size for all columns. Now recompute
+  // fragments with a (potentially) varying number of fragments per column.
 
-  // first figure out the total number of fragments
-  // calculate start offset for each column
+  // first figure out the total number of fragments and calculate the start offset for each column
   std::vector<size_type> frag_offsets;
-  size_type total_frags = 0;
-
-  if (frags_per_column.size() > 0) {
-    std::exclusive_scan(frags_per_column.data(),
-                        frags_per_column.data() + num_columns + 1,
-                        std::back_inserter(frag_offsets),
-                        0);
-    total_frags = frag_offsets[num_columns];
-  }
+  size_type const total_frags = [&]() {
+    if (frags_per_column.size() > 0) {
+      std::exclusive_scan(frags_per_column.data(),
+                          frags_per_column.data() + num_columns + 1,
+                          std::back_inserter(frag_offsets),
+                          0);
+      return frag_offsets[num_columns];
+    } else {
+      return 0;
+    }
+  }();
 
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   hostdevice_vector<gpu::PageFragment> page_fragments(total_frags, stream);
