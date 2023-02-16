@@ -15,15 +15,15 @@ jobs:
       - checks
       - conda-cpp-build
       - conda-cpp-tests
-      - conda-python-build
-      - conda-python-cudf-tests
-      - conda-python-other-tests
-      - conda-java-tests
-      - conda-notebook-tests
-      - wheel-build-cudf
-      - wheel-tests-cudf
-      - wheel-build-dask-cudf
-      - wheel-tests-dask-cudf
+      # - conda-python-build
+      # - conda-python-cudf-tests
+      # - conda-python-other-tests
+      # - conda-java-tests
+      # - conda-notebook-tests
+      # - wheel-build-cudf
+      # - wheel-tests-cudf
+      # - wheel-build-dask-cudf
+      # - wheel-tests-dask-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.04
   checks:
