@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,8 +83,8 @@ struct base_split_tokenizer {
    * @brief This counts the tokens for strings that contain delimiters
    *
    * Counting tokens is the same regardless if counting from the left
-   * or from the right. This logic counts from the left which is simpler
-   * logic. The count will be truncated appropriately to the max_tokens value.
+   * or from the right. This logic counts from the left which is simpler.
+   * The count will be truncated appropriately to the max_tokens value.
    *
    * @param idx Index of input string
    * @param d_positions Start positions of all the delimiters
