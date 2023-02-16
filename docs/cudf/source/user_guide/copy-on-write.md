@@ -88,7 +88,11 @@ dtype: int64
 
 ## Notes
 
-When copy-on-write is enabled, there is no concept of views. Modifying any view created inside cuDF will always trigger a copy and will not modify the original object.
+When copy-on-write is enabled, there is no longer a concept of views when
+slicing or indexing. In this sense indexing behaves as one would expect for
+builtin Python containers like `lists`, rather than indexing `numpy arrays`.
+Modifying a "view" created by cuDF will always trigger a copy and will not
+modify the original object.
 
 Copy-on-write produces much more consistent copy semantics. Since every object is a copy of the original, users no longer have to think about when modifications may unexpectedly happen in place. This will bring consistency across operations and bring cudf and pandas behavior into alignment when copy-on-write is enabled for both. Here is one example where pandas and cudf are currently inconsistent without copy-on-write enabled:
 
