@@ -419,26 +419,23 @@ struct column_to_strings_fn {
     auto list_string           = [&]() {
       // nulls are replaced due to special handling of all-null lists as empty lists
       // by join_list_elements
+      auto child_string_with_null = [&]() {
+        if (child_view.type().id() == type_id::STRUCT) {
+          return (*this).template operator()<cudf::struct_view>(
+            child_view,
+            children_names.size() > child_index ? children_names[child_index].children
+                                                          : std::vector<column_name_info>{});
+        } else if (child_view.type().id() == type_id::LIST) {
+          return (*this).template operator()<cudf::list_view>(
+            child_view,
+            children_names.size() > child_index ? children_names[child_index].children
+                                                          : std::vector<column_name_info>{});
+        } else {
+          return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        }
+      };
       auto child_string = cudf::strings::detail::replace_nulls(
-        [&]() {
-          if (child_view.type().id() == type_id::STRUCT) {
-            return (*this).template operator()<cudf::struct_view>(
-              child_view,
-              children_names.size() > child_index ? children_names[child_index].children
-                                                            : std::vector<column_name_info>{});
-          } else if (child_view.type().id() == type_id::LIST) {
-            return (*this).template operator()<cudf::list_view>(
-              child_view,
-              children_names.size() > child_index ? children_names[child_index].children
-                                                            : std::vector<column_name_info>{});
-          } else {
-            return cudf::type_dispatcher(child_view.type(), *this, child_view);
-          }
-        }()
-          ->view(),
-        narep,
-        stream_,
-        rmm::mr::get_current_device_resource());
+        child_string_with_null()->view(), narep, stream_, rmm::mr::get_current_device_resource());
       auto const list_child_string =
         column_view(column.type(),
                     column.size(),
