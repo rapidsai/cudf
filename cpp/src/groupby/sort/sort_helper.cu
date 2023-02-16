@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,17 +149,28 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1, stream);
 
-  auto const comparator  = cudf::experimental::row::equality::self_comparator{_keys, stream};
-  auto const d_key_equal = comparator.equal_to(
-    cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
+  auto const comparator = cudf::experimental::row::equality::self_comparator{_keys, stream};
+
   auto const sorted_order = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
-  result_end = thrust::unique_copy(rmm::exec_policy(stream),
-                                   thrust::counting_iterator<size_type>(0),
-                                   thrust::counting_iterator<size_type>(num_keys(stream)),
-                                   _group_offsets->begin(),
-                                   permuted_row_equality_comparator(d_key_equal, sorted_order));
+  if (cudf::detail::has_nested_columns(_keys)) {
+    auto const d_key_equal = comparator.equal_to<true>(
+      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
+    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                     thrust::counting_iterator<size_type>(0),
+                                     thrust::counting_iterator<size_type>(num_keys(stream)),
+                                     _group_offsets->begin(),
+                                     permuted_row_equality_comparator(d_key_equal, sorted_order));
+  } else {
+    auto const d_key_equal = comparator.equal_to<false>(
+      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
+    result_end = thrust::unique_copy(rmm::exec_policy(stream),
+                                     thrust::counting_iterator<size_type>(0),
+                                     thrust::counting_iterator<size_type>(num_keys(stream)),
+                                     _group_offsets->begin(),
+                                     permuted_row_equality_comparator(d_key_equal, sorted_order));
+  }
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
   _group_offsets->set_element(num_groups, num_keys(stream), stream);
