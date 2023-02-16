@@ -2960,3 +2960,15 @@ def test_groupby_ngroup(by, ascending, df_ngroup):
     expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)
     actual = df_ngroup.groupby(by).ngroup(ascending=ascending)
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_groupby_dtypes(groups):
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
+    )
+    pdf = df.to_pandas()
+
+    assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
