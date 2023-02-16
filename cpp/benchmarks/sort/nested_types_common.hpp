@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,32 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/utilities/default_stream.hpp>
-
 #include <nvbench/nvbench.cuh>
 
 #include <random>
 
-void bench_groupby_struct_keys(nvbench::state& state)
+inline std::unique_ptr<cudf::table> create_lists_data(nvbench::state& state)
+{
+  const size_t size_bytes(state.get_int64("size_bytes"));
+  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("depth"))};
+  auto const null_frequency{state.get_float64("null_frequency")};
+
+  data_profile table_profile;
+  table_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
+  table_profile.set_list_depth(depth);
+  table_profile.set_null_probability(null_frequency);
+  return create_random_table({cudf::type_id::LIST}, table_size_bytes{size_bytes}, table_profile);
+}
+
+inline std::unique_ptr<cudf::table> create_structs_data(nvbench::state& state,
+                                                        cudf::size_type const n_cols = 1)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
@@ -35,7 +47,6 @@ void bench_groupby_struct_keys(nvbench::state& state)
   std::uniform_int_distribution<int> distribution(0, 100);
 
   const cudf::size_type n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
-  const cudf::size_type n_cols{1};
   const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
   const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
@@ -57,7 +68,8 @@ void bench_groupby_struct_keys(nvbench::state& state)
   });
 
   std::vector<std::unique_ptr<cudf::column>> child_cols = std::move(cols);
-  // Add some layers
+  // Nest the child columns in a struct, then nest that struct column inside another
+  // struct column up to the desired depth
   for (int i = 0; i < depth; i++) {
     std::vector<bool> struct_validity;
     std::uniform_int_distribution<int> bool_distribution(0, 100 * (i + 1));
@@ -67,29 +79,7 @@ void bench_groupby_struct_keys(nvbench::state& state)
     child_cols = std::vector<std::unique_ptr<cudf::column>>{};
     child_cols.push_back(struct_col.release());
   }
-  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
-    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
 
-  auto const keys_table = cudf::table(std::move(child_cols));
-  auto const vals = create_random_column(cudf::type_to_id<int64_t>(), row_count{n_rows}, profile);
-
-  cudf::groupby::groupby gb_obj(keys_table.view());
-
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals->view();
-  requests[0].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-
-  // Set up nvbench default stream
-  auto stream = cudf::get_default_stream();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  // Create table view
+  return std::make_unique<cudf::table>(std::move(child_cols));
 }
-
-NVBENCH_BENCH(bench_groupby_struct_keys)
-  .set_name("groupby_struct_keys")
-  .add_int64_power_of_two_axis("NumRows", {10, 16, 20})
-  .add_int64_axis("Depth", {0, 1, 8})
-  .add_int64_axis("Nulls", {0, 1});
