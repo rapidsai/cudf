@@ -185,9 +185,6 @@ TEST_F(groupby_min_string_test, min_sorted_strings)
     {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
-  // cudf::test::fixed_width_column_wrapper<size_type> expect_argmin(
-  // {6, 10, 14, 18, 22, 26, 30, 34, 38, 42, -1},
-  // {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
   auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys,
                   vals,

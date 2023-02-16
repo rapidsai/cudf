@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// #include <tests/groupby/groupby_test_util.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -26,11 +24,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-inline void test_groups(cudf::column_view const& keys,
-                        cudf::column_view const& expect_grouped_keys,
-                        std::vector<cudf::size_type> const& expect_group_offsets,
-                        cudf::column_view const& values                = {},
-                        cudf::column_view const& expect_grouped_values = {})
+void test_groups(cudf::column_view const& keys,
+                 cudf::column_view const& expect_grouped_keys,
+                 std::vector<cudf::size_type> const& expect_group_offsets,
+                 cudf::column_view const& values                = {},
+                 cudf::column_view const& expect_grouped_values = {})
 {
   cudf::groupby::groupby gb(cudf::table_view({keys}));
   cudf::groupby::groupby::groups gb_groups;

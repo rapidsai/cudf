@@ -364,9 +364,10 @@ TEST_F(groupby_dictionary_keys_test, basic)
 struct groupby_cache_test : public cudf::test::BaseFixture {
 };
 
-// To check if the cache doesn't insert multiple times to cache for same cudf::aggregation on a
-// column in same request. If this test fails, then insert happened and key stored in cache map
-// becomes dangling reference. Any comparison with same cudf::aggregation as key will fail.
+// To check if the cache doesn't insert multiple times to cache for the same aggregation on a
+// column in the same request. If this test fails, then insert happened and the key stored in the
+// cache map becomes a dangling reference. Any comparison with the same aggregation as the key will
+// fail.
 TEST_F(groupby_cache_test, duplicate_agggregations)
 {
   using K = int32_t;
@@ -392,10 +393,10 @@ TEST_F(groupby_cache_test, duplicate_agggregations)
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
 
-// To check if the cache doesn't insert multiple times to cache for same cudf::aggregation on same
-// column but in different requests. If this test fails, then insert happened and key stored in
-// cache map becomes dangling reference. Any comparison with same cudf::aggregation as key will
-// fail.
+// To check if the cache doesn't insert multiple times to cache for the same aggregation on the same
+// column but in different requests. If this test fails, then insert happened and the key stored in
+// the cache map becomes a dangling reference. Any comparison with the same aggregation as the key
+// will fail.
 TEST_F(groupby_cache_test, duplicate_columns)
 {
   using K = int32_t;

@@ -23,11 +23,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <initializer_list>
-#include <iterator>
-#include <type_traits>
 #include <vector>
 
 using namespace cudf::test::iterators;

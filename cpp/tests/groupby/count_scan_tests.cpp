@@ -23,8 +23,7 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-using K           = int32_t;
-using key_wrapper = cudf::test::fixed_width_column_wrapper<K>;
+using key_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 template <typename T>
 struct groupby_count_scan_test : public cudf::test::BaseFixture {
@@ -189,6 +188,7 @@ struct groupby_dictionary_count_scan_test : public cudf::test::BaseFixture {
 
 TEST_F(groupby_dictionary_count_scan_test, basic)
 {
+  using K              = int32_t;
   using V              = std::string;
   using R              = cudf::detail::target_type_t<V, cudf::aggregation::COUNT_ALL>;
   using result_wrapper = cudf::test::fixed_width_column_wrapper<R, int32_t>;
