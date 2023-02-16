@@ -244,8 +244,8 @@ struct source_info {
    *
    * @param host_buffers Input buffers in host memory
    */
-  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<T>())>
-  explicit source_info(cudf::host_span<cudf::host_span<T const>> const& host_buffers)
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<cudf::host_span<T>> const host_buffers)
     : _type(io_type::HOST_BUFFER)
   {
     if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
@@ -258,7 +258,7 @@ struct source_info {
                          reinterpret_cast<std::byte const*>(s.data()), s.size()};
                      });
     } else {
-      _host_buffers = host_buffers;
+      _host_buffers.assign(host_buffers.begin(), host_buffers.end());
     }
   }
 
@@ -267,8 +267,8 @@ struct source_info {
    *
    * @param host_data Input buffer in host memory
    */
-  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<T>())>
-  explicit source_info(cudf::host_span<T const> host_data)
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<T> host_data)
     : _type(io_type::HOST_BUFFER),
       _host_buffers{cudf::host_span<std::byte const>(
         reinterpret_cast<std::byte const*>(host_data.data()), host_data.size())}
