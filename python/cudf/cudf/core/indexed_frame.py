@@ -1629,7 +1629,7 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    def hash_values(self, method="murmur3", seed=0):
+    def hash_values(self, method="murmur3", seed=None):
         """Compute the hash of values in this column.
 
         Parameters
@@ -1639,7 +1639,7 @@ class IndexedFrame(Frame):
             * murmur3: MurmurHash3 hash function.
             * md5: MD5 hash function.
 
-        seed : int, default 0
+        seed : int, optional
             Seed value to use for the hash function.
             Note - This only has effect for the following supported
             hash functions:
@@ -1700,6 +1700,8 @@ class IndexedFrame(Frame):
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
+        if seed is None:
+            seed = 0
         return cudf.Series._from_data(
             {None: libcudf.hash.hash([*self._columns], method, seed)},
             index=self.index,
