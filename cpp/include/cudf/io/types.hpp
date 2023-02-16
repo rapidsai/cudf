@@ -178,9 +178,10 @@ struct host_buffer {
 template <typename T>
 constexpr inline auto is_byte_like_type()
 {
-  return cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, char> ||
-         cuda::std::is_same_v<T, uint8_t> || cuda::std::is_same_v<T, unsigned char> ||
-         cuda::std::is_same_v<T, std::byte>;
+  using non_cv_T = std::remove_cv_t<T>;
+  return std::is_same_v<non_cv_T , int8_t> || std::is_same_v<non_cv_T , char> ||
+         std::is_same_v<non_cv_T , uint8_t> || std::is_same_v<non_cv_T , unsigned char> ||
+         std::is_same_v<non_cv_T , std::byte>;
 }
 
 /**
