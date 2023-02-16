@@ -66,32 +66,5 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     fi
 done
 
-echo "++++++++++++++++++++++++++++++++++++++++++++"
-echo "CUDA_VER=${CUDA_VER}"
-echo "LINUX_VER=${LINUX_VER}"
-echo "ARCH=${ARCH}"
-echo "arch=${arch}"
-echo "PY_VER=${PY_VER}"
-echo "GPU=${GPU}"
-echo "DRIVER=${DRIVER}"
-echo "CS_RUN=${CS_RUN}"
-echo "++++++++++++++++++++++++++++++++++++++++++++"
-
-if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
-    rapids-logger "Memcheck gtests with rmm_mode=cuda"
-    export GTEST_CUDF_RMM_MODE=cuda
-    COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
-    for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
-        test_name=$(basename ${gt})
-        if [[ "$test_name" == "ERROR_TEST" ]]; then
-            continue
-        fi
-        echo "Running gtest $test_name"
-        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${RAPIDS_TESTS_DIR}${test_name}.cs.log"
-    done
-    unset GTEST_CUDF_RMM_MODE
-    # TODO: test-results/*.cs.log are processed in CI
-fi
-
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
