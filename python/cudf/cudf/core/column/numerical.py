@@ -13,7 +13,6 @@ from typing import (
     cast,
 )
 
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -729,7 +728,7 @@ class NumericalColumn(NumericalBaseColumn):
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
-            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+            pd_series = pd.Series(self.values_host, copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
 
