@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ void test_cudaLaunchKernel()
 
   try {
     kernel<<<1, 1>>>();
-  } catch (std::runtime_error) {
+  } catch (std::runtime_error&) {
     return;
   }
   throw std::runtime_error("No exception raised for kernel on default stream!");
