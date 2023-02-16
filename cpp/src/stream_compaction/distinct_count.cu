@@ -135,8 +135,6 @@ cudf::size_type distinct_count(table_view const& keys,
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
-  // compaction_hash hash_key{has_null, *table_ptr};
-  // row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
 
