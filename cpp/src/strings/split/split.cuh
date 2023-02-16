@@ -37,9 +37,7 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace cudf::strings::detail {
 
 /**
  * @brief Base class for delimiter-based tokenizers
@@ -50,7 +48,7 @@ namespace detail {
  */
 template <typename Derived>
 struct base_split_tokenizer {
-  __device__ const char* get_base_ptr() const
+  __device__ char const* get_base_ptr() const
   {
     return d_strings.child(strings_column_view::chars_column_index).data<char>();
   }
@@ -402,6 +400,4 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   return std::make_pair(std::move(offsets), std::move(tokens));
 }
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings::detail

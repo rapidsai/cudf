@@ -137,8 +137,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
   for (size_type col = 0; col < columns_count; ++col) {
     auto itr = cudf::detail::make_counting_transform_iterator(
       0, [d_tokens, d_offsets, col] __device__(size_type idx) {
-        auto offset      = d_offsets[idx];
-        auto token_count = d_offsets[idx + 1] - offset;
+        auto const offset      = d_offsets[idx];
+        auto const token_count = d_offsets[idx + 1] - offset;
         return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
       });
     results.emplace_back(make_strings_column(itr, itr + input.size(), stream, mr));
