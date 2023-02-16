@@ -245,6 +245,16 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
+ *        `type_dispatcher` to help select an overload instance for each column in a table.
+ *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+ *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+ *
+ * @tparam has_nested_columns compile-time optimization for primitive types.
+ *         This template parameter is to be used by the developer by querying
+ *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         overloads for nested types, while `false` only compiles operator
+ *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalElementComparator A relational comparator functor that compares individual values
  * rather than logical elements, defaults to `NaN` aware relational comparator that evaluates `NaN`
@@ -857,6 +867,16 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
@@ -1009,6 +1029,16 @@ class two_table_comparator {
    * only if row `i` of the right table compares lexicographically less than row
    * `j` of the left table.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
@@ -1131,11 +1161,22 @@ struct nan_equal_physical_equality_comparator {
  * returns false, representing unequal rows. If the rows are compared without mismatched elements,
  * the rows are equal.
  *
+ * @note The operator overloads in sub-class `element_comparator` are templated via the
+ *        `type_dispatcher` to help select an overload instance for each column in a table.
+ *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+ *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+ *
+ * @tparam has_nested_columns compile-time optimization for primitive types.
+ *         This template parameter is to be used by the developer by querying
+ *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         overloads for nested types, while `false` only compiles operator
+ *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual values
  * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
  */
-template <typename Nullate,
+template <bool has_nested_columns,
+          typename Nullate,
           typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
 class device_row_comparator {
   friend class self_comparator;       ///< Allow self_comparator to access private members
@@ -1246,14 +1287,14 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             not cudf::is_nested<Element>()),
+                             (not has_nested_columns or not cudf::is_nested<Element>())),
               typename... Args>
     __device__ bool operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
+    template <typename Element, CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1437,6 +1478,16 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
@@ -1445,13 +1496,15 @@ class self_comparator {
    * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator};
+    return device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>{
+      nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
 
  private:
@@ -1539,6 +1592,16 @@ class two_table_comparator {
    * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
    * right table compares equal to row `j` of the left table.
    *
+   * @note The operator overloads in sub-class `element_comparator` are templated via the
+   *        `type_dispatcher` to help select an overload instance for each column in a table.
+   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *
+   * @tparam has_nested_columns compile-time optimization for primitive types.
+   *         This template parameter is to be used by the developer by querying
+   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         overloads for nested types, while `false` only compiles operator
+   *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
    * values rather than logical elements, defaults to a `NaN == NaN` equality comparator.
@@ -1547,14 +1610,16 @@ class two_table_comparator {
    * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
-  template <typename Nullate,
+  template <bool has_nested_columns,
+            typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return strong_index_comparator_adapter{
-      device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
+      device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>(
+        nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 
  private:
