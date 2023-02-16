@@ -98,7 +98,7 @@ std::size_t compute_join_output_size(table_view build_table,
   auto const preprocessed_build =
     cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
 
   auto const comparator_helper = [&](auto const device_comparator) {
     pair_equality equality{device_comparator};
@@ -162,7 +162,6 @@ probe_join_hash_table(cudf::table_view build_table,
     output_size ? *output_size
                 : compute_join_output_size<ProbeJoinKind>(
                     build_table, probe_table, hash_table, has_nulls, compare_nulls, stream);
-  std::cout << "output size: " << join_size << std::endl;
 
   // If output size is zero, return immediately
   if (join_size == 0) {
@@ -185,7 +184,7 @@ probe_join_hash_table(cudf::table_view build_table,
   auto const preprocessed_build =
     cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto const device_comparator) {
     pair_equality equality{device_comparator};
 
@@ -277,7 +276,7 @@ std::size_t get_full_join_size(cudf::table_view build_table,
   auto const preprocessed_build =
     cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
   auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_build, preprocessed_probe};
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const comparator_helper = [&](auto const device_comparator) {
     pair_equality equality{device_comparator};
 
@@ -361,7 +360,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
 
-  _build = build;
+  _build = std::move(build);
 
   if (_is_empty) { return; }
 

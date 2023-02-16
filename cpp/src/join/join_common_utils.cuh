@@ -115,7 +115,7 @@ class pair_equality {
     // lhs.first == rhs.first, _check_row_equality(rhs_index_type{rhs.second},
     // lhs_index_type{lhs.second}));
     return lhs.first == rhs.first and
-           _check_row_equality(rhs_index_type{rhs.second}, lhs_index_type{lhs.second});
+           _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
   }
 
  private:

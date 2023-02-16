@@ -74,9 +74,7 @@ struct hash_join {
   rmm::device_buffer const _composite_bitmask;  ///< Bitmask to denote whether a row is valid
   cudf::null_equality const _nulls_equal;       ///< whether to consider nulls as equal
   cudf::table_view _build;                      ///< input table to build the hash map
-  cudf::structs::detail::flattened_table
-    _flattened_build_table;  ///< flattened data structures for `_build`
-  map_type _hash_table;      ///< hash table built on `_build`
+  map_type _hash_table;                         ///< hash table built on `_build`
 
  public:
   /**
