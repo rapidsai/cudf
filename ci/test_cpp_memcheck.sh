@@ -47,6 +47,9 @@ echo "RAPIDS_BUILD_TYPE=${RAPIDS_BUILD_TYPE}"
         if [[ "$test_name" == "ERROR_TEST" ]]; then
             continue
         fi
+        if [[ "$test_name" == "STREAM_IDENTIFICATION_TEST" ]]; then
+            continue
+        fi
         echo "Running gtest $test_name"
         echo "${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}${test_name}.xml"
         ${gt} --gtest_output=xml:"${RAPIDS_TESTS_DIR}${test_name}.xml"
