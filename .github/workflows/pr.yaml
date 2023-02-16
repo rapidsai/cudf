@@ -15,16 +15,15 @@ jobs:
       - checks
       - conda-cpp-build
       - conda-cpp-tests
-      - conda-cpp-memcheck-tests
-      # - conda-python-build
-      # - conda-python-cudf-tests
-      # - conda-python-other-tests
-      # - conda-java-tests
-      # - conda-notebook-tests
-      # - wheel-build-cudf
-      # - wheel-tests-cudf
-      # - wheel-build-dask-cudf
-      # - wheel-tests-dask-cudf
+      - conda-python-build
+      - conda-python-cudf-tests
+      - conda-python-other-tests
+      - conda-java-tests
+      - conda-notebook-tests
+      - wheel-build-cudf
+      - wheel-tests-cudf
+      - wheel-build-dask-cudf
+      - wheel-tests-dask-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.04
   checks:
@@ -33,8 +32,7 @@ jobs:
   conda-cpp-build:
     needs: checks
     secrets: inherit
-    # uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
-    uses: ./.github/workflows/conda-cpp-build.yaml
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-build.yaml@branch-23.04
     with:
       build_type: pull-request
   conda-cpp-tests:
@@ -43,97 +41,83 @@ jobs:
     uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.04
     with:
       build_type: pull-request
-  # Just testing this for now
-  conda-cpp-memcheck-tests:
+  conda-python-build:
+    needs: conda-cpp-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@branch-23.04
+    with:
+      build_type: pull-request
+  conda-python-cudf-tests:
+    needs: conda-python-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.04
+    with:
+      build_type: pull-request
+      test_script: "ci/test_python_cudf.sh"
+  conda-python-other-tests:
+    # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+    needs: conda-python-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.04
+    with:
+      build_type: pull-request
+      test_script: "ci/test_python_other.sh"
+  conda-java-tests:
     needs: conda-cpp-build
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
     with:
       build_type: pull-request
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
       node_type: "gpu-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci:latest"
-      run_script: "ci/test_cpp_memcheck.sh"
-  # conda-python-build:
-  #   needs: conda-cpp-build
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-build.yaml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  # conda-python-cudf-tests:
-  #   needs: conda-python-build
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     test_script: "ci/test_python_cudf.sh"
-  # conda-python-other-tests:
-  #   # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-  #   needs: conda-python-build
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     test_script: "ci/test_python_other.sh"
-  # conda-java-tests:
-  #   needs: conda-cpp-build
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     node_type: "gpu-latest-1"
-  #     arch: "amd64"
-  #     container_image: "rapidsai/ci:latest"
-  #     run_script: "ci/test_java.sh"
-  # conda-notebook-tests:
-  #   needs: conda-python-build
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     node_type: "gpu-latest-1"
-  #     arch: "amd64"
-  #     container_image: "rapidsai/ci:latest"
-  #     run_script: "ci/test_notebooks.sh"
-  # wheel-build-cudf:
-  #   needs: checks
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     package-name: cudf
-  #     package-dir: python/cudf
-  #     skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
-  # wheel-tests-cudf:
-  #   needs: wheel-build-cudf
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     package-name: cudf
-  #     # Install cupy-cuda11x for arm from a special index url
-  #     # Install tokenizers last binary wheel to avoid a Rust compile from the latest sdist
-  #     test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
-  #     test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
-  #     test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
-  # wheel-build-dask-cudf:
-  #   needs: wheel-tests-cudf
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     package-name: dask_cudf
-  #     package-dir: python/dask_cudf
-  #     before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
-  # wheel-tests-dask-cudf:
-  #   needs: wheel-build-dask-cudf
-  #   secrets: inherit
-  #   uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.04
-  #   with:
-  #     build_type: pull-request
-  #     package-name: dask_cudf
-  #     test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
-  #     test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
+      run_script: "ci/test_java.sh"
+  conda-notebook-tests:
+    needs: conda-python-build
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.04
+    with:
+      build_type: pull-request
+      node_type: "gpu-latest-1"
+      arch: "amd64"
+      container_image: "rapidsai/ci:latest"
+      run_script: "ci/test_notebooks.sh"
+  wheel-build-cudf:
+    needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.04
+    with:
+      build_type: pull-request
+      package-name: cudf
+      package-dir: python/cudf
+      skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+  wheel-tests-cudf:
+    needs: wheel-build-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.04
+    with:
+      build_type: pull-request
+      package-name: cudf
+      # Install cupy-cuda11x for arm from a special index url
+      # Install tokenizers last binary wheel to avoid a Rust compile from the latest sdist
+      test-before-arm64: "pip install tokenizers==0.10.2 cupy-cuda11x -f https://pip.cupy.dev/aarch64"
+      test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
+      test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
+  wheel-build-dask-cudf:
+    needs: wheel-tests-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.04
+    with:
+      build_type: pull-request
+      package-name: dask_cudf
+      package-dir: python/dask_cudf
+      before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
+  wheel-tests-dask-cudf:
+    needs: wheel-build-dask-cudf
+    secrets: inherit
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.04
+    with:
+      build_type: pull-request
+      package-name: dask_cudf
+      test-before: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf-dep && pip install --no-deps ./local-cudf-dep/cudf*.whl"
+      test-unittest: "pytest -v -n 8 ./python/dask_cudf/dask_cudf/tests"
