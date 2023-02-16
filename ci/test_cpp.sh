@@ -66,6 +66,17 @@ for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     fi
 done
 
+echo "++++++++++++++++++++++++++++++++++++++++++++"
+echo "CUDA_VER=${CUDA_VER}"
+echo "LINUX_VER=${LINUX_VER}"
+echo "ARCH=${ARCH}"
+echo "arch=${arch}"
+echo "PY_VER=${PY_VER}"
+echo "GPU=${GPU}"
+echo "DRIVER=${DRIVER}"
+echo "CS_RUN=${CS_RUN}"
+echo "++++++++++++++++++++++++++++++++++++++++++++"
+
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     rapids-logger "Memcheck gtests with rmm_mode=cuda"
     export GTEST_CUDF_RMM_MODE=cuda
