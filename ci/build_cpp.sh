@@ -25,7 +25,7 @@ echo "++++++++++++++++++++++++++++++++++++++++++++"
 
 FILE=${RAPIDS_ARTIFACTS_DIR}/ninja.log
 if [[ -f $FILE ]]; then
-  echo "Ninja log for this build available at the following link"
+  echo -e "\x1B[33;1m\x1B[48;5;240m Ninja log for this build available at the following link \x1B[0m"
   UPLOAD_NAME=cpp_cuda${RAPIDS_CUDA_VERSION%%.*}_$(arch).ninja.log
   rapids-upload-to-s3 "${UPLOAD_NAME}" "${FILE}"
 fi
@@ -34,7 +34,7 @@ echo "++++++++++++++++++++++++++++++++++++++++++++"
 
 FILE=${RAPIDS_ARTIFACTS_DIR}/ninja_log.html
 if [[ -f $FILE ]]; then
-  echo "Build Metrics Report for this build available at the following link"
+  echo -e "\x1B[36;1m\x1B[47;1m Build Metrics Report for this build available at the following link \x1B[0m"
   UPLOAD_NAME=cpp_cuda${RAPIDS_CUDA_VERSION%%.*}_$(arch).BuildMetricsReport.html
   rapids-upload-to-s3 "${UPLOAD_NAME}" "${FILE}"
 fi
