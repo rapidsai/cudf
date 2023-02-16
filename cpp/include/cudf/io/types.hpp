@@ -179,9 +179,9 @@ template <typename T>
 constexpr inline auto is_byte_like_type()
 {
   using non_cv_T = std::remove_cv_t<T>;
-  return std::is_same_v<non_cv_T , int8_t> || std::is_same_v<non_cv_T , char> ||
-         std::is_same_v<non_cv_T , uint8_t> || std::is_same_v<non_cv_T , unsigned char> ||
-         std::is_same_v<non_cv_T , std::byte>;
+  return std::is_same_v<non_cv_T, int8_t> || std::is_same_v<non_cv_T, char> ||
+         std::is_same_v<non_cv_T, uint8_t> || std::is_same_v<non_cv_T, unsigned char> ||
+         std::is_same_v<non_cv_T, std::byte>;
 }
 
 /**
