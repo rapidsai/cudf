@@ -38,7 +38,7 @@ set +e
 # Run gtests with compute-sanitizer
 echo "RAPIDS_BUILD_TYPE=${RAPIDS_BUILD_TYPE}"
 
-if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
+#if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
     rapids-logger "Memcheck gtests with rmm_mode=cuda"
     export GTEST_CUDF_RMM_MODE=cuda
     COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
@@ -48,11 +48,12 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
             continue
         fi
         echo "Running gtest $test_name"
-        ${COMPUTE_SANITIZER_CMD} ${gt} | tee "${RAPIDS_TESTS_DIR}${test_name}.cs.log"
+        echo "${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}${test_name}.xml"
+        ${gt} --gtest_output=xml:"${RAPIDS_TESTS_DIR}${test_name}.xml"
     done
     unset GTEST_CUDF_RMM_MODE
     # TODO: test-results/*.cs.log are processed in CI
-fi
+#fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
