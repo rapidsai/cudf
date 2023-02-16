@@ -1860,139 +1860,152 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
-/**
- * @brief Kernel for co the column data stored in the pages
- *
- * This function will write the page data and the page data's validity to the
- * output specified in the page's column chunk. If necessary, additional
- * conversion will be performed to translate from the Parquet datatype to
- * desired output datatype (ex. 32-bit to 16-bit, string to hash).
- *
- * @param pages List of pages
- * @param chunks List of column chunks
- * @param min_row Row index to start reading at
- * @param num_rows Maximum number of rows to read
- */
-__global__ void __launch_bounds__(block_size) gpuDecodePageData(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+struct delta_binary_state_s {
+  uint8_t const* block_start;
+  uint8_t const* block_end;
+  uint32_t block_size;         // usually 128, must be multiple of 128
+  uint32_t mini_block_count;   // usually 4, block_size/mini_block_count must be multiple of 32
+  uint32_t value_count;        // total values encoded in the block
+  int64_t last_value;          // last value decoded, initialized to first_value from header
+                               // should be int128_t, but in all likelihood we'll never see
+                               // an int96 with this encoding
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
+
+  int64_t cur_min_delta;         // min delta for the block
+  uint32_t cur_mb;               // index of the current mini-block within the block
+  uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
+  uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
+  int64_t deltas[32];            // decoded deltas go here
+};
+
+// decode page data encoded as DELTA_BINARY_PACKED
+__device__ void DecodeDeltaBinary(page_state_s* const s)
 {
-  __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) delta_binary_state_s state_g;
 
-  page_state_s* const s = &state_g;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
-  int out_thread0;
+  int t                    = threadIdx.x;
+  delta_binary_state_s* db = &state_g;
 
-  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+  // need to pull header info from data_start, then increment
+  // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
+  if (t == 0) {
+    auto d_start = s->data_start;
+    auto d_end   = s->data_end;
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+    db->block_end        = d_end;
+    db->block_size       = get_vlq32(d_start, d_end);
+    db->mini_block_count = get_vlq32(d_start, d_end);
+    db->value_count      = get_vlq32(d_start, d_end);
+    db->last_value       = get_i64(d_start, d_end);
 
-  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  //
-  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
-  // starts before this page and ends after this page:
-  //       P0        P1        P2
-  //  |---------|---------|----------|
-  //        ^------------------^
-  //      row start           row end
-  // P1 will contain 0 rows
-  //
-  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
-                                               is_page_contained(s, min_row, num_rows)))) {
-    return;
+    db->current_value_idx = 0;
+
+    // init the first mini-block
+    db->cur_min_delta = get_i64(d_start, d_end);
+    db->cur_bitwidths = d_start;
+    db->cur_mb        = 0;
+    d_start += db->mini_block_count;
+    db->cur_mb_start = d_start;
+    db->block_start  = d_start;
   }
+  __syncthreads();
 
-  if (s->dict_base) {
-    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
-  } else {
-    out_thread0 =
-      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
-  }
+  auto const vals_per_mb = block_size / db->mini_block_count;  // this better be 32!
 
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
-
+  // each mini-block should be 32 values, to match the ~32 levels that are decoded.
+  // hopefully values in and values out stay in sync when there are nulls.
   // skipped_leaf_values will always be 0 for flat hierarchies.
-  uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
+  // uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
+  if (blockIdx.x == 0 && t == 0) {
+    printf("num_inp3 %d, nz %d\n", s->num_input_values, s->nz_count);
+    printf("src_pos %d siv %d\n", s->src_pos, s->input_value_count);
+  }
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
-    int src_pos = s->src_pos;
+    int src_pos               = s->src_pos;
+    constexpr int out_thread0 = 32;
 
-    if (t < out_thread0) {
+    // now use two warps to do the decode. warp0 will decode the rep/def levels, warp1
+    // will decode the bit-packed values and place into the output array. warps 2 and 3
+    // will make tea.
+    if (t < 32) {
       target_pos =
         min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
-    } else {
+      // decode repetition and definition levels.
+      // - update validity vectors
+      // - updates offsets (for nested columns)
+      // - produces non-NULL value indices in s->nz_idx for subsequent decoding
+      gpuDecodeLevels(s, target_pos, t);
+
+    } else if (t < 64) {
+      int me     = t & 0x1f;
       target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
-      if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
+
+      // get to the end of the current mini-block because the unpacking uses negative
+      // offsets
+      int const mb_bits = db->cur_bitwidths[db->cur_mb];
+      auto d_start      = db->cur_mb_start + (vals_per_mb * mb_bits) / 8;
+      if (me + db->current_value_idx < db->value_count) {
+        int delta        = 0;
+        int32_t ofs      = (me - ((vals_per_mb + 7) & ~7)) * mb_bits;
+        const uint8_t* p = d_start + (ofs >> 3);
+        ofs &= 7;
+        if (p < db->block_end) {
+          uint32_t c = 8 - ofs;
+          delta      = (*p++) >> ofs;
+          if (c < mb_bits && p < db->block_end) {
+            delta |= (*p++) << c;
+            c += 8;
+            if (c < mb_bits && p < db->block_end) {
+              delta |= (*p++) << c;
+              c += 8;
+              if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
+            }
+          }
+          delta &= (1 << mb_bits) - 1;
+          delta += db->cur_min_delta;
+          db->deltas[me] = delta;
+        }
+      }
+
+      __syncwarp();
+
+      if (me == 0) {
+        // start stuffing values into output.  have to do this single threaded
+        // because each value is a delta of the preceding one.
+        if (!db->current_value_idx) {
+          if (blockIdx.x == 0) printf("%06d %ld\n", db->current_value_idx, db->last_value);
+          db->current_value_idx++;
+        }
+        for (int i = 0; i < 32; i++) {
+          db->last_value += db->deltas[i];
+          if (blockIdx.x == 0) printf("%06d %ld\n", db->current_value_idx + i + 1, db->last_value);
+        }
+        db->current_value_idx += 32;
+
+        // set up for next block
+        if (db->cur_mb < db->mini_block_count - 1) {
+          db->cur_mb++;
+          db->cur_mb_start = d_start;
+        } else {
+          db->cur_min_delta = get_i64(d_start, db->block_end);
+          db->cur_bitwidths = d_start;
+          db->cur_mb        = 0;
+          d_start += db->mini_block_count;
+          db->cur_mb_start = d_start;
+          db->block_start  = d_start;
+        }
+      }
+    }
+
+    if (t == 0) {
+      // s->input_value_count += 32;
+      s->src_pos += 32;
     }
     __syncthreads();
-    if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
-      struct delta_binary_state_s {
-        uint8_t* block_start;
-        uint8_t* block_end;
-        uint32_t block_size;        // usually 128, must be multiple of 128
-        uint32_t mini_block_count;  // usually 4, block_size/mini_block_count must be multiple of 32
-        uint32_t value_count;       // total values encoded in the block
-        int64_t last_value;         // last value decoded, initialized to first_value from header
-        uint32_t current_value_idx; // current value index, initialized to 0 at start of block
-
-        uint32_t cur_mb;
-        uint8_t* cur_mb_start;
-        uint8_t* cur_bitwidths;
-      };
-
-      const bool dopr = blockIdx.x == 0;
-      // need to pull header info from data_start, then increment
-      // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
-      __shared__ uint32_t block_size, mini_blk_count, value_count;
-      __shared__ int64_t first_value;  // should be int128_t, but in all likelyhood we'll never see
-                                       // an int96 with this encoding
-
-      auto const d_end = s->data_end;
-      if (t == 0) {
-        auto d_start = s->data_start;
-        block_size   = get_vlq32(d_start, d_end);  // multiple of 128
-        mini_blk_count =
-          get_vlq32(d_start, d_end);  // block_size / mini_blk_count is multiple of 32
-        value_count   = get_vlq32(d_start, d_end);
-        first_value   = get_i64(d_start, d_end);
-        s->data_start = d_start;
-        if (dopr) {
-          printf("block_size %d mbc %d val_count %d 1st %ld\n",
-                 block_size,
-                 mini_blk_count,
-                 value_count,
-                 first_value);
-        }
-      }
-      __syncthreads();
-
-      // do this first since we'll want all 4 warps to do mini-block decoding
-      if (t < 32) {
-        // decode repetition and definition levels.
-        // - update validity vectors
-        // - updates offsets (for nested columns)
-        // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-        gpuDecodeLevels(s, target_pos, t);
-      }
-      __syncthreads();
-
-      auto const vals_per_mb = block_size / mini_blk_count;
-
-      auto const num_block = (value_count + block_size - 1) / block_size;
-      int values_decoded   = 0;
+    if (t == 0 && blockIdx.x == 0) printf("siv %d src_pos %d\n", s->input_value_count, s->src_pos);
+#if 0
       for (int i = 0; i < num_block; i++) {
-        // start of a miniblock
-        __shared__ int64_t min_delta;
-        __shared__ uint8_t const* bit_widths;
-        __shared__ __align__(16) uint64_t mb_values[128];
-        if (t == 0) {
-          if (dopr) printf("data_start %p\n", s->data_start);
-          min_delta  = get_i64(s->data_start, d_end);
-          bit_widths = s->data_start;
-          s->data_start += mini_blk_count;
-          if (dopr) printf("min_delta %ld bw0 %d\n", min_delta, bit_widths[0]);
-        }
-
         __syncthreads();
 
         auto const mb  = t / vals_per_mb;
@@ -2007,7 +2020,6 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
             if (mb > 2) { d_start += (vals_per_mb * bit_widths[3]) / 8; }
           }
         }
-        if (dopr && (t & 0x1f) == 0) { printf("  %d dstart %p\n", mb, d_start); }
 
         if (t + values_decoded < value_count) {
           int delta        = 0;
@@ -2050,12 +2062,80 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
         values_decoded += block_size;
       }
+#endif
+  }
+}
 
-      __syncthreads();
+/**
+ * @brief Kernel for co the column data stored in the pages
+ *
+ * This function will write the page data and the page data's validity to the
+ * output specified in the page's column chunk. If necessary, additional
+ * conversion will be performed to translate from the Parquet datatype to
+ * desired output datatype (ex. 32-bit to 16-bit, string to hash).
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
+ */
+__global__ void __launch_bounds__(block_size) gpuDecodePageData(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+{
+  __shared__ __align__(16) page_state_s state_g;
 
-      // FIXME: hack, fix this when it works
-      break;
+  page_state_s* const s = &state_g;
+  int page_idx          = blockIdx.x;
+  int t                 = threadIdx.x;
+  int out_thread0;
+
+  if (!setupLocalPageInfo(s, &pages[page_idx], chunks, min_row, num_rows, true)) { return; }
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current
+  // row starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
+  if (s->num_rows == 0 && !(has_repetition && (is_bounds_page(s, min_row, num_rows) ||
+                                               is_page_contained(s, min_row, num_rows)))) {
+    return;
+  }
+
+  if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
+    DecodeDeltaBinary(s);
+    return;
+  }
+
+  if (s->dict_base) {
+    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
+  } else {
+    out_thread0 =
+      ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
+  }
+
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
+  // skipped_leaf_values will always be 0 for flat hierarchies.
+  uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
+  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+    int target_pos;
+    int src_pos = s->src_pos;
+
+    if (t < out_thread0) {
+      target_pos =
+        min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
+    } else {
+      target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
+      if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
+    __syncthreads();
+
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -2096,13 +2176,14 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-      // before first_row) in the flat hierarchy case.
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative
+      // (values before first_row) in the flat hierarchy case.
       if (src_pos < target_pos && dst_pos >= 0) {
         // src_pos represents the logical row position we want to read from. But in the case of
-        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read position
-        // has to take into account the # of values we have to skip in the page to get to the
-        // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read
+        // position has to take into account the # of values we have to skip in the page to get
+        // to the desired logical row.  For flat hierarchies, skipped_leaf_values will always be
+        // 0.
         uint32_t val_src_pos = src_pos + skipped_leaf_values;
 
         // nesting level that is storing actual leaf values
