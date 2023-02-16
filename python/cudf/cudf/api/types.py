@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -11,10 +11,9 @@ from typing import List, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas.api import types as pd_types
 
 import cudf
+import pandas as pd
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     dtype,
@@ -27,6 +26,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
+from pandas.api import types as pd_types
 
 
 def is_numeric_dtype(obj):
@@ -101,6 +101,12 @@ def is_string_dtype(obj):
     bool
         Whether or not the array or dtype is of the string dtype.
     """
+    # import pdb;pdb.set_trace()
+    if isinstance(obj, (cudf.Series, cudf.core.column.ColumnBase)):
+        try:
+            return obj.dtype == np.dtype("str")
+        except AttributeError:
+            return False
     return (
         pd.api.types.is_string_dtype(obj)
         # Reject all cudf extension types.
@@ -244,7 +250,6 @@ is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = pd_types.is_datetime64_dtype
 is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
 is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
-is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)
 is_int64_dtype = pd_types.is_int64_dtype
@@ -263,7 +268,7 @@ is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
-is_categorical = pd_types.is_categorical
+is_categorical = pd_types.is_categorical_dtype
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

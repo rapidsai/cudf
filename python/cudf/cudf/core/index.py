@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,10 +21,9 @@ from typing import (
 
 import cupy
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 
 import cudf
+import pandas as pd
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
@@ -33,7 +32,7 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_dtype_equal,
     is_interval_dtype,
-    is_list_like,
+    # is_list_like,
     is_scalar,
     is_string_dtype,
 )
@@ -60,10 +59,11 @@ from cudf.utils.docutils import copy_docstring, doc_apply
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     find_common_type,
-    is_mixed_with_object_dtype,
-    numeric_normalize_types,
+    # is_mixed_with_object_dtype,
+    # numeric_normalize_types,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate, search_range
+from pandas._config import get_option
 
 T = TypeVar("T", bound="Frame")
 
@@ -920,8 +920,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def any(self):
         return any(self._range)
 
-    def append(self, other):
-        return self._as_int_index().append(other)
+    # def append(self, other):
+    #     return self._as_int_index().append(other)
 
     def isin(self, values):
         if is_scalar(values):
@@ -1523,45 +1523,45 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             self._values.to_pandas(nullable=nullable), name=self.name
         )
 
-    def append(self, other):
-        if is_list_like(other):
-            to_concat = [self]
-            to_concat.extend(other)
-        else:
-            this = self
-            if len(other) == 0:
-                # short-circuit and return a copy
-                to_concat = [self]
+    # def append(self, other):
+    #     if is_list_like(other):
+    #         to_concat = [self]
+    #         to_concat.extend(other)
+    #     else:
+    #         this = self
+    #         if len(other) == 0:
+    #             # short-circuit and return a copy
+    #             to_concat = [self]
 
-            other = cudf.Index(other)
+    #         other = cudf.Index(other)
 
-            if len(self) == 0:
-                to_concat = [other]
+    #         if len(self) == 0:
+    #             to_concat = [other]
 
-            if len(self) and len(other):
-                if is_mixed_with_object_dtype(this, other):
-                    got_dtype = (
-                        other.dtype
-                        if this.dtype == cudf.dtype("object")
-                        else this.dtype
-                    )
-                    raise TypeError(
-                        f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
-                        f"of dtype `{got_dtype}`, please type-cast "
-                        f"either one of them to same dtypes."
-                    )
+    #         if len(self) and len(other):
+    #             if is_mixed_with_object_dtype(this, other):
+    #                 got_dtype = (
+    #                     other.dtype
+    #                     if this.dtype == cudf.dtype("object")
+    #                     else this.dtype
+    #                 )
+    #                 raise TypeError(
+    #                     f"cudf does not support appending an Index of "
+    #                     f"dtype `{cudf.dtype('object')}` with an Index "
+    #                     f"of dtype `{got_dtype}`, please type-cast "
+    #                     f"either one of them to same dtypes."
+    #                 )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
-                    if self.dtype != other.dtype:
-                        this, other = numeric_normalize_types(self, other)
-                to_concat = [this, other]
+    #             if isinstance(self._values, cudf.core.column.NumericalColumn):
+    #                 if self.dtype != other.dtype:
+    #                     this, other = numeric_normalize_types(self, other)
+    #             to_concat = [this, other]
 
-        for obj in to_concat:
-            if not isinstance(obj, BaseIndex):
-                raise TypeError("all inputs must be Index")
+    #     for obj in to_concat:
+    #         if not isinstance(obj, BaseIndex):
+    #             raise TypeError("all inputs must be Index")
 
-        return self._concat(to_concat)
+    #     return self._concat(to_concat)
 
     def unique(self):
         return cudf.core.index._index_from_data(

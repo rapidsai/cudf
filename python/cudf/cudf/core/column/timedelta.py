@@ -6,13 +6,14 @@ import datetime
 from typing import Any, Sequence, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -149,9 +150,16 @@ class TimeDeltaColumn(ColumnBase):
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        # Pandas supports only `timedelta64[ns]`, hence the cast.
+        if PANDAS_GE_200:
+            host_values = self.fillna("NaT").values_host
+        else:
+            # Pandas<2.0 supports only `timedelta64[ns]`, hence the cast.
+            host_values = (
+                self.astype("timedelta64[ns]").fillna("NaT").values_host
+            )
+
         pd_series = pd.Series(
-            self.astype("timedelta64[ns]").fillna("NaT").values_host,
+            host_values,
             copy=False,
         )
 

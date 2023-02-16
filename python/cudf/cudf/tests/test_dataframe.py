@@ -15,18 +15,19 @@ from copy import copy
 
 import cupy
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 from numba import cuda
 from packaging import version
 
 import cudf
+import pandas as pd
 from cudf.core._compat import (
     PANDAS_GE_110,
     PANDAS_GE_120,
     PANDAS_GE_134,
     PANDAS_GE_150,
+    PANDAS_GE_200,
     PANDAS_LT_140,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -254,19 +255,14 @@ def test_append_index(a, b):
     gdf["a"] = a
     gdf["b"] = b
 
-    # Check the default index after appending two columns(Series)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = df.a.append(df.b)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.a.append(gdf.b)
+    expected = pd.concat([df.a, df.b])
+    actual = cudf.concat([gdf.a, gdf.b])
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
 
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        expected = df.a.append(df.b, ignore_index=True)
-    with pytest.warns(FutureWarning, match="append method is deprecated"):
-        actual = gdf.a.append(gdf.b, ignore_index=True)
+    expected = pd.concat([df.a, df.b], ignore_index=True)
+    actual = cudf.concat([gdf.a, gdf.b], ignore_index=True)
 
     assert len(expected) == len(actual)
     assert_eq(expected.index, actual.index)
@@ -286,7 +282,8 @@ def test_append_index(a, b):
         pytest.param(
             {},
             marks=pytest_xfail(
-                reason="https://github.com/rapidsai/cudf/issues/11080"
+                condition=not PANDAS_GE_150,
+                reason="https://github.com/rapidsai/cudf/issues/11080",
             ),
         ),
         pytest.param(
@@ -1514,7 +1511,8 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
 
-    # pandas warns when trying to concatenate any empty float columns (or float
+    # pandas(lower than pandas 2.0 only) warns when trying to
+    # concatenate any empty float columns (or float
     # columns with all None values) with any non-empty bool columns.
     def is_invalid_concat(left, right):
         return (
@@ -1523,7 +1521,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
             and right.count() == 0
         )
 
-    cond = any(
+    cond = (not PANDAS_GE_200) and any(
         is_invalid_concat(pdf1[colname], pdf2[colname])
         or is_invalid_concat(pdf2[colname], pdf1[colname])
         for colname in set(pdf1) & set(pdf2)

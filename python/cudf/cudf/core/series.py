@@ -12,11 +12,9 @@ from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 
 import cupy
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
-from pandas.core.dtypes.common import is_float
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
@@ -79,6 +77,8 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
+from pandas._config import get_option
+from pandas.core.dtypes.common import is_float
 
 
 def _format_percentile_names(percentiles):
@@ -841,81 +841,81 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.to_pandas().to_dict(into=into)
 
-    @_cudf_nvtx_annotate
-    def append(self, to_append, ignore_index=False, verify_integrity=False):
-        """Append values from another ``Series`` or array-like object.
-        If ``ignore_index=True``, the index is reset.
+    # @_cudf_nvtx_annotate
+    # def append(self, to_append, ignore_index=False, verify_integrity=False):
+    #     """Append values from another ``Series`` or array-like object.
+    #     If ``ignore_index=True``, the index is reset.
 
-        Parameters
-        ----------
-        to_append : Series or list/tuple of Series
-            Series to append with self.
-        ignore_index : boolean, default False.
-            If True, do not use the index.
-        verify_integrity : bool, default False
-            This Parameter is currently not supported.
+    #     Parameters
+    #     ----------
+    #     to_append : Series or list/tuple of Series
+    #         Series to append with self.
+    #     ignore_index : boolean, default False.
+    #         If True, do not use the index.
+    #     verify_integrity : bool, default False
+    #         This Parameter is currently not supported.
 
-        Returns
-        -------
-        Series
-            A new concatenated series
+    #     Returns
+    #     -------
+    #     Series
+    #         A new concatenated series
 
-        See Also
-        --------
-        cudf.concat : General function to concatenate DataFrame or
-            Series objects.
+    #     See Also
+    #     --------
+    #     cudf.concat : General function to concatenate DataFrame or
+    #         Series objects.
 
-        Examples
-        --------
-        >>> import cudf
-        >>> s1 = cudf.Series([1, 2, 3])
-        >>> s2 = cudf.Series([4, 5, 6])
-        >>> s1
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s2
-        0    4
-        1    5
-        2    6
-        dtype: int64
-        >>> s1.append(s2)
-        0    1
-        1    2
-        2    3
-        0    4
-        1    5
-        2    6
-        dtype: int64
+    #     Examples
+    #     --------
+    #     >>> import cudf
+    #     >>> s1 = cudf.Series([1, 2, 3])
+    #     >>> s2 = cudf.Series([4, 5, 6])
+    #     >>> s1
+    #     0    1
+    #     1    2
+    #     2    3
+    #     dtype: int64
+    #     >>> s2
+    #     0    4
+    #     1    5
+    #     2    6
+    #     dtype: int64
+    #     >>> s1.append(s2)
+    #     0    1
+    #     1    2
+    #     2    3
+    #     0    4
+    #     1    5
+    #     2    6
+    #     dtype: int64
 
-        >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
-        >>> s3
-        3    4
-        4    5
-        5    6
-        dtype: int64
-        >>> s1.append(s3)
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        dtype: int64
+    #     >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
+    #     >>> s3
+    #     3    4
+    #     4    5
+    #     5    6
+    #     dtype: int64
+    #     >>> s1.append(s3)
+    #     0    1
+    #     1    2
+    #     2    3
+    #     3    4
+    #     4    5
+    #     5    6
+    #     dtype: int64
 
-        With `ignore_index` set to True:
+    #     With `ignore_index` set to True:
 
-        >>> s1.append(s2, ignore_index=True)
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        dtype: int64
-        """
-        return super()._append(to_append, ignore_index, verify_integrity)
+    #     >>> s1.append(s2, ignore_index=True)
+    #     0    1
+    #     1    2
+    #     2    3
+    #     3    4
+    #     4    5
+    #     5    6
+    #     dtype: int64
+    #     """
+    #     return super()._append(to_append, ignore_index, verify_integrity)
 
     @_cudf_nvtx_annotate
     def reindex(self, *args, **kwargs):

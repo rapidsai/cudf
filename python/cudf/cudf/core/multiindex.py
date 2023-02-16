@@ -13,10 +13,9 @@ from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -31,6 +30,7 @@ from cudf.core.index import (
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from pandas._config import get_option
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -1574,68 +1574,68 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             other = other.to_pandas()
         return self.to_pandas().difference(other, sort)
 
-    @_cudf_nvtx_annotate
-    def append(self, other):
-        """
-        Append a collection of MultiIndex objects together
+    # @_cudf_nvtx_annotate
+    # def append(self, other):
+    #     """
+    #     Append a collection of MultiIndex objects together
 
-        Parameters
-        ----------
-        other : MultiIndex or list/tuple of MultiIndex objects
+    #     Parameters
+    #     ----------
+    #     other : MultiIndex or list/tuple of MultiIndex objects
 
-        Returns
-        -------
-        appended : Index
+    #     Returns
+    #     -------
+    #     appended : Index
 
-        Examples
-        --------
-        >>> import cudf
-        >>> idx1 = cudf.MultiIndex(
-        ...     levels=[[1, 2], ['blue', 'red']],
-        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
-        ... )
-        >>> idx2 = cudf.MultiIndex(
-        ...     levels=[[3, 4], ['blue', 'red']],
-        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
-        ... )
-        >>> idx1
-        MultiIndex([(1,  'red'),
-                    (1, 'blue'),
-                    (2,  'red'),
-                    (2, 'blue')],
-                   )
-        >>> idx2
-        MultiIndex([(3,  'red'),
-                    (3, 'blue'),
-                    (4,  'red'),
-                    (4, 'blue')],
-                   )
-        >>> idx1.append(idx2)
-        MultiIndex([(1,  'red'),
-                    (1, 'blue'),
-                    (2,  'red'),
-                    (2, 'blue'),
-                    (3,  'red'),
-                    (3, 'blue'),
-                    (4,  'red'),
-                    (4, 'blue')],
-                   )
-        """
-        if isinstance(other, (list, tuple)):
-            to_concat = [self]
-            to_concat.extend(other)
-        else:
-            to_concat = [self, other]
+    #     Examples
+    #     --------
+    #     >>> import cudf
+    #     >>> idx1 = cudf.MultiIndex(
+    #     ...     levels=[[1, 2], ['blue', 'red']],
+    #     ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+    #     ... )
+    #     >>> idx2 = cudf.MultiIndex(
+    #     ...     levels=[[3, 4], ['blue', 'red']],
+    #     ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+    #     ... )
+    #     >>> idx1
+    #     MultiIndex([(1,  'red'),
+    #                 (1, 'blue'),
+    #                 (2,  'red'),
+    #                 (2, 'blue')],
+    #                )
+    #     >>> idx2
+    #     MultiIndex([(3,  'red'),
+    #                 (3, 'blue'),
+    #                 (4,  'red'),
+    #                 (4, 'blue')],
+    #                )
+    #     >>> idx1.append(idx2)
+    #     MultiIndex([(1,  'red'),
+    #                 (1, 'blue'),
+    #                 (2,  'red'),
+    #                 (2, 'blue'),
+    #                 (3,  'red'),
+    #                 (3, 'blue'),
+    #                 (4,  'red'),
+    #                 (4, 'blue')],
+    #                )
+    #     """
+    #     if isinstance(other, (list, tuple)):
+    #         to_concat = [self]
+    #         to_concat.extend(other)
+    #     else:
+    #         to_concat = [self, other]
 
-        for obj in to_concat:
-            if not isinstance(obj, MultiIndex):
-                raise TypeError(
-                    f"all objects should be of type "
-                    f"MultiIndex for MultiIndex.append, "
-                    f"found object of type: {type(obj)}"
-                )
+    #     for obj in to_concat:
+    #         if not isinstance(obj, MultiIndex):
+    #             raise TypeError(
+    #                 f"all objects should be of type "
+    #                 f"MultiIndex for MultiIndex.append, "
+    #                 f"found object of type: {type(obj)}"
+    #             )
 
-        return MultiIndex._concat(to_concat)
+    #     return MultiIndex._concat(to_concat)
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):

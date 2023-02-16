@@ -7,9 +7,8 @@ import warnings
 from functools import cached_property
 from typing import Any, Set, TypeVar
 
-import pandas as pd
-
 import cudf
+import pandas as pd
 from cudf._lib.copying import _gather_map_is_valid, gather
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
@@ -738,36 +737,36 @@ class BaseIndex(Serializable):
 
         return cudf.io.dlpack.to_dlpack(self)
 
-    def append(self, other):
-        """
-        Append a collection of Index objects together.
+    # def append(self, other):
+    #     """
+    #     Append a collection of Index objects together.
 
-        Parameters
-        ----------
-        other : Index or list/tuple of indices
+    #     Parameters
+    #     ----------
+    #     other : Index or list/tuple of indices
 
-        Returns
-        -------
-        appended : Index
+    #     Returns
+    #     -------
+    #     appended : Index
 
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([1, 2, 10, 100])
-        >>> idx
-        Int64Index([1, 2, 10, 100], dtype='int64')
-        >>> other = cudf.Index([200, 400, 50])
-        >>> other
-        Int64Index([200, 400, 50], dtype='int64')
-        >>> idx.append(other)
-        Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
+    #     Examples
+    #     --------
+    #     >>> import cudf
+    #     >>> idx = cudf.Index([1, 2, 10, 100])
+    #     >>> idx
+    #     Int64Index([1, 2, 10, 100], dtype='int64')
+    #     >>> other = cudf.Index([200, 400, 50])
+    #     >>> other
+    #     Int64Index([200, 400, 50], dtype='int64')
+    #     >>> idx.append(other)
+    #     Int64Index([1, 2, 10, 100, 200, 400, 50], dtype='int64')
 
-        append accepts list of Index objects
+    #     append accepts list of Index objects
 
-        >>> idx.append([other, other])
-        Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
-        """
-        raise NotImplementedError
+    #     >>> idx.append([other, other])
+    #     Int64Index([1, 2, 10, 100, 200, 400, 50, 200, 400, 50], dtype='int64')
+    #     """
+    #     raise NotImplementedError
 
     def difference(self, other, sort=None):
         """
