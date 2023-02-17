@@ -28,6 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
+
 #include <thrust/functional.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -1916,10 +1918,6 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // hopefully values in and values out stay in sync when there are nulls.
   // skipped_leaf_values will always be 0 for flat hierarchies.
   // uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
-  if (blockIdx.x == 0 && t == 0) {
-    printf("num_inp3 %d, nz %d\n", s->num_input_values, s->nz_count);
-    printf("src_pos %d siv %d\n", s->src_pos, s->input_value_count);
-  }
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
     int src_pos               = s->src_pos;
@@ -1930,7 +1928,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     // will make tea.
     if (t < 32) {
       target_pos =
-        min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
+        src_pos + 32 + (src_pos == 0);  // need one extra level on first pass for first_value
+      //  min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
@@ -1969,18 +1968,43 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       }
 
       __syncwarp();
+      int64_t my_delta = db->deltas[me];
+      __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
+      cub::WarpScan<int64_t>(temp_storage[0]).InclusiveSum(my_delta, my_delta);
+      my_delta += db->last_value;
+      db->deltas[me] = my_delta;  // now contains values
+
+      //FIXME nz_idx isn't always populated by the time we get here...how
+      // to ensure writes from warp 0 are done before we do this part???
+      constexpr int blk = 1;
+      // handle first value
+      if (me == 0) {
+        if (db->current_value_idx == 0) {
+          if (blockIdx.x == blk) {
+            printf("%06d %ld %d -> %d\n",
+                  s->page.chunk_row + db->current_value_idx + 1,
+                  my_delta,
+                  src_pos,
+                  s->nz_idx[rolling_index(src_pos + me)]);
+          }
+          db->current_value_idx++;
+          src_pos++;
+        }
+      }
+      __syncwarp();
+      /*
+      if (blockIdx.x == blk && db->current_value_idx + me < db->value_count) {
+        printf("%06d %ld %d -> %d\n",
+               s->page.chunk_row + db->current_value_idx + me + 1,
+               my_delta,
+               src_pos + me,
+               s->nz_idx[rolling_index(src_pos + me)]);
+      }
+       */
 
       if (me == 0) {
-        // start stuffing values into output.  have to do this single threaded
-        // because each value is a delta of the preceding one.
-        if (!db->current_value_idx) {
-          if (blockIdx.x == 0) printf("%06d %ld\n", db->current_value_idx, db->last_value);
-          db->current_value_idx++;
-        }
-        for (int i = 0; i < 32; i++) {
-          db->last_value += db->deltas[i];
-          if (blockIdx.x == 0) printf("%06d %ld\n", db->current_value_idx + i + 1, db->last_value);
-        }
+        db->last_value = db->deltas[31];
+        s->src_pos     = src_pos + 32;
         db->current_value_idx += 32;
 
         // set up for next block
@@ -1997,72 +2021,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
         }
       }
     }
-
-    if (t == 0) {
-      // s->input_value_count += 32;
-      s->src_pos += 32;
-    }
     __syncthreads();
-    if (t == 0 && blockIdx.x == 0) printf("siv %d src_pos %d\n", s->input_value_count, s->src_pos);
-#if 0
-      for (int i = 0; i < num_block; i++) {
-        __syncthreads();
-
-        auto const mb  = t / vals_per_mb;
-        auto dict_bits = bit_widths[mb];
-
-        // find the end of this warp's mini-block
-        auto d_start = s->data_start + (vals_per_mb * bit_widths[0]) / 8;
-        if (mb > 0) {
-          d_start += (vals_per_mb * bit_widths[1]) / 8;
-          if (mb > 1) {
-            d_start += (vals_per_mb * bit_widths[2]) / 8;
-            if (mb > 2) { d_start += (vals_per_mb * bit_widths[3]) / 8; }
-          }
-        }
-
-        if (t + values_decoded < value_count) {
-          int delta        = 0;
-          int32_t ofs      = ((t & 0x1f) - ((vals_per_mb + 7) & ~7)) * dict_bits;
-          const uint8_t* p = d_start + (ofs >> 3);
-          ofs &= 7;
-          if (p < d_end) {
-            uint32_t c = 8 - ofs;
-            delta      = (*p++) >> ofs;
-            if (c < dict_bits && p < d_end) {
-              delta |= (*p++) << c;
-              c += 8;
-              if (c < dict_bits && p < d_end) {
-                delta |= (*p++) << c;
-                c += 8;
-                if (c < dict_bits && p < d_end) { delta |= (*p++) << c; }
-              }
-            }
-            delta &= (1 << dict_bits) - 1;
-            delta += min_delta;
-            mb_values[t] = delta;
-          }
-        }
-        if (t == 96) { s->data_start = d_start; }
-
-        __syncthreads();
-        if (t == 0) {
-          for (int j = 0; j < 128; j++) {
-            // need to account for first value in header
-            if (values_decoded + j + 1 < value_count) {
-              first_value += mb_values[j];
-              if (dopr)
-                printf("idx %03d delta %10ld value %10ld\n",
-                       t + values_decoded + j + 2,
-                       mb_values[j],
-                       first_value);
-            }
-          }
-        }
-
-        values_decoded += block_size;
-      }
-#endif
   }
 }
 
