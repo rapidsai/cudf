@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@
 template <typename Type>
 static void bench_reduction_distinct_count(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-
   auto const dtype            = cudf::type_to_id<Type>();
   auto const size             = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_probability = state.get_float64("null_probability");
