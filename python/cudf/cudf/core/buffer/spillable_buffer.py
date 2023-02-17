@@ -152,7 +152,7 @@ class DelayedPointerTuple(collections.abc.Sequence):
 
 
 class SpillableBuffer(Buffer):
-    """A spillable buffer that implements DeviceBufferLike.
+    """A Buffer that supports spilling memory off the GPU to avoid OOMs.
 
     This buffer supports spilling the represented data to host memory.
     Spilling can be done manually by calling `.spill(target="cpu")` but
@@ -277,6 +277,11 @@ class SpillableBuffer(Buffer):
     @property
     def is_spilled(self) -> bool:
         return self._ptr_desc["type"] != "gpu"
+
+    def copy(self, deep: bool = True):
+        spill_lock = SpillLock()
+        self.spill_lock(spill_lock=spill_lock)
+        return super().copy(deep=deep)
 
     def spill(self, target: str = "cpu") -> None:
         """Spill or un-spill this buffer in-place
