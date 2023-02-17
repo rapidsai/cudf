@@ -15,7 +15,9 @@
  */
 #include "timezone.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/table.hpp>
 
 #include <algorithm>
 #include <fstream>
@@ -370,18 +372,18 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-timezone_table build_timezone_transition_table(std::string const& timezone_name,
-                                               rmm::cuda_stream_view stream)
+std::unique_ptr<table> build_timezone_transition_table(std::string const& timezone_name,
+                                                       rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
-    return {};
+    return std::make_unique<cudf::table>();
   }
 
   timezone_file const tzf(timezone_name);
 
-  std::vector<int64_t> ttimes(1);
-  std::vector<int32_t> offsets(1);
+  std::vector<timestamp_s::rep> ttimes(1);
+  std::vector<duration_s::rep> offsets(1);
   // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
   ttimes.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
   offsets.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
@@ -404,7 +406,7 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
     if (tzf.typecnt() == 0 || tzf.ttype[0].utcoff == 0) {
       // No transitions, offset is zero; Table would be a no-op.
       // Return an empty table to speed up parsing.
-      return {};
+      return std::make_unique<cudf::table>();
     }
     // No transitions to use for the time/offset - use the first offset and apply to all timestamps
     ttimes[0]  = std::numeric_limits<int64_t>::max();
@@ -458,9 +460,26 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
                         .count();
   }
 
-  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
-  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets, stream);
-  return {std::move(d_ttimes), std::move(d_offsets)};
+  std::vector<std::unique_ptr<column>> tz_table_columns;
+  tz_table_columns.emplace_back(make_timestamp_column(
+    data_type{type_id::TIMESTAMP_SECONDS}, ttimes.size(), mask_state::UNALLOCATED, stream));
+  tz_table_columns.emplace_back(make_duration_column(
+    data_type{type_id::DURATION_SECONDS}, offsets.size(), mask_state::UNALLOCATED, stream));
+
+  CUDF_CUDA_TRY(cudaMemcpyAsync(tz_table_columns[0]->mutable_view().head(),
+                                ttimes.data(),
+                                ttimes.size() * sizeof(timestamp_s::rep),
+                                cudaMemcpyDefault,
+                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(tz_table_columns[1]->mutable_view().head(),
+                                offsets.data(),
+                                offsets.size() * sizeof(duration_s::rep),
+                                cudaMemcpyDefault,
+                                stream.value()));
+  // Need to finish copies before ttimes and offsets go out of scope
+  stream.synchronize();
+
+  return std::make_unique<cudf::table>(std::move(tz_table_columns));
 }
 
 }  // namespace io

@@ -1374,7 +1374,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
-                         timezone_table_view tz_table,
+                         table_device_view tz_table,
                          device_2dspan<RowGroup> row_groups,
                          size_t first_row,
                          uint32_t rowidx_stride,
@@ -1446,8 +1446,7 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.utc_epoch =
-      kORCTimeToUTC - get_gmt_offset(tz_table.ttimes, tz_table.offsets, kORCTimeToUTC);
+    s->top.data.utc_epoch = kORCTimeToUTC - get_gmt_offset(tz_table, kORCTimeToUTC);
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1771,7 +1770,7 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
+              seconds += get_gmt_offset(tz_table, seconds);
 
               int64_t nanos = secondary_val;
               nanos         = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
@@ -1886,7 +1885,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
                                   size_t first_row,
-                                  timezone_table_view tz_table,
+                                  table_device_view tz_table,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
                                   size_t level,

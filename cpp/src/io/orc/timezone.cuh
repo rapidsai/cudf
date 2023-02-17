@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -31,11 +32,6 @@
 
 namespace cudf {
 namespace io {
-
-struct timezone_table_view {
-  cudf::device_span<int64_t const> ttimes;
-  cudf::device_span<int32_t const> offsets;
-};
 
 // Cycle in which the time offsets repeat
 static constexpr int32_t cycle_years = 400;
@@ -56,11 +52,14 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes,
-                                         cudf::device_span<int32_t const> offsets,
-                                         int64_t ts)
+inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, int64_t ts)
 {
-  if (ttimes.empty()) { return 0; }
+  if (tz_table.num_rows() == 0) { return 0; }
+
+  cudf::device_span<timestamp_s::rep const> ttimes(tz_table.column(0).head<timestamp_s::rep>(),
+                                                   static_cast<size_t>(tz_table.num_rows()));
+  cudf::device_span<duration_s::rep const> offsets(tz_table.column(1).head<duration_s::rep>(),
+                                                   static_cast<size_t>(tz_table.num_rows()));
 
   auto const ts_ttime_it = [&]() {
     auto last_less_equal = [](auto begin, auto end, auto value) {
@@ -85,22 +84,6 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
   return offsets[ts_ttime_it - ttimes.begin()];
 }
 
-class timezone_table {
-  rmm::device_uvector<int64_t> ttimes;
-  rmm::device_uvector<int32_t> offsets;
-
- public:
-  // Safe to use the default stream, device_uvectors will not change after they are created empty
-  timezone_table() : ttimes{0, cudf::get_default_stream()}, offsets{0, cudf::get_default_stream()}
-  {
-  }
-  timezone_table(rmm::device_uvector<int64_t>&& ttimes, rmm::device_uvector<int32_t>&& offsets)
-    : ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
-  {
-  }
-  [[nodiscard]] timezone_table_view view() const { return {ttimes, offsets}; }
-};
-
 /**
  * @brief Creates a transition table to convert ORC timestamps to UTC.
  *
@@ -111,8 +94,8 @@ class timezone_table {
  *
  * @return The transition table for the given timezone
  */
-timezone_table build_timezone_transition_table(std::string const& timezone_name,
-                                               rmm::cuda_stream_view stream);
+std::unique_ptr<table> build_timezone_transition_table(std::string const& timezone_name,
+                                                       rmm::cuda_stream_view stream);
 
 }  // namespace io
 }  // namespace cudf

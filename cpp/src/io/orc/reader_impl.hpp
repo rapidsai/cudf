@@ -145,7 +145,7 @@ class reader::impl {
   void decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
                           size_t skip_rows,
-                          timezone_table_view tz_table,
+                          table_device_view tz_table,
                           cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
@@ -210,7 +210,7 @@ class reader::impl {
    *
    * @return Timezone table with timestamp offsets
    */
-  timezone_table compute_timezone_table(
+  std::unique_ptr<table> compute_timezone_table(
     const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
     rmm::cuda_stream_view stream);
 
