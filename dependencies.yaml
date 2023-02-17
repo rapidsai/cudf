@@ -13,6 +13,7 @@ files:
       - notebooks
       - py_version
       - run
+      - test_cpp
       - test_python
   test_cpp:
     output: none
