@@ -51,8 +51,7 @@ if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
             continue
         fi
         echo "Running gtest $test_name"
-        echo "${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}${test_name}.xml"
-        ${gt} --gtest_output=xml:"${RAPIDS_TESTS_DIR}${test_name}.xml"
+        ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"${RAPIDS_TESTS_DIR}${test_name}.xml"
     done
     unset GTEST_CUDF_RMM_MODE
     # TODO: test-results/*.cs.log are processed in CI
