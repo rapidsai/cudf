@@ -1,5 +1,5 @@
 diff --git a/nvbench/main.cuh b/nvbench/main.cuh
-index 4c1588c..3ba2b99 100644
+index 0ba82d7..7ab02c1 100644
 --- a/nvbench/main.cuh
 +++ b/nvbench/main.cuh
 @@ -54,6 +54,14 @@
@@ -14,14 +14,14 @@ index 4c1588c..3ba2b99 100644
 +#define NVBENCH_ENVIRONMENT nvbench::no_environment
 +#endif
 +
- #define NVBENCH_MAIN_PARSE(argc, argv)                                         \
-   nvbench::option_parser parser;                                               \
+ #define NVBENCH_MAIN_PARSE(argc, argv)                                                             \
+   nvbench::option_parser parser;                                                                   \
    parser.parse(argc, argv)
 @@ -77,6 +85,7 @@
-     printer.set_total_state_count(total_states);                               \
-                                                                                \
-     printer.set_completed_state_count(0);                                      \
-+    NVBENCH_ENVIRONMENT{};                                                     \
-     for (auto &bench_ptr : benchmarks)                                         \
-     {                                                                          \
-       bench_ptr->set_printer(printer);                                         \
+     printer.set_total_state_count(total_states);                                                   \
+                                                                                                    \
+     printer.set_completed_state_count(0);                                                          \
++    NVBENCH_ENVIRONMENT();                                                                         \
+     for (auto &bench_ptr : benchmarks)                                                             \
+     {                                                                                              \
+       bench_ptr->set_printer(printer);                                                             \

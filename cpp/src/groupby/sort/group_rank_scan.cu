@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,38 @@ namespace groupby {
 namespace detail {
 namespace {
 
+template <bool forward, typename permuted_equal_t, typename value_resolver>
+struct unique_identifier {
+  unique_identifier(size_type const* labels,
+                    size_type const* offsets,
+                    permuted_equal_t permuted_equal,
+                    value_resolver resolver)
+    : _labels(labels), _offsets(offsets), _permuted_equal(permuted_equal), _resolver(resolver)
+  {
+  }
+
+  auto __device__ operator()(size_type row_index) const noexcept
+  {
+    auto const group_start = _offsets[_labels[row_index]];
+    if constexpr (forward) {
+      // First value of equal values is 1.
+      return _resolver(row_index == group_start || !_permuted_equal(row_index, row_index - 1),
+                       row_index - group_start);
+    } else {
+      auto const group_end = _offsets[_labels[row_index] + 1];
+      // Last value of equal values is 1.
+      return _resolver(row_index + 1 == group_end || !_permuted_equal(row_index, row_index + 1),
+                       row_index - group_start);
+    }
+  }
+
+ private:
+  size_type const* _labels;
+  size_type const* _offsets;
+  permuted_equal_t _permuted_equal;
+  value_resolver _resolver;
+};
+
 /**
  * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
  *
@@ -71,36 +103,34 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
+  auto const grouped_values_view = table_view{{grouped_values}};
   auto const comparator =
-    cudf::experimental::row::equality::self_comparator{table_view{{grouped_values}}, stream};
-  auto const d_equal = comparator.equal_to(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
-  auto const permuted_equal =
-    permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
+    cudf::experimental::row::equality::self_comparator{grouped_values_view, stream};
 
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, grouped_values.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  auto unique_identifier = [labels  = group_labels.begin(),
-                            offsets = group_offsets.begin(),
-                            permuted_equal,
-                            resolver] __device__(size_type row_index) {
-    auto const group_start = offsets[labels[row_index]];
-    if constexpr (forward) {
-      // First value of equal values is 1.
-      return resolver(row_index == group_start || !permuted_equal(row_index, row_index - 1),
-                      row_index - group_start);
-    } else {
-      auto const group_end = offsets[labels[row_index] + 1];
-      // Last value of equal values is 1.
-      return resolver(row_index + 1 == group_end || !permuted_equal(row_index, row_index + 1),
-                      row_index - group_start);
-    }
+  auto const comparator_helper = [&](auto const d_equal) {
+    auto const permuted_equal =
+      permuted_row_equality_comparator(d_equal, value_order.begin<size_type>());
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<size_type>(),
+                     mutable_ranks.end<size_type>(),
+                     unique_identifier<forward, decltype(permuted_equal), value_resolver>(
+                       group_labels.begin(), group_offsets.begin(), permuted_equal, resolver));
   };
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<size_type>(),
-                   mutable_ranks.end<size_type>(),
-                   unique_identifier);
+
+  if (cudf::detail::has_nested_columns(grouped_values_view)) {
+    auto const d_equal =
+      comparator.equal_to<true>(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
+    comparator_helper(d_equal);
+  } else {
+    auto const d_equal =
+      comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
+    comparator_helper(d_equal);
+  }
 
   auto [group_labels_begin, mutable_rank_begin] = [&]() {
     if constexpr (forward) {
