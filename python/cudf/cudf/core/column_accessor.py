@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -319,9 +319,9 @@ class ColumnAccessor(abc.MutableMapping):
         """
         Make a copy of this ColumnAccessor.
         """
-        if deep:
+        if deep or cudf.get_option("copy_on_write"):
             return self.__class__(
-                {k: v.copy(deep=True) for k, v in self._data.items()},
+                {k: v.copy(deep=deep) for k, v in self._data.items()},
                 multiindex=self.multiindex,
                 level_names=self.level_names,
             )
