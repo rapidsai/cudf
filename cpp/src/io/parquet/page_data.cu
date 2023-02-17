@@ -172,7 +172,7 @@ inline __device__ unsigned int getb(const uint8_t*& cur, const uint8_t* end)
   return (cur < end) ? *cur++ : 0;
 }
 
-__device__ uint64_t get_u64(const uint8_t*& cur, const uint8_t* end)
+inline __device__ uint64_t get_u64(const uint8_t*& cur, const uint8_t* end)
 {
   uint64_t v = 0, l = 0, c;
   do {
@@ -1863,10 +1863,12 @@ __global__ void __launch_bounds__(block_size)
 }
 
 struct delta_binary_state_s {
-  uint8_t const* block_start;
-  uint8_t const* block_end;
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
   uint32_t block_size;         // usually 128, must be multiple of 128
-  uint32_t mini_block_count;   // usually 4, block_size/mini_block_count must be multiple of 32
+  uint32_t mini_block_count;   // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
   uint32_t value_count;        // total values encoded in the block
   int64_t last_value;          // last value decoded, initialized to first_value from header
                                // should be int128_t, but in all likelihood we'll never see
@@ -1878,6 +1880,89 @@ struct delta_binary_state_s {
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 };
+
+// should only be called from InitDeltaBinaryBlock or SetupNextMiniBlock
+__device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
+{
+  auto d_start      = db->block_start;
+  db->cur_min_delta = get_i64(d_start, db->block_end);
+  db->cur_bitwidths = d_start;
+  db->cur_mb        = 0;
+  d_start += db->mini_block_count;
+  db->cur_mb_start = d_start;
+  db->block_start  = d_start;
+}
+
+// should be called on thread 0
+__device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
+                                     uint8_t const* d_start,
+                                     uint8_t const* d_end)
+{
+  db->block_end        = d_end;
+  db->block_size       = get_vlq32(d_start, d_end);
+  db->mini_block_count = get_vlq32(d_start, d_end);
+  db->value_count      = get_vlq32(d_start, d_end);
+  db->last_value       = get_i64(d_start, d_end);
+
+  db->current_value_idx = 0;
+  db->values_per_mb     = db->block_size / db->mini_block_count;
+
+  // init the first mini-block
+  db->block_start = d_start;
+  InitDeltaMiniBlock(db);
+}
+
+// should only be called on thread 0
+__device__ void SetupNextMiniBlock(delta_binary_state_s* db)
+{
+  db->current_value_idx += db->values_per_mb;
+
+  // just set pointer to start of next mini_block
+  if (db->cur_mb < db->mini_block_count - 1) {
+    db->cur_mb_start += db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
+    db->cur_mb++;
+  }
+  // out of mini-blocks, start a new block
+  else {
+    db->block_start = db->cur_mb_start + db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
+    InitDeltaMiniBlock(db);
+  }
+}
+
+__device__ int64_t DeltaForThread(delta_binary_state_s* db, int lane_id)
+{
+  // position at end of the current mini-block since the following calculates
+  // negative indexes
+  int const mb_bits = db->cur_bitwidths[db->cur_mb];
+  auto d_start      = db->cur_mb_start + (db->values_per_mb * mb_bits) / 8;
+
+  // TODO this is only good up to 24 bits
+  // unpack deltas
+  int64_t delta = 0;
+  if (lane_id + db->current_value_idx < db->value_count) {
+    int32_t ofs      = (lane_id - ((db->values_per_mb + 7) & ~7)) * mb_bits;
+    const uint8_t* p = d_start + (ofs >> 3);
+    ofs &= 7;
+    if (p < db->block_end) {
+      uint32_t c = 8 - ofs;
+      delta      = (*p++) >> ofs;
+      if (c < mb_bits && p < db->block_end) {
+        delta |= (*p++) << c;
+        c += 8;
+        if (c < mb_bits && p < db->block_end) {
+          delta |= (*p++) << c;
+          c += 8;
+          if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
+        }
+      }
+      delta &= (1 << mb_bits) - 1;
+    }
+  }
+  __syncwarp();
+
+  // add min delta to get true delta
+  return delta + db->cur_min_delta;
+}
 
 // decode page data encoded as DELTA_BINARY_PACKED
 __device__ void DecodeDeltaBinary(page_state_s* const s)
@@ -1891,29 +1976,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
   // need to pull header info from data_start, then increment
   // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
-  if (t == 0) {
-    auto d_start = s->data_start;
-    auto d_end   = s->data_end;
-
-    db->block_end        = d_end;
-    db->block_size       = get_vlq32(d_start, d_end);
-    db->mini_block_count = get_vlq32(d_start, d_end);
-    db->value_count      = get_vlq32(d_start, d_end);
-    db->last_value       = get_i64(d_start, d_end);
-
-    db->current_value_idx = 0;
-
-    // init the first mini-block
-    db->cur_min_delta = get_i64(d_start, d_end);
-    db->cur_bitwidths = d_start;
-    db->cur_mb        = 0;
-    d_start += db->mini_block_count;
-    db->cur_mb_start = d_start;
-    db->block_start  = d_start;
-  }
+  if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
-
-  auto const vals_per_mb = block_size / db->mini_block_count;  // this better be 32!
 
   // each mini-block should be 32 values, to match the ~32 levels that are decoded.s
   //
@@ -1965,37 +2029,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       // TODO handle skip_rows here
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // get to the end of the current mini-block because the unpacking uses negative
-      // offsets
-      int const mb_bits = db->cur_bitwidths[db->cur_mb];
-      auto d_start      = db->cur_mb_start + (vals_per_mb * mb_bits) / 8;
-
       // unpack deltas
-      int64_t delta = 0;
-      if (me + db->current_value_idx < db->value_count) {
-        int32_t ofs      = (me - ((vals_per_mb + 7) & ~7)) * mb_bits;
-        const uint8_t* p = d_start + (ofs >> 3);
-        ofs &= 7;
-        if (p < db->block_end) {
-          uint32_t c = 8 - ofs;
-          delta      = (*p++) >> ofs;
-          if (c < mb_bits && p < db->block_end) {
-            delta |= (*p++) << c;
-            c += 8;
-            if (c < mb_bits && p < db->block_end) {
-              delta |= (*p++) << c;
-              c += 8;
-              if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
-            }
-          }
-          delta &= (1 << mb_bits) - 1;
-        }
-      }
-
-      // add min_delta to get the true delta value
-      delta += db->cur_min_delta;
-
-      __syncwarp();
+      int64_t delta = DeltaForThread(db, me);
 
       // do inclusive scan to get value - first_value at each position
       __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
@@ -2008,6 +2043,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
+      // special case for first value in the page, which is stored in db->last_value
       if (src_pos == 1 && s->first_row == 0) {
         void* dst = nesting_info_base[leaf_level_index].data_out +
                     static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
@@ -2034,20 +2070,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
       if (me == 0) {
         s->src_pos = src_pos + 32;
-        db->current_value_idx += 32;
-
-        // set up for next block
-        if (db->cur_mb < db->mini_block_count - 1) {
-          db->cur_mb++;
-          db->cur_mb_start = d_start;
-        } else {
-          db->cur_min_delta = get_i64(d_start, db->block_end);
-          db->cur_bitwidths = d_start;
-          db->cur_mb        = 0;
-          d_start += db->mini_block_count;
-          db->cur_mb_start = d_start;
-          db->block_start  = d_start;
-        }
+        SetupNextMiniBlock(db);
       }
     }
     __syncthreads();
