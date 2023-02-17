@@ -1045,8 +1045,8 @@ public class ColumnVectorTest extends CudfTestBase {
     BigInteger bigInteger2 = new BigInteger("14");
     BigInteger bigInteger3 = new BigInteger("152345742357340573405745");
     final BigInteger[] bigInts = new BigInteger[] {bigInteger1, bigInteger2, bigInteger3};
-    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts)) {
-      HostColumnVector hostColumnVector = v.copyToHost();
+    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts);
+         HostColumnVector hostColumnVector = v.copyToHost()) {
       assertEquals(bigInteger1, hostColumnVector.getBigDecimal(0).unscaledValue());
       assertEquals(bigInteger2, hostColumnVector.getBigDecimal(1).unscaledValue());
       assertEquals(bigInteger3, hostColumnVector.getBigDecimal(2).unscaledValue());
