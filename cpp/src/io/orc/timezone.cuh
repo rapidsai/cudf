@@ -35,11 +35,15 @@ namespace io {
 
 // Cycle in which the time offsets repeat
 static constexpr int32_t cycle_years = 400;
-// Number of seconds in 400 years
-static constexpr int64_t cycle_seconds =
-  cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)}).count();
 // Two entries per year, over the length of the cycle
 static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
+
+inline __device__ auto project_to_cycle(timestamp_s ts)
+{
+  static constexpr duration_s cycle_s =
+    cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)});
+  return timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s};
+}
 
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
@@ -52,12 +56,12 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, int64_t ts)
+inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, timestamp_s ts)
 {
   if (tz_table.num_rows() == 0) { return 0; }
 
-  cudf::device_span<timestamp_s::rep const> ttimes(tz_table.column(0).head<timestamp_s::rep>(),
-                                                   static_cast<size_t>(tz_table.num_rows()));
+  cudf::device_span<timestamp_s const> ttimes(tz_table.column(0).head<timestamp_s>(),
+                                              static_cast<size_t>(tz_table.num_rows()));
   cudf::device_span<duration_s::rep const> offsets(tz_table.column(1).head<duration_s::rep>(),
                                                    static_cast<size_t>(tz_table.num_rows()));
 
@@ -77,7 +81,7 @@ inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, int
       return last_less_equal(ttimes.begin(), file_entry_end, ts);
     } else {
       // Search the 400-year cycle if outside of the file entries range
-      return last_less_equal(file_entry_end, ttimes.end(), (ts + cycle_seconds) % cycle_seconds);
+      return last_less_equal(file_entry_end, ttimes.end(), project_to_cycle(ts));
     }
   }();
 
