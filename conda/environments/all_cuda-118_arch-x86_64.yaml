@@ -17,6 +17,7 @@ dependencies:
 - cubinlinker
 - cuda-python>=11.7.1,<12.0
 - cudatoolkit=11.8
+- cuda-sanitizer-api=11.8.86
 - cupy>=9.5.0,<12.0.0a0
 - cxx-compiler
 - cython>=0.29,<0.30
