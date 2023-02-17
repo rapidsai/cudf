@@ -54,7 +54,7 @@ jobs:
       sha: ${{ inputs.sha }}
       skip_upload_pkgs: libcudf-example
   docs-build:
-    if: ${{ startsWith(github.ref, 'refs/heads/branch-') }}
+    if: github.ref_type == 'branch' && github.event_name == 'push'
     needs: python-build
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@cuda-118
