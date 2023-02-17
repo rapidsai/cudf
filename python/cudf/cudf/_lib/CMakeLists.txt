@@ -46,7 +46,7 @@ set(cython_sources
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
-    strings_udf.pyx
+    # strings_udf.pyx
     text.pyx
     transform.pyx
     transpose.pyx
