@@ -2080,3 +2080,25 @@ def test_series_duplicated(data, index, keep):
     ps = gs.to_pandas()
 
     assert_eq(gs.duplicated(keep=keep), ps.duplicated(keep=keep))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        [10, 20, None, None],
+    ],
+)
+@pytest.mark.parametrize("copy", [True, False])
+def test_series_copy(data, copy):
+    psr = pd.Series(data)
+    gsr = cudf.from_pandas(psr)
+
+    new_psr = pd.Series(psr, copy=copy)
+    new_gsr = cudf.Series(gsr, copy=copy)
+
+    new_psr.iloc[0] = 999
+    new_gsr.iloc[0] = 999
+
+    assert_eq(psr, gsr)
+    assert_eq(new_psr, new_gsr)
