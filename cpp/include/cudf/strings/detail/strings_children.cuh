@@ -27,6 +27,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -35,7 +37,7 @@ namespace detail {
  * @brief Creates child offsets and chars columns by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
- * @throws cudf::logic_error if the output strings column exceeds the column size limit
+ * @throws std::overflow_error if the output strings column exceeds the column size limit
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must also have members d_offsets and d_chars which are set to
@@ -78,7 +80,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   auto const bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
+               "Size of output exceeds column size limit",
+               std::overflow_error);
 
   // Now build the chars column
   std::unique_ptr<column> chars_column =

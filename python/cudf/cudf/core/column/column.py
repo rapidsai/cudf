@@ -64,7 +64,12 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
+from cudf.core.buffer import (
+    Buffer,
+    acquire_spill_lock,
+    as_buffer,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
@@ -137,7 +142,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.data is not None:
             if mode == "read":
-                obj = self.data._readonly_proxy_cai_obj
+                obj = _proxy_cai_obj(
+                    self.data._get_cuda_array_interface(readonly=True),
+                    owner=self.data,
+                )
             elif mode == "write":
                 obj = self.data
             else:
@@ -170,7 +178,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if self.mask is not None:
             if mode == "read":
-                obj = self.mask._readonly_proxy_cai_obj
+                obj = _proxy_cai_obj(
+                    self.mask._get_cuda_array_interface(readonly=True),
+                    owner=self.mask,
+                )
             elif mode == "write":
                 obj = self.mask
             else:
@@ -418,24 +429,50 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view(mode="read")
 
+    def force_deep_copy(self: T) -> T:
+        """
+        A method to create deep copy irrespective of whether
+        `copy-on-write` is enabled.
+        """
+        result = libcudf.copying.copy_column(self)
+        return cast(T, result._with_type_metadata(self.dtype))
+
     def copy(self: T, deep: bool = True) -> T:
-        """Columns are immutable, so a deep copy produces a copy of the
-        underlying data and mask and a shallow copy creates a new column and
-        copies the references of the data and mask.
+        """
+        Makes a copy of the Column.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, a true physical copy of the column
+            is made.
+            If False and `copy_on_write` is False, the same
+            memory is shared between the buffers of the Column
+            and changes made to one Column will propagate to
+            its copy and vice-versa.
+            If False and `copy_on_write` is True, the same
+            memory is shared between the buffers of the Column
+            until there is a write operation being performed on
+            them.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return cast(T, result._with_type_metadata(self.dtype))
+            return self.force_deep_copy()
         else:
             return cast(
                 T,
                 build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
+                    data=self.base_data
+                    if self.base_data is None
+                    else self.base_data.copy(deep=False),
+                    dtype=self.dtype,
+                    mask=self.base_mask
+                    if self.base_mask is None
+                    else self.base_mask.copy(deep=False),
                     size=self.size,
                     offset=self.offset,
-                    children=self.base_children,
+                    children=tuple(
+                        col.copy(deep=False) for col in self.base_children
+                    ),
                 ),
             )
 
@@ -1358,7 +1395,7 @@ def column_empty_like(
             data=None,
             dtype=dtype,
             mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            children=(codes,),
             size=codes.size,
         )
 
@@ -1887,6 +1924,8 @@ def as_column(
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
         data = as_buffer(arbitrary)
+        if cudf.get_option("copy_on_write"):
+            data._zero_copied = True
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -2561,3 +2600,22 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
                 ) from e
             raise
     return col
+
+
+def _proxy_cai_obj(cai, owner):
+    """
+    Returns a proxy CAI SimpleNameSpace wrapped
+    with the provided `cai` as `__cuda_array_interface__`
+    and owner as `owner` to keep the object alive.
+    This is an internal utility for `data_array_view`
+    and `mask_array_view` where an object with
+    read-only CAI is required.
+    """
+    return cuda_array_interface_wrapper(
+        ptr=cai["data"][0],
+        size=cai["shape"][0],
+        owner=owner,
+        readonly=cai["data"][1],
+        typestr=cai["typestr"],
+        version=cai["version"],
+    )
