@@ -20,12 +20,14 @@ from cudf.core.udf.templates import (
     groupby_apply_kernel_template,
 )
 from cudf.core.udf.utils import (
+    _generate_cache_key,
     _get_extensionty_size,
     _get_kernel,
     _get_ptx_file,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
+    precompiled,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -152,12 +154,18 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
 
-    kernel, return_type = _get_groupby_apply_kernel(
-        grouped_values, function, args
-    )
-    return_type = numpy_support.as_dtype(return_type)
+    cache_key = _generate_cache_key(grouped_values, function)
+    if precompiled.get(cache_key) is not None:
+        kernel, return_type = precompiled[cache_key]
+    else:
+        kernel, return_type = _get_groupby_apply_kernel(
+            grouped_values, function, args
+        )
+        precompiled[cache_key] = (kernel, return_type)
 
+    return_type = numpy_support.as_dtype(return_type)
     output = cudf.core.column.column_empty(ngroups, dtype=return_type)
+
     launch_args = [
         offsets,
         output,
