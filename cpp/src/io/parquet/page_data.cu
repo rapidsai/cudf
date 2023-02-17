@@ -1877,7 +1877,6 @@ struct delta_binary_state_s {
   uint32_t cur_mb;               // index of the current mini-block within the block
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
-  int64_t deltas[32];            // decoded deltas go here
 };
 
 // decode page data encoded as DELTA_BINARY_PACKED
@@ -1887,6 +1886,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
   int t                    = threadIdx.x;
   delta_binary_state_s* db = &state_g;
+
+  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // need to pull header info from data_start, then increment
   // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
@@ -1914,38 +1915,64 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
   auto const vals_per_mb = block_size / db->mini_block_count;  // this better be 32!
 
-  // each mini-block should be 32 values, to match the ~32 levels that are decoded.
-  // hopefully values in and values out stay in sync when there are nulls.
-  // skipped_leaf_values will always be 0 for flat hierarchies.
-  // uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
+  // each mini-block should be 32 values, to match the ~32 levels that are decoded.s
+  //
+  // copying logic from gpuDecodePageData.  I didn't realize that target_pos on warp0 was
+  // ahead of warp1...so warp0 decodes a batch, but warp1 doesn't consume on the first go around
+  // becuase of sync issues.  so then on iteration 2 of this loop, warp0 produces another
+  // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
+  // nothting when target_pos hits num_input_values
+  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
     int src_pos               = s->src_pos;
-    constexpr int out_thread0 = 32;
+    constexpr int out_thread0 = 96;
 
-    // now use two warps to do the decode. warp0 will decode the rep/def levels, warp1
-    // will decode the bit-packed values and place into the output array. warps 2 and 3
+    if (t < out_thread0) {
+      target_pos =
+        min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
+      if (src_pos == 0) target_pos++;
+    } else {
+      target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
+    }
+
+    // FIXME eventually should produce 96 values in warp0 and get all of the other warps
+    // busy, but that's going to lead to weird issues with miniblocks.  would be so much
+    // simpler to just have warp0 decode levels, sync, and then have all 4 warps process
+    // a block.  It depends on the relative cost of decoding level data vs consuming.
+    // now use two warps to do the decode. warp0 will decode the rep/def levels, warp3
+    // will decode the bit-packed values and place into the output array. warps 1 and 2
     // will make tea.
     if (t < 32) {
-      target_pos =
-        src_pos + 32 + (src_pos == 0);  // need one extra level on first pass for first_value
-      //  min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
 
-    } else if (t < 64) {
-      int me     = t & 0x1f;
-      target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
+    } else if (t < out_thread0) {
+      // warps 1 & 2 do nothing
+    } else if (src_pos < target_pos) {
+      // warp 3
+      // need to bump src_pos by one because of the first_value being in the header
+      if (src_pos == 0) { src_pos++; }
+      int me = t & 0x1f;
+      src_pos += me;
+
+      int dst_pos = s->nz_idx[rolling_index(src_pos)];
+
+      // TODO handle skip_rows here
+      if (!has_repetition) { dst_pos -= s->first_row; }
 
       // get to the end of the current mini-block because the unpacking uses negative
       // offsets
       int const mb_bits = db->cur_bitwidths[db->cur_mb];
       auto d_start      = db->cur_mb_start + (vals_per_mb * mb_bits) / 8;
+
+      // unpack deltas
+      int64_t delta = 0;
       if (me + db->current_value_idx < db->value_count) {
-        int delta        = 0;
         int32_t ofs      = (me - ((vals_per_mb + 7) & ~7)) * mb_bits;
         const uint8_t* p = d_start + (ofs >> 3);
         ofs &= 7;
@@ -1962,49 +1989,51 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
             }
           }
           delta &= (1 << mb_bits) - 1;
-          delta += db->cur_min_delta;
-          db->deltas[me] = delta;
         }
       }
 
+      // add min_delta to get the true delta value
+      delta += db->cur_min_delta;
+
       __syncwarp();
-      int64_t my_delta = db->deltas[me];
+
+      // do inclusive scan to get value - first_value at each position
       __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
-      cub::WarpScan<int64_t>(temp_storage[0]).InclusiveSum(my_delta, my_delta);
-      my_delta += db->last_value;
-      db->deltas[me] = my_delta;  // now contains values
+      cub::WarpScan<int64_t>(temp_storage[0]).InclusiveSum(delta, delta);
 
-      //FIXME nz_idx isn't always populated by the time we get here...how
-      // to ensure writes from warp 0 are done before we do this part???
-      constexpr int blk = 1;
-      // handle first value
-      if (me == 0) {
-        if (db->current_value_idx == 0) {
-          if (blockIdx.x == blk) {
-            printf("%06d %ld %d -> %d\n",
-                  s->page.chunk_row + db->current_value_idx + 1,
-                  my_delta,
-                  src_pos,
-                  s->nz_idx[rolling_index(src_pos + me)]);
-          }
-          db->current_value_idx++;
-          src_pos++;
+      // now add first_value to get true value
+      delta += db->last_value;
+
+      // nesting level that is storing actual leaf values
+      int leaf_level_index = s->col.max_nesting_depth - 1;
+      uint32_t dtype_len   = s->dtype_len;
+
+      if (src_pos == 1 && s->first_row == 0) {
+        void* dst = nesting_info_base[leaf_level_index].data_out +
+                    static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
+        if (s->dtype_len == 8) {
+          *static_cast<int64_t*>(dst) = db->last_value;
+        } else if (dtype_len == 4) {
+          *static_cast<int32_t*>(dst) = db->last_value;
         }
       }
-      __syncwarp();
-      /*
-      if (blockIdx.x == blk && db->current_value_idx + me < db->value_count) {
-        printf("%06d %ld %d -> %d\n",
-               s->page.chunk_row + db->current_value_idx + me + 1,
-               my_delta,
-               src_pos + me,
-               s->nz_idx[rolling_index(src_pos + me)]);
+
+      if (dst_pos >= 0) {
+        void* dst =
+          nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        if (s->dtype_len == 8) {
+          *static_cast<int64_t*>(dst) = delta;
+        } else if (dtype_len == 4) {
+          *static_cast<int32_t*>(dst) = delta;
+        }
       }
-       */
+
+      // last lane in warp has the last_value now
+      __syncwarp();
+      if (me == 31) { db->last_value = delta; }
 
       if (me == 0) {
-        db->last_value = db->deltas[31];
-        s->src_pos     = src_pos + 32;
+        s->src_pos = src_pos + 32;
         db->current_value_idx += 32;
 
         // set up for next block
