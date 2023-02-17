@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -460,22 +460,27 @@ std::unique_ptr<table> build_timezone_transition_table(std::string const& timezo
                         .count();
   }
 
-  std::vector<std::unique_ptr<column>> tz_table_columns;
-  tz_table_columns.emplace_back(make_timestamp_column(
-    data_type{type_id::TIMESTAMP_SECONDS}, ttimes.size(), mask_state::UNALLOCATED, stream));
-  tz_table_columns.emplace_back(make_duration_column(
-    data_type{type_id::DURATION_SECONDS}, offsets.size(), mask_state::UNALLOCATED, stream));
+  CUDF_EXPECTS(ttimes.size() == offsets.size(),
+               "Error reading TZif file for timezone " + timezone_name);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(tz_table_columns[0]->mutable_view().head(),
-                                ttimes.data(),
-                                ttimes.size() * sizeof(timestamp_s::rep),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  CUDF_CUDA_TRY(cudaMemcpyAsync(tz_table_columns[1]->mutable_view().head(),
-                                offsets.data(),
-                                offsets.size() * sizeof(duration_s::rep),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  std::vector<timestamp_s> ttimes_typed;
+  ttimes_typed.reserve(ttimes.size());
+  std::transform(ttimes.cbegin(), ttimes.cend(), std::back_inserter(ttimes_typed), [](auto ts) {
+    return timestamp_s{duration_s{ts}};
+  });
+  std::vector<duration_s> offsets_typed;
+  offsets_typed.reserve(offsets.size());
+  std::transform(offsets.cbegin(), offsets.cend(), std::back_inserter(offsets_typed), [](auto ts) {
+    return duration_s{ts};
+  });
+
+  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes_typed, stream);
+  auto d_offsets = cudf::detail::make_device_uvector_async(offsets_typed, stream);
+
+  std::vector<std::unique_ptr<column>> tz_table_columns;
+  tz_table_columns.emplace_back(std::make_unique<cudf::column>(std::move(d_ttimes)));
+  tz_table_columns.emplace_back(std::make_unique<cudf::column>(std::move(d_offsets)));
+
   // Need to finish copies before ttimes and offsets go out of scope
   stream.synchronize();
 
