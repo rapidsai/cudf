@@ -56,14 +56,12 @@ inline __device__ auto project_to_cycle(timestamp_s ts)
  *
  * @return GMT offset
  */
-inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, timestamp_s ts)
+inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestamp_s ts)
 {
-  if (tz_table.num_rows() == 0) { return 0; }
+  if (tz_table.num_rows() == 0) { return duration_s{0}; }
 
   cudf::device_span<timestamp_s const> ttimes(tz_table.column(0).head<timestamp_s>(),
                                               static_cast<size_t>(tz_table.num_rows()));
-  cudf::device_span<duration_s::rep const> offsets(tz_table.column(1).head<duration_s::rep>(),
-                                                   static_cast<size_t>(tz_table.num_rows()));
 
   auto const ts_ttime_it = [&]() {
     auto last_less_equal = [](auto begin, auto end, auto value) {
@@ -85,7 +83,7 @@ inline __device__ duration_s::rep get_gmt_offset(table_device_view tz_table, tim
     }
   }();
 
-  return offsets[ts_ttime_it - ttimes.begin()];
+  return tz_table.column(1).element<duration_s>(ts_ttime_it - ttimes.begin());
 }
 
 /**

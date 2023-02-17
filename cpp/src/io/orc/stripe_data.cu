@@ -1447,7 +1447,7 @@ __global__ void __launch_bounds__(block_size)
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
     s->top.data.utc_epoch =
-      kORCTimeToUTC - get_gmt_offset(tz_table, timestamp_s{duration_s{kORCTimeToUTC}});
+      kORCTimeToUTC - get_gmt_offset(tz_table, timestamp_s{duration_s{kORCTimeToUTC}}).count();
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1771,7 +1771,7 @@ __global__ void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              seconds += get_gmt_offset(tz_table, timestamp_s{duration_s{seconds}});
+              seconds += get_gmt_offset(tz_table, timestamp_s{duration_s{seconds}}).count();
 
               int64_t nanos = secondary_val;
               nanos         = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
