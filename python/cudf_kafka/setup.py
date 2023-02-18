@@ -43,7 +43,7 @@ CUDF_ROOT = os.environ.get(
     ),
 )
 CUDF_KAFKA_ROOT = os.environ.get(
-    "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
+    "CUDF_KAFKA_ROOT", "../../cpp/libcudf_kafka/build"
 )
 
 try:
@@ -72,10 +72,16 @@ extensions = [
             pa.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
+        library_dirs=(
+            [
+                get_python_lib(),
+                os.path.join(os.sys.prefix, "lib"),
+                CUDF_KAFKA_ROOT,
+            ]
+        ),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++17"],
+        extra_compile_args=["-std=c++17", "-DFMT_HEADER_ONLY=1"],
     )
 ]
 
