@@ -91,12 +91,14 @@ inline __device__ duration_s get_gmt_offset(table_device_view tz_table, timestam
  *
  * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
+ * @param tzif_dir TODO
  * @param timezone_name standard timezone name (for example, "US/Pacific")
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The transition table for the given timezone
  */
-std::unique_ptr<table> build_timezone_transition_table(std::string const& timezone_name,
+std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string> const& tzif_dir,
+                                                       std::string const& timezone_name,
                                                        rmm::cuda_stream_view stream);
 
 }  // namespace io

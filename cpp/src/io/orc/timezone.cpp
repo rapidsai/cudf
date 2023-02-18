@@ -126,12 +126,12 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::string const& timezone_name)
+  timezone_file(std::optional<std::string> const& tzif_dir, std::string const& timezone_name)
   {
     using std::ios_base;
 
     // Open the input file
-    std::string const tz_filename = tzif_system_directory + timezone_name;
+    auto const tz_filename = tzif_dir.value_or(tzif_system_directory) + timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
     CUDF_EXPECTS(fin, "Failed to open the timezone file.");
@@ -372,7 +372,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-std::unique_ptr<table> build_timezone_transition_table(std::string const& timezone_name,
+std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string> const& tzif_dir,
+                                                       std::string const& timezone_name,
                                                        rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
@@ -380,7 +381,7 @@ std::unique_ptr<table> build_timezone_transition_table(std::string const& timezo
     return std::make_unique<cudf::table>();
   }
 
-  timezone_file const tzf(timezone_name);
+  timezone_file const tzf(tzif_dir, timezone_name);
 
   std::vector<timestamp_s::rep> ttimes(1);
   std::vector<duration_s::rep> offsets(1);
