@@ -27,13 +27,11 @@ rapids-mamba-retry install \
   libcudf cudf dask-cudf
 
 
-# Build CPP docs
 rapids-logger "Build Doxygen docs"
 pushd cpp/doxygen
 doxygen Doxyfile
 popd
 
-# Build Python docs
 rapids-logger "Build Sphinx docs"
 pushd docs/cudf
 sphinx-build -b dirhtml source _html
