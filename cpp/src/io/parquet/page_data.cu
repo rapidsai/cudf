@@ -1218,6 +1218,8 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
           break;
         case Encoding::RLE: s->dict_run = 0; break;
         case Encoding::DELTA_BINARY_PACKED:
+        case Encoding::DELTA_BYTE_ARRAY:
+          // FIXME
           // not sure if we should do the header here.  would need uint64_t first_value.
           // need to ensure num_values from header matches page num_values - num_nulls?
           break;
@@ -1893,7 +1895,10 @@ __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
   db->block_start  = d_start;
 }
 
-// should be called on thread 0
+// read delta binary header into state object. should be called on thread 0. header format is:
+//
+// | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
+//
 __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
                                      uint8_t const* d_start,
                                      uint8_t const* d_end)
@@ -1929,6 +1934,7 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   }
 }
 
+// called by all threads in a warp, currently only one warp supported.
 __device__ int64_t DeltaForThread(delta_binary_state_s* db, int lane_id)
 {
   // position at end of the current mini-block since the following calculates
@@ -1964,6 +1970,14 @@ __device__ int64_t DeltaForThread(delta_binary_state_s* db, int lane_id)
   return delta + db->cur_min_delta;
 }
 
+// TODO
+// 1) test with nulls
+// 2) test with nesting
+// 3) test with nest and nulls
+// 4) test all the above with skip_rows
+// 5) make more general so it will work if block_size > 128 or
+//    values/mini-block > 32
+// 6) if skip_rows, then fast forward to correct block/mini-block
 // decode page data encoded as DELTA_BINARY_PACKED
 __device__ void DecodeDeltaBinary(page_state_s* const s)
 {
@@ -1974,8 +1988,6 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // need to pull header info from data_start, then increment
-  // | block size (uint) | mini-block count (uint) | value count (uint) | first value (int) |
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
 
@@ -1986,7 +1998,10 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   // becuase of sync issues.  so then on iteration 2 of this loop, warp0 produces another
   // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
   // nothting when target_pos hits num_input_values
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+  PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
+
+  // skipped_leaf_values will always be 0 for flat hierarchies.
+  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
@@ -2016,18 +2031,30 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       gpuDecodeLevels(s, target_pos, t);
 
     } else if (t < out_thread0) {
-      // warps 1 & 2 do nothing
+      // warps 1 & 2 do nothing (kettle's on)
     } else if (src_pos < target_pos) {
       // warp 3
       // need to bump src_pos by one because of the first_value being in the header
-      if (src_pos == 0) { src_pos++; }
+      bool const first_pass = src_pos == 0;
+      if (first_pass) { src_pos++; }
       int me = t & 0x1f;
       src_pos += me;
 
-      int dst_pos = s->nz_idx[rolling_index(src_pos)];
+      int dst_pos = src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
 
-      // TODO handle skip_rows here
-      if (!has_repetition) { dst_pos -= s->first_row; }
+      // handle skip_rows here. flat hierarchies can just skip up to first_row.
+      if (!has_repetition) {
+        dst_pos -= s->first_row;
+      } else {
+        // nested with skipped rows is a different beast. gpuDecodeLevels assumes
+        // use of the original code, so it will only work up until
+        // num_input_values - skipped_leaf_values. so we need to do some finagling
+        // because the the bit-packing has to start at least at the start of a
+        // mini-block and then skip values.
+        if (first_pass) { src_pos -= skipped_leaf_values; }
+        dst_pos =
+          src_pos >= 0 && src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
+      }
 
       // unpack deltas
       int64_t delta = DeltaForThread(db, me);
@@ -2043,7 +2070,8 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
       int leaf_level_index = s->col.max_nesting_depth - 1;
       uint32_t dtype_len   = s->dtype_len;
 
-      // special case for first value in the page, which is stored in db->last_value
+      // special case for first value in the page, which is stored in db->last_value.
+      // if skip_rows is non-zero, first_row will be as well.
       if (src_pos == 1 && s->first_row == 0) {
         void* dst = nesting_info_base[leaf_level_index].data_out +
                     static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
@@ -2121,6 +2149,8 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
   if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
     DecodeDeltaBinary(s);
+    return;
+  } else if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
     return;
   }
 
