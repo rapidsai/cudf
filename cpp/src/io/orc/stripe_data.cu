@@ -43,8 +43,8 @@ inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode
 
 inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
 
-static __device__ __constant__ int64_t kORCTimeToUTC =
-  1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
+// Seconds from January 1st, 1970 to January 1st, 2015
+static __device__ __constant__ duration_s orc_utc_epoch = duration_s{1420070400};
 
 struct orc_bytestream_s {
   const uint8_t* base;
@@ -101,7 +101,7 @@ struct orc_datadec_state_s {
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
-  int64_t utc_epoch;        // kORCTimeToUTC - gmtOffset
+  duration_s tz_epoch;      // orc_utc_epoch - gmtOffset
   RowGroup index;
 };
 
@@ -1446,8 +1446,7 @@ __global__ void __launch_bounds__(block_size)
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
-    s->top.data.utc_epoch =
-      kORCTimeToUTC - get_gmt_offset(tz_table, timestamp_s{duration_s{kORCTimeToUTC}}).count();
+    s->top.data.tz_epoch = orc_utc_epoch - get_gmt_offset(tz_table, timestamp_s{orc_utc_epoch});
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1770,35 +1769,33 @@ __global__ void __launch_bounds__(block_size)
               break;
             }
             case TIMESTAMP: {
-              int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
-              seconds += get_gmt_offset(tz_table, timestamp_s{duration_s{seconds}}).count();
+              auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
+              // Convert to UTC
+              seconds += get_gmt_offset(tz_table, timestamp_s{seconds});
 
-              int64_t nanos = secondary_val;
-              nanos         = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
+              duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
+                                              kTimestampNanoScale[secondary_val & 7]};
 
               // Adjust seconds only for negative timestamps with positive nanoseconds.
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
               // Comparing with 999999 instead of zero to match the apache writer.
-              if (seconds < 0 and nanos > 999999) { seconds -= 1; }
-
-              duration_ns d_ns{nanos};
-              duration_s d_s{seconds};
+              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
                 switch (s->chunk.timestamp_type_id) {
                   case type_id::TIMESTAMP_SECONDS:
-                    return (d_s + duration_cast<duration_s>(d_ns)).count();
+                    return (seconds + duration_cast<duration_s>(nanos)).count();
                   case type_id::TIMESTAMP_MILLISECONDS:
-                    return (d_s + duration_cast<duration_ms>(d_ns)).count();
+                    return (seconds + duration_cast<duration_ms>(nanos)).count();
                   case type_id::TIMESTAMP_MICROSECONDS:
-                    return (d_s + duration_cast<duration_us>(d_ns)).count();
+                    return (seconds + duration_cast<duration_us>(nanos)).count();
                   case type_id::TIMESTAMP_NANOSECONDS:
                   default:
                     // nanoseconds as output in case of `type_id::EMPTY` and
                     // `type_id::TIMESTAMP_NANOSECONDS`
-                    return (d_s + d_ns).count();
+                    return (seconds + nanos).count();
                 }
               }();
 
