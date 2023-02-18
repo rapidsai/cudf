@@ -5,10 +5,10 @@ import operator
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pytest
 
 import cudf
+import pandas as pd
 from cudf.core._compat import PANDAS_GE_120
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
@@ -1006,11 +1006,11 @@ def test_timedelta_index_properties(data, dtype, name):
     gdi = cudf.Index(data, dtype=dtype, name=name)
     pdi = gdi.to_pandas()
 
-    def local_assert(expected, actual):
+    def local_assert(expected, actual, **kwargs):
         if actual._values.null_count:
-            assert_eq(expected, actual.astype("float64"))
+            assert_eq(expected, actual.astype("float64"), **kwargs)
         else:
-            assert_eq(expected, actual)
+            assert_eq(expected.astype("int64"), actual, **kwargs)
 
     expected_days = pdi.days
     actual_days = gdi.days

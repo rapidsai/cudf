@@ -37,6 +37,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _index_astype_docstring
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -2332,8 +2333,12 @@ class DatetimeIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, nullable=False):
-        nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+        if PANDAS_GE_200:
+            host_values = self._values.to_pandas()
+        else:
+            host_values = self._values.astype("datetime64[ns]").to_pandas()
+
+        return pd.DatetimeIndex(host_values, name=self.name)
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):

@@ -2997,13 +2997,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
-
+        result_name = "proportion" if normalize else "count"
         if dropna and self.null_count == len(self):
             return Series(
                 [],
                 dtype=np.int32,
-                name=self.name,
-                index=cudf.Index([], dtype=self.dtype),
+                name=result_name,
+                index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
 
         if bins is not None:
@@ -3012,7 +3012,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
 
-        res.index.name = None
+        res.index.name = self.name
 
         if sort:
             res = res.sort_values(ascending=ascending)
@@ -3027,7 +3027,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 res.index._column, res.index.categories.dtype
             )
             res.index = int_index
-
+        res.name = result_name
         return res
 
     @_cudf_nvtx_annotate

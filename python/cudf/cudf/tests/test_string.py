@@ -9,11 +9,11 @@ from sys import getsizeof
 
 import cupy
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
+import pandas as pd
 from cudf import concat
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
@@ -1908,7 +1908,10 @@ def test_string_count(data, pat, flags):
         ps.str.count(pat=pat, flags=flags),
         check_dtype=False,
     )
-    assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
+    assert_eq(
+        as_index(gs).str.count(pat=pat),
+        pd.Index(ps).str.count(pat=pat).astype("int32"),
+    )
 
 
 @pytest.mark.parametrize(
