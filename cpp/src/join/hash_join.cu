@@ -43,6 +43,40 @@
 namespace cudf {
 namespace detail {
 namespace {
+
+auto get_legacy_comparator(table_view build_table,
+  table_view probe_table,
+  bool const has_nulls,
+  cudf::null_equality nulls_equal,
+  rmm::cuda_stream_view stream) {
+    auto build_table_d          = cudf::table_device_view::create(build_table, stream);
+    auto probe_table_d          = cudf::table_device_view::create(probe_table, stream);
+
+    auto probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+
+    return row_equality{probe_nulls, *probe_table_d, *build_table_d, nulls_equal};
+}
+
+auto get_experimental_comparator(table_view build_table,
+  table_view probe_table,
+  bool const has_nulls,
+  cudf::null_equality const nulls_equal,
+  rmm::cuda_stream_view stream) {
+    auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+
+    auto const preprocessed_probe =
+    cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
+  
+  auto const preprocessed_build =
+    cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+
+  auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, nulls_equal);
+
+  return device_comparator;
+}
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -88,21 +122,17 @@ std::size_t compute_join_output_size(table_view build_table,
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
-  auto const preprocessed_probe =
-    cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
-  auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  // auto const preprocessed_probe =
+  // cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
+  // auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  // auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  auto probe_table_d          = cudf::table_device_view::create(probe_table, stream);
+  row_hash hash_probe{probe_nulls, *probe_table_d};
+
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  auto const preprocessed_build =
-    cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-
-  auto const comparator_helper = [&](auto const device_comparator) {
-    pair_equality equality{device_comparator};
-
+  auto const comparator_helper = [&](auto const equality) {
     std::size_t size;
     auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
     if constexpr (JoinKind == join_kind::LEFT_JOIN) {
@@ -116,11 +146,13 @@ std::size_t compute_join_output_size(table_view build_table,
   };
 
   if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(has_nulls, nulls_equal);
-    return comparator_helper(device_comparator);
+    auto const device_comparator = get_experimental_comparator(build_table, probe_table, has_nulls, nulls_equal, stream);
+    experimental::pair_equality equality{device_comparator};
+    return comparator_helper(equality);
   } else {
-    auto const device_comparator = row_comparator.equal_to<false>(has_nulls, nulls_equal);
-    return comparator_helper(device_comparator);
+    auto const device_comparator = get_legacy_comparator(build_table, probe_table, has_nulls, nulls_equal, stream);
+    pair_equality equality(device_comparator);
+    return comparator_helper(equality);
   }
 }
 
@@ -174,19 +206,16 @@ probe_join_hash_table(cudf::table_view build_table,
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
-  auto const preprocessed_probe =
-    cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
-  auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  // auto const preprocessed_probe =
+  //   cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
+  // auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  // auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  auto probe_table_d          = cudf::table_device_view::create(probe_table, stream);
+  row_hash hash_probe{probe_nulls, *probe_table_d};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  auto const preprocessed_build =
-    cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const comparator_helper = [&](auto const device_comparator) {
-    pair_equality equality{device_comparator};
+  auto const comparator_helper = [&](auto const equality) {
 
     const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
@@ -222,11 +251,13 @@ probe_join_hash_table(cudf::table_view build_table,
   };
 
   if (cudf::detail::has_nested_columns(probe_table)) {
-    auto device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+    auto const device_comparator = get_experimental_comparator(build_table, probe_table, has_nulls, compare_nulls, stream);
+    experimental::pair_equality equality{device_comparator};
+    comparator_helper(equality);
   } else {
-    auto device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+    auto const device_comparator = get_legacy_comparator(build_table, probe_table, has_nulls, compare_nulls, stream);
+    pair_equality equality{device_comparator};
+    comparator_helper(equality);
   }
 
   return std::pair(std::move(left_indices), std::move(right_indices));
@@ -266,19 +297,16 @@ std::size_t get_full_join_size(cudf::table_view build_table,
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
-  auto const preprocessed_probe =
-    cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
-  auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  // auto const preprocessed_probe =
+  //   cudf::experimental::row::hash::preprocessed_table::create(probe_table, stream);
+  // auto row_hash                 = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  // auto hash_probe               = row_hash.device_hasher(probe_nulls);
+  auto probe_table_d          = cudf::table_device_view::create(probe_table, stream);
+  row_hash hash_probe{probe_nulls, *probe_table_d};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  auto const preprocessed_build =
-    cudf::experimental::row::equality::preprocessed_table::create(build_table, stream);
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const comparator_helper = [&](auto const device_comparator) {
-    pair_equality equality{device_comparator};
+  auto const comparator_helper = [&](auto const equality) {
 
     auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
@@ -293,11 +321,14 @@ std::size_t get_full_join_size(cudf::table_view build_table,
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   };
   if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+    auto const device_comparator = get_experimental_comparator(build_table, probe_table, has_nulls, compare_nulls, stream);
+    experimental::pair_equality equality{device_comparator};
+    comparator_helper(equality);
   } else {
-    auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+
+    auto const device_comparator = get_legacy_comparator(build_table, probe_table, has_nulls, compare_nulls, stream);
+    pair_equality equality{device_comparator};
+    comparator_helper(equality);
   }
 
   // Release intermediate memory allocation

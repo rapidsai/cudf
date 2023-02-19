@@ -101,6 +101,31 @@ class row_is_valid {
  *
  * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
  */
+
+ template <typename Comparator = row_equality>
+ class pair_equality {
+  public:
+   pair_equality(table_device_view lhs,
+                 table_device_view rhs,
+                 nullate::DYNAMIC has_nulls,
+                 null_equality nulls_are_equal = null_equality::EQUAL)
+     : _check_row_equality{has_nulls, lhs, rhs, nulls_are_equal}
+   {
+   }
+ 
+   pair_equality(Comparator const d_eqcomp) : _check_row_equality{std::move(d_eqcomp)} {}
+ 
+   template <typename LhsPair, typename RhsPair>
+   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
+   {
+     return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+   }
+ 
+  private:
+   Comparator _check_row_equality;
+ };
+
+namespace experimental {
 template <typename DeviceComparator>
 class pair_equality {
  public:
@@ -109,8 +134,8 @@ class pair_equality {
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    using experimental::row::lhs_index_type;
-    using experimental::row::rhs_index_type;
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
     // printf("lhs_index: %d, rhs_index: %d, hash: %d, equality: %d\n", lhs.second, rhs.second,
     // lhs.first == rhs.first, _check_row_equality(rhs_index_type{rhs.second},
     // lhs_index_type{lhs.second}));
@@ -121,6 +146,7 @@ class pair_equality {
  private:
   DeviceComparator _check_row_equality;
 };
+}
 
 /**
  * @brief Computes the trivial left join operation for the case when the
@@ -165,8 +191,10 @@ void build_join_hash_table(cudf::table_view const& build,
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  auto row_hash   = experimental::row::hash::row_hasher{build, stream};
-  auto hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
+  // auto row_hash   = cudf::experimental::row::hash::row_hasher{build, stream};
+  // auto hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
