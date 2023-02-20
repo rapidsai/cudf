@@ -29,15 +29,11 @@
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-void json_read_common(cudf::io::json_writer_options const& write_opts,
-                      cuio_source_sink_pair& source_sink,
-                      nvbench::state& state)
+void json_write_common(cudf::io::json_writer_options const& write_opts,
+                       cuio_source_sink_pair& source_sink,
+                       size_t const data_size,
+                       nvbench::state& state)
 {
-  cudf::io::write_json(write_opts);
-
-  cudf::io::json_reader_options read_opts =
-    cudf::io::json_reader_options::builder(source_sink.make_source_info());
-
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
@@ -45,7 +41,7 @@ void json_read_common(cudf::io::json_writer_options const& write_opts,
                try_drop_l3_cache();
 
                timer.start();
-               cudf::io::read_json(read_opts);
+               cudf::io::write_json(write_opts);
                timer.stop();
              });
 
@@ -57,7 +53,7 @@ void json_read_common(cudf::io::json_writer_options const& write_opts,
 }
 
 template <cudf::io::io_type IO>
-void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
+void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
@@ -78,15 +74,24 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
   cudf::io::json_writer_options write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
 
-  json_read_common(write_opts, source_sink, state);
+  json_write_common(write_opts, source_sink, data_size, state);
 }
 
-template <data_type DataType, cudf::io::io_type IO>
-void BM_json_read_data_type(
-  nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
+void BM_json_writer_options(nvbench::state& state)
 {
-  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const source_type = IO;
+  auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                         static_cast<int32_t>(data_type::FLOAT),
+                                         static_cast<int32_t>(data_type::DECIMAL),
+                                         static_cast<int32_t>(data_type::TIMESTAMP),
+                                         static_cast<int32_t>(data_type::DURATION),
+                                         static_cast<int32_t>(data_type::STRING),
+                                         static_cast<int32_t>(data_type::LIST),
+                                         static_cast<int32_t>(data_type::STRUCT)});
+
+  auto const source_type    = io_type::HOST_BUFFER;
+  bool const json_lines     = state.get_int64("json_lines");
+  bool const include_nulls  = state.get_int64("include_nulls");
+  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
 
   auto const tbl = create_random_table(
     cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, data_profile_builder());
@@ -94,36 +99,27 @@ void BM_json_read_data_type(
 
   cuio_source_sink_pair source_sink(source_type);
   cudf::io::json_writer_options write_opts =
-    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
+    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
+      .na_rep("null")
+      .lines(json_lines)
+      .include_nulls(include_nulls)
+      .rows_per_chunk(rows_per_chunk);
 
-  json_read_common(write_opts, source_sink, state);
+  json_write_common(write_opts, source_sink, data_size, state);
 }
-
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
-                                            data_type::FLOAT,
-                                            data_type::DECIMAL,
-                                            data_type::TIMESTAMP,
-                                            data_type::DURATION,
-                                            data_type::STRING,
-                                            data_type::LIST,
-                                            data_type::STRUCT>;
 
 using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
                                         cudf::io::io_type::HOST_BUFFER,
                                         cudf::io::io_type::DEVICE_BUFFER>;
 
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
-
-NVBENCH_BENCH_TYPES(BM_json_read_data_type,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
-  .set_name("json_read_data_type")
-  .set_type_axes_names({"data_type", "io"})
-  .set_min_samples(4);
-
-NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
-  .set_name("json_read_io")
+NVBENCH_BENCH_TYPES(BM_json_write_io, NVBENCH_TYPE_AXES(io_list))
+  .set_name("json_write_io")
   .set_type_axes_names({"io"})
   .set_min_samples(4);
-// TODO compression, cardinality, run_length
+
+NVBENCH_BENCH(BM_json_writer_options)
+  .set_name("json_write_options")
+  .set_min_samples(4)
+  .add_int64_axis("json_lines", {false, true})
+  .add_int64_axis("include_nulls", {false, true})
+  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(1, 20, 2));
