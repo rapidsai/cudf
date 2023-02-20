@@ -156,16 +156,21 @@ get_trivial_left_join_indices(
  *
  */
 template <typename MultimapType>
-void build_join_hash_table(cudf::table_view const& build,
-                           MultimapType& hash_table,
-                           null_equality const nulls_equal,
-                           [[maybe_unused]] bitmask_type const* bitmask,
-                           rmm::cuda_stream_view stream)
+void build_join_hash_table(
+  cudf::table_view const& build,
+  MultimapType& hash_table,
+  null_equality const nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream,
+  std::shared_ptr<experimental::row::equality::preprocessed_table> preprocessed_build = nullptr)
 {
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  auto row_hash   = experimental::row::hash::row_hasher{build, stream};
+  if (preprocessed_build == nullptr) {
+    preprocessed_build = experimental::row::equality::preprocessed_table::create(build, stream);
+  }
+  auto row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
   auto hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();

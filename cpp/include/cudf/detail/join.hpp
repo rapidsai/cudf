@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -74,7 +75,9 @@ struct hash_join {
   rmm::device_buffer const _composite_bitmask;  ///< Bitmask to denote whether a row is valid
   cudf::null_equality const _nulls_equal;       ///< whether to consider nulls as equal
   cudf::table_view _build;                      ///< input table to build the hash map
-  map_type _hash_table;                         ///< hash table built on `_build`
+  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
+    _preprocessed_build;  ///< input table preprocssed for row operators
+  map_type _hash_table;   ///< hash table built on `_build`
 
  public:
   /**
