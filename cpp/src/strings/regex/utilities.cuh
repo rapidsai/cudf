@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {
@@ -134,7 +136,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   auto const char_bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
   CUDF_EXPECTS(char_bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
+               "Size of output exceeds column size limit",
+               std::overflow_error);
 
   // Now build the chars column
   std::unique_ptr<column> chars =

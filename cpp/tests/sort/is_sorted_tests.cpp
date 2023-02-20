@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -223,6 +224,58 @@ auto nulls_before<cudf::struct_view>()
   return cudf::test::structs_column_wrapper{{col1, col2}, {0, 1}};
 }
 
+using lcw = cudf::test::lists_column_wrapper<int32_t>;
+using cudf::test::iterators::null_at;
+/*
+List<List<List<int>
+[
+  [[[0]], [[0]], [[0]]],                        0
+  [[[0], [0], [0]]],                            1
+  [[[0, 0]], [[0, 0, 0, 0, 0, 0, 0, 0]], [[0]]] 2
+  [[[0, 0, 0]]],                                3
+  [[[0, 0, 0]], [[0]], [[0]]],                  4
+]
+*/
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::list_view>, lcw> ascending()
+{
+  return lcw{lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+             lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0, 0, 0}}},
+             lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::list_view>, lcw> descending()
+{
+  return lcw{lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+             lcw{lcw{lcw{0, 0, 0}}},
+             lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}},
+
+             lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+             lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}}};
+}
+
+template <>
+auto empty<cudf::list_view>()
+{
+  return lcw{};
+}
+
+template <>
+auto nulls_after<cudf::list_view>()
+{
+  return lcw{{{1}, {2, 2}, {0}}, null_at(2)};
+}
+
+template <>
+auto nulls_before<cudf::list_view>()
+{
+  return lcw{{{0}, {1}, {2, 2}}, null_at(0)};
+}
+
 }  // namespace testdata
 
 // =============================================================================
@@ -232,8 +285,8 @@ template <typename T>
 struct IsSortedTest : public cudf::test::BaseFixture {
 };
 
-using SupportedTypes =
-  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::Types<cudf::struct_view>>;
+using SupportedTypes = cudf::test::
+  Concat<cudf::test::ComparableTypes, cudf::test::Types<cudf::struct_view>, cudf::test::ListTypes>;
 TYPED_TEST_SUITE(IsSortedTest, SupportedTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
