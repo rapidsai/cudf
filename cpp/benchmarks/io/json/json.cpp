@@ -71,8 +71,8 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
 
-  cudf::size_type const cardinality = state.get_int64("cardinality");
-  cudf::size_type const run_length  = state.get_int64("run_length");
+  cudf::size_type const cardinality = 0;
+  cudf::size_type const run_length  = 1;
   auto const source_type            = IO;
 
   auto const tbl =
@@ -95,9 +95,7 @@ using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
 NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_read_io")
   .set_type_axes_names({"io"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {0})
-  .add_int64_axis("run_length", {1});
+  .set_min_samples(4);
 
 void json_write_common(cudf::io::json_writer_options const& write_opts,
                        cuio_source_sink_pair& source_sink,
