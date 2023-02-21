@@ -102,56 +102,58 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   return results;
 }
 
-struct count_characters_parallel_fn {
-  column_device_view const d_strings;
-  size_type* d_lengths;
+/**
+ * @brief Count characters using a warp per string
+ *
+ * @param d_strings Column with strings to count
+ * @param d_lengths Results of the counts per string
+ */
+__global__ void count_characters_parallel_fn(column_device_view const d_strings,
+                                             size_type* d_lengths)
+{
+  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  using warp_reduce   = cub::WarpReduce<size_type>;
+  __shared__ typename warp_reduce::TempStorage temp_storage;
 
-  __device__ void operator()(size_type idx)
-  {
-    using warp_reduce = cub::WarpReduce<size_type>;
-    __shared__ typename warp_reduce::TempStorage temp_storage;
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-    auto const str_idx  = idx / cudf::detail::warp_size;
-    auto const lane_idx = idx % cudf::detail::warp_size;
-    if (d_strings.is_null(str_idx)) {
-      d_lengths[str_idx] = 0;
-      return;
-    }
-    auto const d_str = d_strings.element<string_view>(str_idx);
-    if (d_str.size_bytes() < cudf::detail::warp_size) {
-      d_lengths[str_idx] = d_str.length();
-      return;
-    }
-    auto count   = 0;
-    auto str_ptr = d_str.data();
-    for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
-      count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
-    }
-    auto char_count = warp_reduce(temp_storage).Sum(count);
-    if (lane_idx == 0) { d_lengths[str_idx] = char_count; }
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
+  if (d_strings.is_null(str_idx)) {
+    d_lengths[str_idx] = 0;
+    return;
   }
-};
+  auto const d_str   = d_strings.element<string_view>(str_idx);
+  auto const str_ptr = d_str.data();
+
+  auto count = 0;
+  for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
+    count += static_cast<size_type>(is_begin_utf8_char(str_ptr[i]));
+  }
+  auto const char_count = warp_reduce(temp_storage).Sum(count);
+  if (lane_idx == 0) { d_lengths[str_idx] = char_count; }
+}
 
 std::unique_ptr<column> count_characters_parallel(strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   // create output column
-  auto results   = make_numeric_column(data_type{type_to_id<size_type>()},
+  auto results = make_numeric_column(data_type{type_to_id<size_type>()},
                                      input.size(),
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                      input.null_count(),
                                      stream,
                                      mr);
-  auto d_lengths = results->mutable_view().data<size_type>();
-  // input column device view
-  auto d_strings = cudf::column_device_view::create(input.parent(), stream);
+
+  auto const d_lengths = results->mutable_view().data<size_type>();
+  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   // fill in the lengths
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     input.size() * cudf::detail::warp_size,
-                     count_characters_parallel_fn{*d_strings, d_lengths});
+  constexpr int block_size = 256;
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  count_characters_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    *d_strings, d_lengths);
 
   results->set_null_count(input.null_count());  // reset null count
   return results;
@@ -168,6 +170,7 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
     auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
     return counts_fn(input, ufn, stream, mr);
   }
+
   return count_characters_parallel(input, stream, mr);
 }
 
