@@ -13,10 +13,9 @@ from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-from pandas._config import get_option
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -31,6 +30,7 @@ from cudf.core.index import (
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from pandas._config import get_option
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -714,7 +714,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         codes = {}
         for name, col in self._data.items():
-            code, cats = cudf.Series._from_data({None: col}).factorize()
+            with warnings.catch_warnings():
+                # TODO: Remove this filter when
+                # `na_sentinel` is removed from `factorize`.
+                # This is a filter to not let the warnings from
+                # `factorize` show up in other parts of public APIs.
+                warnings.simplefilter("ignore")
+                code, cats = cudf.Series._from_data({None: col}).factorize()
             codes[name] = code.astype(np.int64)
             levels.append(cudf.Series(cats, name=None))
 

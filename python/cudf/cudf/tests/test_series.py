@@ -8,11 +8,11 @@ from string import ascii_letters, digits
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
+import pandas as pd
 from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -486,10 +486,35 @@ def test_series_factorize(data, na_sentinel):
 
     with pytest.warns(FutureWarning):
         expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
-    actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
+    with pytest.warns(FutureWarning):
+        actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
     assert_eq(expected_labels, actual_labels.get())
     assert_eq(expected_cats.values, actual_cats.to_pandas().values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("use_na_sentinel", [True, False])
+def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    actual_labels, actual_cats = gsr.factorize(
+        use_na_sentinel=use_na_sentinel, sort=True
+    )
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize(

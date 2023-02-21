@@ -22,13 +22,13 @@ from typing import (
 
 import cupy
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from numba import cuda
 
 import rmm
 
 import cudf
+import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
@@ -1343,7 +1343,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
+            dtype = min_scalar_type(
+                max(
+                    len(cats),
+                    -1
+                    if isinstance(na_sentinel, cudf.Scalar)
+                    and na_sentinel.value is cudf.NA
+                    else na_sentinel,
+                ),
+                8,
+            )
 
         if is_mixed_with_object_dtype(self, cats):
             return _return_sentinel_column()
