@@ -30,6 +30,6 @@ sed -i "s/cubinlinker/cubinlinker${CUDA_SUFFIX}/g" python/cudf/setup.py
 sed -i "s/rmm/rmm${CUDA_SUFFIX}/g" python/cudf/pyproject.toml
 
 # dask_cudf setup.py cuda suffixes
-sed -i "s/name=\"dask_cudf\"/name=\"dask_cudf${CUDA_SUFFIX}\"/g" python/dask_cudf/setup.py
+sed -i "s/name=\"dask-cudf\"/name=\"dask-cudf${CUDA_SUFFIX}\"/g" python/dask_cudf/setup.py
 # Need to provide the == to avoid modifying the URL
 sed -i "s/\"cudf==/\"cudf${CUDA_SUFFIX}==/g" python/dask_cudf/setup.py
