@@ -507,8 +507,8 @@ class BaseIndex(Serializable):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self.is_boolean() and other.is_numeric()) or (
-            self.is_numeric() and other.is_boolean()
+        if (self._is_boolean() and other.is_numeric()) or (
+            self.is_numeric() and other._is_boolean()
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -879,6 +879,9 @@ class BaseIndex(Serializable):
     def is_boolean(self):
         """
         Check if the Index only consists of booleans.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_bool_dtype` instead.
 
         Returns
         -------

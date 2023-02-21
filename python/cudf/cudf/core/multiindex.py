@@ -1018,6 +1018,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return False
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     def is_integer(self):

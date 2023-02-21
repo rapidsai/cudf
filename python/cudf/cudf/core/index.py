@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -262,6 +262,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return True
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     def is_integer(self):
@@ -1426,6 +1434,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return False
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return True
 
     def is_integer(self):
@@ -1623,6 +1639,14 @@ class NumericIndex(GenericIndex):
         return True
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     def is_integer(self):
@@ -2346,6 +2370,14 @@ class DatetimeIndex(GenericIndex):
         return as_index(out_column, name=self.name)
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     @_cudf_nvtx_annotate
@@ -2594,6 +2626,14 @@ class TimedeltaIndex(GenericIndex):
         raise NotImplementedError("inferred_freq is not yet supported")
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
 
@@ -2712,6 +2752,14 @@ class CategoricalIndex(GenericIndex):
         return as_index(self._values.categories)
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     def is_categorical(self):
@@ -2969,6 +3017,14 @@ class IntervalIndex(GenericIndex):
         return True
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
 
@@ -3031,6 +3087,14 @@ class StringIndex(GenericIndex):
             return self
 
     def is_boolean(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_boolean is deprecated. "
+            "Use cudf.api.types.is_bool_dtype instead",
+            FutureWarning,
+        )
+        return self._is_boolean()
+
+    def _is_boolean(self):
         return False
 
     def is_object(self):

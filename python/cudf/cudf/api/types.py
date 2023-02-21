@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -230,13 +230,63 @@ def _union_categoricals(
     return cudf.Index(result_col)
 
 
+def is_bool_dtype(arr_or_dtype):
+    """
+    Check whether the provided array or dtype is of a boolean dtype.
+
+    Parameters
+    ----------
+    arr_or_dtype : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    boolean
+        Whether or not the array or dtype is of a boolean dtype.
+
+    Examples
+    --------
+    >>> from cudf.api.types import is_bool_dtype
+    >>> import numpy as np
+    >>> import cudf
+    >>> is_bool_dtype(str)
+    False
+    >>> is_bool_dtype(int)
+    False
+    >>> is_bool_dtype(bool)
+    True
+    >>> is_bool_dtype(np.bool_)
+    True
+    >>> is_bool_dtype(np.array(['a', 'b']))
+    False
+    >>> is_bool_dtype(cudf.Series([1, 2]))
+    False
+    >>> is_bool_dtype(np.array([True, False]))
+    True
+    >>> is_bool_dtype(cudf.Series([True, False], dtype='category'))
+    True
+    """
+    if isinstance(arr_or_dtype, cudf.BaseIndex):
+        return arr_or_dtype._is_boolean()
+    elif isinstance(arr_or_dtype, cudf.Series):
+        if isinstance(arr_or_dtype.dtype, cudf.CategoricalDtype):
+            return is_bool_dtype(arr_or_dtype=arr_or_dtype.dtype)
+        else:
+            return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype.dtype)
+    elif isinstance(arr_or_dtype, cudf.CategoricalDtype):
+        return pd_types.is_bool_dtype(
+            arr_or_dtype=arr_or_dtype.categories.dtype
+        )
+    else:
+        return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype)
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
 # union_categoricals = pd_types.union_categoricals
 infer_dtype = pd_types.infer_dtype
 pandas_dtype = pd_types.pandas_dtype
-is_bool_dtype = pd_types.is_bool_dtype
 is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
