@@ -85,16 +85,17 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@replace_versioneer
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.04
     with:
       build_type: pull-request
       package-name: cudf
       package-dir: python/cudf
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      uses-setup-env-vars: false
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@replace_versioneer
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.04
     with:
       build_type: pull-request
       package-name: cudf
@@ -106,16 +107,17 @@ jobs:
   wheel-build-dask-cudf:
     needs: wheel-tests-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@replace_versioneer
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.04
     with:
       build_type: pull-request
       package-name: dask_cudf
       package-dir: python/dask_cudf
       before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
+      uses-setup-env-vars: false
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@replace_versioneer
+    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.04
     with:
       build_type: pull-request
       package-name: dask_cudf
