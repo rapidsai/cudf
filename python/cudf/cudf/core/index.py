@@ -276,6 +276,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return True
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return False
 
     def is_object(self):
@@ -1472,6 +1480,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return False
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return False
 
     def is_object(self):
@@ -1701,6 +1717,14 @@ class NumericIndex(GenericIndex):
         return True
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return False
 
     def is_object(self):
@@ -1965,6 +1989,14 @@ class Float32Index(NumericIndex):
         return False
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return True
 
 
@@ -1996,6 +2028,14 @@ class Float64Index(NumericIndex):
         return False
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return True
 
 

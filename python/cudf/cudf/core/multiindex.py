@@ -1032,6 +1032,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return False
 
     def is_floating(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_floating is deprecated. "
+            "Use cudf.api.types.is_float_dtype instead",
+            FutureWarning,
+        )
+        return self._is_floating()
+
+    def _is_floating(self):
         return False
 
     def is_object(self):

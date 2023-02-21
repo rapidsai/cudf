@@ -912,6 +912,8 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
+    _is_boolean = is_boolean
+
     def is_integer(self):
         """
         Check if the Index only consists of integers.
@@ -952,6 +954,9 @@ class BaseIndex(Serializable):
         The Index may consist of only floats, NaNs, or a mix of floats,
         integers, or NaNs.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_float_dtype` instead.
+
         Returns
         -------
         bool
@@ -984,6 +989,8 @@ class BaseIndex(Serializable):
         False
         """
         raise NotImplementedError
+
+    _is_floating = is_floating
 
     def is_object(self):
         """
@@ -1021,6 +1028,8 @@ class BaseIndex(Serializable):
         False
         """
         raise NotImplementedError
+
+    _is_object = is_object
 
     def is_categorical(self):
         """
@@ -1066,6 +1075,8 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
+    _is_categorical = is_categorical
+
     def is_interval(self):
         """
         Check if the Index holds Interval objects.
@@ -1103,6 +1114,8 @@ class BaseIndex(Serializable):
         False
         """
         raise NotImplementedError
+
+    _is_interval = is_interval
 
     def _union(self, other, sort=None):
         # TODO: As a future optimization we should explore
