@@ -29,9 +29,9 @@ namespace reduction {
 namespace detail {
 
 /**
- * @brief Compute the number of valid entries per segment
+ * @brief Compute the number of elements per segment
  *
- * If `null_handling == null_policy::EXCLUDE`, the valid count for each
+ * If `null_handling == null_policy::EXCLUDE`, the count for each
  * segment omits any null entries. Otherwise, this returns the number
  * of elements in each segment.
  *
@@ -41,6 +41,7 @@ namespace detail {
  * @param null_handling How null entries are processed within each segment
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The number of elements in each segment
  */
 rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
                                                 bool has_nulls,
