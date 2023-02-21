@@ -38,8 +38,8 @@ target_include_directories(
 
 set_target_properties(
   cudf_strings_udf
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN"
+  PROPERTIES BUILD_RPATH "\$ORIGIN/../"
+             INSTALL_RPATH "\$ORIGIN/../"
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
              CUDA_STANDARD 17
