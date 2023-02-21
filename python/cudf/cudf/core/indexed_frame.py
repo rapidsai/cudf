@@ -1697,11 +1697,18 @@ class IndexedFrame(Frame):
         2    fe061786ea286a515b772d91b0dfcd70
         dtype: object
         """
+        seed_hash_methods = {"murmur3"}
+        if seed is None:
+            seed = 0
+        elif method not in seed_hash_methods:
+            warnings.warn(
+                "Provided seed value has no effect for hash method"
+                f" `{method}`. Refer to the docstring for information"
+                " on hash methods that support the `seed` param"
+            )
         # Note that both Series and DataFrame return Series objects from this
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
-        if seed is None:
-            seed = 0
         return cudf.Series._from_data(
             {None: libcudf.hash.hash([*self._columns], method, seed)},
             index=self.index,
