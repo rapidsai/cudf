@@ -13,6 +13,7 @@ from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 import cupy
 import numpy as np
 import pandas as pd
+import warnings
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float
 
@@ -3114,6 +3115,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         """{docstring}"""
 
+        if datetime_is_numeric:
+            warnings.warn(
+                "`datetime_is_numeric` is deprecated and will be removed in "
+                "a future release. Specify `datetime_is_numeric=True` to "
+                "silence this warning and adopt the future behavior now.",
+                FutureWarning,
+            )
         if percentiles is not None:
             if not all(0 <= x <= 1 for x in percentiles):
                 raise ValueError(
