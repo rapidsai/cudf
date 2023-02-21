@@ -1242,15 +1242,15 @@ TYPED_TEST(SegmentedReductionFixedPointTest, Product)
 {
   using RepType = cudf::device_storage_type_t<TypeParam>;
 
-  auto const offsets = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto const offsets = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 12, 12};
   auto const d_offsets =
     cudf::detail::make_device_uvector_async(offsets, cudf::get_default_stream());
   auto const agg = cudf::make_product_aggregation<cudf::segmented_reduce_aggregation>();
 
   for (auto scale : {-2, 0, 5}) {
     auto input = cudf::test::fixed_point_column_wrapper<RepType>(
-      {-10, 1, 33, 40, XXX, 50, 11000, XXX, XXX, XXX},
-      {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+      {-10, 1, 33, 40, XXX, 50, 11000, XXX, XXX, XXX, XXX, XXX},
+      {1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0},
       numeric::scale_type{scale});
     auto const out_type = cudf::column_view(input).type();
     auto result =
@@ -1265,9 +1265,9 @@ TYPED_TEST(SegmentedReductionFixedPointTest, Product)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 
     input = cudf::test::fixed_point_column_wrapper<RepType>(
-      {-10, 1, 33, 3, 40, 50, 11000, 0, -120, 50}, numeric::scale_type{scale});
+      {-10, 1, 33, 3, 40, 50, 11000, 0, -3, 50, 10, 4}, numeric::scale_type{scale});
     expect = cudf::test::fixed_point_column_wrapper<RepType>(
-      {-330, 6000, 11000, 0, -6000, XXX}, {1, 1, 1, 1, 1, 0}, numeric::scale_type{scale * 3});
+      {-330, 6000, 11000, 0, -6000, XXX}, {1, 1, 1, 1, 1, 0}, numeric::scale_type{scale * 4});
     result = cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::INCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
     result = cudf::segmented_reduce(input, d_offsets, *agg, out_type, cudf::null_policy::EXCLUDE);

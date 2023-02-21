@@ -42,12 +42,12 @@ namespace detail {
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-rmm::device_uvector<size_type> segmented_valid_counts(bitmask_type const* null_mask,
-                                                      bool has_nulls,
-                                                      device_span<size_type const> offsets,
-                                                      null_policy null_handling,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr);
+rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
+                                                bool has_nulls,
+                                                device_span<size_type const> offsets,
+                                                null_policy null_handling,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace reduction

@@ -455,6 +455,7 @@ add_library(
   src/reductions/scan/scan_inclusive.cu
   src/reductions/segmented/all.cu
   src/reductions/segmented/any.cu
+  src/reductions/segmented/counts.cu
   src/reductions/segmented/max.cu
   src/reductions/segmented/mean.cu
   src/reductions/segmented/min.cu
@@ -464,7 +465,6 @@ add_library(
   src/reductions/segmented/sum.cu
   src/reductions/segmented/sum_of_squares.cu
   src/reductions/segmented/update_validity.cu
-  src/reductions/segmented/valid_counts.cu
   src/reductions/segmented/var.cu
   src/reductions/std.cu
   src/reductions/sum.cu

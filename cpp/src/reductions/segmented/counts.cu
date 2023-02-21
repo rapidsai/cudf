@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "valid_counts.hpp"
+#include "counts.hpp"
 
 #include <cudf/detail/null_mask.cuh>
 
@@ -24,12 +24,12 @@ namespace cudf {
 namespace reduction {
 namespace detail {
 
-rmm::device_uvector<size_type> segmented_valid_counts(bitmask_type const* null_mask,
-                                                      bool has_nulls,
-                                                      device_span<size_type const> offsets,
-                                                      null_policy null_handling,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
+                                                bool has_nulls,
+                                                device_span<size_type const> offsets,
+                                                null_policy null_handling,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   auto const num_segments = offsets.size() - 1;
 
