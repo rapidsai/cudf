@@ -64,6 +64,56 @@ get_trivial_left_join_indices(table_view const& left,
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
+template <typename MultimapType>
+void build_join_hash_table(
+  cudf::table_view const& build,
+  MultimapType& hash_table,
+  null_equality const nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream,
+  std::shared_ptr<experimental::row::equality::preprocessed_table> preprocessed_build)
+{
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
+
+  if (preprocessed_build == nullptr) {
+    preprocessed_build = experimental::row::equality::preprocessed_table::create(build, stream);
+  }
+  auto row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
+  auto hash_build = row_hash.device_hasher(nullate::DYNAMIC{cudf::has_nested_nulls(build)});
+
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+  size_type const build_table_num_rows{build.num_rows()};
+  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    thrust::counting_iterator<size_type> stencil(0);
+    row_is_valid pred{bitmask};
+
+    // insert valid rows
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
+}
+
+template void build_join_hash_table<cudf::detail::multimap_type>(
+  cudf::table_view const&,
+  cudf::detail::multimap_type&,
+  null_equality const,
+  bitmask_type const*,
+  rmm::cuda_stream_view,
+  std::shared_ptr<experimental::row::equality::preprocessed_table>);
+template void build_join_hash_table<cudf::detail::mixed_multimap_type>(
+  cudf::table_view const&,
+  cudf::detail::mixed_multimap_type&,
+  null_equality const,
+  bitmask_type const*,
+  rmm::cuda_stream_view,
+  std::shared_ptr<experimental::row::equality::preprocessed_table>);
+
 VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS((a.first->size() == a.second->size()),
