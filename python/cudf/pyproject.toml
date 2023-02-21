@@ -13,5 +13,5 @@ requires = [
     # Hard pin the patch version used during the build.
     "pyarrow==10.0.1",
     "protoc-wheel",
-    "rmm==23.04.*",
+    "rmm==23.4.*",
 ]
