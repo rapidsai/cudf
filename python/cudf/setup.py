@@ -1,11 +1,7 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
-import os
-
 from setuptools import find_packages
 from skbuild import setup
-
-cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
     "cachetools",
@@ -20,9 +16,9 @@ install_requires = [
     "typing_extensions",
     # Allow floating minor versions for Arrow.
     "pyarrow==10",
-    f"rmm{cuda_suffix}==23.4.*",
-    f"ptxcompiler{cuda_suffix}",
-    f"cubinlinker{cuda_suffix}",
+    "rmm==23.4.*",
+    "ptxcompiler",
+    "cubinlinker",
     "cupy-cuda11x",
 ]
 
@@ -43,7 +39,7 @@ extras_require = {
 }
 
 setup(
-    name=f"cudf{cuda_suffix}",
+    name="cudf",
     version="23.04.00",
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",

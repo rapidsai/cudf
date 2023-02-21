@@ -1,10 +1,6 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
-import os
-
 from setuptools import find_packages, setup
-
-cuda_suffix = os.getenv("RAPIDS_PY_WHEEL_CUDA_SUFFIX", default="")
 
 install_requires = [
     "dask>=2023.1.1",
@@ -12,7 +8,7 @@ install_requires = [
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.6.0dev0",
-    f"cudf{cuda_suffix}==23.4.*",
+    "cudf==23.4.*",
     "cupy-cuda11x",
 ]
 
@@ -27,7 +23,7 @@ extras_require = {
 }
 
 setup(
-    name=f"dask-cudf{cuda_suffix}",
+    name="dask-cudf",
     version="23.04.00",
     description="Utilities for Dask and cuDF interactions",
     url="https://github.com/rapidsai/cudf",

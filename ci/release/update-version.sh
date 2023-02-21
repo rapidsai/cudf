@@ -97,8 +97,8 @@ sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_
 NEXT_SHORT_TAG_PEP440=$(python -c "from setuptools.extern import packaging; print(packaging.version.Version('${NEXT_SHORT_TAG}'))")
 
 # Wheel builds install intra-RAPIDS dependencies from same release
-sed_runner "s/rmm{cuda_suffix}.*\",/rmm{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/cudf/setup.py
-sed_runner "s/cudf{cuda_suffix}==.*\",/cudf{cuda_suffix}==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/dask_cudf/setup.py
+sed_runner "s/rmm==.*\",/rmm==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/cudf/setup.py
+sed_runner "s/cudf==.*\",/cudf==${NEXT_SHORT_TAG_PEP440}.*\",/g" python/dask_cudf/setup.py
 
 for FILE in .github/workflows/*.yaml; do
   sed_runner "/shared-action-workflows/ s/@.*/@branch-${NEXT_SHORT_TAG}/g" "${FILE}"
