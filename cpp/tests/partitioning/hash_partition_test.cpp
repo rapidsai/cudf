@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -29,6 +30,10 @@
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
+using structs_col = cudf::test::structs_column_wrapper;
+
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
 
 // Transform vector of column wrappers to vector of column views
 template <typename T>
@@ -359,6 +364,78 @@ TEST_F(HashPartition, FixedPointColumnsToHash)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(), first_input.column(0));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(1).view(), first_input.column(1));
+}
+
+TEST_F(HashPartition, ListWithNulls)
+{
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  lcw to_hash{{{1}, {2, 2}, {0}, {1}, {2, 2}, {0}}, nulls_at({2, 5})};
+  fixed_width_column_wrapper<int32_t> first_col({7, 8, 9, 10, 11, 12});
+  fixed_width_column_wrapper<int32_t> second_col({13, 14, 15, 16, 17, 18});
+  auto const first_input  = cudf::table_view({to_hash, first_col});
+  auto const second_input = cudf::table_view({to_hash, second_col});
+
+  auto const columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto const [first_result, first_offsets] =
+    cudf::hash_partition(first_input, columns_to_hash, num_partitions);
+  auto const [second_result, second_offsets] =
+    cudf::hash_partition(second_input, columns_to_hash, num_partitions);
+
+  // Expect offsets to be equal and num_partitions in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  EXPECT_TRUE(std::equal(
+    first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
+
+  // Expect same result for the hashed columns
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(),
+                                 second_result->get_column(0).view());
+}
+
+TEST_F(HashPartition, StructofStructWithNulls)
+{
+  //  +-----------------+
+  //  |  s1{s2{a,b}, c} |
+  //  +-----------------+
+  // 0 |  { {1, 1}, 5}  |
+  // 1 |  { {1, 1}, 5}  |
+  // 2 |  { {1, 2}, 4}  |
+  // 3 |  Null          |
+  // 4 |  { Null,   4}  |
+  // 5 |  { Null,   4}  |
+
+  auto const to_hash = [&] {
+    auto a  = fixed_width_column_wrapper<int32_t>{1, 1, 1, 0, 0, 0};
+    auto b  = fixed_width_column_wrapper<int32_t>{1, 1, 2, 0, 0, 0};
+    auto s2 = structs_col{{a, b}, nulls_at({4, 5})};
+
+    auto c = fixed_width_column_wrapper<int32_t>{5, 5, 4, 0, 4, 4};
+    return structs_col({s2, c}, null_at(3));
+  }();
+
+  fixed_width_column_wrapper<int32_t> first_col({7, 8, 9, 10, 11, 12});
+  fixed_width_column_wrapper<int32_t> second_col({13, 14, 15, 16, 17, 18});
+  auto const first_input  = cudf::table_view({to_hash, first_col});
+  auto const second_input = cudf::table_view({to_hash, second_col});
+
+  auto const columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto const [first_result, first_offsets] =
+    cudf::hash_partition(first_input, columns_to_hash, num_partitions);
+  auto const [second_result, second_offsets] =
+    cudf::hash_partition(second_input, columns_to_hash, num_partitions);
+
+  // Expect offsets to be equal and num_partitions in length
+  EXPECT_EQ(static_cast<size_t>(num_partitions), first_offsets.size());
+  EXPECT_TRUE(std::equal(
+    first_offsets.begin(), first_offsets.end(), second_offsets.begin(), second_offsets.end()));
+
+  // Expect same result for the hashed columns
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_result->get_column(0).view(),
+                                 second_result->get_column(0).view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
