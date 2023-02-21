@@ -4813,8 +4813,6 @@ class StringMethods(ColumnMethods):
         dtype: list
         """
         ngrams = libstrings.generate_character_ngrams(self._column, n)
-        if as_list is False:
-            return self._return_or_inplace(ngrams, retain_index=False)
 
         # convert the output to a list by just generating the
         # offsets for the output list column
@@ -4831,7 +4829,11 @@ class StringMethods(ColumnMethods):
             null_count=self._column.null_count,
             children=(oc, ngrams),
         )
-        return self._return_or_inplace(lc, retain_index=False)
+        result = self._return_or_inplace(lc, retain_index=True)
+
+        if isinstance(result, cudf.Series) and not as_list:
+            return result.explode()
+        return result
 
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
