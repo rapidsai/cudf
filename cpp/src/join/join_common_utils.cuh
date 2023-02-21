@@ -111,9 +111,7 @@ class pair_equality {
   {
     using experimental::row::lhs_index_type;
     using experimental::row::rhs_index_type;
-    // printf("lhs_index: %d, rhs_index: %d, hash: %d, equality: %d\n", lhs.second, rhs.second,
-    // lhs.first == rhs.first, _check_row_equality(rhs_index_type{rhs.second},
-    // lhs_index_type{lhs.second}));
+
     return lhs.first == rhs.first and
            _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
   }
