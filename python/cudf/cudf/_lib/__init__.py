@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -34,6 +34,7 @@ from . import (
     string_casting,
     strings,
     text,
+    timezone,
     transpose,
     unary,
 )

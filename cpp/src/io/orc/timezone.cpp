@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/timezone.hpp>
 #include <cudf/table/table.hpp>
 
 #include <algorithm>
@@ -486,6 +487,12 @@ std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string
   stream.synchronize();
 
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
+}
+
+std::unique_ptr<table> build_timezone_transition_table(std::optional<std::string> const& tzif_dir,
+                                                       std::string const& timezone_name)
+{
+  return build_timezone_transition_table(tzif_dir, timezone_name, cudf::get_default_stream());
 }
 
 }  // namespace io

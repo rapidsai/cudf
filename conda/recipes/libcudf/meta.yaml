@@ -170,6 +170,7 @@ outputs:
         - test -f $PREFIX/include/cudf/io/text/detail/tile_state.hpp
         - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
         - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
+        - test -f $PREFIX/include/cudf/io/timezone.hpp
         - test -f $PREFIX/include/cudf/io/types.hpp
         - test -f $PREFIX/include/cudf/join.hpp
         - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
