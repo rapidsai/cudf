@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include "counts.hpp"
 #include "update_validity.hpp"
-#include "valid_counts.hpp"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
@@ -217,26 +217,26 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   auto const scale = [&] {
     if constexpr (std::is_same_v<Op, cudf::reduction::op::product>) {
       // The product aggregation requires updating the scale of the fixed-point output column.
-      // The output scale needs to be the maximum valid count of all segments multiplied by
+      // The output scale needs to be the maximum count of all segments multiplied by
       // the input scale value.
-      rmm::device_uvector<size_type> valid_counts =
-        cudf::reduction::detail::segmented_valid_counts(col.null_mask(),
-                                                        col.has_nulls(),
-                                                        offsets,
-                                                        null_handling,
-                                                        stream,
-                                                        rmm::mr::get_current_device_resource());
+      rmm::device_uvector<size_type> const counts =
+        cudf::reduction::detail::segmented_counts(col.null_mask(),
+                                                  col.has_nulls(),
+                                                  offsets,
+                                                  null_policy::EXCLUDE,  // do not count nulls
+                                                  stream,
+                                                  rmm::mr::get_current_device_resource());
 
-      auto max_valid_count = thrust::reduce(rmm::exec_policy(stream),
-                                            valid_counts.begin(),
-                                            valid_counts.end(),
+      auto const max_count = thrust::reduce(rmm::exec_policy(stream),
+                                            counts.begin(),
+                                            counts.end(),
                                             size_type{0},
                                             thrust::maximum<size_type>{});
 
-      auto new_scale = numeric::scale_type{col.type().scale() * max_valid_count};
+      auto const new_scale = numeric::scale_type{col.type().scale() * max_count};
 
       // adjust values in each segment to match the new scale
-      auto d_col = column_device_view::create(col, stream);
+      auto const d_col = column_device_view::create(col, stream);
       thrust::transform(rmm::exec_policy(stream),
                         d_col->begin<InputType>(),
                         d_col->end<InputType>(),
@@ -256,13 +256,11 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   auto const null_count = result->null_count();  // release() is called
   auto contents         = result->release();
 
-  result = std::make_unique<column>(data_type{type_to_id<InputType>(), scale},
-                                    size,
-                                    std::move(*(contents.data.release())),
-                                    std::move(*(contents.null_mask.release())),
-                                    null_count);
-
-  return result;
+  return std::make_unique<column>(data_type{type_to_id<InputType>(), scale},
+                                  size,
+                                  std::move(*(contents.data.release())),
+                                  std::move(*(contents.null_mask.release())),
+                                  null_count);
 }
 
 /**
