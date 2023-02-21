@@ -29,6 +29,7 @@ rapids-mamba-retry install \
 
 rapids-logger "Build Doxygen docs"
 pushd cpp/doxygen
+aws s3 cp s3://rapidsai-docs/librmm/${VERSION_NUMBER}/html/rmm.tag . || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 popd
 
