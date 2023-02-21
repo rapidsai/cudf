@@ -1347,7 +1347,7 @@ def test_dataframe_hash_values(nrows, method, seed):
 @pytest.mark.parametrize("method", ["murmur3"])
 def test_dataframe_hash_values_seed(method):
     gdf = cudf.DataFrame()
-    data = np.asarray(range(10))
+    data = np.arange(10)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
