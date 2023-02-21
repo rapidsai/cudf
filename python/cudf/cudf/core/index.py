@@ -279,6 +279,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return False
 
     def is_object(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         return False
 
     def is_categorical(self):
@@ -1467,6 +1475,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return False
 
     def is_object(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         return False
 
     def is_categorical(self):
@@ -1688,6 +1704,14 @@ class NumericIndex(GenericIndex):
         return False
 
     def is_object(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         return False
 
     def is_categorical(self):
@@ -3162,6 +3186,14 @@ class StringIndex(GenericIndex):
         return False
 
     def is_object(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_object is deprecated. "
+            "Use cudf.api.types.is_object_dtype instead",
+            FutureWarning,
+        )
+        return self._is_object()
+
+    def _is_object(self):
         return True
 
 

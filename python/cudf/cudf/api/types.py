@@ -281,6 +281,43 @@ def is_bool_dtype(arr_or_dtype):
         return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype)
 
 
+def is_object_dtype(arr_or_dtype):
+    """
+    Check whether an array-like or dtype is of the object dtype.
+
+    Parameters
+    ----------
+    arr_or_dtype : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    boolean
+        Whether or not the array-like or dtype is of the object dtype.
+
+    Examples
+    --------
+    >>> from cudf.api.types import is_object_dtype
+    >>> import numpy as np
+    >>> is_object_dtype(object)
+    True
+    >>> is_object_dtype(int)
+    False
+    >>> is_object_dtype(np.array([], dtype=object))
+    True
+    >>> is_object_dtype(np.array([], dtype=int))
+    False
+    >>> is_object_dtype([1, 2, 3])
+    False
+    """
+    if isinstance(arr_or_dtype, cudf.BaseIndex):
+        return arr_or_dtype._is_object()
+    elif isinstance(arr_or_dtype, cudf.Series):
+        return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
+    else:
+        return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype)
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -299,7 +336,6 @@ is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)
 is_int64_dtype = pd_types.is_int64_dtype
 is_integer_dtype = _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)
-is_object_dtype = pd_types.is_object_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)

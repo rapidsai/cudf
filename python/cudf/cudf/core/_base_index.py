@@ -989,6 +989,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index is of the object dtype.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_object_dtype` instead.
+
         Returns
         -------
         bool
