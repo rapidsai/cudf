@@ -6,6 +6,7 @@ import functools
 import inspect
 import pickle
 import textwrap
+import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
@@ -13,7 +14,6 @@ from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
 import cupy
 import numpy as np
 import pandas as pd
-import warnings
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float
 
