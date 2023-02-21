@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "split.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,14 +25,12 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -38,108 +38,43 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
-
 namespace {
 
+template <typename Tokenizer>
+std::unique_ptr<column> split_record_fn(strings_column_view const& input,
+                                        Tokenizer tokenizer,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) { return make_empty_column(type_id::LIST); }
+  if (input.size() == input.null_count()) {
+    auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
+    auto results = make_empty_column(type_id::STRING);
+    return make_lists_column(input.size(),
+                             std::move(offsets),
+                             std::move(results),
+                             input.null_count(),
+                             copy_bitmask(input.parent(), stream, mr),
+                             stream,
+                             mr);
+  }
+
+  // builds the offsets and the vector of all tokens
+  auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+
+  // build a strings column from the tokens
+  auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
+
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(strings_child),
+                           input.null_count(),
+                           copy_bitmask(input.parent(), stream, mr),
+                           stream,
+                           mr);
+}
+
 enum class Dir { FORWARD, BACKWARD };
-
-/**
- * @brief Compute the number of tokens for the `idx'th` string element of `d_strings`.
- *
- * The number of tokens is the same regardless if counting from the beginning
- * or the end of the string.
- */
-struct token_counter_fn {
-  column_device_view const d_strings;  // strings to split
-  string_view const d_delimiter;       // delimiter for split
-  size_type const max_tokens = std::numeric_limits<size_type>::max();
-
-  __device__ size_type operator()(size_type idx) const
-  {
-    if (d_strings.is_null(idx)) { return 0; }
-
-    auto const d_str      = d_strings.element<string_view>(idx);
-    size_type token_count = 0;
-    size_type start_pos   = 0;
-    while (token_count < max_tokens - 1) {
-      auto const delimiter_pos = d_str.find(d_delimiter, start_pos);
-      if (delimiter_pos == string_view::npos) break;
-      token_count++;
-      start_pos = delimiter_pos + d_delimiter.length();
-    }
-    return token_count + 1;  // always at least one token
-  }
-};
-
-/**
- * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
- */
-template <Dir dir>
-struct token_reader_fn {
-  column_device_view const d_strings;  // strings to split
-  string_view const d_delimiter;       // delimiter for split
-  int32_t* d_token_offsets{};          // for locating tokens in d_tokens
-  string_index_pair* d_tokens{};
-
-  __device__ string_index_pair resolve_token(string_view const& d_str,
-                                             size_type start_pos,
-                                             size_type end_pos,
-                                             size_type delimiter_pos) const
-  {
-    if (dir == Dir::FORWARD) {
-      auto const byte_offset = d_str.byte_offset(start_pos);
-      return string_index_pair{d_str.data() + byte_offset,
-                               d_str.byte_offset(delimiter_pos) - byte_offset};
-    } else {
-      auto const byte_offset = d_str.byte_offset(delimiter_pos + d_delimiter.length());
-      return string_index_pair{d_str.data() + byte_offset,
-                               d_str.byte_offset(end_pos) - byte_offset};
-    }
-  }
-
-  __device__ void operator()(size_type idx)
-  {
-    if (d_strings.is_null(idx)) { return; }
-
-    auto const token_offset = d_token_offsets[idx];
-    auto const token_count  = d_token_offsets[idx + 1] - token_offset;
-    auto d_result           = d_tokens + token_offset;
-    auto const d_str        = d_strings.element<string_view>(idx);
-    if (d_str.empty()) {
-      // Pandas str.split("") for non-whitespace delimiter is an empty string
-      *d_result = string_index_pair{"", 0};
-      return;
-    }
-
-    size_type token_idx = 0;
-    size_type start_pos = 0;               // updates only if moving forward
-    size_type end_pos   = d_str.length();  // updates only if moving backward
-    while (token_idx < token_count - 1) {
-      auto const delimiter_pos = dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos)
-                                                     : d_str.rfind(d_delimiter, start_pos, end_pos);
-      if (delimiter_pos == string_view::npos) break;
-      auto const token = resolve_token(d_str, start_pos, end_pos, delimiter_pos);
-      if (dir == Dir::FORWARD) {
-        d_result[token_idx] = token;
-        start_pos           = delimiter_pos + d_delimiter.length();
-      } else {
-        d_result[token_count - 1 - token_idx] = token;
-        end_pos                               = delimiter_pos;
-      }
-      token_idx++;
-    }
-
-    // set last token to remainder of the string
-    if (dir == Dir::FORWARD) {
-      auto const offset_bytes = d_str.byte_offset(start_pos);
-      d_result[token_idx] =
-        string_index_pair{d_str.data() + offset_bytes, d_str.byte_offset(end_pos) - offset_bytes};
-    } else {
-      d_result[0] = string_index_pair{d_str.data(), d_str.byte_offset(end_pos)};
-    }
-  }
-};
 
 /**
  * @brief Compute the number of tokens for the `idx'th` string element of `d_strings`.
@@ -196,7 +131,7 @@ struct whitespace_token_reader_fn {
     whitespace_string_tokenizer tokenizer(d_str, dir != Dir::FORWARD);
     size_type token_idx = 0;
     position_pair token{0, 0};
-    if (dir == Dir::FORWARD) {
+    if constexpr (dir == Dir::FORWARD) {
       while (tokenizer.next_token() && (token_idx < token_count)) {
         token = tokenizer.get_token();
         d_result[token_idx++] =
@@ -224,11 +159,11 @@ struct whitespace_token_reader_fn {
 
 // The output is one list item per string
 template <typename TokenCounter, typename TokenReader>
-std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
-                                        TokenCounter counter,
-                                        TokenReader reader,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& strings,
+                                                   TokenCounter counter,
+                                                   TokenReader reader,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   // create offsets column by counting the number of tokens per string
   auto strings_count = strings.size();
@@ -244,7 +179,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // last entry is the total number of tokens to be generated
-  auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
+  auto total_tokens = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
   // split each string into an array of index-pair values
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   reader.d_token_offsets = d_offsets;
@@ -277,18 +212,21 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
 
   auto d_strings_column_ptr = column_device_view::create(strings.parent(), stream);
   if (delimiter.size() == 0) {
-    return split_record_fn(strings,
-                           whitespace_token_counter_fn{*d_strings_column_ptr, max_tokens},
-                           whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens},
-                           stream,
-                           mr);
+    return whitespace_split_record_fn(
+      strings,
+      whitespace_token_counter_fn{*d_strings_column_ptr, max_tokens},
+      whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens},
+      stream,
+      mr);
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
-    return split_record_fn(strings,
-                           token_counter_fn{*d_strings_column_ptr, d_delimiter, max_tokens},
-                           token_reader_fn<dir>{*d_strings_column_ptr, d_delimiter},
-                           stream,
-                           mr);
+    if (dir == Dir::FORWARD) {
+      return split_record_fn(
+        strings, split_tokenizer_fn{*d_strings_column_ptr, d_delimiter, max_tokens}, stream, mr);
+    } else {
+      return split_record_fn(
+        strings, rsplit_tokenizer_fn{*d_strings_column_ptr, d_delimiter, max_tokens}, stream, mr);
+    }
   }
 }
 
