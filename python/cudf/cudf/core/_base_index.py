@@ -1023,6 +1023,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index holds categorical data.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_categorical_dtype` instead.
+
         Returns
         -------
         bool
@@ -1063,6 +1066,9 @@ class BaseIndex(Serializable):
     def is_interval(self):
         """
         Check if the Index holds Interval objects.
+
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_interval_dtype` instead.
 
         Returns
         -------

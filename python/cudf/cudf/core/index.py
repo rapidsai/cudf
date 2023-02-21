@@ -282,9 +282,25 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return False
 
     def is_categorical(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         return False
 
     def is_interval(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         return False
 
     @property  # type: ignore
@@ -1454,9 +1470,25 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return False
 
     def is_categorical(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         return False
 
     def is_interval(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         return False
 
     @property  # type: ignore
@@ -1659,9 +1691,25 @@ class NumericIndex(GenericIndex):
         return False
 
     def is_categorical(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         return False
 
     def is_interval(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         return False
 
 
@@ -2763,6 +2811,14 @@ class CategoricalIndex(GenericIndex):
         return False
 
     def is_categorical(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_categorical is deprecated. "
+            "Use cudf.api.types.is_categorical_dtype instead",
+            FutureWarning,
+        )
+        return self._is_categorical()
+
+    def _is_categorical(self):
         return True
 
 
@@ -3014,6 +3070,14 @@ class IntervalIndex(GenericIndex):
         )
 
     def is_interval(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_interval is deprecated. "
+            "Use cudf.api.types.is_interval_dtype instead",
+            FutureWarning,
+        )
+        return self._is_interval()
+
+    def _is_interval(self):
         return True
 
     def is_boolean(self):
