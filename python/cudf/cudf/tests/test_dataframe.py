@@ -1327,7 +1327,7 @@ def test_assign():
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
     gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
+    data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
@@ -1336,12 +1336,27 @@ def test_dataframe_hash_values(nrows, method, seed):
     assert len(out) == nrows
     assert out.dtype == np.uint32
 
+    warning_expected = (
+        True if seed is not None and method not in {"murmur3"} else False
+    )
     # Check single column
-    out_one = gdf[["a"]].hash_values(method=method, seed=seed)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
+    else:
+        out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+    if warning_expected:
+        with pytest.warns(
+            UserWarning, match="Provided seed value has no effect*"
+        ):
+            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
+    else:
+        assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 
 @pytest.mark.parametrize("method", ["murmur3"])
