@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +130,15 @@ class reader::impl {
                     bool uses_custom_row_bounds,
                     host_span<std::vector<size_type> const> row_group_indices);
 
+  /**
+   * @brief Create chunk information and start file reads
+   *
+   * @param row_groups_info vector of information about row groups to read
+   * @param num_rows  Maximum number of rows to read
+   * @return boolean indicating if compressed chunks were found
+   */
+  std::pair<bool, std::vector<std::future<void>>> create_and_read_column_chunks(
+    std::vector<row_group_info> const& row_groups_info, size_type num_rows);
   /**
    * @brief Load and decompress the input file(s) into memory.
    */
