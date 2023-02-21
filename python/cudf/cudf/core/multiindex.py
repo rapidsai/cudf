@@ -13,9 +13,10 @@ from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy as cp
 import numpy as np
+import pandas as pd
+from pandas._config import get_option
 
 import cudf
-import pandas as pd
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
@@ -30,7 +31,6 @@ from cudf.core.index import (
 )
 from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
-from pandas._config import get_option
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:

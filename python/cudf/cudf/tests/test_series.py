@@ -8,11 +8,11 @@ from string import ascii_letters, digits
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pytest
 
 import cudf
-import pandas as pd
 from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
