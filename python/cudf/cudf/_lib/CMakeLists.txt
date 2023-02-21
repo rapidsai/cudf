@@ -46,7 +46,7 @@ set(cython_sources
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
-    # strings_udf.pyx
+    strings_udf.pyx
     text.pyx
     transform.pyx
     transpose.pyx
@@ -62,7 +62,7 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
 
-# target_link_libraries(strings_udf cudf_strings_udf)
+target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
