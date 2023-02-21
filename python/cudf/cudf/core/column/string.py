@@ -5339,6 +5339,11 @@ class StringColumn(column.ColumnBase):
         self._start_offset = None
         self._end_offset = None
 
+    def copy(self, deep: bool = True):
+        # Since string columns are immutable, both deep
+        # and shallow copies share the underlying device data and mask.
+        return super().copy(deep=False)
+
     @property
     def start_offset(self) -> int:
         if self._start_offset is None:
@@ -5665,7 +5670,7 @@ class StringColumn(column.ColumnBase):
             and other.dtype == "object"
         ):
             return other
-        if isinstance(other, str):
+        if is_scalar(other):
             return cudf.Scalar(other)
         return NotImplemented
 
@@ -5701,6 +5706,17 @@ class StringColumn(column.ColumnBase):
             return NotImplemented
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
+            if isinstance(other, cudf.Scalar) and other.dtype != "O":
+                if op in {
+                    "__eq__",
+                    "__ne__",
+                }:
+                    return column.full(
+                        len(self), op == "__ne__", dtype="bool"
+                    ).set_mask(self.mask)
+                else:
+                    return NotImplemented
+
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
                     other = cast(
