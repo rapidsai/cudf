@@ -7,6 +7,7 @@ from libcpp.string cimport string
 from cudf._lib.cpp.table.table cimport table
 
 
+# TODO: this is vendored from Cython 3.0
 cdef extern from "<optional>" namespace "std" nogil:
     cdef cppclass nullopt_t:
         nullopt_t()
