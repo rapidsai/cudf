@@ -101,6 +101,25 @@ struct page_state_s {
   PageNestingDecodeInfo* nesting_info;
 };
 
+struct delta_binary_state_s {
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
+  uint32_t block_size;         // usually 128, must be multiple of 128
+  uint32_t mini_block_count;   // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
+  uint32_t value_count;        // total values encoded in the block
+  int64_t last_value;          // last value decoded, initialized to first_value from header
+                               // should be int128_t, but in all likelihood we'll never see
+                               // an int96 with this encoding
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
+
+  int64_t cur_min_delta;         // min delta for the block
+  uint32_t cur_mb;               // index of the current mini-block within the block
+  uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
+  uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
+};
+
 /**
  * @brief Returns whether or not a page spans either the beginning or the end of the
  * specified row bounds
@@ -1864,25 +1883,6 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
-struct delta_binary_state_s {
-  uint8_t const* block_start;  // start of data, but updated as data is read
-  uint8_t const* block_end;    // end of data
-  uint32_t block_size;         // usually 128, must be multiple of 128
-  uint32_t mini_block_count;   // usually 4, chosen such that block_size/mini_block_count is a
-                               // multiple of 32
-  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
-  uint32_t value_count;        // total values encoded in the block
-  int64_t last_value;          // last value decoded, initialized to first_value from header
-                               // should be int128_t, but in all likelihood we'll never see
-                               // an int96 with this encoding
-  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
-
-  int64_t cur_min_delta;         // min delta for the block
-  uint32_t cur_mb;               // index of the current mini-block within the block
-  uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
-  uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
-};
-
 // should only be called from InitDeltaBinaryBlock or SetupNextMiniBlock
 __device__ void InitDeltaMiniBlock(delta_binary_state_s* db)
 {
@@ -1930,7 +1930,8 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   // out of mini-blocks, start a new block
   else {
     db->block_start = db->cur_mb_start + db->cur_bitwidths[db->cur_mb] * db->values_per_mb / 8;
-    InitDeltaMiniBlock(db);
+    // only do init if there's another mini-block available
+    if (db->current_value_idx < db->value_count) { InitDeltaMiniBlock(db); }
   }
 }
 
@@ -1995,7 +1996,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   //
   // copying logic from gpuDecodePageData.  I didn't realize that target_pos on warp0 was
   // ahead of warp1...so warp0 decodes a batch, but warp1 doesn't consume on the first go around
-  // becuase of sync issues.  so then on iteration 2 of this loop, warp0 produces another
+  // because of sync issues.  so then on iteration 2 of this loop, warp0 produces another
   // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
   // nothting when target_pos hits num_input_values
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -2105,6 +2106,57 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   }
 }
 
+// this encoding consists of a DeltaBinaryPacked array of prefix lengths,
+// followed by a DeltaBinaryPacked array of suffix lengths, followed by
+// the suffixes. The latter two can be used to create an offsets array
+// for the suffix data, but then this needs to be combined with the prefix
+// lengths to do the final decode for each value.
+// because the lengths of the prefixes and suffixes are not encoded in the
+// header, we're going to have to first do a quick pass through them to
+// find the start/end of each structure.
+__device__ void DecodeDeltaByteArray(page_state_s* const s)
+{
+  __shared__ __align__(16) delta_binary_state_s db_state[2];
+  __shared__ __align__(16) uint8_t const* data_start;
+
+  int t           = threadIdx.x;
+  auto* prefix_db = &db_state[0];
+  auto* suffix_db = &db_state[1];
+
+  // bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  constexpr int blk = 0;
+  if (t == 0) {
+    auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
+      InitDeltaBinaryBlock(db, start, end);
+      while (db->current_value_idx < db->value_count) {
+        SetupNextMiniBlock(db);
+      }
+      auto const* new_end = db->cur_mb == 0 ? db->block_start : db->cur_mb_start;
+      // re-init block with correct end
+      InitDeltaBinaryBlock(db, start, new_end);
+      return new_end;
+    };
+
+    // initialize the prefixes and suffixes blocks
+    auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
+    data_start               = find_end(suffix_db, suffix_start, s->data_end);
+
+    if (blockIdx.x == blk) {
+      printf("data_start %p %c %c %c %c\n",
+             data_start,
+             data_start[0],
+             data_start[1],
+             data_start[2],
+             data_start[3]);
+    }
+  }
+  __syncthreads();
+
+  // we now have the locations of the three blocks of encoded data. pull batches of 32
+  // and populate the offsets/and data arrays for the column.
+}
+
 /**
  * @brief Kernel for co the column data stored in the pages
  *
@@ -2151,6 +2203,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     DecodeDeltaBinary(s);
     return;
   } else if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
+    DecodeDeltaByteArray(s);
     return;
   }
 
