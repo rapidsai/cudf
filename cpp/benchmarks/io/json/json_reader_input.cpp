@@ -75,7 +75,7 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
-  cudf::io::json_writer_options write_opts =
+  cudf::io::json_writer_options const write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
 
   json_read_common(write_opts, source_sink, state);
@@ -93,7 +93,7 @@ void BM_json_read_data_type(
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
-  cudf::io::json_writer_options write_opts =
+  cudf::io::json_writer_options const write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
 
   json_read_common(write_opts, source_sink, state);

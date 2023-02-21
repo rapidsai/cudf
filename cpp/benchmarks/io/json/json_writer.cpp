@@ -122,4 +122,4 @@ NVBENCH_BENCH(BM_json_writer_options)
   .set_min_samples(4)
   .add_int64_axis("json_lines", {false, true})
   .add_int64_axis("include_nulls", {false, true})
-  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(1, 20, 2));
+  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(10, 20, 2));
