@@ -11,11 +11,17 @@ import cupy
 import numpy as np
 import pandas as pd
 import pytest
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import AbstractTemplate
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.cudaimpl import lower as cuda_lower
 from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
+from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -346,6 +352,11 @@ def assert_column_memory_eq(
     assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
         assert_column_memory_eq(lhs_child, rhs_child)
+    if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
+        rhs, cudf.core.column.CategoricalColumn
+    ):
+        assert_column_memory_eq(lhs.categories, rhs.categories)
+        assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
 def assert_column_memory_ne(
@@ -382,3 +393,21 @@ def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
             yield
     else:
         yield
+
+
+def sv_to_udf_str(sv):
+    pass
+
+
+@cuda_decl_registry.register_global(sv_to_udf_str)
+class StringViewToUDFStringDecl(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], StringView) and len(args) == 1:
+            return nb_signature(udf_string, string_view)
+
+
+@cuda_lower(sv_to_udf_str, string_view)
+def sv_to_udf_str_testing_lowering(context, builder, sig, args):
+    return cast_string_view_to_udf_string(
+        context, builder, sig.args[0], sig.return_type, args[0]
+    )

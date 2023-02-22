@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import operator
 
@@ -18,7 +18,11 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.masked_typing import MaskedType, NAType
+from cudf.core.udf.masked_typing import (
+    MaskedType,
+    NAType,
+    _supported_masked_types,
+)
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -381,9 +385,8 @@ def masked_constructor(context, builder, sig, args):
     return masked._getvalue()
 
 
-def _register_masked_constructor_lowering(supported_masked_types):
-    for ty in supported_masked_types:
-        lower_builtin(api.Masked, ty, types.boolean)(masked_constructor)
+for ty in _supported_masked_types:
+    lower_builtin(api.Masked, ty, types.boolean)(masked_constructor)
 
 
 # Allows us to make an instance of MaskedType a global variable

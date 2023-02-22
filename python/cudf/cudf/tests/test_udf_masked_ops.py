@@ -8,7 +8,6 @@ from numba import cuda
 
 import cudf
 from cudf.core.missing import NA
-from cudf.core.udf import _STRING_UDFS_ENABLED
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -21,6 +20,7 @@ from cudf.testing._utils import (
     _decimal_series,
     assert_eq,
     parametrize_numeric_dtypes_pairwise,
+    sv_to_udf_str,
 )
 
 
@@ -74,7 +74,6 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
 
 def run_masked_string_udf_test(func, data, args=(), **kwargs):
-    from strings_udf._testing import sv_to_udf_str
 
     gdf = data
     pdf = data.to_pandas(nullable=True)
@@ -790,8 +789,6 @@ def test_masked_udf_casting(operator, data):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
-# only run string udf tests if library exists and is enabled
-@pytest.mark.skipif(not _STRING_UDFS_ENABLED, reason="String UDFs not enabled")
 class TestStringUDFs:
     def test_string_udf_len(self, str_udf_data):
         def func(row):

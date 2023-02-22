@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool ha
 
 static void nvbench_contains_scalar(nvbench::state& state)
 {
-  cudf::rmm_pool_raii pool_raii;
   using Type = int;
 
   auto const has_nulls = static_cast<bool>(state.get_int64("has_nulls"));

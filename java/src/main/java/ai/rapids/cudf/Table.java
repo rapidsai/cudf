@@ -194,6 +194,7 @@ public final class Table implements AutoCloseable {
                                              int[] columnsToHash,
                                              int hashTypeId,
                                              int numberOfPartitions,
+                                             int seed,
                                              int[] outputOffsets) throws CudfException;
 
   private static native long[] roundRobinPartition(long inputTable,
@@ -4253,12 +4254,27 @@ public final class Table implements AutoCloseable {
      * {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
+      final int DEFAULT_HASH_SEED = 0;
+      return hashPartition(type, numberOfPartitions, DEFAULT_HASH_SEED);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions number of partitions to use
+     * @param seed the seed value for hashing
+     * @return Table that exposes a limited functionality of the {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
       int[] partitionOffsets = new int[numberOfPartitions];
       return new PartitionedTable(new Table(Table.hashPartition(
           operation.table.nativeHandle,
           operation.indices,
           type.nativeId,
           partitionOffsets.length,
+          seed,
           partitionOffsets)), partitionOffsets);
     }
   }
