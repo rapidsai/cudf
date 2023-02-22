@@ -13,14 +13,10 @@ export GTEST_CUDF_RMM_MODE=cuda
 COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
 for gt in "$CONDA_PREFIX"/bin/gtests/{libcudf,libcudf_kafka}/* ; do
     test_name=$(basename ${gt})
-    if [[ "$test_name" == "ERROR_TEST" ]]; then
+    if [[ "$test_name" == "ERROR_TEST" ]] || [[ "$test_name" == "STREAM_IDENTIFICATION_TEST" ]]; then
         continue
     fi
-    if [[ "$test_name" == "STREAM_IDENTIFICATION_TEST" ]]; then
-        continue
-    fi
-    echo "Running gtest $test_name"
-    echo "${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:${RAPIDS_TESTS_DIR}${test_name}.xml"
+    echo "Running compute-sanitizer on $test_name"
     ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"${RAPIDS_TESTS_DIR}${test_name}.xml"
 done
 unset GTEST_CUDF_RMM_MODE
