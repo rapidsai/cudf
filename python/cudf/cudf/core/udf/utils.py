@@ -2,13 +2,14 @@
 
 import glob
 import os
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict
 
 import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
 from cubinlinker.patch import _numba_version_ok, get_logger, new_patched_linker
+from cuda import cudart
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager
 from numba.core.errors import TypingError
@@ -19,32 +20,105 @@ from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
 import rmm
 
+from cudf._lib.strings_udf import (
+    column_from_udf_string_array,
+    column_to_string_view_array,
+)
 from cudf.core.column.column import as_column
+from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.strings_typing import (
+    str_view_arg_handler,
+    string_view,
+    udf_string,
+)
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
+    STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.utils import _cudf_nvtx_annotate, initfunc
+
+# Maximum size of a string column is 2 GiB
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
+    "STRINGS_UDF_HEAP_SIZE", 2**31
+)
+_heap_size = 0
+_cudf_str_dtype = dtype(str)
+
 
 logger = get_logger()
 
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
+    NUMERIC_TYPES
+    | BOOL_TYPES
+    | DATETIME_TYPES
+    | TIMEDELTA_TYPES
+    | STRING_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-arg_handlers: List[Any] = []
-ptx_files: List[Any] = []
-masked_array_types: Dict[Any, Any] = {}
 launch_arg_getters: Dict[Any, Any] = {}
-output_col_getters: Dict[Any, Any] = {}
+
+
+def _get_best_ptx_file(archs, max_compute_capability):
+    """
+    Determine of the available PTX files which one is
+    the most recent up to and including the device cc
+    """
+    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
+    if filtered_archs:
+        return max(filtered_archs, key=lambda y: y[0])
+    else:
+        return None
+
+
+def _get_ptx_file(path, prefix):
+    if "RAPIDS_NO_INITIALIZE" in os.environ:
+        # cc=60 ptx is always built
+        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
+    else:
+        dev = cuda.get_current_device()
+
+        # Load the highest compute capability file available that is less than
+        # the current device's.
+        cc = int("".join(str(x) for x in dev.compute_capability))
+    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
+    if len(files) == 0:
+        raise RuntimeError(f"Missing PTX files for cc={cc}")
+    regular_sms = []
+
+    for f in files:
+        file_name = os.path.basename(f)
+        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
+        if sm_number.endswith("a"):
+            processed_sm_number = int(sm_number.rstrip("a"))
+            if processed_sm_number == cc:
+                return f
+        else:
+            regular_sms.append((int(sm_number), f))
+
+    regular_result = None
+
+    if regular_sms:
+        regular_result = _get_best_ptx_file(regular_sms, cc)
+
+    if regular_result is None:
+        raise RuntimeError(
+            "This cuDF installation is missing the necessary PTX "
+            f"files that are <={cc}."
+        )
+    else:
+        return regular_result[1]
+
+
+_PTX_FILE = _get_ptx_file(os.path.dirname(__file__), "shim_")
 
 
 @_cudf_nvtx_annotate
@@ -129,9 +203,8 @@ def _masked_array_type_from_col(col):
     array of bools representing a mask.
     """
 
-    col_type = masked_array_types.get(col.dtype)
-    if col_type:
-        col_type = CPointer(col_type)
+    if col.dtype == _cudf_str_dtype:
+        col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
         col_type = nb_scalar_ty[::1]
@@ -239,7 +312,9 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=ptx_files, extensions=arg_handlers)(_kernel)
+    kernel = cuda.jit(
+        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
+    )(_kernel)
 
     return kernel
 
@@ -248,9 +323,8 @@ def _get_input_args_from_frame(fr):
     args = []
     offsets = []
     for col in _supported_cols_from_frame(fr).values():
-        getter = launch_arg_getters.get(col.dtype)
-        if getter:
-            data = getter(col)
+        if col.dtype == _cudf_str_dtype:
+            data = column_to_string_view_array_init_heap(col)
         else:
             data = col.data
         if col.mask is not None:
@@ -264,67 +338,16 @@ def _get_input_args_from_frame(fr):
     return args + offsets
 
 
-def _return_arr_from_dtype(dt, size):
-    if extensionty := masked_array_types.get(dt):
-        return rmm.DeviceBuffer(size=size * extensionty.return_type.size_bytes)
-    return cp.empty(size, dtype=dt)
+def _return_arr_from_dtype(dtype, size):
+    if dtype == _cudf_str_dtype:
+        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+    return cp.empty(size, dtype=dtype)
 
 
 def _post_process_output_col(col, retty):
-    if getter := output_col_getters.get(retty):
-        col = getter(col)
+    if retty == _cudf_str_dtype:
+        return column_from_udf_string_array(col)
     return as_column(col, retty)
-
-
-def _get_best_ptx_file(archs, max_compute_capability):
-    """
-    Determine of the available PTX files which one is
-    the most recent up to and including the device cc
-    """
-    filtered_archs = [x for x in archs if x[0] <= max_compute_capability]
-    if filtered_archs:
-        return max(filtered_archs, key=lambda y: y[0])
-    else:
-        return None
-
-
-def _get_ptx_file(path, prefix):
-    if "RAPIDS_NO_INITIALIZE" in os.environ:
-        # cc=60 ptx is always built
-        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
-    else:
-        dev = cuda.get_current_device()
-
-        # Load the highest compute capability file available that is less than
-        # the current device's.
-        cc = int("".join(str(x) for x in dev.compute_capability))
-    files = glob.glob(os.path.join(path, f"{prefix}*.ptx"))
-    if len(files) == 0:
-        raise RuntimeError(f"Missing PTX files for cc={cc}")
-    regular_sms = []
-
-    for f in files:
-        file_name = os.path.basename(f)
-        sm_number = file_name.rstrip(".ptx").lstrip(prefix)
-        if sm_number.endswith("a"):
-            processed_sm_number = int(sm_number.rstrip("a"))
-            if processed_sm_number == cc:
-                return f
-        else:
-            regular_sms.append((int(sm_number), f))
-
-    regular_result = None
-
-    if regular_sms:
-        regular_result = _get_best_ptx_file(regular_sms, cc)
-
-    if regular_result is None:
-        raise RuntimeError(
-            "This cuDF installation is missing the necessary PTX "
-            f"files that are <={cc}."
-        )
-    else:
-        return regular_result[1]
 
 
 def _get_extensionty_size(ty):
@@ -420,3 +443,26 @@ def maybe_patch_numba_linker(
             Linker.new = new_patched_linker
         else:
             logger.debug("Cannot patch Numba Linker - unsupported version")
+
+
+@initfunc
+def set_malloc_heap_size(size=None):
+    """
+    Heap size control for strings_udf, size in bytes.
+    """
+    global _heap_size
+    if size is None:
+        size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
+    if size != _heap_size:
+        (ret,) = cudart.cudaDeviceSetLimit(
+            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        )
+        if ret.value != 0:
+            raise RuntimeError("Unable to set cudaMalloc heap size")
+
+        _heap_size = size
+
+
+def column_to_string_view_array_init_heap(col):
+    # lazily allocate heap only when a string needs to be returned
+    return column_to_string_view_array(col)
