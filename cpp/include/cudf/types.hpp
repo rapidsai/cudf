@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -324,7 +324,7 @@ constexpr bool operator==(data_type const& lhs, data_type const& rhs)
  * @return true `lhs` is not equal to `rhs`
  * @return false `lhs` is equal to `rhs`
  */
-constexpr bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lhs == rhs); }
+inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lhs == rhs); }
 
 /**
  * @brief Returns the size in bytes of elements of the specified `data_type`
@@ -337,8 +337,6 @@ constexpr bool operator!=(data_type const& lhs, data_type const& rhs) { return !
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
-constexpr int fake_var_for_build_baseline = 2304;  ///< temporary
 
 /** @} */
 }  // namespace cudf
