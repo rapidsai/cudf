@@ -103,12 +103,10 @@ def factorize(
     elif use_na_sentinel is None and na_sentinel is None:
         use_na_sentinel = True
         na_sentinel = -1
-
-    if use_na_sentinel is None:
+    elif use_na_sentinel is None:
         use_na_sentinel = True
-    elif na_sentinel is None:
-        na_sentinel = -1
     else:
+        # use_sentinel is either True or False, na_sentinel is None
         na_sentinel = (
             -1 if use_na_sentinel else Scalar(None, dtype=values.dtype)
         )
