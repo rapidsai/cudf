@@ -60,6 +60,8 @@ def is_numeric_dtype(obj):
             getattr(obj, "dtype", None), _BaseDtype
         ):
             return False
+    if isinstance(obj, cudf.BaseIndex):
+        return obj._is_numeric()
     return pd_types.is_numeric_dtype(obj)
 
 
@@ -361,6 +363,103 @@ def is_float_dtype(arr_or_dtype) -> bool:
     return pd_types.is_float_dtype(arr_or_dtype=arr_or_dtype)
 
 
+def is_integer_dtype(arr_or_dtype) -> bool:
+    """
+    Check whether the provided array or dtype is of an integer dtype.
+    Unlike in `is_any_int_dtype`, timedelta64 instances will return False.
+
+    Parameters
+    ----------
+    arr_or_dtype : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    boolean
+        Whether or not the array or dtype is of an integer dtype and
+        not an instance of timedelta64.
+
+    Examples
+    --------
+    >>> from cudf.api.types import is_integer_dtype
+    >>> import numpy as np
+    >>> import cudf
+    >>> is_integer_dtype(str)
+    False
+    >>> is_integer_dtype(int)
+    True
+    >>> is_integer_dtype(float)
+    False
+    >>> is_integer_dtype(np.uint64)
+    True
+    >>> is_integer_dtype('int8')
+    True
+    >>> is_integer_dtype('Int8')
+    True
+    >>> is_integer_dtype(np.datetime64)
+    False
+    >>> is_integer_dtype(np.timedelta64)
+    False
+    >>> is_integer_dtype(np.array(['a', 'b']))
+    False
+    >>> is_integer_dtype(cudf.Series([1, 2]))
+    True
+    >>> is_integer_dtype(np.array([], dtype=np.timedelta64))
+    False
+    >>> is_integer_dtype(cudf.Index([1, 2.]))  # float
+    False
+    """
+    if isinstance(arr_or_dtype, cudf.BaseIndex):
+        return arr_or_dtype._is_integer()
+    elif (
+        (isclass(arr_or_dtype) and issubclass(arr_or_dtype, _BaseDtype))
+        or isinstance(arr_or_dtype, _BaseDtype)
+        or isinstance(getattr(arr_or_dtype, "dtype", None), _BaseDtype)
+    ):
+        return False
+    return pd_types.is_integer_dtype(arr_or_dtype=arr_or_dtype)
+
+
+def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
+    """
+    Check whether the provided array or dtype is of a real number dtype.
+
+    Parameters
+    ----------
+    arr_or_dtype : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    boolean
+        Whether or not the array or dtype is of a real number dtype.
+
+    Examples
+    --------
+    >>> from cudf.api.types import is_any_real_numeric_dtype
+    >>> import cudf
+    >>> is_any_real_numeric_dtype(int)
+    True
+    >>> is_any_real_numeric_dtype(float)
+    True
+    >>> is_any_real_numeric_dtype(object)
+    False
+    >>> is_any_real_numeric_dtype(str)
+    False
+    >>> is_any_real_numeric_dtype(complex(1, 2))
+    False
+    >>> is_any_real_numeric_dtype(bool)
+    False
+    >>> is_any_real_numeric_dtype(cudf.Index([1, 2, 3]))
+    True
+    """
+    return (
+        is_numeric_dtype(arr_or_dtype)
+        and not is_complex_dtype(arr_or_dtype)
+        and not is_bool_dtype(arr_or_dtype)
+    )
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -377,7 +476,6 @@ is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
-is_integer_dtype = _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)

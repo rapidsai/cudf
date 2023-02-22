@@ -507,8 +507,8 @@ class BaseIndex(Serializable):
 
         res_name = _get_result_name(self.name, other.name)
 
-        if (self._is_boolean() and other.is_numeric()) or (
-            self.is_numeric() and other._is_boolean()
+        if (self._is_boolean() and other._is_numeric()) or (
+            self._is_numeric() and other._is_boolean()
         ):
             if isinstance(self, cudf.MultiIndex):
                 return self[:0].rename(res_name)
@@ -841,6 +841,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index only consists of numeric data.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_any_real_numeric_dtype` instead.
+
         Returns
         -------
         bool
@@ -875,6 +878,8 @@ class BaseIndex(Serializable):
         False
         """
         raise NotImplementedError
+
+    _is_numeric = is_numeric
 
     def is_boolean(self):
         """
@@ -918,6 +923,9 @@ class BaseIndex(Serializable):
         """
         Check if the Index only consists of integers.
 
+        .. deprecated:: 23.04
+           Use `cudf.api.types.is_integer_dtype` instead.
+
         Returns
         -------
         bool
@@ -946,6 +954,8 @@ class BaseIndex(Serializable):
         False
         """
         raise NotImplementedError
+
+    _is_integer = is_integer
 
     def is_floating(self):
         """

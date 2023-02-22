@@ -259,6 +259,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self
 
     def is_numeric(self):
+        warnings.warn(
+            f"{type(self).__name__}._is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         return True
 
     def is_boolean(self):
@@ -273,6 +281,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return False
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return True
 
     def is_floating(self):
@@ -1463,6 +1479,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return self._values.get_slice_bound(label, side, kind)
 
     def is_numeric(self):
+        warnings.warn(
+            f"{type(self).__name__}._is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         return False
 
     def is_boolean(self):
@@ -1477,6 +1501,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return True
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return False
 
     def is_floating(self):
@@ -1700,6 +1732,14 @@ class NumericIndex(GenericIndex):
         super().__init__(data, **kwargs)
 
     def is_numeric(self):
+        warnings.warn(
+            f"{type(self).__name__}._is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         return True
 
     def is_boolean(self):
@@ -1714,6 +1754,14 @@ class NumericIndex(GenericIndex):
         return False
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return True
 
     def is_floating(self):
@@ -1986,6 +2034,14 @@ class Float32Index(NumericIndex):
     _dtype = np.float32
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return False
 
     def is_floating(self):
@@ -2025,6 +2081,14 @@ class Float64Index(NumericIndex):
     _dtype = np.float64
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return False
 
     def is_floating(self):

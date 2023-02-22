@@ -1015,6 +1015,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return level_values
 
     def is_numeric(self):
+        warnings.warn(
+            f"{type(self).__name__}._is_numeric is deprecated. "
+            "Use cudf.api.types.is_any_real_numeric_dtype instead",
+            FutureWarning,
+        )
+        return self._is_numeric()
+
+    def _is_numeric(self):
         return False
 
     def is_boolean(self):
@@ -1029,6 +1037,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return False
 
     def is_integer(self):
+        warnings.warn(
+            f"{type(self).__name__}.is_integer is deprecated. "
+            "Use cudf.api.types.is_integer_dtype instead",
+            FutureWarning,
+        )
+        return self._is_integer()
+
+    def _is_integer(self):
         return False
 
     def is_floating(self):
