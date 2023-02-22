@@ -1,6 +1,5 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-import os
 
 import cupy as cp
 import numpy as np
@@ -22,15 +21,11 @@ from cudf.core.udf.templates import (
 from cudf.core.udf.utils import (
     _get_extensionty_size,
     _get_kernel,
-    _get_ptx_file,
     _get_udf_return_type,
     _supported_cols_from_frame,
     _supported_dtypes_from_frame,
 )
 from cudf.utils.utils import _cudf_nvtx_annotate
-
-dev_func_ptx = _get_ptx_file(os.path.dirname(__file__), "function_")
-cudf.core.udf.utils.ptx_files.append(dev_func_ptx)
 
 
 def _get_frame_groupby_type(dtype, index_dtype):
