@@ -54,7 +54,7 @@ target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
-target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf CUDA::nvrtc)
+target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # This function will copy the generated PTX file from its generator-specific location in the build
