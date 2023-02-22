@@ -520,6 +520,26 @@ def test_series_factorize_use_na_sentinel(data, use_na_sentinel):
 @pytest.mark.parametrize(
     "data",
     [
+        [1, 2, 3, 2, 1],
+        [1, 2, None, 3, 1, 1],
+        [],
+        ["a", "b", "c", None, "z", "a"],
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_series_factorize_sort(data, sort):
+    gsr = cudf.Series(data)
+    psr = gsr.to_pandas(nullable=True)
+
+    expected_labels, expected_cats = psr.factorize(sort=sort)
+    actual_labels, actual_cats = gsr.factorize(sort=sort)
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats, actual_cats.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
