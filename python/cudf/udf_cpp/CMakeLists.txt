@@ -18,8 +18,6 @@ include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-find)
 
-rapids_cuda_init_architectures(udf-cpp)
-
 rapids_cpm_init()
 
 rapids_find_package(
