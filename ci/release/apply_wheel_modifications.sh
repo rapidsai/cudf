@@ -11,14 +11,12 @@ sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/cudf/cudf/__in
 sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/dask_cudf/dask_cudf/__init__.py
 sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/cudf_kafka/cudf_kafka/__init__.py
 sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/custreamz/custreamz/__init__.py
-sed -i "s/__version__ = .*/__version__ = \"${VERSION}\"/g" python/strings_udf/strings_udf/__init__.py
 
 # setup.py versions
 sed -i "s/version=.*,/version=\"${VERSION}\",/g" python/cudf/setup.py
 sed -i "s/version=.*,/version=\"${VERSION}\",/g" python/dask_cudf/setup.py
 sed -i "s/version=.*,/version=\"${VERSION}\",/g" python/cudf_kafka/setup.py
 sed -i "s/version=.*,/version=\"${VERSION}\",/g" python/custreamz/setup.py
-sed -i "s/version=.*,/version=\"${VERSION}\",/g" python/strings_udf/setup.py
 
 # cudf setup.py cuda suffixes
 sed -i "s/name=\"cudf\"/name=\"cudf${CUDA_SUFFIX}\"/g" python/cudf/setup.py

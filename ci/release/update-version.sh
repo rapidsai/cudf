@@ -48,14 +48,12 @@ sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf
 sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/dask_cudf/dask_cudf/__init__.py
 sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/cudf_kafka/cudf_kafka/__init__.py
 sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/custreamz/custreamz/__init__.py
-sed_runner "s/__version__ = .*/__version__ = \"${NEXT_FULL_TAG}\"/g" python/strings_udf/strings_udf/__init__.py
 
 # Python setup.py updates
 sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/cudf/setup.py
 sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/dask_cudf/setup.py
 sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/cudf_kafka/setup.py
 sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/custreamz/setup.py
-sed_runner "s/version=.*,/version=\"${NEXT_FULL_TAG}\",/g" python/strings_udf/setup.py
 
 # rapids-cmake version
 sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
