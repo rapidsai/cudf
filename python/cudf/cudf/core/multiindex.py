@@ -356,7 +356,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
             .. deprecated:: 23.02
 
-               The `levels` parameter is deprecated and will be removed in
+               The `codes` parameter is deprecated and will be removed in
                a future version of cudf.
 
         deep : Bool (default False)
