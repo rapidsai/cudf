@@ -72,15 +72,6 @@ endif()
 include(rapids-cython)
 
 if(NOT cudf_FOUND)
-  # TODO: This will not be necessary once we upgrade to CMake 3.22, which will pull in the required
-  # languages for the C++ project even if this project does not require those languages.
-  include(rapids-cuda)
-  rapids_cuda_init_architectures(cudf-python)
-  enable_language(CUDA)
-  # Since cudf only enables CUDA optionally we need to manually include the file that
-  # rapids_cuda_init_architectures relies on `project` including.
-  include("${CMAKE_PROJECT_cudf-python_INCLUDE}")
-
   set(BUILD_TESTS OFF)
   set(BUILD_BENCHMARKS OFF)
 

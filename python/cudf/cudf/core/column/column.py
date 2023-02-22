@@ -607,7 +607,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
-        num_keys = (stop - start) // step
+        num_keys = len(range(start, stop, step))
 
         self._check_scatter_key_length(num_keys, value)
 
