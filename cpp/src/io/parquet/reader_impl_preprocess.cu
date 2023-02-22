@@ -740,7 +740,7 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
                                                          chunk_source_map,
                                                          _stream));
 
-  CUDF_EXPECTS(remaining_rows <= 0, "All rows data must be read.");
+  CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
 
   return {total_decompressed_size > 0, std::move(read_rowgroup_tasks)};
 }
