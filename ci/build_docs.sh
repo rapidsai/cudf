@@ -41,7 +41,7 @@ popd
 
 
 if [[ ${RAPIDS_BUILD_TYPE} == "branch" ]]; then
-  aws s3 sync --delete cpp/doxygen/html "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/html"
+  aws s3 sync --delete cpp/doxygen/html "s3://rapidsai-docs/libcudf/${VERSION_NUMBER}/html"
   aws s3 sync --delete docs/cudf/_html "s3://rapidsai-docs/libcudf/${VERSION_NUMBER}/html"
   aws s3 sync --delete docs/cudf/_text "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/txt"
 fi
