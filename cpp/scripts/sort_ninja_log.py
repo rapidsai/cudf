@@ -1,10 +1,11 @@
 #
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 #
 import argparse
 import os
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from xml.dom import minidom
 
 parser = argparse.ArgumentParser()
@@ -22,7 +23,7 @@ parser.add_argument(
     "--msg",
     type=str,
     default=None,
-    help="optional message to include in html output",
+    help="optional text file to include at the top of the html output",
 )
 args = parser.parse_args()
 
@@ -150,11 +151,15 @@ def assign_entries_to_threads(entries):
 # output chart results in HTML format
 def output_html(entries, sorted_list, args):
     print("<html><head><title>Build Metrics Report</title>")
-    # Note: Jenkins does not support javascript nor style defined in the html
+    # This creates a standalone html file with no javascript and no styles.
+    # This was originally to support the Jenkins security policy described here:
     # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
     if args.msg is not None:
-        print("<p>", args.msg, "</p>")
+        msg_file = Path(args.msg)
+        if msg_file.is_file():
+            msg = msg_file.read_text()
+            print("<p>", msg, "</p>")
 
     # map entries to threads
     # the end_time is used to scale all the entries to a fixed output width
