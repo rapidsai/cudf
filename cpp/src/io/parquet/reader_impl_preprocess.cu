@@ -756,7 +756,7 @@ void reader::impl::load_and_decompress_data(
   auto& chunks           = _file_itm_data.chunks;
   auto& pages_info       = _file_itm_data.pages_info;
 
-  auto [has_compressed_data, read_rowgroup_tasks] =
+  auto const [has_compressed_data, read_rowgroup_tasks] =
     create_and_read_column_chunks(row_groups_info, num_rows);
 
   for (auto& task : read_rowgroup_tasks) {
