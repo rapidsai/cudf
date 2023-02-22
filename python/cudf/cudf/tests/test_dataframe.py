@@ -3625,7 +3625,8 @@ def test_dataframe_describe_exclude():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(exclude=["float"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(exclude=["float"])
     pdf_results = pdf.describe(exclude=["float"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3640,7 +3641,8 @@ def test_dataframe_describe_include():
     df["x"] = df.x.astype("int64")
     df["y"] = np.random.normal(10, 1, data_length)
     pdf = df.to_pandas()
-    gdf_results = df.describe(include=["int"])
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
 
     assert_eq(gdf_results, pdf_results)
@@ -3672,7 +3674,8 @@ def test_series_describe_include_all():
     df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
 
     pdf = df.to_pandas()
-    gdf_results = df.describe(include="all")
+    with pytest.warns(FutureWarning):
+        gdf_results = df.describe(include="all")
     pdf_results = pdf.describe(include="all")
 
     assert_eq(gdf_results[["x", "y"]], pdf_results[["x", "y"]])

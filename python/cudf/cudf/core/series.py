@@ -3112,7 +3112,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         """{docstring}"""
 
-        if datetime_is_numeric:
+        if not datetime_is_numeric:
             warnings.warn(
                 "`datetime_is_numeric` is deprecated and will be removed in "
                 "a future release. Specify `datetime_is_numeric=True` to "

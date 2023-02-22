@@ -4962,7 +4962,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("No data of included types.")
 
         describe_series_list = [
-            data_to_describe[col].describe(percentiles=percentiles)
+            data_to_describe[col].describe(
+                percentiles=percentiles,
+                datetime_is_numeric=datetime_is_numeric,
+            )
             for col in data_to_describe._column_names
         ]
         if len(describe_series_list) == 1:
