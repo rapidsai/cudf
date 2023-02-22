@@ -129,7 +129,7 @@ def factorize(
         cats, _ = cats.sort_by_values()
 
     labels = values._column._label_encoding(
-        cats=cats, na_sentinel=na_sentinel
+        cats=cats, na_sentinel=Scalar(na_sentinel)
     ).values
 
     return labels, cats.values if return_cupy_array else Index(cats)
