@@ -727,7 +727,7 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
     }
-    remaining_rows -= row_group.num_rows;
+    remaining_rows -= row_group_rows;
   }
 
   // Read compressed chunk data to device memory
