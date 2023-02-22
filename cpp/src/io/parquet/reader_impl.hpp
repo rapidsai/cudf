@@ -135,14 +135,16 @@ class reader::impl {
    *
    * @param row_groups_info vector of information about row groups to read
    * @param num_rows  Maximum number of rows to read
-   * @return boolean indicating if compressed chunks were found
+   * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
+   * read completion
    */
   std::pair<bool, std::vector<std::future<void>>> create_and_read_column_chunks(
-    std::vector<row_group_info> const& row_groups_info, size_type num_rows);
+    cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows);
+
   /**
    * @brief Load and decompress the input file(s) into memory.
    */
-  void load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
+  void load_and_decompress_data(cudf::host_span<row_group_info const> const row_groups_info,
                                 size_type num_rows);
 
   /**

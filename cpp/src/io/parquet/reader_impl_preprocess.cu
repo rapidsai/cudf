@@ -652,7 +652,7 @@ void reader::impl::allocate_nesting_info()
 }
 
 std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_column_chunks(
-  std::vector<row_group_info> const& row_groups_info, size_type num_rows)
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
 {
   auto& raw_page_data = _file_itm_data.raw_page_data;
   auto& chunks        = _file_itm_data.chunks;
@@ -745,8 +745,8 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::create_and_read_co
   return {total_decompressed_size > 0, std::move(read_rowgroup_tasks)};
 }
 
-void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& row_groups_info,
-                                            size_type num_rows)
+void reader::impl::load_and_decompress_data(
+  cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows)
 {
   // This function should never be called if `num_rows == 0`.
   CUDF_EXPECTS(num_rows > 0, "Number of reading rows must not be zero.");
