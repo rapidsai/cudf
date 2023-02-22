@@ -11,8 +11,9 @@ from setuptools import build_meta as _orig
 
 # Alias the required bits
 build_wheel = _orig.build_wheel
-build_sdist = _orig.build_sdist
+prepare_metadata_for_build_wheel = _orig.prepare_metadata_for_build_wheel
 
+build_sdist = _orig.build_sdist
 
 def replace_requirements(func):
     @wraps(func)
@@ -32,6 +33,11 @@ get_requires_for_build_wheel = replace_requirements(
 get_requires_for_build_sdist = replace_requirements(
     _orig.get_requires_for_build_sdist
 )
-get_requires_for_build_editable = replace_requirements(
-    _orig.get_requires_for_build_editable
-)
+
+if not _orig.LEGACY_EDITABLE:
+    build_editable = _orig.build_editable
+    prepare_metadata_for_build_editable = \
+        _orig.prepare_metadata_for_build_editable
+    get_requires_for_build_editable = replace_requirements(
+        _orig.get_requires_for_build_editable
+    )
