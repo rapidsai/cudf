@@ -1016,7 +1016,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     def is_numeric(self):
         warnings.warn(
-            f"{type(self).__name__}._is_numeric is deprecated. "
+            f"{type(self).__name__}.is_numeric is deprecated. "
             "Use cudf.api.types.is_any_real_numeric_dtype instead",
             FutureWarning,
         )
