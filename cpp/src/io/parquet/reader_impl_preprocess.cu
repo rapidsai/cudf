@@ -685,7 +685,6 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
     auto const row_group_start  = rg.start_row;
     auto const row_group_source = rg.source_index;
     auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
-    auto const io_chunk_idx     = chunks.size();
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -733,18 +732,19 @@ void reader::impl::load_and_decompress_data(std::vector<row_group_info> const& r
         total_decompressed_size += col_meta.total_uncompressed_size;
       }
     }
-    // Read compressed chunk data to device memory
-    read_rowgroup_tasks.push_back(read_column_chunks_async(_sources,
-                                                           raw_page_data,
-                                                           chunks,
-                                                           io_chunk_idx,
-                                                           chunks.size(),
-                                                           column_chunk_offsets,
-                                                           chunk_source_map,
-                                                           _stream));
-
     remaining_rows -= row_group.num_rows;
   }
+
+  // Read compressed chunk data to device memory
+  read_rowgroup_tasks.push_back(read_column_chunks_async(_sources,
+                                                         raw_page_data,
+                                                         chunks,
+                                                         0,
+                                                         chunks.size(),
+                                                         column_chunk_offsets,
+                                                         chunk_source_map,
+                                                         _stream));
+
   for (auto& task : read_rowgroup_tasks) {
     task.wait();
   }
