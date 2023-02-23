@@ -4192,11 +4192,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -6552,12 +6549,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         field_names = [str(name) for name in self._data.names]
 
         col = cudf.core.column.build_struct_column(
-            names=field_names, children=self._data.columns, size=len(self)
+            names=field_names,
+            children=tuple(col.copy(deep=True) for col in self._data.columns),
+            size=len(self),
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                {name: col.copy(deep=True)}
-            ),
+            cudf.core.column_accessor.ColumnAccessor({name: col}),
             index=self.index,
             name=name,
         )
