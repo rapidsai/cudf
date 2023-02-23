@@ -2020,9 +2020,9 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 {
   __shared__ __align__(16) delta_binary_state_s state_g;
 
-  int t                    = threadIdx.x;
-  int lane_id              = t & 0x1f;
-  delta_binary_state_s* db = &state_g;
+  int t       = threadIdx.x;
+  int lane_id = t & 0x1f;
+  auto* db    = &state_g;
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
@@ -2031,14 +2031,13 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
-  if (blockIdx.x == 0 && t == 0) printf("skipped leaf vals %d\n", skipped_leaf_values);
 
   // initialize delta state
   if (t == 0) { InitDeltaBinaryBlock(db, s->data_start, s->data_end); }
   __syncthreads();
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
-  // that has a value we need (add 1 for first value in header)
+  // that has a value we need
   while (db->current_value_idx < skipped_leaf_values && db->current_value_idx < db->value_count) {
     if (t < 32) {
       DeltaForThread(db, lane_id);
@@ -2058,6 +2057,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     } else {  // warp2...
       target_pos = min(s->nz_count, src_pos + 32);
     }
+    __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
     // warp2 waits one cycle for warps 0/1 to produce a batch, and then stuffs values
@@ -2081,11 +2081,11 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
     } else if (t < 96 && src_pos < target_pos) {
       // warp 2
       // need to bump src_pos by one because of the first_value being in the header
-      bool const first_pass = src_pos == 0;
-      if (first_pass) { src_pos++; }
+      if (src_pos == 0) { src_pos++; }
       src_pos += lane_id;
 
-      int dst_pos = src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
+      // the position in the output column/buffer
+      int dst_pos = s->nz_idx[rolling_index(src_pos)];
 
       // handle skip_rows here. flat hierarchies can just skip up to first_row.
       if (!has_repetition) { dst_pos -= s->first_row; }
@@ -2122,26 +2122,29 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
   }
 }
 
-// this encoding consists of a DeltaBinaryPacked array of prefix lengths,
-// followed by a DeltaBinaryPacked array of suffix lengths, followed by
-// the suffixes. The latter two can be used to create an offsets array
-// for the suffix data, but then this needs to be combined with the prefix
-// lengths to do the final decode for each value.
-// because the lengths of the prefixes and suffixes are not encoded in the
-// header, we're going to have to first do a quick pass through them to
-// find the start/end of each structure.
+// this encoding consists of a DeltaBinaryPacked array of prefix lengths, followed by a
+// DeltaBinaryPacked array of suffix lengths, followed by the suffixes. The latter two can be used
+// to create an offsets array for the suffix data, but then this needs to be combined with the
+// prefix lengths to do the final decode for each value. because the lengths of the prefixes and
+// suffixes are not encoded in the header, we're going to have to first do a quick pass through them
+// to find the start/end of each structure.
 __device__ void DecodeDeltaByteArray(page_state_s* const s)
 {
-#if 0
   __shared__ __align__(16) delta_binary_state_s db_state[2];
   __shared__ __align__(16) uint8_t const* data_start;
 
-  return;
   int t           = threadIdx.x;
+  int lane_id     = t & 0x1f;
   auto* prefix_db = &db_state[0];
   auto* suffix_db = &db_state[1];
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+
+  // copying logic from gpuDecodePageData.
+  PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
+
+  // skipped_leaf_values will always be 0 for flat hierarchies.
+  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
   if (t == 0) {
     auto find_end = [](delta_binary_state_s* db, uint8_t const* start, uint8_t const* end) {
@@ -2162,38 +2165,37 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   }
   __syncthreads();
 
-  // we now have the locations of the three blocks of encoded data. pull batches of 32
-  // and populate the offsets/and data arrays for the column.
-  // each mini-block should be 32 values, to match the ~32 levels that are decoded.s
-  //
-  // copying logic from gpuDecodePageData.  I didn't realize that target_pos on warp0 was
-  // ahead of warp1...so warp0 decodes a batch, but warp1 doesn't consume on the first go around
-  // because of sync issues.  so then on iteration 2 of this loop, warp0 produces another
-  // batch while warp1 conumes the batch produced previously.  I assume gpuDecodeLevels does
-  // nothting when target_pos hits num_input_values
-  PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
-
-  // skipped_leaf_values will always be 0 for flat hierarchies.
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
+  // that has a value we need
+  while (prefix_db->current_value_idx < skipped_leaf_values &&
+         prefix_db->current_value_idx < prefix_db->value_count) {
+    // prefixes and suffixes should be same length, so only testing prefix_db above
+    if (t < 32) {  // warp 0 does prefixes
+      DeltaForThread(prefix_db, lane_id);
+      if (lane_id == 0) { SetupNextMiniBlock(prefix_db); }
+    } else if (t < 64) {  // warp 1 does suffixes
+      DeltaForThread(suffix_db, lane_id);
+      if (lane_id == 0) { SetupNextMiniBlock(suffix_db); }
+    }
+    __syncthreads();
+  }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
-    int src_pos                 = s->src_pos;
-    constexpr int vals_per_iter = 32;
+    int src_pos = s->src_pos;
 
-    if (t < 32) {
-      target_pos = min(src_pos + 2 * vals_per_iter, s->nz_count + vals_per_iter);
-      if (src_pos == 0) target_pos++;
-    } else if (t < 96) {
-      target_pos = min(s->nz_count, src_pos + vals_per_iter);
-    } else {
-      // this needs to be 32 behind warp 1/2
-      target_pos = min(s->nz_count, src_pos + vals_per_iter) - 32;
+    if (t < 96) {  // warp 0..2
+      target_pos = s->nz_count + 32;
+      // first pass will have 33 values because the first value is in the header
+      if (target_pos == 32) target_pos++;
+    } else {  // warp 3
+      target_pos = min(s->nz_count, src_pos + 32);
     }
+    __syncthreads();
 
-    if ((t & 0x1f) == 0) { printf("%d target_pos %d\n", t, target_pos); }
-    // warp0 does rep & def levels. warp1 does decoding of prefix lengths. warp2
-    // decodes suffix lengths. warp3 reconstructs strings?
+    // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of prefixes, warp 2 will
+    // unpack a mini-batch of suffixes. warp3 waits one cycle for warps 0-2 to produce a batch, and
+    // then stuffs values into the proper location in the output.
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -2201,37 +2203,27 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
 
-    } else if (t < 3 * vals_per_iter && src_pos < target_pos) {
-      // warp 2 & 3
+    } else if (t < 96) {
+      // warp 1 gets prefixes and warp 2 gets suffixes
+      auto* db = t < 64 ? prefix_db : suffix_db;
+
+      // unpack deltas and save in db->value
+      DeltaForThread(db, lane_id);
+
+      // set up for next mini-block
+      if (lane_id == 0) { SetupNextMiniBlock(db); }
+
+    } else if (src_pos < target_pos) {
+      // warp 3
       // need to bump src_pos by one because of the first_value being in the header
-      bool const first_pass = src_pos == 0;
-      if (first_pass) { src_pos++; }
-      int me = t & 0x1f;
-      src_pos += me;
+      if (src_pos == 0) { src_pos++; }
+      src_pos += lane_id;
 
-      bool const is_prefixes = t < 2 * vals_per_iter;
-      auto* db               = is_prefixes ? prefix_db : suffix_db;
-
-      int dst_pos = src_pos < s->nz_count ? (int)s->nz_idx[rolling_index(src_pos)] : -1;
+      // the position in the output column/buffer
+      int dst_pos = s->nz_idx[rolling_index(src_pos)];
 
       // handle skip_rows here. flat hierarchies can just skip up to first_row.
       if (!has_repetition) { dst_pos -= s->first_row; }
-
-      // unpack deltas
-      int64_t delta = 0;  // DeltaForThread(db, me);
-
-      // do inclusive scan to get value - first_value at each position
-      __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[1];
-      cub::WarpScan<int64_t>(temp_storage[0]).InclusiveSum(delta, delta);
-
-      // now add first_value to get true value
-      delta += db->last_value;
-
-      // special case for first value in the page, which is stored in db->last_value.
-      // if skip_rows is non-zero, first_row will be as well.
-      if (src_pos == 1 && s->first_row == 0) { db->value[0] = db->last_value; }
-
-      db->value[rolling_index(db->current_value_idx + me + 1)] = delta;
 
       // nesting level that is storing actual leaf values
       int leaf_level_index = s->col.max_nesting_depth - 1;
@@ -2239,63 +2231,31 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
 
       // special case for first value in the page, which is stored in db->last_value.
       // if skip_rows is non-zero, first_row will be as well.
-      if (blockIdx.x == 0 && db->current_value_idx + me + 1 < db->value_count) {
-        if (is_prefixes) {
-          if (src_pos == 1 && s->first_row == 0)
-            printf("%02d: first prefix_len %ld\n", t, db->last_value);
-          printf("%02d: prefix_len %d %ld\n", t, db->current_value_idx + me + 1, delta);
-        } else {
-          if (src_pos == 1 && s->first_row == 0)
-            printf("%02d: first suffix_len %ld\n", t, db->last_value);
-          printf("%02d: suffix_len %d %ld\n", t, db->current_value_idx + me + 1, delta);
-        }
-      }
-
       if (src_pos == 1 && s->first_row == 0) {
         void* dst = nesting_info_base[leaf_level_index].data_out +
-                    static_cast<size_t>(s->nz_idx[rolling_index(0)]) * dtype_len;
-        if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = db->last_value;
-        } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = db->last_value;
-        }
+                    static_cast<size_t>(s->nz_idx[0]) * dtype_len;
+        int len      = prefix_db->value[0] + suffix_db->value[0];
+        auto* dstp   = static_cast<string_index_pair*>(dst);
+        dstp->first  = (char*)data_start;
+        dstp->second = len;
+        printf("dtlen %d len %d data %p\n", dtype_len, len, data_start);
       }
 
-      if (dst_pos >= 0) {
+      if (dst_pos >= 0 && src_pos < target_pos) {
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-        if (s->dtype_len == 8) {
-          *static_cast<int64_t*>(dst) = delta;
-        } else if (dtype_len == 4) {
-          *static_cast<int32_t*>(dst) = delta;
-        }
+        int src_idx  = rolling_index(src_pos + skipped_leaf_values);
+        int len      = prefix_db->value[src_idx] + suffix_db->value[src_idx];
+        auto* dstp   = static_cast<string_index_pair*>(dst);
+        dstp->first  = (char*)data_start;
+        dstp->second = len;
       }
 
-      // last lane in warp has the last_value now
-      __syncwarp();
-      if (me == 31) { db->last_value = delta; }
-
-      if (me == 0) {
-        s->src_pos = src_pos + 32;
-        SetupNextMiniBlock(db);
-      }
-    } else {
-      int me = t & 0x1f;
-      // warp 3
-      if (target_pos > 0) {
-        if (blockIdx.x == 0) {
-          if (me == 0) {
-            printf(" target_pos %d prefix %ld suffix %ld\n",
-                   target_pos,
-                   prefix_db->value[rolling_index(target_pos - 32)],
-                   suffix_db->value[rolling_index(target_pos - 32)]);
-          }
-        }
-      }
+      if (lane_id == 0) { *(volatile int32_t*)&s->src_pos = src_pos + 32; }
     }
+
     __syncthreads();
   }
-#endif
 }
 
 /**
