@@ -144,8 +144,7 @@ repos:
                 exclude: |
                   (?x)^(
                     .*test.*|
-                    ^CHANGELOG.md$|
-                    ^.*versioneer.py$
+                    ^CHANGELOG.md$
                   )
 
 default_language_version:

@@ -10,7 +10,6 @@ from numba import config as numba_config, cuda
 import rmm
 
 from cudf import api, core, datasets, testing
-from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
     register_index_accessor,
@@ -112,8 +111,7 @@ del numba_config
 rmm.register_reinitialize_hook(clear_cache)
 
 
-__version__ = get_versions()["version"]
-del get_versions
+__version__ = "23.04.00"
 
 __all__ = [
     "BaseIndex",
