@@ -163,7 +163,7 @@ std::unique_ptr<column> index_of(
  * @return std::unique_ptr<column> INT32 column of `n` rows with the location of the `search_key`
  *
  * @throw cudf::logic_error If `search_keys` does not match `lists` in its number of rows
- * @throw cudf::dtype_error If `search_keys` type does not match the element type in `lists`
+ * @throw cudf::data_type_error If `search_keys` type does not match the element type in `lists`
  * @throw cudf::logic_error If `lists` or `search_keys` contains nested elements (LIST, STRUCT)
  */
 std::unique_ptr<column> index_of(

@@ -84,7 +84,6 @@ struct cuda_error : public std::runtime_error {
 struct fatal_cuda_error : public cuda_error {
   using cuda_error::cuda_error;  // Inherit constructors
 };
-/** @} */
 
 /**
  * @brief Exception thrown when an operation is attempted on an unsupported dtype.
@@ -93,21 +92,22 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported dtype. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct dtype_error : public std::invalid_argument {
+struct data_type_error : public std::invalid_argument {
   /**
-   * @brief Constructs a dtype_error with the error message.
+   * @brief Constructs a data_type_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  dtype_error(char const* const message) : std::invalid_argument(message) {}
+  data_type_error(char const* const message) : std::invalid_argument(message) {}
 
   /**
-   * @brief Construct a new logic error object with error message
+   * @brief Construct a new data_type_error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  dtype_error(std::string const& message) : std::invalid_argument(message) {}
+  data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
+/** @} */
 
 }  // namespace cudf
 

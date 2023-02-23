@@ -310,7 +310,7 @@ struct dispatch_index_of {
 
     CUDF_EXPECTS(child.type() == search_keys.type(),
                  "Type/Scale of search key does not match list column element type.",
-                 cudf::dtype_error);
+                 cudf::data_type_error);
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;

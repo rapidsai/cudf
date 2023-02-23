@@ -50,8 +50,8 @@ void cudf_exception_handler()
     PyErr_SetString(PyExc_TypeError, exn.what());
   } catch (const std::domain_error& exn) {
     PyErr_SetString(PyExc_ValueError, exn.what());
-  } catch (const cudf::dtype_error& exn) {
-    // Have to catch dtype_error before invalid_argument because it is a subclass
+  } catch (const cudf::data_type_error& exn) {
+    // Have to catch data_type_error before invalid_argument because it is a subclass
     PyErr_SetString(PyExc_TypeError, exn.what());
   } catch (const std::invalid_argument& exn) {
     PyErr_SetString(PyExc_ValueError, exn.what());

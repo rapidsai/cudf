@@ -31,12 +31,12 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <stdexcept>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <numeric>
+#include <stdexcept>
 #include <string>
 
 template <typename T>

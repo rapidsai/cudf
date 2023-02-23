@@ -862,7 +862,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   catch (const cudf::cuda_error &e) {                                                              \
     JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
   }                                                                                                \
-  catch (const cudf::dtype_error &e) {                                                             \
+  catch (const cudf::data_type_error &e) {                                                         \
     JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_DTYPE_ERROR_CLASS, e.what(), ret_val);                \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \

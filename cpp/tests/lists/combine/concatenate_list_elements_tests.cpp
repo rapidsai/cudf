@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/combine.hpp>
+
 #include <stdexcept>
 
 using namespace cudf::test::iterators;
