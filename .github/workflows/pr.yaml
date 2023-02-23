@@ -85,7 +85,7 @@ jobs:
       #    container_image: "rapidsai/ci:latest"
       #    run_script: "ci/test_notebooks.sh"
   wheel-build-cudf:
-    needs: checks
+    #needs: checks
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-build.yml@branch-23.04
     with:
@@ -107,7 +107,7 @@ jobs:
         #    test-unittest: "pytest -v -n 8 ./python/cudf/cudf/tests"
         #    test-smoketest: "python ./ci/wheel_smoke_test_cudf.py"
   wheel-build-dask-cudf:
-    needs: wheel-tests-cudf
+    needs: wheel-build-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-build.yml@branch-23.04
     with:
