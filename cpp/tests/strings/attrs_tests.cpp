@@ -26,8 +26,7 @@
 
 #include <vector>
 
-struct StringsAttributesTest : public cudf::test::BaseFixture {
-};
+struct StringsAttributesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsAttributesTest, CodePoints)
 {
@@ -101,7 +100,6 @@ TEST_F(StringsAttributesTest, StringsLengthsLong)
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::count_characters(strings_view);
-  // cudf::test::print(results->view());
   std::vector<int32_t> h_expected(h_strings.size(), 64);
   cudf::test::fixed_width_column_wrapper<int32_t> expected(h_expected.begin(), h_expected.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
