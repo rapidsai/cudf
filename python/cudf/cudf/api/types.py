@@ -354,9 +354,7 @@ def is_float_dtype(arr_or_dtype) -> bool:
     """
     if isinstance(arr_or_dtype, cudf.BaseIndex):
         return arr_or_dtype._is_floating()
-    return _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)(
-        arr_or_dtype=arr_or_dtype
-    )
+    return _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)(arr_or_dtype)
 
 
 def is_integer_dtype(arr_or_dtype) -> bool:
@@ -407,9 +405,7 @@ def is_integer_dtype(arr_or_dtype) -> bool:
     """
     if isinstance(arr_or_dtype, cudf.BaseIndex):
         return arr_or_dtype._is_integer()
-    return _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)(
-        arr_or_dtype=arr_or_dtype
-    )
+    return _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)(arr_or_dtype)
 
 
 def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
