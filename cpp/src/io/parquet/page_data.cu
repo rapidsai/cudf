@@ -1923,7 +1923,7 @@ __device__ void InitDeltaBinaryBlock(delta_binary_state_s* db,
   InitDeltaMiniBlock(db);
 }
 
-// should only be called on thread 0
+// skip to the start of the next mini-block. should only be called on thread 0
 __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
 {
   if (db->current_value_idx >= db->value_count) { return; }
@@ -1943,64 +1943,72 @@ __device__ void SetupNextMiniBlock(delta_binary_state_s* db)
   }
 }
 
-// FIXME assumes only 32 values per mini-block
+// decode the current mini-batch of deltas, and convert to values.
 // called by all threads in a warp, currently only one warp supported.
 __device__ void DeltaForThread(delta_binary_state_s* db, int lane_id)
 {
   if (db->current_value_idx >= db->value_count) { return; }
 
+  int const mb_bits = db->cur_bitwidths[db->cur_mb];
+
+  // need to do in multiple passes if values_per_mb != 32
+  int num_pass = db->values_per_mb / 32;
+
   // position at end of the current mini-block since the following calculates
   // negative indexes
-  int const mb_bits = db->cur_bitwidths[db->cur_mb];
-  auto d_start      = db->cur_mb_start + (db->values_per_mb * mb_bits) / 8;
+  auto d_start = db->cur_mb_start;
 
-  // FIXME this is only good up to 24 bits
-  // unpack deltas
-  int64_t delta = 0;
-  if (lane_id + db->current_value_idx < db->value_count) {
-    int32_t ofs      = (lane_id - ((db->values_per_mb + 7) & ~7)) * mb_bits;
-    const uint8_t* p = d_start + (ofs >> 3);
-    ofs &= 7;
-    if (p < db->block_end) {
-      uint32_t c = 8 - ofs;
-      delta      = (*p++) >> ofs;
-      if (c < mb_bits && p < db->block_end) {
-        delta |= (*p++) << c;
-        c += 8;
+  for (int i = 0; i < num_pass; i++) {
+    d_start += (32 * mb_bits) / 8;
+
+    // FIXME this is only good up to 24 bits
+    // unpack deltas
+    int64_t delta = 0;
+    if (lane_id + db->current_value_idx < db->value_count) {
+      int32_t ofs      = (lane_id - ((32 + 7) & ~7)) * mb_bits;
+      const uint8_t* p = d_start + (ofs >> 3);
+      ofs &= 7;
+      if (p < db->block_end) {
+        uint32_t c = 8 - ofs;
+        delta      = (*p++) >> ofs;
         if (c < mb_bits && p < db->block_end) {
           delta |= (*p++) << c;
           c += 8;
-          if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
+          if (c < mb_bits && p < db->block_end) {
+            delta |= (*p++) << c;
+            c += 8;
+            if (c < mb_bits && p < db->block_end) { delta |= (*p++) << c; }
+          }
         }
+        delta &= (1 << mb_bits) - 1;
       }
-      delta &= (1 << mb_bits) - 1;
     }
-  }
-  __syncwarp();
+    __syncwarp();
 
-  // add min delta to get true delta
-  delta += db->cur_min_delta;
+    // add min delta to get true delta
+    delta += db->cur_min_delta;
 
-  // do inclusive scan to get value - first_value at each position
-  __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage;
-  cub::WarpScan<int64_t>(temp_storage).InclusiveSum(delta, delta);
+    // do inclusive scan to get value - first_value at each position
+    __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage;
+    cub::WarpScan<int64_t>(temp_storage).InclusiveSum(delta, delta);
 
-  // now add first_value to get true value
-  delta += db->last_value;
+    // now add first_value to get true value
+    delta += db->last_value;
 
-  // need to save first value from header on first pass
-  if (db->current_value_idx == 0) {
-    if (lane_id == 0) {
-      db->current_value_idx++;
-      db->value[0] = db->last_value;
+    // need to save first value from header on first pass
+    if (db->current_value_idx == 0) {
+      if (lane_id == 0) {
+        db->current_value_idx++;
+        db->value[0] = db->last_value;
+      }
     }
+    __syncwarp();
+
+    db->value[rolling_index(db->current_value_idx + 32 * i + lane_id)] = delta;
+
+    // save delta from last lane in warp
+    if (lane_id == 31) { db->last_value = delta; }
   }
-  __syncwarp();
-
-  db->value[rolling_index(db->current_value_idx + lane_id)] = delta;
-
-  // save delta from last lane in warp
-  if (lane_id == 31) { db->last_value = delta; }
 }
 
 // Decode page data that is DELTA_BINARY_PACKED encoded. This encoding is
@@ -2052,11 +2060,11 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
 
     if (t < 64) {  // warp0..1
       target_pos = s->nz_count + 32;
-      // first pass will have 33 values because the first value is in the header
-      if (target_pos == 32) target_pos++;
     } else {  // warp2...
       target_pos = min(s->nz_count, src_pos + 32);
     }
+    // first pass will have 33 values because the first value is in the header
+    if (target_pos == 32) target_pos++;
     __syncthreads();
 
     // warp0 will decode the rep/def levels, warp1 will unpack a mini-batch of deltas.
@@ -2161,7 +2169,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
     // initialize the prefixes and suffixes blocks
     auto const* suffix_start = find_end(prefix_db, s->data_start, s->data_end);
     data_start               = find_end(suffix_db, suffix_start, s->data_end);
-    if (blockIdx.x == 0) printf("%c\n", *data_start);
   }
   __syncthreads();
 
@@ -2238,7 +2245,6 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
         auto* dstp   = static_cast<string_index_pair*>(dst);
         dstp->first  = (char*)data_start;
         dstp->second = len;
-        printf("dtlen %d len %d data %p\n", dtype_len, len, data_start);
       }
 
       if (dst_pos >= 0 && src_pos < target_pos) {
@@ -2258,8 +2264,24 @@ __device__ void DecodeDeltaByteArray(page_state_s* const s)
   }
 }
 
+// if we are using the nesting decode cache, copy null count back
+__device__ void restore_decode_cache(page_state_s* s)
+{
+  if (s->nesting_info == s->nesting_decode_cache) {
+    int depth = 0;
+    while (depth < s->page.num_output_nesting_levels) {
+      int const thread_depth = depth + threadIdx.x;
+      if (thread_depth < s->page.num_output_nesting_levels) {
+        s->page.nesting_decode[thread_depth].null_count =
+          s->nesting_decode_cache[thread_depth].null_count;
+      }
+      depth += blockDim.x;
+    }
+  }
+}
+
 /**
- * @brief Kernel for co the column data stored in the pages
+ * @brief Kernel for decoding the column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
@@ -2302,9 +2324,11 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
 
   if (s->page.encoding == Encoding::DELTA_BINARY_PACKED) {
     DecodeDeltaBinary(s);
+    restore_decode_cache(s);
     return;
   } else if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
     DecodeDeltaByteArray(s);
+    restore_decode_cache(s);
     return;
   }
 
@@ -2441,18 +2465,7 @@ __global__ void __launch_bounds__(block_size) gpuDecodePageData(
     __syncthreads();
   }
 
-  // if we are using the nesting decode cache, copy null count back
-  if (s->nesting_info == s->nesting_decode_cache) {
-    int depth = 0;
-    while (depth < s->page.num_output_nesting_levels) {
-      int const thread_depth = depth + t;
-      if (thread_depth < s->page.num_output_nesting_levels) {
-        s->page.nesting_decode[thread_depth].null_count =
-          s->nesting_decode_cache[thread_depth].null_count;
-      }
-      depth += blockDim.x;
-    }
-  }
+  restore_decode_cache(s);
 }
 
 }  // anonymous namespace
