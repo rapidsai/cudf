@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -244,7 +244,6 @@ is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = pd_types.is_datetime64_dtype
 is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
 is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
-is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)
 is_int64_dtype = pd_types.is_int64_dtype
@@ -263,7 +262,7 @@ is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
-is_categorical = pd_types.is_categorical
+is_categorical = pd_types.is_categorical_dtype
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable
