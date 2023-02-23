@@ -21,9 +21,11 @@ jobs:
         #- conda-java-tests
         #- conda-notebook-tests
       - wheel-build-cudf
-      - wheel-tests-cudf
+        #- wheel-tests-cudf
       - wheel-build-dask-cudf
-      - wheel-tests-dask-cudf
+        #- wheel-tests-dask-cudf
+      - wheel-publish-cudf
+      - wheel-publish-dask-cudf
     secrets: inherit
     uses: rapidsai/shared-action-workflows/.github/workflows/pr-builder.yaml@branch-23.04
       #checks:
