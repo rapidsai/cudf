@@ -132,7 +132,7 @@ jobs:
     with:
       build_type: pull-request
       package-name: cudf
-  # rebuild!
+  # rebuild! once more
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
