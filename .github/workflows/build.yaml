@@ -64,6 +64,7 @@ jobs:
       package-name: cudf
       package-dir: python/cudf
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      uses-setup-env-vars: false
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -85,6 +86,7 @@ jobs:
       date: ${{ inputs.date }}
       package-name: dask_cudf
       package-dir: python/dask_cudf
+      uses-setup-env-vars: false
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
