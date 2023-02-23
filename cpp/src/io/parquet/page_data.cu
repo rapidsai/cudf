@@ -2106,7 +2106,7 @@ __device__ void DecodeDeltaBinary(page_state_s* const s)
         }
       }
 
-      if (dst_pos >= 0) {
+      if (dst_pos >= 0 && src_pos < target_pos) {
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         if (s->dtype_len == 8) {
