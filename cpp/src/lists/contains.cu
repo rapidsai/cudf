@@ -267,7 +267,7 @@ void index_of_nested_types(InputIterator input_it,
   auto const has_nulls   = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
-  auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
+  auto const d_comp = comparator.equal_to<true>(nullate::DYNAMIC{has_nulls});
 
   auto const do_search = [=](auto const key_validity_iter) {
     thrust::transform(

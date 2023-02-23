@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -8,7 +8,6 @@ from numba import cuda
 
 import cudf
 from cudf.core.missing import NA
-from cudf.core.udf import _STRING_UDFS_ENABLED
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -757,8 +756,6 @@ def test_masked_udf_casting(operator, data):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
-# only run string udf tests if library exists and is enabled
-@pytest.mark.skipif(not _STRING_UDFS_ENABLED, reason="String UDFs not enabled")
 class TestStringUDFs:
     def test_string_udf_len(self, str_udf_data):
         def func(row):
