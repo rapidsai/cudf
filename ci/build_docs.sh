@@ -41,6 +41,7 @@ popd
 
 
 if [[ ${RAPIDS_BUILD_TYPE} == "branch" ]]; then
+  rapids-logger "Upload Docs to S3"
   aws s3 sync --no-progress --delete cpp/doxygen/html "s3://rapidsai-docs/libcudf/${VERSION_NUMBER}/html"
   aws s3 sync --no-progress --delete docs/cudf/_html "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/html"
   aws s3 sync --no-progress --delete docs/cudf/_text "s3://rapidsai-docs/cudf/${VERSION_NUMBER}/txt"
