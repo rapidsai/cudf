@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -306,6 +306,82 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   LCW expected({LCW{"Héllo", "thesé  "}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{}},
                validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, MultiByteDelimiters)
+{
+  // Overlapping delimiters
+  auto input =
+    cudf::test::strings_column_wrapper({"u::", "w:::x", "y::::z", "::a", ":::b", ":::c:::"});
+  auto view = cudf::strings_column_view(input);
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  {
+    auto result        = cudf::strings::split_record(view, cudf::string_scalar("::"));
+    auto expected_left = LCW({LCW{"u", ""},
+                              LCW{"w", ":x"},
+                              LCW{"y", "", "z"},
+                              LCW{"", "a"},
+                              LCW{"", ":b"},
+                              LCW{"", ":c", ":"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected_left);
+    result              = cudf::strings::rsplit_record(view, cudf::string_scalar("::"));
+    auto expected_right = LCW({LCW{"u", ""},
+                               LCW{"w:", "x"},
+                               LCW{"y", "", "z"},
+                               LCW{"", "a"},
+                               LCW{":", "b"},
+                               LCW{":", "c:", ""}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected_right);
+  }
+  {
+    auto result = cudf::strings::split(view, cudf::string_scalar("::"));
+
+    auto c0 = cudf::test::strings_column_wrapper({"u", "w", "y", "", "", ""});
+    auto c1 = cudf::test::strings_column_wrapper({"", ":x", "", "a", ":b", ":c"});
+    auto c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ":"}, {0, 0, 1, 0, 0, 1});
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(c0.release());
+    expected_columns.push_back(c1.release());
+    expected_columns.push_back(c2.release());
+    auto expected_left = std::make_unique<cudf::table>(std::move(expected_columns));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected_left);
+
+    result = cudf::strings::rsplit(view, cudf::string_scalar("::"));
+
+    c0 = cudf::test::strings_column_wrapper({"u", "w:", "y", "", ":", ":"});
+    c1 = cudf::test::strings_column_wrapper({"", "x", "", "a", "b", "c:"});
+    c2 = cudf::test::strings_column_wrapper({"", "", "z", "", "", ""}, {0, 0, 1, 0, 0, 1});
+    expected_columns.push_back(c0.release());
+    expected_columns.push_back(c1.release());
+    expected_columns.push_back(c2.release());
+    auto expected_right = std::make_unique<cudf::table>(std::move(expected_columns));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected_right);
+  }
+
+  // Delimiters that span across adjacent strings
+  input = cudf::test::strings_column_wrapper({"{a=1}:{b=2}:", "{c=3}", ":{}:{}"});
+  view  = cudf::strings_column_view(input);
+  {
+    auto result   = cudf::strings::split_record(view, cudf::string_scalar("}:{"));
+    auto expected = LCW({LCW{"{a=1", "b=2}:"}, LCW{"{c=3}"}, LCW{":{", "}"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+    result = cudf::strings::rsplit_record(view, cudf::string_scalar("}:{"));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  }
+  {
+    auto result = cudf::strings::split(view, cudf::string_scalar("}:{"));
+
+    auto c0 = cudf::test::strings_column_wrapper({"{a=1", "{c=3}", ":{"});
+    auto c1 = cudf::test::strings_column_wrapper({"b=2}:", "", "}"}, {1, 0, 1});
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(c0.release());
+    expected_columns.push_back(c1.release());
+    auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected);
+
+    result = cudf::strings::rsplit(view, cudf::string_scalar("}:{"));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected);
+  }
 }
 
 TEST_F(StringsSplitTest, SplitRegex)
