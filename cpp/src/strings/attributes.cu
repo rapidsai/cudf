@@ -167,7 +167,7 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
 {
   if ((input.size() == input.null_count()) ||
       ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
-    auto ufn = [] __device__(const string_view& d_str) { return d_str.length(); };
+    auto ufn = [] __device__(string_view const& d_str) { return d_str.length(); };
     return counts_fn(input, ufn, stream, mr);
   }
 
@@ -178,7 +178,7 @@ std::unique_ptr<column> count_bytes(strings_column_view const& strings,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto ufn = [] __device__(const string_view& d_str) { return d_str.size_bytes(); };
+  auto ufn = [] __device__(string_view const& d_str) { return d_str.size_bytes(); };
   return counts_fn(strings, ufn, stream, mr);
 }
 
