@@ -13,12 +13,14 @@ files:
       - notebooks
       - py_version
       - run
+      - test_cpp
       - test_python
   test_cpp:
     output: none
     includes:
       - cudatoolkit
       - libidentify_stream_usage_build
+      - test_cpp
   test_python:
     output: none
     includes:
@@ -266,6 +268,16 @@ dependencies:
               arch: aarch64
             packages:
               - cupy-cuda11x -f https://pip.cupy.dev/aarch64 # TODO: Verify that this works.
+  test_cpp:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.8"
+            packages:
+              - cuda-sanitizer-api=11.8.86
+          - matrix:
+            packages:
   test_java:
     common:
       - output_types: conda

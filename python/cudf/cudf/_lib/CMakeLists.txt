@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -46,6 +46,7 @@ set(cython_sources
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
+    strings_udf.pyx
     text.pyx
     transform.pyx
     transpose.pyx
@@ -60,6 +61,8 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf
 )
+
+target_link_libraries(strings_udf cudf_strings_udf)
 
 # TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
 # fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in

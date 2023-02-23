@@ -2112,7 +2112,6 @@ class IndexedFrame(Frame):
         """Apply `func` across the rows of the frame."""
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
-
         try:
             kernel, retty = _compile_or_get(
                 self, func, args, kernel_getter=kernel_getter
@@ -2130,7 +2129,6 @@ class IndexedFrame(Frame):
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
-
         try:
             kernel.forall(len(self))(*launch_args)
         except Exception as e:
