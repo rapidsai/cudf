@@ -91,6 +91,7 @@ jobs:
       package-name: cudf
       package-dir: python/cudf
       skbuild-configure-options: "-DCUDF_BUILD_WHEELS=ON -DDETECT_CONDA_ENV=OFF"
+      uses-setup-env-vars: false
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
@@ -112,6 +113,7 @@ jobs:
       package-name: dask_cudf
       package-dir: python/dask_cudf
       before-wheel: "RAPIDS_PY_WHEEL_NAME=cudf_cu11 rapids-download-wheels-from-s3 ./local-cudf && pip install --no-deps ./local-cudf/cudf*.whl"
+      uses-setup-env-vars: false
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
